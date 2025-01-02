@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AndroidLayouts">
+    <shared>
+      <config />
+    </shared>
+  </component>
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="87bdc812-34a6-42de-a746-6821cf7d00da" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.dart_tool/dartpad/web_plugin_registrant.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.dart_tool/flutter_build/dart_plugin_registrant.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.dart_tool/package_config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.dart_tool/package_config_subset" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.dart_tool/version" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.flutter-plugins" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/caches/deviceStreaming.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/libraries/Dart_Packages.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/libraries/Dart_SDK.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/libraries/Flutter_Plugins.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/libraries/KotlinJavaRuntime.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.idea/runConfigurations/main_dart.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/.metadata" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/analysis_options.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/build.gradle" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/debug/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/kotlin/com/example/cpr_assist/MainActivity.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/drawable-v21/launch_background.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/drawable/launch_background.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/mipmap-hdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/values-night/styles.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/main/res/values/styles.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/app/src/profile/AndroidManifest.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/build.gradle" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/cpr_assist_android.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/gradle.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/android/settings.gradle" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/195aac3dd53938b37eca652b46b1c7ff/_composite.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/195aac3dd53938b37eca652b46b1c7ff/gen_dart_plugin_registrant.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/195aac3dd53938b37eca652b46b1c7ff/gen_localizations.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/855c4435b738c36b9f2d243b08fd51b7/_composite.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/855c4435b738c36b9f2d243b08fd51b7/gen_dart_plugin_registrant.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/855c4435b738c36b9f2d243b08fd51b7/gen_localizations.stamp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/build/last_build_run.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/cpr_assist.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/devtools_options.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Flutter/AppFrameworkInfo.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Flutter/Debug.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Flutter/Release.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcodeproj/project.pbxproj" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcodeproj/project.xcworkspace/contents.xcworkspacedata" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcworkspace/contents.xcworkspacedata" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/AppDelegate.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Base.lproj/LaunchScreen.storyboard" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Base.lproj/Main.storyboard" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Info.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/Runner/Runner-Bridging-Header.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/ios/RunnerTests/RunnerTests.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/main.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/screens/home_screen.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/screens/login_screen.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/screens/past_sessions_screen.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/screens/registration_screen.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/services/mock_ble_data.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/lib/services/network_service.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/flutter/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/flutter/generated_plugin_registrant.cc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/flutter/generated_plugin_registrant.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/flutter/generated_plugins.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/main.cc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/my_application.cc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/linux/my_application.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Flutter/Flutter-Debug.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Flutter/Flutter-Release.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Flutter/GeneratedPluginRegistrant.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner.xcodeproj/project.pbxproj" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner.xcworkspace/contents.xcworkspacedata" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/AppDelegate.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_16.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_32.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_512.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_64.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Base.lproj/MainMenu.xib" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Configs/AppInfo.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Configs/Debug.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Configs/Release.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Configs/Warnings.xcconfig" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/DebugProfile.entitlements" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Info.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/MainFlutterWindow.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/Runner/Release.entitlements" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/macos/RunnerTests/RunnerTests.swift" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/pubspec.lock" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/pubspec.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/test/widget_test.dart" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/favicon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/icons/Icon-192.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/icons/Icon-512.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/icons/Icon-maskable-192.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/icons/Icon-maskable-512.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/web/manifest.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/flutter/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/flutter/generated_plugin_registrant.cc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/flutter/generated_plugin_registrant.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/flutter/generated_plugins.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/Runner.rc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/flutter_window.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/flutter_window.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/main.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/resource.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/resources/app_icon.ico" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/runner.exe.manifest" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/utils.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/utils.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/win32_window.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist App/windows/runner/win32_window.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/controllers/authController.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/db.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/index.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/middleware/validation.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/package-lock.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/routes/auth.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../CPR Assist Server/routes/session.js" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Dart File" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="2paSvYdxxFnBooITP8phMmVajH5" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Flutter.main.dart.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "com.google.services.firebase.aqiPopupShown": "true",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "main",
+    "io.flutter.reload.alreadyRun": "true",
+    "last_opened_file_path": "C:/Users/evaro/Personal Apps/CPR-Assist-Glove/CPR-Assist-App/cpr_assist",
+    "settings.editor.selected.configurable": "reference.settingsdialog.project.gradle",
+    "show.migrate.to.gradle.popup": "false"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="main.dart" type="FlutterRunConfigurationType" factoryName="Flutter">
+      <option name="filePath" value="$PROJECT_DIR$/lib/main.dart" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="87bdc812-34a6-42de-a746-6821cf7d00da" name="Changes" comment="" />
+      <created>1733002928322</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1733002928322</updated>
+    </task>
+    <servers />
+  </component>
+</project>
