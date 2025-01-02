@@ -8,6 +8,8 @@ const pool = new Pool({
     database: process.env.DB_DATABASE,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
+    port: process.env.POSTGRES_PORT || 5432,
+
 });
 
 // Export the pool to use in other files

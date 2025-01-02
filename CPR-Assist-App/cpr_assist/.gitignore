@@ -33,11 +33,17 @@ migrate_working_dir/
 # iOS/Android specific
 ios/Flutter/Generated.xcconfig
 ios/Flutter/Flutter.podspec
+ios/Runner.xcworkspace/   # iOS Xcode workspace files
+ios/Pods/                 # CocoaPods dependencies
 android/.gradle/          # Gradle cache
 android/app/build/        # Android build outputs
 android/app/debug/        # Android debug builds
 android/app/profile/      # Android profile builds
 android/app/release/      # Android release builds
+
+# APK and Bundle files
+*.apk                     # Android APK files
+*.aab                     # Android app bundles
 
 # Symbolication related
 app.*.symbols
