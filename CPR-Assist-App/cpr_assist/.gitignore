@@ -53,3 +53,8 @@ app.*.map.json
 
 # Devtools
 devtools_options.yaml     # Flutter devtools configuration
+
+# Flutter build files
+build/
+
+
