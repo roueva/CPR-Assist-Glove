@@ -61,6 +61,19 @@ app.use('/cpr', sessionRoutes(pool));
 const PORT = process.env.PORT || 3000;
 console.log(`Using port: ${PORT}`);
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-});
+(async () => {
+    try {
+        // Optional: Test database connection before starting the server
+        await pool.query('SELECT 1');
+        console.log('Database connection successful');
+
+        const PORT = process.env.PORT || 3000;
+        console.log(`Using port: ${PORT}`);
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Error during startup:', error.message);
+        process.exit(1); // Exit with error code if something goes wrong
+    }
+})();
