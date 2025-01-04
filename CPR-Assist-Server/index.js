@@ -51,10 +51,6 @@ app.use('/cpr', sessionRoutes(pool));
 const PORT = process.env.PORT || 3000;
 console.log(`Using port: ${PORT}`);
 
-// Keep-alive ping every 10 seconds
-setInterval(() => {
-    console.log('Keep-alive ping');
-}, 10000);
 
 (async () => {
     try {
