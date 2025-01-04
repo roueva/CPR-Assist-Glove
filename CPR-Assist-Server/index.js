@@ -15,8 +15,7 @@ const pool = new Pool({
     port: process.env.POSTGRES_PORT,
 });
 
-// Export pool for potential use in other modules
-module.exports = { pool };
+pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 const logger = winston.createLogger({
     level: 'info',
@@ -35,9 +34,6 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
-
-
-
 // Global error handler
 app.use((err, req, res, next) => {
     logger.error(err.message, { stack: err.stack });
@@ -47,28 +43,25 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Handle pool errors
-pool.on('error', (err) => console.error('Unexpected error on idle client', err));
-
-// Pass pool to authRoutes
+// Pass pool to authRoutes and sessionRoutes
 app.use('/auth', createAuthRoutes(pool));
-
-// Connect to session
 const sessionRoutes = require('./routes/session');
 app.use('/cpr', sessionRoutes(pool));
 
-// Start server
 const PORT = process.env.PORT || 3000;
 console.log(`Using port: ${PORT}`);
 
+// Keep-alive ping every 10 seconds
+setInterval(() => {
+    console.log('Keep-alive ping');
+}, 10000);
+
 (async () => {
     try {
-        // Optional: Test database connection before starting the server
+        // Test database connection before starting the server
         await pool.query('SELECT 1');
         console.log('Database connection successful');
 
-        const PORT = process.env.PORT || 3000;
-        console.log(`Using port: ${PORT}`);
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT}`);
         });
