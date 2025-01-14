@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.lib.flutter_blue_plus-merged_res-25:/layout-v21/notification_template_custom_big.xml",
+        "source": "com.lib.flutter_blue_plus-core-1.13.1-12:/layout-v21/notification_template_custom_big.xml"
+    },
+    {
+        "merged": "com.lib.flutter_blue_plus-merged_res-25:/layout-v21/notification_action_tombstone.xml",
+        "source": "com.lib.flutter_blue_plus-core-1.13.1-12:/layout-v21/notification_action_tombstone.xml"
+    },
+    {
+        "merged": "com.lib.flutter_blue_plus-merged_res-25:/layout-v21/notification_template_icon_group.xml",
+        "source": "com.lib.flutter_blue_plus-core-1.13.1-12:/layout-v21/notification_template_icon_group.xml"
+    },
+    {
+        "merged": "com.lib.flutter_blue_plus-merged_res-25:/layout-v21/notification_action.xml",
+        "source": "com.lib.flutter_blue_plus-core-1.13.1-12:/layout-v21/notification_action.xml"
+    }
+]

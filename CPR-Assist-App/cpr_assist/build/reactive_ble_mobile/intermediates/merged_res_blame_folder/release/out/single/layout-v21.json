@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/layout-v21/notification_action_tombstone.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/layout-v21/notification_action_tombstone.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/layout-v21/notification_template_custom_big.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/layout-v21/notification_template_custom_big.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/layout-v21/notification_action.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/layout-v21/notification_action.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/layout-v21/notification_template_icon_group.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/layout-v21/notification_template_icon_group.xml"
+    }
+]
