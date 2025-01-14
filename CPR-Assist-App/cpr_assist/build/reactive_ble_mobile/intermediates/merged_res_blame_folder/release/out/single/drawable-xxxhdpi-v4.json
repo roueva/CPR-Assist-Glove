@@ -1,0 +1,26 @@
+[
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_answer.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_answer.png"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_answer_video_low.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_answer_video_low.png"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_decline_low.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_decline_low.png"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_answer_video.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_answer_video.png"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_decline.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_decline.png"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable-xxxhdpi-v4/ic_call_answer_low.png",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable-xxxhdpi-v4/ic_call_answer_low.png"
+    }
+]

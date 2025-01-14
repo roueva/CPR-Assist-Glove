@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable/notification_tile_bg.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable/notification_tile_bg.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable/notification_bg_low.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable/notification_bg_low.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable/notification_icon_background.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable/notification_icon_background.xml"
+    },
+    {
+        "merged": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-merged_res-25:/drawable/notification_bg.xml",
+        "source": "com.signify.hue.flutterreactiveble.reactive_ble_mobile-core-1.13.1-12:/drawable/notification_bg.xml"
+    }
+]

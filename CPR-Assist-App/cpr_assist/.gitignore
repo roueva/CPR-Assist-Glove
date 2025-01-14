@@ -23,12 +23,12 @@ migrate_working_dir/
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
-.dart_tool/               # Dart tool cache
+.dart_tool/               # Dart tool cache (includes app.dill)
 .flutter-plugins          # Flutter plugins cache
 .flutter-plugins-dependencies
 .pub-cache/               # Pub dependency cache
 .pub/                     # Pub cache
-/build/                   # Build outputs
+build/                    # Build outputs (includes APKs and build intermediates)
 
 # iOS/Android specific
 ios/Flutter/Generated.xcconfig
@@ -53,8 +53,3 @@ app.*.map.json
 
 # Devtools
 devtools_options.yaml     # Flutter devtools configuration
-
-# Flutter build files
-build/
-
-
