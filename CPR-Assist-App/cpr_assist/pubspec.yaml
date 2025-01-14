@@ -19,7 +19,7 @@ dependencies:
 
   # Local Storage
   shared_preferences: ^2.2.2
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: ^10.0.0-beta.4
 
 
   # Icons
@@ -28,10 +28,27 @@ dependencies:
   # Logging
   logger: ^2.5.0
 
+  # For BLE communication
+  flutter_reactive_ble: ^5.0.2
+  flutter_blue_plus: ^1.3.1
+  permission_handler: ^11.3.1
+
+  # For NFC Card
+  url_launcher: ^6.1.7
+
+  # For location services
+  geolocator: ^13.0.2
+
+  # For AES decryption
+  encrypt: ^5.0.0
+
+  # DateFormat
+  intl: ^0.20.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true

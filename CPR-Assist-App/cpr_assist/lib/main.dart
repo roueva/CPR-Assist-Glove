@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
+import 'services/decrypted_data.dart'; // Import DecryptedData
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
+
+  final DecryptedData decryptedDataHandler = DecryptedData(); // Create a shared instance of DecryptedData
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CPR App',
+      title: 'CPR Assist App',
       theme: ThemeData(primarySwatch: Colors.blue),
-      initialRoute: '/login',
+      home: HomeScreen(decryptedDataHandler: decryptedDataHandler), // Use HomeScreen as the initial screen
       routes: {
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegistrationScreen(),
-        '/home': (context) => const HomeScreen(),
+        '/login': (context) => LoginScreen(
+          dataStream: decryptedDataHandler.dataStream,
+          decryptedDataHandler: decryptedDataHandler,
+        ),
+        '/register': (context) => RegistrationScreen(
+          dataStream: decryptedDataHandler.dataStream,
+          decryptedDataHandler: decryptedDataHandler,
+        ),
       },
     );
   }

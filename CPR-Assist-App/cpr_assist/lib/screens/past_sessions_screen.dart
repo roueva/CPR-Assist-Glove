@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/network_service.dart';
 
 class PastSessionsScreen extends StatefulWidget {
@@ -23,7 +24,6 @@ class _PastSessionsScreenState extends State<PastSessionsScreen> {
     try {
       final response = await NetworkService.get('/auth/sessions', requiresAuth: true);
 
-      // Extract the 'data' field which contains the list of sessions
       if (response['success'] == true && response['data'] is List) {
         setState(() {
           sessionSummaries = response['data'];
@@ -68,16 +68,17 @@ class _PastSessionsScreenState extends State<PastSessionsScreen> {
               itemCount: sessionSummaries.length,
               itemBuilder: (context, index) {
                 final session = sessionSummaries[index];
-
-                // Safely parse correct_angle
                 final double correctAngle = double.tryParse(
                     session['correct_angle'].toString()) ??
                     0.0;
+                final formattedDate = DateFormat.yMMMd()
+                    .add_jm()
+                    .format(DateTime.parse(session['session_start']));
 
                 return Card(
                   margin: const EdgeInsets.all(8.0),
                   child: ListTile(
-                    title: Text('Session ${sessionSummaries.length - index}'), // Reverse numbering
+                    title: Text('Session ${sessionSummaries.length - index}'),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -86,7 +87,7 @@ class _PastSessionsScreenState extends State<PastSessionsScreen> {
                         Text('Correct Frequency: ${session['correct_frequency']}'),
                         Text('Correct Angle: ${correctAngle.toStringAsFixed(2)} seconds'),
                         Text('Duration: ${session['session_duration']} seconds'),
-                        Text('Date: ${session['session_start']}'),
+                        Text('Date: $formattedDate'),
                       ],
                     ),
                   ),
