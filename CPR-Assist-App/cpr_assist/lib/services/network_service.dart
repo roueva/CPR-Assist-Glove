@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NetworkService {
-  static const String baseUrl = 'https://cpr-assist-app.up.railway.app';
+  //static const String baseUrl = 'https://cpr-assist-app.up.railway.app';
+  static String get baseUrl => 'http://192.168.2.22:3000'; // Local IP
 
   // Get the token from SharedPreferences
   static Future<String?> getToken() async {

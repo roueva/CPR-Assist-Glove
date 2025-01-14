@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.cpr_assist.app-mergeDebugResources-39:/values-sw360dp-v13/values-sw360dp-v13.xml",
+            "outputFile": "com.example.cpr_assist.app-mergeDebugResources-42:/values-sw360dp-v13/values-sw360dp-v13.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\evaro\\.gradle\\caches\\transforms-3\\10d0d8c1f4c5c1b7a3b300d05f7ebb5e\\transformed\\preference-1.2.1\\res\\values-sw360dp-v13\\values-sw360dp-v13.xml",
+                    "source": "C:\\Users\\evaro\\.gradle\\caches\\transforms-3\\047aa7ddff6241681155a5178fa0e58d\\transformed\\preference-1.2.1\\res\\values-sw360dp-v13\\values-sw360dp-v13.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

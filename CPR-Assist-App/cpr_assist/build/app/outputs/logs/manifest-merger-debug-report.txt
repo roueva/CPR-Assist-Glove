@@ -1,65 +1,79 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-33:12
-MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-33:12
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-52:12
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-52:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
+MERGED from [:flutter_blue_plus] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_blue_plus\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-11:12
 MERGED from [:flutter_secure_storage] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_secure_storage\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-10:12
+MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-15:12
 MERGED from [:path_provider_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\path_provider_android\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-7:12
+MERGED from [:permission_handler_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\permission_handler_android\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-7:12
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-15:12
 MERGED from [:shared_preferences_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\shared_preferences_android\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.datastore:datastore-preferences:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\7374f32381d954e34124ee720ff47df8\transformed\jetified-datastore-preferences-1.0.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.datastore:datastore:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1471cc351ba4f9046368b464c95dce27\transformed\jetified-datastore-1.0.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\10d0d8c1f4c5c1b7a3b300d05f7ebb5e\transformed\preference-1.2.1\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\3a04377ab98aaf9189ccddcb951bae89\transformed\appcompat-1.1.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\6bbbed36202d97cc5c56f59110c58ff8\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\a49cd171355a6a39687e69f028c8bcbc\transformed\fragment-1.7.1\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\3849d2a4662c79004aa48857ab62a419\transformed\recyclerview-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ff41c027205974229495f373ecb481a6\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\5de8146ab39b4585c501d381da5b31ee\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:17:1-31:12
-MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\bf78d940cc78ca45c77421e3af64376e\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:17:1-21:12
-MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0d551311c4ac90ac20e2909566776d0a\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\3e4063b07db37bd08626b21245b0f82d\transformed\jetified-activity-1.8.1\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\4b6525a5d93188e5b5598cf18f4a9dee\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2b9c9404689a5c622c078d5da9ff626f\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\878dadbdc8c0f130b446b0870752f824\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\fc510e06b3828af7121634ed81a0fa63\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9c28b5c7a2d23237247570dbf8382af1\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4befdc7f9fed1e5c6647eae72672d219\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7c191cc5b1357899ac0fb27789b31527\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\52dfd6d7c21c1e36dbdf0d304093d642\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9ec76326f098fb11057ae8a1fda52a48\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\ca2eed4266fd24517e583e6618aa3924\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\58accd456bc756075136cc5a7dae18d3\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\ba1149b554bea47224344eb46b66b293\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\99d579add3f9fd6fe77868a192125a71\transformed\drawerlayout-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\84fd36235785b204f68ac36381954b4b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\086326c62f893543809400fb5f82aa08\transformed\customview-1.1.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\662b6f3f4294d98a11aa8ce24a3a2b88\transformed\transition-1.4.1\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\d8209ac831e6b22e460fd260ebb7d1bf\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\75799f7dc1e6a4997cf50d7388f1985b\transformed\vectordrawable-1.1.0\AndroidManifest.xml:17:1-24:12
-MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\e0c45b5b32e92589929466005f9038d7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0d3858709972cef10e9a53b7b072e999\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:17:1-30:12
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\c8996eb6ce8efabee1883fe1486006c9\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:17:1-35:12
-MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\9052453186e3003b95f282d86591f3f1\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\010887bb3359843376c02ecf4bf2ef43\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.security:security-crypto:1.1.0-alpha06] C:\Users\evaro\.gradle\caches\transforms-3\968200e68236f406aae431c886839cb1\transformed\jetified-security-crypto-1.1.0-alpha06\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:17:1-55:12
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
-MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\fee79d0d8ef3af5dbc14ef6d22d028cf\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\ee01e2b20f52029a052c42ac95f9e8b2\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
-MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\08235bf0a8760a790ea7b8b4eab82236\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\de4e1f54747892e0930cd2e3ecf5513e\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a2bd407c8cd5bfb977ceded389a17806\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6dde453803d512b3f23cc981e264e9e0\transformed\jetified-core-1.0.0\AndroidManifest.xml:2:1-7:12
-MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\58c4070d0c945e110a829877b1739849\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\553ce2a25086d5c186f45ec2c465136b\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0dc5f52e11e39e47d9a291708a767dcc\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\6707c561045b071954f9f1d8398a2530\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:2:1-7:12
+MERGED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:2:1-14:12
+MERGED from [com.google.android.gms:play-services-location:21.2.0] C:\Users\evaro\.gradle\caches\transforms-3\062a0e0b197545c8dac64c951de02bc9\transformed\jetified-play-services-location-21.2.0\AndroidManifest.xml:2:1-9:12
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\047aa7ddff6241681155a5178fa0e58d\transformed\preference-1.2.1\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.browser:browser:1.8.0] C:\Users\evaro\.gradle\caches\transforms-3\7f6d20225ac1174a3efad96609161b97\transformed\browser-1.8.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\9005ab99f1717e9b0608d9f5ab54ff23\transformed\recyclerview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\88664bc4898591af2b748d514fde3782\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\a499fa3c34a38edcfdea6b351554e382\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:17:1-31:12
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8a650b2c5ea333036303d473a939db42\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:17:1-21:12
+MERGED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:16:1-24:12
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] C:\Users\evaro\.gradle\caches\transforms-3\785692452bed6b1414fd4fb764050d2b\transformed\jetified-play-services-tasks-18.1.0\AndroidManifest.xml:2:1-6:12
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:16:1-26:12
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\6ddfe7bc5a026c54878de2bc1391ef46\transformed\appcompat-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\8ab227ca6d562dab86394f7a2b42fe97\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\ca4d40f38b71d4c621d36eba6fe2f4a4\transformed\fragment-1.7.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0efada588904821f11adf7ec39ee67b0\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\90da4fa7ab29bed17775e89b3905b1f1\transformed\jetified-activity-1.8.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\248c2ee92a3eff0f51bd645d25837450\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a818e414c52385021f1d9677e7b7ca4e\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa0545052c10d03c17d2b473348f6ff3\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\7f4a0c54f8ded54a4c0d55036a334d3c\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2c20b5293e22728da7046407170ca5c0\transformed\drawerlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\334f77f688c510e4c631ba2daaab7ec9\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\43df30f2af92cd091715649462883cab\transformed\customview-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\8e926d88adc6ec4405f4b01d4e9b1bad\transformed\transition-1.4.1\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\85a2d865d0e12a22249976e5601901a3\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\82d8b2a7d9fca5e641d160069565b477\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\051f9dac57ad8cee60cc5a95eb8d9d7f\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4b65a3e10bc06490e1a05d1d300300eb\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7b5a837770709484bd30395a2788a4e5\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\6964f45bcdaad7c523c03595346078c4\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\2b2bf4b21be1acb6d8aafc6e5e4bedac\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\8b9f2b08a8ef59d66d7e2f702c5ee30e\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\34e9e272fefd16ac66a87408accf94b7\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\4059a61bdad93a189cb4807e89b6c4ef\transformed\vectordrawable-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6204f3b987160f01c2c219f45e0d137b\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\56d32690194daba5731f9179db6d47c0\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\12d0e8d71b0600cec5ba2edcf29e905c\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\eb30b97cf0c123a3aa78bfba9082ceea\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\40a45e686cd0e99ac2a33b1453f47939\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\9441e8b274faebbfe21cf8c8f463be95\transformed\jetified-datastore-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\0cf0dfa47f40d2ebd3407bd47f3dd25e\transformed\jetified-datastore-preferences-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\e3611af684c8af9ba655b32249084f4e\transformed\jetified-datastore-release\AndroidManifest.xml:17:1-22:12
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:2:1-27:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\e896b9ac412a8814559a776dc7b5a420\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1122d081a937e71194adcd50d186ca4f\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\d21e37b6169caa7895fc002c1192b0f1\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3cccf64d8e44a1ff0116ea6b8bd8d8e9\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ac364ab66752097bb4779d5aeb5f3ac7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\61fbac9cdc1a22c54aa04ec76334a907\transformed\jetified-core-1.0.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa45ff664a4fe5a6d06833e16afb125c\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\5c2f866ed92dccb171acdbd21a39b9a6\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\c956c3ff78f47134a13fc36ef46fb31f\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\c4537ab9015740d05f09a422063523a5\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:2:1-7:12
+MERGED from [io.reactivex.rxjava2:rxandroid:2.1.1] C:\Users\evaro\.gradle\caches\transforms-3\def6a43a416de6d350d9f6c9a422b875\transformed\jetified-rxandroid-2.1.1\AndroidManifest.xml:15:1-20:12
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\evaro\.gradle\caches\transforms-3\84b17be5f49a910e04e8c35fea028f28\transformed\jetified-relinker-1.4.5\AndroidManifest.xml:2:1-7:12
 	package
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:2:5-37
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	android:versionName
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
@@ -67,294 +81,432 @@ MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	xmlns:android
 		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:11-69
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:22-64
+uses-permission#android.permission.BLUETOOTH
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:5-68
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:8:5-10:38
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:8:5-10:38
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:10:5-12:38
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:10:5-12:38
+	android:maxSdkVersion
+		ADDED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:10:9-35
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:22-65
+uses-permission#android.permission.BLUETOOTH_ADMIN
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:5-74
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:11:5-13:38
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:11:5-13:38
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:13:5-15:38
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:13:5-15:38
+	android:maxSdkVersion
+		ADDED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:13:9-35
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:22-71
+uses-permission#android.permission.BLUETOOTH_SCAN
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:5-73
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:22:5-25:31
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:22:5-25:31
+	android:usesPermissionFlags
+		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:24:9-55
+	tools:targetApi
+		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:25:9-28
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:22-70
+uses-permission#android.permission.BLUETOOTH_CONNECT
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:5-76
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:21:5-76
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:21:5-76
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:22-73
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:5-79
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:22-76
+uses-feature#android.hardware.bluetooth
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:5-87
+	android:required
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:61-84
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:19-60
+uses-feature#android.hardware.bluetooth_le
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:5-91
+	android:required
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:64-88
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:19-63
 application
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:2:5-26:19
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:5-44:19
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
-MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:22:5-29:19
-MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:22:5-29:19
-MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:28:5-89
-MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:28:5-89
-MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
-MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\ee01e2b20f52029a052c42ac95f9e8b2\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\ee01e2b20f52029a052c42ac95f9e8b2\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-13:19
+MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-13:19
+MERGED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-12:19
+MERGED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-12:19
+MERGED from [com.google.android.gms:play-services-location:21.2.0] C:\Users\evaro\.gradle\caches\transforms-3\062a0e0b197545c8dac64c951de02bc9\transformed\jetified-play-services-location-21.2.0\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-location:21.2.0] C:\Users\evaro\.gradle\caches\transforms-3\062a0e0b197545c8dac64c951de02bc9\transformed\jetified-play-services-location-21.2.0\AndroidManifest.xml:7:5-20
+MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:22:5-29:19
+MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:22:5-29:19
+MERGED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] C:\Users\evaro\.gradle\caches\transforms-3\785692452bed6b1414fd4fb764050d2b\transformed\jetified-play-services-tasks-18.1.0\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] C:\Users\evaro\.gradle\caches\transforms-3\785692452bed6b1414fd4fb764050d2b\transformed\jetified-play-services-tasks-18.1.0\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:20:5-24:19
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:20:5-24:19
+MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:5-89
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\d21e37b6169caa7895fc002c1192b0f1\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\d21e37b6169caa7895fc002c1192b0f1\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
 	android:extractNativeLibs
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	android:appComponentFactory
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:label
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:3:9-35
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:17:9-35
 	android:icon
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:4:9-43
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:9-43
 activity#com.example.cpr_assist.MainActivity
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:9-22:20
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:9-35:20
 	android:launchMode
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:13-43
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:22:13-43
 	android:hardwareAccelerated
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:13-47
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:26:13-47
 	android:windowSoftInputMode
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:13-55
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:13-55
 	android:exported
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:13-36
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:21:13-36
 	android:configChanges
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:13-163
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:13-163
 	android:theme
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:13-47
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:13-47
 	android:taskAffinity
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:13-36
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:23:13-36
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:13-63
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:13-63
 meta-data#io.flutter.embedding.android.NormalTheme
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:13-17:19
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:13-30:57
 	android:resource
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:17-54
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:17-54
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:17-72
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:17-72
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:13-21:29
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:31:13-34:29
 action#android.intent.action.MAIN
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:17-68
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:17-69
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:25-66
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:25-66
 category#android.intent.category.LAUNCHER
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:17-76
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:33:17-77
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:27-74
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:33:27-74
 meta-data#flutterEmbedding
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:23:9-25:33
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:37:9-39:33
 	android:value
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:13-30
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:13-30
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:13-44
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:38:13-44
+meta-data#com.google.android.bluetooth.le.BLE_ADVERTISING_SUPPORTED
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:41:9-43:36
+	android:value
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:43:13-33
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:42:13-85
 queries
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:5-32:15
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:5-51:15
 intent#action:name:android.intent.action.PROCESS_TEXT+data:mimeType:text/plain
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:9-31:18
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:47:9-50:18
 action#android.intent.action.PROCESS_TEXT
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:13-72
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:13-73
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:21-70
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:21-70
 data
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:13-50
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:13-51
 	android:mimeType
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:19-48
-uses-permission#android.permission.INTERNET
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:6:5-66
-	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:6:22-64
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:19-48
 uses-sdk
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
+MERGED from [:flutter_blue_plus] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_blue_plus\intermediates\merged_manifest\debug\AndroidManifest.xml:9:5-44
+MERGED from [:flutter_blue_plus] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_blue_plus\intermediates\merged_manifest\debug\AndroidManifest.xml:9:5-44
 MERGED from [:flutter_secure_storage] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_secure_storage\intermediates\merged_manifest\debug\AndroidManifest.xml:6:5-8:53
 MERGED from [:flutter_secure_storage] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_secure_storage\intermediates\merged_manifest\debug\AndroidManifest.xml:6:5-8:53
+MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
 MERGED from [:path_provider_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\path_provider_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
 MERGED from [:path_provider_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\path_provider_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:permission_handler_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\permission_handler_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:permission_handler_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\permission_handler_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
 MERGED from [:shared_preferences_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\shared_preferences_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
 MERGED from [:shared_preferences_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\shared_preferences_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
-MERGED from [androidx.datastore:datastore-preferences:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\7374f32381d954e34124ee720ff47df8\transformed\jetified-datastore-preferences-1.0.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.datastore:datastore-preferences:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\7374f32381d954e34124ee720ff47df8\transformed\jetified-datastore-preferences-1.0.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.datastore:datastore:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1471cc351ba4f9046368b464c95dce27\transformed\jetified-datastore-1.0.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.datastore:datastore:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1471cc351ba4f9046368b464c95dce27\transformed\jetified-datastore-1.0.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\10d0d8c1f4c5c1b7a3b300d05f7ebb5e\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\10d0d8c1f4c5c1b7a3b300d05f7ebb5e\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\3a04377ab98aaf9189ccddcb951bae89\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\3a04377ab98aaf9189ccddcb951bae89\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\6bbbed36202d97cc5c56f59110c58ff8\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\6bbbed36202d97cc5c56f59110c58ff8\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\a49cd171355a6a39687e69f028c8bcbc\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\a49cd171355a6a39687e69f028c8bcbc\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\3849d2a4662c79004aa48857ab62a419\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\3849d2a4662c79004aa48857ab62a419\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ff41c027205974229495f373ecb481a6\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ff41c027205974229495f373ecb481a6\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\5de8146ab39b4585c501d381da5b31ee\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\5de8146ab39b4585c501d381da5b31ee\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\bf78d940cc78ca45c77421e3af64376e\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:19:5-44
-MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\bf78d940cc78ca45c77421e3af64376e\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:19:5-44
-MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0d551311c4ac90ac20e2909566776d0a\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0d551311c4ac90ac20e2909566776d0a\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\3e4063b07db37bd08626b21245b0f82d\transformed\jetified-activity-1.8.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\3e4063b07db37bd08626b21245b0f82d\transformed\jetified-activity-1.8.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\4b6525a5d93188e5b5598cf18f4a9dee\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\4b6525a5d93188e5b5598cf18f4a9dee\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2b9c9404689a5c622c078d5da9ff626f\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2b9c9404689a5c622c078d5da9ff626f\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\878dadbdc8c0f130b446b0870752f824\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\878dadbdc8c0f130b446b0870752f824\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\fc510e06b3828af7121634ed81a0fa63\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\fc510e06b3828af7121634ed81a0fa63\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9c28b5c7a2d23237247570dbf8382af1\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9c28b5c7a2d23237247570dbf8382af1\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4befdc7f9fed1e5c6647eae72672d219\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4befdc7f9fed1e5c6647eae72672d219\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7c191cc5b1357899ac0fb27789b31527\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7c191cc5b1357899ac0fb27789b31527\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\52dfd6d7c21c1e36dbdf0d304093d642\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\52dfd6d7c21c1e36dbdf0d304093d642\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9ec76326f098fb11057ae8a1fda52a48\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\9ec76326f098fb11057ae8a1fda52a48\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\ca2eed4266fd24517e583e6618aa3924\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\ca2eed4266fd24517e583e6618aa3924\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\58accd456bc756075136cc5a7dae18d3\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\58accd456bc756075136cc5a7dae18d3\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:5:5-44
-MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\ba1149b554bea47224344eb46b66b293\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\ba1149b554bea47224344eb46b66b293\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\99d579add3f9fd6fe77868a192125a71\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\99d579add3f9fd6fe77868a192125a71\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\84fd36235785b204f68ac36381954b4b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\84fd36235785b204f68ac36381954b4b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\086326c62f893543809400fb5f82aa08\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\086326c62f893543809400fb5f82aa08\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\662b6f3f4294d98a11aa8ce24a3a2b88\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\662b6f3f4294d98a11aa8ce24a3a2b88\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\d8209ac831e6b22e460fd260ebb7d1bf\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\d8209ac831e6b22e460fd260ebb7d1bf\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\75799f7dc1e6a4997cf50d7388f1985b\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\75799f7dc1e6a4997cf50d7388f1985b\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\e0c45b5b32e92589929466005f9038d7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\e0c45b5b32e92589929466005f9038d7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0d3858709972cef10e9a53b7b072e999\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0d3858709972cef10e9a53b7b072e999\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\c8996eb6ce8efabee1883fe1486006c9\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\c8996eb6ce8efabee1883fe1486006c9\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
-MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
-MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\9052453186e3003b95f282d86591f3f1\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\9052453186e3003b95f282d86591f3f1\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\010887bb3359843376c02ecf4bf2ef43\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\010887bb3359843376c02ecf4bf2ef43\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:20:5-44
-MERGED from [androidx.security:security-crypto:1.1.0-alpha06] C:\Users\evaro\.gradle\caches\transforms-3\968200e68236f406aae431c886839cb1\transformed\jetified-security-crypto-1.1.0-alpha06\AndroidManifest.xml:20:5-44
-MERGED from [androidx.security:security-crypto:1.1.0-alpha06] C:\Users\evaro\.gradle\caches\transforms-3\968200e68236f406aae431c886839cb1\transformed\jetified-security-crypto-1.1.0-alpha06\AndroidManifest.xml:20:5-44
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
-MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\fee79d0d8ef3af5dbc14ef6d22d028cf\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\fee79d0d8ef3af5dbc14ef6d22d028cf\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\ee01e2b20f52029a052c42ac95f9e8b2\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\ee01e2b20f52029a052c42ac95f9e8b2\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
-MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\08235bf0a8760a790ea7b8b4eab82236\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\08235bf0a8760a790ea7b8b4eab82236\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\de4e1f54747892e0930cd2e3ecf5513e\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\de4e1f54747892e0930cd2e3ecf5513e\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a2bd407c8cd5bfb977ceded389a17806\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a2bd407c8cd5bfb977ceded389a17806\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6dde453803d512b3f23cc981e264e9e0\transformed\jetified-core-1.0.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6dde453803d512b3f23cc981e264e9e0\transformed\jetified-core-1.0.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\58c4070d0c945e110a829877b1739849\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\58c4070d0c945e110a829877b1739849\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\553ce2a25086d5c186f45ec2c465136b\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\553ce2a25086d5c186f45ec2c465136b\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0dc5f52e11e39e47d9a291708a767dcc\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\0dc5f52e11e39e47d9a291708a767dcc\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\6707c561045b071954f9f1d8398a2530\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
-MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\6707c561045b071954f9f1d8398a2530\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
+MERGED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-location:21.2.0] C:\Users\evaro\.gradle\caches\transforms-3\062a0e0b197545c8dac64c951de02bc9\transformed\jetified-play-services-location-21.2.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-location:21.2.0] C:\Users\evaro\.gradle\caches\transforms-3\062a0e0b197545c8dac64c951de02bc9\transformed\jetified-play-services-location-21.2.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\047aa7ddff6241681155a5178fa0e58d\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\047aa7ddff6241681155a5178fa0e58d\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.browser:browser:1.8.0] C:\Users\evaro\.gradle\caches\transforms-3\7f6d20225ac1174a3efad96609161b97\transformed\browser-1.8.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.browser:browser:1.8.0] C:\Users\evaro\.gradle\caches\transforms-3\7f6d20225ac1174a3efad96609161b97\transformed\browser-1.8.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\9005ab99f1717e9b0608d9f5ab54ff23\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\9005ab99f1717e9b0608d9f5ab54ff23\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\88664bc4898591af2b748d514fde3782\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\88664bc4898591af2b748d514fde3782\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\a499fa3c34a38edcfdea6b351554e382\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\a499fa3c34a38edcfdea6b351554e382\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8a650b2c5ea333036303d473a939db42\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:19:5-44
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8a650b2c5ea333036303d473a939db42\transformed\jetified-window-java-1.2.0\AndroidManifest.xml:19:5-44
+MERGED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] C:\Users\evaro\.gradle\caches\transforms-3\785692452bed6b1414fd4fb764050d2b\transformed\jetified-play-services-tasks-18.1.0\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] C:\Users\evaro\.gradle\caches\transforms-3\785692452bed6b1414fd4fb764050d2b\transformed\jetified-play-services-tasks-18.1.0\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\6ddfe7bc5a026c54878de2bc1391ef46\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\6ddfe7bc5a026c54878de2bc1391ef46\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\8ab227ca6d562dab86394f7a2b42fe97\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\8ab227ca6d562dab86394f7a2b42fe97\transformed\jetified-fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\ca4d40f38b71d4c621d36eba6fe2f4a4\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\evaro\.gradle\caches\transforms-3\ca4d40f38b71d4c621d36eba6fe2f4a4\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0efada588904821f11adf7ec39ee67b0\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\0efada588904821f11adf7ec39ee67b0\transformed\jetified-activity-ktx-1.8.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\90da4fa7ab29bed17775e89b3905b1f1\transformed\jetified-activity-1.8.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.8.1] C:\Users\evaro\.gradle\caches\transforms-3\90da4fa7ab29bed17775e89b3905b1f1\transformed\jetified-activity-1.8.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\248c2ee92a3eff0f51bd645d25837450\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\248c2ee92a3eff0f51bd645d25837450\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a818e414c52385021f1d9677e7b7ca4e\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\a818e414c52385021f1d9677e7b7ca4e\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa0545052c10d03c17d2b473348f6ff3\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa0545052c10d03c17d2b473348f6ff3\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\7f4a0c54f8ded54a4c0d55036a334d3c\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\7f4a0c54f8ded54a4c0d55036a334d3c\transformed\jetified-appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2c20b5293e22728da7046407170ca5c0\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\2c20b5293e22728da7046407170ca5c0\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\334f77f688c510e4c631ba2daaab7ec9\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\334f77f688c510e4c631ba2daaab7ec9\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\43df30f2af92cd091715649462883cab\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\43df30f2af92cd091715649462883cab\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\8e926d88adc6ec4405f4b01d4e9b1bad\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\evaro\.gradle\caches\transforms-3\8e926d88adc6ec4405f4b01d4e9b1bad\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\85a2d865d0e12a22249976e5601901a3\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\85a2d865d0e12a22249976e5601901a3\transformed\jetified-lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\82d8b2a7d9fca5e641d160069565b477\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\82d8b2a7d9fca5e641d160069565b477\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\051f9dac57ad8cee60cc5a95eb8d9d7f\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\051f9dac57ad8cee60cc5a95eb8d9d7f\transformed\jetified-lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4b65a3e10bc06490e1a05d1d300300eb\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\4b65a3e10bc06490e1a05d1d300300eb\transformed\jetified-lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7b5a837770709484bd30395a2788a4e5\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\7b5a837770709484bd30395a2788a4e5\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\6964f45bcdaad7c523c03595346078c4\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\6964f45bcdaad7c523c03595346078c4\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\2b2bf4b21be1acb6d8aafc6e5e4bedac\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\2b2bf4b21be1acb6d8aafc6e5e4bedac\transformed\jetified-lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\8b9f2b08a8ef59d66d7e2f702c5ee30e\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\8b9f2b08a8ef59d66d7e2f702c5ee30e\transformed\jetified-core-ktx-1.13.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\34e9e272fefd16ac66a87408accf94b7\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\34e9e272fefd16ac66a87408accf94b7\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\4059a61bdad93a189cb4807e89b6c4ef\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\evaro\.gradle\caches\transforms-3\4059a61bdad93a189cb4807e89b6c4ef\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6204f3b987160f01c2c219f45e0d137b\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\6204f3b987160f01c2c219f45e0d137b\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\56d32690194daba5731f9179db6d47c0\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\56d32690194daba5731f9179db6d47c0\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\12d0e8d71b0600cec5ba2edcf29e905c\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\12d0e8d71b0600cec5ba2edcf29e905c\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\eb30b97cf0c123a3aa78bfba9082ceea\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\eb30b97cf0c123a3aa78bfba9082ceea\transformed\jetified-savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\40a45e686cd0e99ac2a33b1453f47939\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\evaro\.gradle\caches\transforms-3\40a45e686cd0e99ac2a33b1453f47939\transformed\jetified-savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\9441e8b274faebbfe21cf8c8f463be95\transformed\jetified-datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\9441e8b274faebbfe21cf8c8f463be95\transformed\jetified-datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\0cf0dfa47f40d2ebd3407bd47f3dd25e\transformed\jetified-datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\0cf0dfa47f40d2ebd3407bd47f3dd25e\transformed\jetified-datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\e3611af684c8af9ba655b32249084f4e\transformed\jetified-datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\e3611af684c8af9ba655b32249084f4e\transformed\jetified-datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:6:5-8:41
+MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:6:5-8:41
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\e896b9ac412a8814559a776dc7b5a420\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\e896b9ac412a8814559a776dc7b5a420\transformed\jetified-tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1122d081a937e71194adcd50d186ca4f\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\1122d081a937e71194adcd50d186ca4f\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\d21e37b6169caa7895fc002c1192b0f1\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\d21e37b6169caa7895fc002c1192b0f1\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3cccf64d8e44a1ff0116ea6b8bd8d8e9\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3cccf64d8e44a1ff0116ea6b8bd8d8e9\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ac364ab66752097bb4779d5aeb5f3ac7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\ac364ab66752097bb4779d5aeb5f3ac7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\61fbac9cdc1a22c54aa04ec76334a907\transformed\jetified-core-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\61fbac9cdc1a22c54aa04ec76334a907\transformed\jetified-core-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa45ff664a4fe5a6d06833e16afb125c\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\aa45ff664a4fe5a6d06833e16afb125c\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\5c2f866ed92dccb171acdbd21a39b9a6\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\5c2f866ed92dccb171acdbd21a39b9a6\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\c956c3ff78f47134a13fc36ef46fb31f\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\evaro\.gradle\caches\transforms-3\c956c3ff78f47134a13fc36ef46fb31f\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\c4537ab9015740d05f09a422063523a5\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.gradle\caches\transforms-3\c4537ab9015740d05f09a422063523a5\transformed\jetified-annotation-experimental-1.4.0\AndroidManifest.xml:5:5-44
+MERGED from [io.reactivex.rxjava2:rxandroid:2.1.1] C:\Users\evaro\.gradle\caches\transforms-3\def6a43a416de6d350d9f6c9a422b875\transformed\jetified-rxandroid-2.1.1\AndroidManifest.xml:18:5-43
+MERGED from [io.reactivex.rxjava2:rxandroid:2.1.1] C:\Users\evaro\.gradle\caches\transforms-3\def6a43a416de6d350d9f6c9a422b875\transformed\jetified-rxandroid-2.1.1\AndroidManifest.xml:18:5-43
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\evaro\.gradle\caches\transforms-3\84b17be5f49a910e04e8c35fea028f28\transformed\jetified-relinker-1.4.5\AndroidManifest.xml:5:5-43
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\evaro\.gradle\caches\transforms-3\84b17be5f49a910e04e8c35fea028f28\transformed\jetified-relinker-1.4.5\AndroidManifest.xml:5:5-43
 	tools:overrideLibrary
 		ADDED from [:flutter_secure_storage] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\flutter_secure_storage\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-50
 	android:targetSdkVersion
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	android:minSdkVersion
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
-uses-library#androidx.window.extensions
-ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:23:9-25:40
-	android:required
-		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:25:13-37
-	android:name
-		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:24:13-54
-uses-library#androidx.window.sidecar
-ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:26:9-28:40
-	android:required
-		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:28:13-37
-	android:name
-		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\3e108fe9d597d03770ae82acaebb5b63\transformed\jetified-window-1.2.0\AndroidManifest.xml:27:13-51
-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
-	android:protectionLevel
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
-	android:name
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
-permission#com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
-	android:protectionLevel
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
-	android:name
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
-uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
-	android:name
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
-uses-permission#com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
-	android:name
-		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\c666c258fca39b3353b46678a6b928ab\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
-provider#androidx.startup.InitializationProvider
-ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
-MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
-MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\53f114d110e356c36b5f50ab357f361f\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
-	tools:node
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:28:13-31
-	android:authorities
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
-	android:exported
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
-	android:name
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
-meta-data#androidx.lifecycle.ProcessLifecycleInitializer
-ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
-	android:value
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
-	android:name
-		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\5d9083683aa46ad6646ca7a884bd56df\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
-meta-data#androidx.profileinstaller.ProfileInstallerInitializer
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
-	android:value
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
-	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
-receiver#androidx.profileinstaller.ProfileInstallReceiver
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+service#com.baseflow.geolocator.GeolocatorLocationService
+ADDED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-12:56
 	android:enabled
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+		ADDED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-35
 	android:exported
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+		ADDED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-37
+	android:foregroundServiceType
+		ADDED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:12:13-53
+	android:name
+		ADDED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-77
+activity#io.flutter.plugins.urllauncher.WebViewActivity
+ADDED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-11:74
+	android:exported
+		ADDED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-37
+	android:theme
+		ADDED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-71
+	android:name
+		ADDED from [:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-74
+uses-library#androidx.window.extensions
+ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:23:9-25:40
+	android:required
+		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:25:13-37
+	android:name
+		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:24:13-54
+uses-library#androidx.window.sidecar
+ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:26:9-28:40
+	android:required
+		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:28:13-37
+	android:name
+		ADDED from [androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:27:13-51
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:9-22:45
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:22:19-43
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:21:19-78
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:19-85
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+permission#com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+uses-permission#com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\evaro\.gradle\caches\transforms-3\a1fd92b89d0c194f8fe8fdca4d20e2ee\transformed\jetified-startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:28:13-31
+	android:authorities
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
+	android:exported
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+uses-permission-sdk-23#android.permission.ACCESS_COARSE_LOCATION
+ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:5-88
+	android:name
+		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:29-85
+uses-permission-sdk-23#android.permission.ACCESS_FINE_LOCATION
+ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:5-86
+	android:name
+		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:29-83
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
 	android:permission
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
 	android:directBootAware
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
 intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
 action#androidx.profileinstaller.action.INSTALL_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
 intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
 action#androidx.profileinstaller.action.SKIP_FILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
 intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
 action#androidx.profileinstaller.action.SAVE_PROFILE
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
 intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
 action#androidx.profileinstaller.action.BENCHMARK_OPERATION
-ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
 	android:name
-		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\1e1e8719823df11c58e964840aa823f6\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
