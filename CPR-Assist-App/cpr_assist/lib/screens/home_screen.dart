@@ -23,7 +23,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    bleConnection = BLEConnection(decryptedDataHandler: widget.decryptedDataHandler, context: context);
+    bleConnection = BLEConnection(
+      decryptedDataHandler: widget.decryptedDataHandler,
+      context: context,
+    );
     _initializeApp();
   }
 
@@ -84,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // BLE Section
             if (bleConnection.connectedDevice == null) ...[
               ElevatedButton(
                 onPressed: bleConnection.isScanning ? null : () => bleConnection.startScan(() => setState(() {})),
@@ -129,37 +133,54 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
+            // Buttons Section
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: _handleTrainingMode,
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(200, 60),
-                      textStyle: const TextStyle(fontSize: 18),
-                    ),
-                    child: const Text('Training Mode'),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EmergencyScreen(
-                          dataStream: widget.decryptedDataHandler.dataStream,
-                          decryptedDataHandler: widget.decryptedDataHandler,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Square button with rounded corners for Training Mode
+                    ElevatedButton(
+                      onPressed: _handleTrainingMode,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 60), // Larger button
+                        backgroundColor: Colors.blueGrey[300], // Softer color
+                      ),
+                      child: const Text(
+                        'Training Mode',
+                        style: TextStyle(fontSize: 20, color: Colors.white),
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(200, 60),
-                      textStyle: const TextStyle(fontSize: 18),
+                    const SizedBox(height: 30),
+                    // Square button with rounded corners for Emergency Mode
+                    ElevatedButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EmergencyScreen(
+                            dataStream: widget.decryptedDataHandler.dataStream,
+                            decryptedDataHandler: widget.decryptedDataHandler,
+                          ),
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 60), // Larger button
+                        backgroundColor: Colors.red[300], // Softer color
+                      ),
+                      child: const Text(
+                        'Emergency Mode',
+                        style: TextStyle(fontSize: 20, color: Colors.white),
+                      ),
                     ),
-                    child: const Text('Emergency Mode'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],

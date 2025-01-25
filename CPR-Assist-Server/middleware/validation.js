@@ -1,7 +1,7 @@
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 
-// Input validation middleware
+// Input validation for registration
 const validateRegistrationInput = [
     body('username')
         .trim()
@@ -21,10 +21,9 @@ const validateRegistrationInput = [
         .withMessage('Password must contain a number')
         .matches(/[A-Z]/)
         .withMessage('Password must contain an uppercase letter'),
-
 ];
 
-// Validation for login
+// Input validation for login
 const validateLoginInput = [
     body('username')
         .trim()
@@ -33,6 +32,22 @@ const validateLoginInput = [
     body('password')
         .notEmpty()
         .withMessage('Password is required'),
+];
+
+// Input validation for session data
+const validateSessionInput = [
+    body('compression_count').isInt().withMessage('Compression count must be an integer'),
+    body('correct_depth').isInt().withMessage('Correct depth must be an integer'),
+    body('correct_frequency').isInt().withMessage('Correct frequency must be an integer'),
+    body('correct_angle').isFloat({ min: 0 }).withMessage('Correct angle must be a positive number'),
+    body('session_duration').isInt().withMessage('Session duration must be an integer'),
+    body('correct_rebound').optional().isBoolean().withMessage('Correct rebound must be a boolean'),
+    body('patient_heart_rate').optional().isInt().withMessage('Patient heart rate must be an integer'),
+    body('patient_temperature').optional().isFloat().withMessage('Patient temperature must be a float'),
+    body('user_heart_rate').optional().isInt().withMessage('User heart rate must be an integer'),
+    body('user_temperature_rate').optional().isFloat().withMessage('User temperature rate must be a float'),
+    body('session_start').optional().isISO8601().withMessage('Session start must be a valid date-time'),
+    body('session_end').optional().isISO8601().withMessage('Session end must be a valid date-time'),
 ];
 
 // Middleware to handle validation errors
@@ -48,7 +63,7 @@ const handleValidationErrors = (req, res, next) => {
     next();
 };
 
-// JWT parsing and verification helper
+// JWT parsing helper
 const parseToken = (header) => {
     if (!header) {
         throw new Error('Token missing');
@@ -69,7 +84,8 @@ const authenticate = (req, res, next) => {
     } catch (err) {
         res.status(401).json({
             success: false,
-            error: err.message || 'Unauthorized access',
+            message: 'Unauthorized access',
+            error: err.message,
         });
     }
 };
@@ -77,6 +93,7 @@ const authenticate = (req, res, next) => {
 module.exports = {
     validateRegistrationInput,
     validateLoginInput,
+    validateSessionInput,
     handleValidationErrors,
     authenticate,
 };

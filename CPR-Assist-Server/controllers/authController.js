@@ -9,22 +9,25 @@ class AuthController {
 
     // Register a new user
     async register(req, res, next) {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
         const { username, password, email } = req.body;
 
         try {
-            // Check if username or email already exists
             const existingUser = await this.pool.query(
                 'SELECT * FROM users WHERE username = $1 OR email = $2',
                 [username, email]
             );
 
             if (existingUser.rows.length > 0) {
-                return res.status(409).json({ error: 'Username or email already exists' });
+                return res.status(409).json({ error: 'A user with this information already exists' });
             }
 
             const hashedPassword = await bcrypt.hash(password, 12);
 
-            // Insert new user
             await this.pool.query(
                 'INSERT INTO users (username, password, email, created_at, is_active) VALUES ($1, $2, $3, NOW(), $4)',
                 [username, hashedPassword, email, true]
@@ -36,6 +39,7 @@ class AuthController {
             next(error);
         }
     }
+
 
     // Login an existing user
     async login(req, res, next) {
@@ -65,7 +69,6 @@ class AuthController {
                 { expiresIn: '1h' }
             );
 
-
             // Send back the token and user ID
             res.json({
                 message: 'Login successful',
@@ -77,7 +80,6 @@ class AuthController {
             next(error);
         }
     }
-
 
     // Refresh token
     async refreshToken(req, res, next) {

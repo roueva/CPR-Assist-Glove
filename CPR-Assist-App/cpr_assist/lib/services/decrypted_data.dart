@@ -6,67 +6,68 @@ class DecryptedData {
   final StreamController<Map<String, dynamic>> _dataStreamController =
   StreamController<Map<String, dynamic>>.broadcast();
 
-  // AES key must match the Arduino's key (16 bytes)
-  final encrypt.Key _aesKey = encrypt.Key.fromUtf8('000102030405060708090A0B0C0D0E0F');
+  // AES key configured as raw bytes to match the Arduino
+  final encrypt.Key _aesKey = encrypt.Key(Uint8List.fromList([
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+  ]));
   late final encrypt.Encrypter _aesEncrypter;
 
   DecryptedData() {
-    _aesEncrypter = encrypt.Encrypter(encrypt.AES(_aesKey, mode: encrypt.AESMode.ecb));
+    _aesEncrypter = encrypt.Encrypter(
+      encrypt.AES(
+        _aesKey,
+        mode: encrypt.AESMode.ecb,
+        padding: null,
+      ),
+    );
   }
 
   Stream<Map<String, dynamic>> get dataStream => _dataStreamController.stream;
 
   void processReceivedData(List<int> data) {
-    if (data.length == 32) {
-      try {
-        // Convert List<int> to Uint8List for encryption library
-        final Uint8List encryptedBlock1 = Uint8List.fromList(data.sublist(0, 16));
-        final Uint8List encryptedBlock2 = Uint8List.fromList(data.sublist(16, 32));
+    if (data.length != 32) {
+      print("Incorrect data length: ${data.length}. Expected 32 bytes.");
+      return;
+    }
 
-        // Decrypt both blocks
-        final decryptedBlock1 = _aesEncrypter.decrypt(encrypt.Encrypted(encryptedBlock1));
-        final decryptedBlock2 = _aesEncrypter.decrypt(encrypt.Encrypted(encryptedBlock2));
+    try {
+      // Split encrypted data into 16-byte blocks
+      final Uint8List encryptedBlock1 = Uint8List.fromList(data.sublist(0, 16));
+      final Uint8List encryptedBlock2 = Uint8List.fromList(data.sublist(16, 32));
 
-        // Combine the decrypted blocks into a single list of bytes
-        final decryptedData = [...decryptedBlock1.codeUnits, ...decryptedBlock2.codeUnits];
+      // Decrypt each block
+      final decryptedBlock1 = _aesEncrypter.decryptBytes(encrypt.Encrypted(encryptedBlock1));
+      final decryptedBlock2 = _aesEncrypter.decryptBytes(encrypt.Encrypted(encryptedBlock2));
 
-        // Notify listeners with parsed data
-        _dataStreamController.add(_parseDecryptedData(decryptedData));
+      // Combine decrypted blocks (first 28 bytes are meaningful data)
+      final decryptedData = [...decryptedBlock1, ...decryptedBlock2.sublist(0, 12)];
 
-        print("Data processed successfully.");
-      } catch (e) {
-        print("Failed to decrypt or process data: $e");
-      }
-    } else {
-      print("Received incomplete or incorrect data length.");
+      // Parse and stream the data
+      final parsedData = _parseDecryptedData(Uint8List.fromList(decryptedData));
+      _dataStreamController.add(parsedData);
+    } catch (e) {
+      print("Failed to decrypt or process data: $e");
     }
   }
 
-  Map<String, dynamic> _parseDecryptedData(List<int> decryptedData) {
-    int totalCompressions = _bytesToInt(decryptedData.sublist(0, 4));
-    int correctWeightCompressions = _bytesToInt(decryptedData.sublist(4, 8));
-    int correctFrequencyCompressions = _bytesToInt(decryptedData.sublist(8, 12));
-    int weightGrade = _bytesToInt(decryptedData.sublist(12, 16));
-    int frequencyGrade = _bytesToInt(decryptedData.sublist(16, 20));
-    int angleGrade = _bytesToInt(decryptedData.sublist(20, 24));
-    int totalGrade = _bytesToInt(decryptedData.sublist(24, 28));
+  Map<String, dynamic> _parseDecryptedData(Uint8List decryptedData) {
+    final buffer = ByteData.sublistView(decryptedData);
 
-    return {
-      'totalCompressions': totalCompressions,
-      'correctWeightCompressions': correctWeightCompressions,
-      'correctFrequencyCompressions': correctFrequencyCompressions,
-      'weightGrade': weightGrade / 100.0,
-      'frequencyGrade': frequencyGrade / 100.0,
-      'angleGrade': angleGrade / 100.0,
-      'totalGrade': totalGrade / 100.0,
-    };
-  }
-
-  int _bytesToInt(List<int> bytes) {
-    return bytes[0] |
-    (bytes[1] << 8) |
-    (bytes[2] << 16) |
-    (bytes[3] << 24);
+    try {
+      return {
+        'totalCompressions': buffer.getUint32(0, Endian.little),
+        'correctWeightCompressions': buffer.getUint32(4, Endian.little),
+        'correctFrequencyCompressions': buffer.getUint32(8, Endian.little),
+        'weightGrade': buffer.getUint32(12, Endian.little) / 100.0,
+        'frequencyGrade': buffer.getUint32(16, Endian.little) / 100.0,
+        'angleGrade': buffer.getUint32(20, Endian.little) / 100.0,
+        'totalGrade': buffer.getUint32(24, Endian.little) / 100.0,
+      };
+    } catch (e) {
+      print("Error parsing decrypted data: $e");
+      return {};
+    }
   }
 
   void dispose() {

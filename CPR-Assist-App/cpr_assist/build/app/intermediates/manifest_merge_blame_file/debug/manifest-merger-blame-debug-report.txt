@@ -36,222 +36,234 @@
 25    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 25-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:5-76
 25-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:22-73
-26    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" /> <!-- Declare Bluetooth features (important for Android 12+) -->
-26-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:5-79
-26-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:22-76
-27    <uses-feature
-27-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:5-87
-28        android:name="android.hardware.bluetooth"
-28-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:19-60
-29        android:required="true" />
-29-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:61-84
-30    <uses-feature
-30-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:5-91
-31        android:name="android.hardware.bluetooth_le"
-31-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:19-63
-32        android:required="false" />
-32-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:14:64-88
-33
-34    <queries>
-34-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:5-51:15
-35        <intent>
-35-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:47:9-50:18
-36            <action android:name="android.intent.action.PROCESS_TEXT" />
-36-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:13-73
-36-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:21-70
+26    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+26-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:5-78
+26-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:22-75
+27    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+27-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:5-79
+27-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:22-76
+28    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" /> <!-- Declare Bluetooth features (important for Android 12+) -->
+28-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:5-81
+28-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:22-78
+29    <uses-feature
+29-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:5-87
+30        android:name="android.hardware.bluetooth"
+30-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:19-60
+31        android:required="true" />
+31-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:61-84
+32    <uses-feature
+32-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:5-90
+33        android:name="android.hardware.bluetooth_le"
+33-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:19-63
+34        android:required="true" />
+34-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:64-87
+35
+36    <queries>
+36-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:53:5-59:15
 37
-38            <data android:mimeType="text/plain" />
-38-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:13-51
-38-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:19-48
-39        </intent>
-40    </queries>
+38        <!-- Query for process text intents -->
+39        <intent>
+39-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:55:9-58:18
+40            <action android:name="android.intent.action.PROCESS_TEXT" />
+40-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:56:13-73
+40-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:56:21-70
 41
-42    <permission
-42-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
-43        android:name="com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-43-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
-44        android:protectionLevel="signature" />
-44-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+42            <data android:mimeType="text/plain" />
+42-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:57:13-51
+42-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:57:19-48
+43        </intent>
+44    </queries>
 45
-46    <uses-permission android:name="com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- required for API 23 - 30, no android:maxSdkVersion because of a potential breaking change -->
-46-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
-46-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
-47    <!-- TODO: add android:maxSdkVersion on 2.0.0 -->
-48    <uses-permission-sdk-23 android:name="android.permission.ACCESS_COARSE_LOCATION" />
-48-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:5-88
-48-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:29-85
-49    <uses-permission-sdk-23 android:name="android.permission.ACCESS_FINE_LOCATION" />
-49-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:5-86
-49-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:29-83
-50
-51    <application
-51-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:5-44:19
-52        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-52-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
-53        android:debuggable="true"
-54        android:extractNativeLibs="false"
-55        android:icon="@mipmap/ic_launcher"
-55-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:9-43
-56        android:label="cpr_assist" >
-56-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:17:9-35
-57        <activity
-57-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:9-35:20
-58            android:name="com.example.cpr_assist.MainActivity"
-58-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:13-63
-59            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-59-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:13-163
-60            android:exported="true"
-60-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:21:13-36
-61            android:hardwareAccelerated="true"
-61-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:26:13-47
-62            android:launchMode="singleTop"
-62-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:22:13-43
-63            android:taskAffinity=""
-63-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:23:13-36
-64            android:theme="@style/LaunchTheme"
-64-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:13-47
-65            android:windowSoftInputMode="adjustResize" >
-65-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:13-55
-66            <meta-data
-66-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:13-30:57
-67                android:name="io.flutter.embedding.android.NormalTheme"
-67-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:17-72
-68                android:resource="@style/NormalTheme" />
-68-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:17-54
-69
-70            <intent-filter>
-70-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:31:13-34:29
-71                <action android:name="android.intent.action.MAIN" />
-71-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:17-69
-71-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:25-66
-72
-73                <category android:name="android.intent.category.LAUNCHER" />
-73-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:33:17-77
-73-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:33:27-74
-74            </intent-filter>
-75        </activity>
-76
-77        <meta-data
-77-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:37:9-39:33
-78            android:name="flutterEmbedding"
-78-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:38:13-44
-79            android:value="2" />
-79-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:13-30
-80        <meta-data
-80-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:41:9-43:36
-81            android:name="com.google.android.bluetooth.le.BLE_ADVERTISING_SUPPORTED"
-81-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:42:13-85
-82            android:value="true" />
-82-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:43:13-33
-83
-84        <service
-84-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-12:56
-85            android:name="com.baseflow.geolocator.GeolocatorLocationService"
-85-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-77
-86            android:enabled="true"
-86-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-35
-87            android:exported="false"
-87-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-37
-88            android:foregroundServiceType="location" />
-88-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:12:13-53
+46    <permission
+46-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+47        android:name="com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+47-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+48        android:protectionLevel="signature" />
+48-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+49
+50    <uses-permission android:name="com.example.cpr_assist.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- required for API 23 - 30, no android:maxSdkVersion because of a potential breaking change -->
+50-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+50-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+51    <!-- TODO: add android:maxSdkVersion on 2.0.0 -->
+52    <uses-permission-sdk-23 android:name="android.permission.ACCESS_COARSE_LOCATION" />
+52-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:5-88
+52-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:18:29-85
+53    <uses-permission-sdk-23 android:name="android.permission.ACCESS_FINE_LOCATION" />
+53-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:5-86
+53-->[com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:19:29-83
+54
+55    <application
+55-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:5-51:19
+56        android:allowBackup="true"
+56-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:21:9-35
+57        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+57-->[androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+58        android:debuggable="true"
+59        android:extractNativeLibs="false"
+60        android:icon="@mipmap/ic_launcher"
+60-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:9-43
+61        android:label="cpr_assist"
+61-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:9-35
+62        android:supportsRtl="true" >
+62-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:22:9-35
+63        <activity
+63-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:9-42:20
+64            android:name="com.example.cpr_assist.MainActivity"
+64-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:13-63
+65            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+65-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:13-163
+66            android:exported="true"
+66-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:26:13-36
+67            android:hardwareAccelerated="true"
+67-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:31:13-47
+68            android:launchMode="singleTop"
+68-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:13-43
+69            android:taskAffinity=""
+69-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:13-36
+70            android:theme="@style/LaunchTheme"
+70-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:13-47
+71            android:windowSoftInputMode="adjustResize" >
+71-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:13-55
+72            <meta-data
+72-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:34:13-36:57
+73                android:name="io.flutter.embedding.android.NormalTheme"
+73-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:35:17-72
+74                android:resource="@style/NormalTheme" />
+74-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:36:17-54
+75
+76            <intent-filter>
+76-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:38:13-41:29
+77                <action android:name="android.intent.action.MAIN" />
+77-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:17-69
+77-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:25-66
+78
+79                <category android:name="android.intent.category.LAUNCHER" />
+79-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:40:17-77
+79-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:40:27-74
+80            </intent-filter>
+81        </activity>
+82
+83        <meta-data
+83-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:44:9-46:33
+84            android:name="flutterEmbedding"
+84-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:45:13-44
+85            android:value="2" />
+85-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:13-30
+86        <meta-data
+86-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:9-50:36
+87            android:name="com.google.android.bluetooth.le.BLE_ADVERTISING_SUPPORTED"
+87-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:13-85
+88            android:value="true" />
+88-->C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:50:13-33
 89
-90        <activity
-90-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-11:74
-91            android:name="io.flutter.plugins.urllauncher.WebViewActivity"
-91-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-74
-92            android:exported="false"
-92-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-37
-93            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
-93-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-71
-94
-95        <uses-library
-95-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:23:9-25:40
-96            android:name="androidx.window.extensions"
-96-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:24:13-54
-97            android:required="false" />
-97-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:25:13-37
-98        <uses-library
-98-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:26:9-28:40
-99            android:name="androidx.window.sidecar"
-99-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:27:13-51
-100            android:required="false" />
-100-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:28:13-37
-101
-102        <activity
-102-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:9-22:45
-103            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-103-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:19-85
-104            android:exported="false"
-104-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:22:19-43
-105            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-105-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:21:19-78
-106
-107        <meta-data
-107-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
-108            android:name="com.google.android.gms.version"
-108-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
-109            android:value="@integer/google_play_services_version" />
-109-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
-110
-111        <provider
-111-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
-112            android:name="androidx.startup.InitializationProvider"
-112-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
-113            android:authorities="com.example.cpr_assist.androidx-startup"
-113-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
-114            android:exported="false" >
-114-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
-115            <meta-data
-115-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
-116                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-116-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
-117                android:value="androidx.startup" />
-117-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
-118            <meta-data
-118-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
-119                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-119-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
-120                android:value="androidx.startup" />
-120-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
-121        </provider>
-122
-123        <receiver
-123-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
-124            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-124-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
-125            android:directBootAware="false"
-125-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
-126            android:enabled="true"
-126-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
-127            android:exported="true"
-127-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
-128            android:permission="android.permission.DUMP" >
-128-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
-129            <intent-filter>
-129-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
-130                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-130-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
-130-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
-131            </intent-filter>
-132            <intent-filter>
-132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
-133                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-133-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
-133-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
-134            </intent-filter>
+90        <service
+90-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-12:56
+91            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+91-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-77
+92            android:enabled="true"
+92-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-35
+93            android:exported="false"
+93-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-37
+94            android:foregroundServiceType="location" />
+94-->[:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:12:13-53
+95
+96        <activity
+96-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:8:9-11:74
+97            android:name="io.flutter.plugins.urllauncher.WebViewActivity"
+97-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:9:13-74
+98            android:exported="false"
+98-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:10:13-37
+99            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+99-->[:url_launcher_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\url_launcher_android\intermediates\merged_manifest\debug\AndroidManifest.xml:11:13-71
+100
+101        <uses-library
+101-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:23:9-25:40
+102            android:name="androidx.window.extensions"
+102-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:24:13-54
+103            android:required="false" />
+103-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:25:13-37
+104        <uses-library
+104-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:26:9-28:40
+105            android:name="androidx.window.sidecar"
+105-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:27:13-51
+106            android:required="false" />
+106-->[androidx.window:window:1.2.0] C:\Users\evaro\.gradle\caches\transforms-3\8859fd2468ade3ef2655d1f63d6737f2\transformed\jetified-window-1.2.0\AndroidManifest.xml:28:13-37
+107
+108        <activity
+108-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:9-22:45
+109            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+109-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:20:19-85
+110            android:exported="false"
+110-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:22:19-43
+111            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+111-->[com.google.android.gms:play-services-base:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\4a0baae68aec8ddf35756692373b5e91\transformed\jetified-play-services-base-18.3.0\AndroidManifest.xml:21:19-78
+112
+113        <meta-data
+113-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
+114            android:name="com.google.android.gms.version"
+114-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
+115            android:value="@integer/google_play_services_version" />
+115-->[com.google.android.gms:play-services-basement:18.3.0] C:\Users\evaro\.gradle\caches\transforms-3\aa568bf11239b6a9b2866fb2d7c8f9fe\transformed\jetified-play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
+116
+117        <provider
+117-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
+118            android:name="androidx.startup.InitializationProvider"
+118-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
+119            android:authorities="com.example.cpr_assist.androidx-startup"
+119-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
+120            android:exported="false" >
+120-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
+121            <meta-data
+121-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+122                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+122-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+123                android:value="androidx.startup" />
+123-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\evaro\.gradle\caches\transforms-3\40a1bd5ff2ce65cd1fad055cc690d356\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+124            <meta-data
+124-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+125                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+125-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+126                android:value="androidx.startup" />
+126-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+127        </provider>
+128
+129        <receiver
+129-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+130            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+130-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+131            android:directBootAware="false"
+131-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+132            android:enabled="true"
+132-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+133            android:exported="true"
+133-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+134            android:permission="android.permission.DUMP" >
+134-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
 135            <intent-filter>
-135-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
-136                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
-136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+135-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+136                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+136-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
 137            </intent-filter>
 138            <intent-filter>
-138-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
-139                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-139-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
-139-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+139                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
 140            </intent-filter>
-141        </receiver>
-142    </application>
-143
-144</manifest>
+141            <intent-filter>
+141-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+142                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+143            </intent-filter>
+144            <intent-filter>
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+145                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\evaro\.gradle\caches\transforms-3\408a642162969e960684d9c16b2f116a\transformed\jetified-profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+146            </intent-filter>
+147        </receiver>
+148    </application>
+149
+150</manifest>

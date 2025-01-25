@@ -5,6 +5,8 @@ import '../widgets/account_menu.dart';
 import 'home_screen.dart';
 import '../services/decrypted_data.dart';
 import 'login_screen.dart';
+import 'past_sessions_screen.dart';
+import '../services/network_service.dart';
 
 class TrainingScreen extends StatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
@@ -22,11 +24,17 @@ class TrainingScreen extends StatefulWidget {
 
 class _TrainingScreenState extends State<TrainingScreen> {
   String connectionStatus = "Disconnected";
-  int totalCompressions = 0;
-  int correctWeightCompressions = 0;
-  int correctFrequencyCompressions = 0;
+  int compressionCount = 0; // Updated naming for clarity
+  int correctWeight = 0; // Correct depth
+  int correctFrequency = 0;
+  int? patientHeartRate;
+  double? patientTemperature;
+  int? userHeartRate;
+  double? userTemperatureRate;
+  bool? correctRebound;
   double totalGrade = 0.0;
   late StreamSubscription<Map<String, dynamic>> dataSubscription;
+  bool? isLoggedIn;
 
   @override
   void initState() {
@@ -35,10 +43,12 @@ class _TrainingScreenState extends State<TrainingScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    if (isLoggedIn == null) {
+      final prefs = await SharedPreferences.getInstance();
+      isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    }
 
-    if (!isLoggedIn) {
+    if (!isLoggedIn!) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (context) => LoginScreen(
@@ -61,16 +71,24 @@ class _TrainingScreenState extends State<TrainingScreen> {
     dataSubscription = widget.dataStream.listen(
           (data) {
         setState(() {
-          totalCompressions = data['totalCompressions'] ?? totalCompressions;
-          correctWeightCompressions = data['correctWeightCompressions'] ?? correctWeightCompressions;
-          correctFrequencyCompressions = data['correctFrequencyCompressions'] ?? correctFrequencyCompressions;
-          totalGrade = data['totalGrade'] ?? totalGrade;
+          compressionCount = data['totalCompressions'] ?? 0;
+          correctWeight = data['correctWeightCompressions'] ?? 0;
+          correctFrequency = data['correctFrequencyCompressions'] ?? 0;
+          patientHeartRate = data['patientHeartRate'] ?? 0;
+          patientTemperature = data['patientTemperature'] ?? 0.0;
+          userHeartRate = data['userHeartRate'] ?? 0;
+          userTemperatureRate = data['userTemperatureRate'] ?? 0.0;
+          correctRebound = data['correctRebound'] ?? false;
+          totalGrade = data['totalGrade'] ?? 0.0;
         });
       },
       onError: (error) {
         setState(() {
-          connectionStatus = "Error receiving data: $error";
+          connectionStatus = "Error: $error";
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Data stream error: $error')),
+        );
       },
       onDone: () {
         setState(() {
@@ -79,6 +97,60 @@ class _TrainingScreenState extends State<TrainingScreen> {
       },
     );
   }
+
+  Future<void> _saveSessionData() async {
+    try {
+      final sessionData = {
+        'compression_count': compressionCount,
+        'correct_depth': correctWeight,
+        'correct_frequency': correctFrequency,
+        'correct_angle': 0.0,
+        'patient_heart_rate': (patientHeartRate ?? 0).toInt(),
+        'patient_temperature': double.parse((patientTemperature ?? 0.0).toStringAsFixed(1)),
+        'user_heart_rate': (userHeartRate ?? 0).toInt(),
+        'user_temperature_rate': double.parse((userTemperatureRate ?? 0.0).toStringAsFixed(1)),
+        'correct_rebound': correctRebound ?? false,
+        'total_grade': double.parse(totalGrade.toStringAsFixed(2)),
+        'session_start': DateTime.now().toUtc().toIso8601String(),
+        'session_duration': 0, // Placeholder
+      };
+
+      print('Sanitized Session Data: $sessionData');
+
+      final response = await NetworkService.post(
+        '/sessions/summary',
+        sessionData,
+        requiresAuth: true,
+      );
+
+      if (response['success'] == true) {
+        _showSuccessMessage(); // Show success message
+      } else {
+        throw Exception(response['message'] ?? 'Failed to save session data');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving session data: $e')),
+      );
+    }
+  }
+
+  void _showSuccessMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: const [
+            Text('Data Saved Successfully!'),
+            Icon(Icons.check_circle, color: Colors.green),
+          ],
+        ),
+        backgroundColor: Colors.black87,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
 
   @override
   void dispose() {
@@ -112,10 +184,48 @@ class _TrainingScreenState extends State<TrainingScreen> {
           children: [
             Text('Connection Status: $connectionStatus'),
             const SizedBox(height: 20),
-            Text('Total Compressions: $totalCompressions'),
-            Text('Correct Weight Compressions: $correctWeightCompressions'),
-            Text('Correct Frequency Compressions: $correctFrequencyCompressions'),
+            Text('Total Compressions: $compressionCount'),
+            Text('Correct Weight Compressions: $correctWeight'),
+            Text('Correct Frequency Compressions: $correctFrequency'),
+            Text('Patient Heart Rate: ${patientHeartRate?.toString() ?? "N/A"} bpm'),
+            Text('Patient Temperature: ${patientTemperature?.toStringAsFixed(1) ?? "N/A"} °C'),
+            Text('User Heart Rate: ${userHeartRate?.toString() ?? "N/A"} bpm'),
+            Text('User Temperature: ${userTemperatureRate?.toStringAsFixed(1) ?? "N/A"} °C'),
+            Text('Correct Rebound: ${correctRebound != null ? (correctRebound! ? "Yes" : "No") : "N/A"}'),
             Text('Total Grade: ${totalGrade.toStringAsFixed(2)}%'),
+            const SizedBox(height: 40),
+            if (connectionStatus == "Disconnected")
+              ElevatedButton(
+                onPressed: _startReceivingData,
+                child: const Text('Retry Connection'),
+              ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _saveSessionData,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                textStyle: const TextStyle(fontSize: 18),
+              ),
+              child: const Text('Save Session'),
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PastSessionsScreen(
+                      dataStream: widget.dataStream,
+                      decryptedDataHandler: widget.decryptedDataHandler,
+                    ),
+                  ),
+                );
+              },
+              child: const Text(
+                'View Past Sessions',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
           ],
         ),
       ),

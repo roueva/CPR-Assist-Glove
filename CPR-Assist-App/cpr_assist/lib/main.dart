@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
-import 'services/decrypted_data.dart'; // Import DecryptedData
+import 'services/decrypted_data.dart';
 
 void main() {
   runApp(MyApp());

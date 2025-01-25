@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class NetworkService {
   //static const String baseUrl = 'https://cpr-assist-app.up.railway.app';
-  static String get baseUrl => 'http://192.168.2.22:3000'; // Local IP
+  static String get baseUrl => 'http://192.168.2.18:3000'; // Local IP
+ // static String get baseUrl => 'http://192.168.0.121:3000'; // captaincoach
 
   // Get the token from SharedPreferences
   static Future<String?> getToken() async {
@@ -46,6 +47,11 @@ class NetworkService {
         if (requiresAuth) 'Authorization': 'Bearer ${await getToken()}',
       };
 
+      // Debugging logs
+      print('POST Request URL: $url');
+      print('POST Request Headers: $headers');
+      print('POST Request Body: ${jsonEncode(body)}');
+
       final response = await http.post(
         url,
         headers: headers,
@@ -54,6 +60,7 @@ class NetworkService {
 
       return _handleResponse(response);
     } catch (e) {
+      print('Error during POST request: $e');
       throw Exception('Network error: $e');
     }
   }
@@ -81,6 +88,9 @@ class NetworkService {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
+    } else if (response.statusCode == 401) {
+      print('Token expired or unauthorized access.');
+      throw Exception('401 Unauthorized');
     } else {
       final errorMessage = jsonDecode(response.body)['errors']
           ?? jsonDecode(response.body)['error']

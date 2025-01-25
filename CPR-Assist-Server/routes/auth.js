@@ -38,52 +38,25 @@ function initializeAuthRoutes(pool) {
         (req, res, next) => authController.login(req, res, next)
     );
 
-    // Refresh token
+    // Refresh token route
     router.post('/refresh-token', authenticate, (req, res, next) =>
         authController.refreshToken(req, res, next)
     );
 
-    // Password reset routes
+    // Password reset request route
     router.post('/password-reset-request', (req, res, next) =>
         authController.requestPasswordReset(req, res, next)
     );
 
+    // Password reset route
     router.post('/password-reset/:token', (req, res, next) =>
         authController.resetPassword(req, res, next)
     );
 
-    // Fetch past sessions for logged-in user
-    router.get('/sessions', authenticate, async (req, res) => {
-        try {
-            const userId = req.user.id; // Ensure the user ID is from the token
-
-            const result = await req.db.query(
-                `SELECT id, compression_count, correct_depth, correct_frequency, correct_angle, session_duration, session_start 
-                 FROM cpr_sessions 
-                 WHERE user_id = $1
-                 ORDER BY session_start DESC`,
-                [userId]
-            );
-
-            res.json({
-                success: true,
-                data: result.rows, // Return session data for the logged-in user
-            });
-        } catch (error) {
-            console.error('Error fetching session summaries:', error.message);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to fetch session summaries',
-                error: error.message,
-            });
-        }
-    });
-
-    // Fetch user profile
+    // User profile route
     router.get('/profile', authenticate, async (req, res) => {
         try {
             const userId = req.user.id;
-
             const result = await pool.query(
                 'SELECT id, username, email, created_at FROM users WHERE id = $1',
                 [userId]

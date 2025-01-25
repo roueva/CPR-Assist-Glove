@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const { Pool } = require('pg');
 const winston = require('winston');
 const createAuthRoutes = require('./routes/auth');
+const createSessionRoutes = require('./routes/session');
 
 // Create PostgreSQL connection pool
 const pool = new Pool({
@@ -12,11 +13,13 @@ const pool = new Pool({
     host: process.env.POSTGRES_HOST,
     database: process.env.POSTGRES_DATABASE,
     password: process.env.POSTGRES_PASSWORD,
-    port: process.env.POSTGRES_PORT,
+    port: process.env.POSTGRES_PORT || 5432, // Default port fallback
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false // Enable SSL in production
 });
 
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
+// Create a Winston logger for application-wide logging
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
@@ -34,6 +37,27 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
+// Root route for health check
+app.get('/', (req, res) => {
+    res.json({ message: 'Server is running', status: 'healthy' });
+});
+
+// Register routes
+app.use('/auth', (req, res, next) => {
+    req.db = pool; // Attach pool to the request object for auth routes
+    next();
+}, createAuthRoutes(pool));
+
+app.use('/sessions', (req, res, next) => {
+    req.db = pool;
+    next();
+}, createSessionRoutes(pool));
+
+// Handle unknown routes
+app.use((req, res, next) => {
+    res.status(404).json({ error: 'Route not found' });
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
     logger.error(err.message, { stack: err.stack });
@@ -43,14 +67,9 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Pass pool to authRoutes and sessionRoutes
-app.use('/auth', createAuthRoutes(pool));
-const sessionRoutes = require('./routes/session');
-app.use('/cpr', sessionRoutes(pool));
-
 const PORT = process.env.PORT || 3000;
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`Using port: ${PORT}`);
-
 
 (async () => {
     try {
@@ -66,3 +85,18 @@ console.log(`Using port: ${PORT}`);
         process.exit(1); // Exit with error code if something goes wrong
     }
 })();
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, closing pool...');
+    await pool.end();
+    console.log('Pool closed. Exiting process.');
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('SIGINT received, closing pool...');
+    await pool.end();
+    console.log('Pool closed. Exiting process.');
+    process.exit(0);
+});
