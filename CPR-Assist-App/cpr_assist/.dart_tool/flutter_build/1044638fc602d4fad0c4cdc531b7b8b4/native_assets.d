@@ -1,1 +1,0 @@
- C:\\Users\\evaro\\Personal\ Apps\\CPR-Assist-Glove\\CPR-Assist-App\\cpr_assist\\.dart_tool\\flutter_build\\1044638fc602d4fad0c4cdc531b7b8b4\\native_assets.yaml: 

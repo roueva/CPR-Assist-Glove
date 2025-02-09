@@ -1,4 +1,0 @@
-#Mon Jan 13 01:43:48 EET 2025
-base.0=C\:\\Users\\evaro\\Personal Apps\\CPR-Assist-Glove\\CPR-Assist-App\\cpr_assist\\build\\app\\intermediates\\dex\\release\\minifyReleaseWithR8\\classes.dex
-renamed.0=classes.dex
-path.0=classes.dex
