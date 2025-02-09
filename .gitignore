@@ -1,0 +1,10 @@
+
+# Ignore build files
+
+build/
+
+.dart_tool/
+
+*.apk
+
+*.dill
