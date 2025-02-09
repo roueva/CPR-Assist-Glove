@@ -1,10 +1,11 @@
 
 # Ignore build files
 
-build/
-
 .dart_tool/
-
+build/
+*.bin
 *.apk
-
 *.dill
+*.map.json
+*.symbols
+flutter_assets/
