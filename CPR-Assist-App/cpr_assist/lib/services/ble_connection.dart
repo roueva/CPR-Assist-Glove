@@ -148,7 +148,6 @@ class BLEConnection {
     isScanning = false;
   }
 
-
   /// **Connect to Arduino**
   Future<void> connectToDevice(BluetoothDevice device) async {
     if (connectedDevice != null) {
