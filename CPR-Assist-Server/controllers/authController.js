@@ -98,10 +98,12 @@ class AuthController {
             }
 
             const newToken = jwt.sign(
-                { username: decoded.username },
+                { id: decoded.id, username: decoded.username }, // Include user ID
                 process.env.JWT_SECRET,
                 { expiresIn: '1h' }
             );
+            res.json({ token: newToken, user_id: decoded.id }); // Return both
+
 
             res.json({ token: newToken });
         } catch (error) {

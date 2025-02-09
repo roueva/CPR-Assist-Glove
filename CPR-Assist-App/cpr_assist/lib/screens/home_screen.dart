@@ -1,62 +1,53 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../main.dart';
 import '../widgets/account_menu.dart';
-import 'login_screen.dart';
-import 'training_screen.dart';
-import 'emergency_screen.dart';
 import '../services/decrypted_data.dart';
+import 'training_screen.dart';
+import 'login_screen.dart';
 import '../services/ble_connection.dart';
+import '../widgets/ble_status_indicator.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final DecryptedData decryptedDataHandler;
+  final bool isLoggedIn; // ✅ Add this
 
-  const HomeScreen({super.key, required this.decryptedDataHandler});
+  const HomeScreen({
+    super.key,
+    required this.decryptedDataHandler,
+    required this.isLoggedIn, // ✅ Ensure it's required
+  });
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late BLEConnection bleConnection;
-  bool isLoggedIn = false;
+  BLEConnection bleConnection = globalBLEConnection; // ✅ Use global instance
+  String connectionStatus = "Disconnected";
 
   @override
   void initState() {
     super.initState();
-    bleConnection = BLEConnection(
-      decryptedDataHandler: widget.decryptedDataHandler,
-      context: context,
-    );
-    _initializeApp();
   }
 
-  Future<void> _initializeApp() async {
-    await _checkLoginStatus();
-    if (await bleConnection.checkAndRequestPermissions()) {
-      await bleConnection.enableBluetooth();
-    }
+  /// **📞 Make Emergency Call**
+  void _makeEmergencyCall() {
+    launchUrl(Uri.parse('tel:112'));
   }
-
-  Future<void> _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-    });
-  }
-
+  /// **🎯 Handle Training Mode Button Click**
   Future<void> _handleTrainingMode() async {
-    if (isLoggedIn) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => TrainingScreen(
-            dataStream: widget.decryptedDataHandler.dataStream,
-            decryptedDataHandler: widget.decryptedDataHandler,
-          ),
-        ),
-      );
-    } else {
-      Navigator.pushReplacement(
+    final prefs = await SharedPreferences.getInstance();
+    bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+    if (!isLoggedIn) {
+      debugPrint("❌ User not authenticated. Redirecting to Login.");
+
+      // ✅ Ensure `Navigator.push()` only returns a boolean
+      final loggedIn = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
           builder: (context) => LoginScreen(
@@ -65,13 +56,32 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       );
+
+      if (loggedIn == true) {
+        debugPrint("✅ User successfully logged in. Navigating to Training Mode.");
+        _navigateToTrainingMode();
+      } else {
+        debugPrint("❌ User canceled login. Staying on HomeScreen.");
+      }
+      return;
     }
+
+    _navigateToTrainingMode();
   }
 
-  @override
-  void dispose() {
-    bleConnection.dispose();
-    super.dispose();
+
+  /// **🔀 Navigate to Training Mode**
+  void _navigateToTrainingMode() {
+    debugPrint("✅ User authenticated. Navigating to Training Mode.");
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TrainingScreen(
+          dataStream: widget.decryptedDataHandler.dataStream,
+          decryptedDataHandler: widget.decryptedDataHandler,
+        ),
+      ),
+    );
   }
 
   @override
@@ -83,108 +93,102 @@ class _HomeScreenState extends State<HomeScreen> {
           AccountMenu(decryptedDataHandler: widget.decryptedDataHandler),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // BLE Section
-            if (bleConnection.connectedDevice == null) ...[
-              ElevatedButton(
-                onPressed: bleConnection.isScanning ? null : () => bleConnection.startScan(() => setState(() {})),
-                child: const Text('Scan for Devices'),
-              ),
-              const SizedBox(height: 20),
-              if (bleConnection.availableDevices.isNotEmpty)
-                Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListView.builder(
-                    itemCount: bleConnection.availableDevices.length,
-                    itemBuilder: (context, index) {
-                      final result = bleConnection.availableDevices[index];
-                      return ListTile(
-                        title: Text(result.device.platformName.isNotEmpty
-                            ? result.device.platformName
-                            : "Unnamed Device"),
-                        subtitle: Text(result.device.remoteId.toString()),
-                        trailing: ElevatedButton(
-                          onPressed: () => bleConnection.connectToDevice(result.device, () => setState(() {})),
-                          child: const Text('Connect'),
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 🚨 Emergency Call Button
+                GestureDetector(
+                  onTap: _makeEmergencyCall,
+                  child: Container(
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color.fromRGBO(0, 0, 0, 0.2),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
                         ),
-                      );
-                    },
-                  ),
-                ),
-            ] else ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Connected to: ${bleConnection.connectedDevice!.platformName}'),
-                  ElevatedButton(
-                    onPressed: () => bleConnection.disconnectDevice(() {
-                      setState(() {});
-                      bleConnection.startScan(() => setState(() {})); // Restart scanning
-                    }),
-                    child: const Text('Disconnect'),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 40),
-            // Buttons Section
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Square button with rounded corners for Training Mode
-                    ElevatedButton(
-                      onPressed: _handleTrainingMode,
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Call 112',
+                        style: TextStyle(
+                          fontSize: 26,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 60), // Larger button
-                        backgroundColor: Colors.blueGrey[300], // Softer color
-                      ),
-                      child: const Text(
-                        'Training Mode',
-                        style: TextStyle(fontSize: 20, color: Colors.white),
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    // Square button with rounded corners for Emergency Mode
-                    ElevatedButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EmergencyScreen(
-                            dataStream: widget.decryptedDataHandler.dataStream,
-                            decryptedDataHandler: widget.decryptedDataHandler,
-                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // 🏥 AED Location Placeholder
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black26, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color.fromRGBO(0, 0, 0, 0.1),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Closest AED Location',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 22,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 50, horizontal: 60), // Larger button
-                        backgroundColor: Colors.red[300], // Softer color
-                      ),
-                      child: const Text(
-                        'Emergency Mode',
-                        style: TextStyle(fontSize: 20, color: Colors.white),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 30),
+
+                // 🎯 Training Mode Button
+                ElevatedButton(
+                  onPressed: _handleTrainingMode,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(fontSize: 20),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    shadowColor: Colors.black38,
+                    elevation: 5,
+                  ),
+                  child: const Text('Training Mode'),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // ✅ BLE Connection Status Indicator (Bottom Right)
+          BLEStatusIndicator(
+            bleConnection: globalBLEConnection,
+            connectionStatusNotifier: globalBLEConnection.connectionStatusNotifier, // ✅ Pass ValueNotifier
+          ),
+        ],
       ),
     );
   }

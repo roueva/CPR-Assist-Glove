@@ -1,166 +1,239 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/decrypted_data.dart';
 
 class BLEConnection {
+  static BLEConnection? _instance; // ✅ Track the single instance
+
+  factory BLEConnection({
+    required DecryptedData decryptedDataHandler,
+    required SharedPreferences prefs,
+    required Function(String) onStatusUpdate,
+  }) {
+    _instance ??= BLEConnection._internal( // ✅ Create only one instance
+      decryptedDataHandler: decryptedDataHandler,
+      prefs: prefs,
+      onStatusUpdate: onStatusUpdate,
+    );
+    return _instance!;
+  }
+
+  BLEConnection._internal({
+    required this.decryptedDataHandler,
+    required this.prefs,
+    required this.onStatusUpdate,
+  }) {
+    _listenToAdapterState();
+
+    Future.delayed(const Duration(seconds: 1), () async {
+      if (await isBluetoothOn()) {
+        scanAndConnect(); // ✅ Start scanning ONLY if Bluetooth is ON
+      } else {
+        _updateConnectionStatus("Bluetooth OFF");
+      }
+    });
+  }
+
   bool isScanning = false;
-  List<ScanResult> availableDevices = [];
   BluetoothDevice? connectedDevice;
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<List<int>>? _bleNotificationSubscription;
+  StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
+  Timer? _monitorConnectionTimer;
+  final List<int> _receivedBuffer = [];
+
   final DecryptedData decryptedDataHandler;
-  final BuildContext context; // BuildContext for showing Snackbars
+  final SharedPreferences prefs;
+  final Function(String) onStatusUpdate;
 
-  BLEConnection({required this.decryptedDataHandler, required this.context});
+  String? _lastStatus; // ✅ Track last status to prevent duplicates
 
-  /// Checks and requests necessary BLE and location permissions
-  Future<bool> checkAndRequestPermissions() async {
-    final permissions = [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.location,
-    ];
+  void _updateConnectionStatus(String status) {
+    if (_lastStatus == status) return; // ✅ Avoid duplicate updates
+    _lastStatus = status;
 
-    final statuses = await permissions.request();
-    return statuses.values.every((status) => status.isGranted);
+    debugPrint("🔄 BLE Status: $status"); // ✅ Logs BLE state changes
+    connectionStatusNotifier.value = status; // ✅ Notify UI listeners
   }
 
-  /// Enables Bluetooth if it's not already enabled
-  Future<void> enableBluetooth() async {
-    BluetoothAdapterState adapterState = await FlutterBluePlus.adapterState.first;
-    if (adapterState != BluetoothAdapterState.on) {
+  final ValueNotifier<String> connectionStatusNotifier = ValueNotifier("Disconnected");
+
+
+  /// **Monitor Bluetooth State**
+  void _listenToAdapterState() {
+    _adapterStateSubscription?.cancel();
+    _adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) async {
+      String newStatus = (state == BluetoothAdapterState.off) ? "Bluetooth OFF" : "Bluetooth ON";
+
+      if (_lastStatus != newStatus) {
+        _updateConnectionStatus(newStatus);
+      }
+
+      // ✅ Ensure scanning starts IMMEDIATELY when Bluetooth turns on
+      if (state == BluetoothAdapterState.on && !isConnected()) {
+        debugPrint("🔍 Bluetooth is ON. Ensuring scan starts...");
+        scanAndConnect();
+      }
+    });
+  }
+
+
+  /// ✅ Expose Bluetooth state changes as a Stream
+  Stream<BluetoothAdapterState> get adapterStateStream => FlutterBluePlus.adapterState;
+
+
+  /// **Check if Bluetooth is ON**
+  Future<bool> isBluetoothOn() async {
+    return await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on;
+  }
+
+  /// **Enable Bluetooth (if OFF)**
+  Future<bool> enableBluetooth({bool prompt = false}) async {
+    if (await isBluetoothOn()) return true;
+
+    if (prompt) {
       await FlutterBluePlus.turnOn();
+      await Future.delayed(const Duration(seconds: 2));
+      return await isBluetoothOn();
     }
+
+    return false;
   }
 
-  /// Starts scanning for BLE devices
-  void startScan(Function onUpdate) {
-    if (isScanning || connectedDevice != null) return;
+  /// **Check if Device is Connected**
+  bool isConnected() => connectedDevice?.isConnected ?? false;
+
+
+  Future<void> scanAndConnect() async {
+    if (isConnected() || isScanning) return;
+
+    if (!await isBluetoothOn()) {
+      _updateConnectionStatus("Bluetooth OFF");
+      isScanning = false;
+      return;
+    }
 
     isScanning = true;
-    availableDevices.clear();
+    _updateConnectionStatus("Scanning for Arduino...");
+
+    if (FlutterBluePlus.isScanningNow) {
+      await FlutterBluePlus.stopScan();
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    FlutterBluePlus.startScan();
+
     _scanSubscription?.cancel();
-
     _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-      availableDevices = results.toSet().toList();
-      onUpdate();
-    }, onError: (error) {
-      _showSnackbar('Scan error: $error');
-    });
-
-    FlutterBluePlus.startScan(timeout: const Duration(seconds: 10)).then((_) {
-      isScanning = false;
-      onUpdate();
-    }).catchError((error) {
-      isScanning = false;
-      _showSnackbar('Failed to start scan: $error');
-    });
-  }
-
-  /// Connects to a selected BLE device
-  Future<void> connectToDevice(BluetoothDevice device, Function onUpdate) async {
-    if (connectedDevice != null) return;
-
-    try {
-      connectedDevice = device;
-      onUpdate();
-
-      await device.connect();
-      startReceivingData(device);
-      _showSnackbar('Connected to ${device.platformName}');
-      onUpdate();
-    } catch (error) {
-      connectedDevice = null;
-      _showSnackbar('Connection failed: $error');
-      onUpdate();
-    }
-  }
-
-  /// Disconnects the currently connected BLE device
-  Future<void> disconnectDevice(Function onUpdate) async {
-    if (connectedDevice != null) {
-      try {
-        await connectedDevice!.disconnect();
-        connectedDevice = null;
-        _showSnackbar('Disconnected');
-        onUpdate();
-      } catch (error) {
-        _showSnackbar('Disconnection failed: $error');
+      for (var result in results) {
+        if (result.device.platformName.contains("Arduino Nano 33 BLE")) {
+          debugPrint("✅ Found Arduino, stopping scan...");
+          FlutterBluePlus.stopScan();
+          isScanning = false;
+          connectToDevice(result.device);
+          return;
+        }
       }
+    });
+
+    await Future.delayed(const Duration(seconds: 15));
+
+    if (!isConnected()) {
+      debugPrint("❌ Arduino not found");
+      FlutterBluePlus.stopScan();
+      _updateConnectionStatus("Arduino Not Found");
+    }
+    isScanning = false;
+  }
+
+
+  /// **Connect to Arduino**
+  Future<void> connectToDevice(BluetoothDevice device) async {
+    if (connectedDevice != null) {
+      await connectedDevice!.disconnect();
+    }
+
+    connectedDevice = device;
+    try {
+      await device.connect().timeout(const Duration(seconds: 15));
+      await Future.delayed(const Duration(seconds: 2));
+
+      _updateConnectionStatus("Connected");
+      startReceivingData(device);
+      startMonitoringConnection(); // ✅ Monitor connection for unexpected disconnections
+    } catch (e) {
+      _updateConnectionStatus("Disconnected → Reconnecting...");
+      scanAndConnect(); // ✅ Immediately restart 15-sec scan if connection fails
     }
   }
 
-  /// Starts receiving and processing BLE notification data
+  /// **Starts receiving and processing BLE notification data**
   void startReceivingData(BluetoothDevice device) {
     const String serviceUuid = '19b10000-e8f2-537e-4f6c-d104768a1214';
     const String characteristicUuid = '19b10001-e8f2-537e-4f6c-d104768a1214';
 
-    List<int> dataBuffer = []; // Buffer to store incoming data
-
     device.discoverServices().then((services) {
       try {
-        final service = services.firstWhere(
-              (s) => s.uuid.toString() == serviceUuid,
-        );
+        final service = services.firstWhere((s) => s.uuid.toString() == serviceUuid);
+        final characteristic = service.characteristics.firstWhere((c) => c.uuid.toString() == characteristicUuid);
 
-        final characteristic = service.characteristics.firstWhere(
-              (c) => c.uuid.toString() == characteristicUuid,
-        );
+        characteristic.setNotifyValue(true).then((_) {
+          debugPrint("✅ BLE Notifications Enabled");
 
-        _bleNotificationSubscription = characteristic.lastValueStream.listen(
-              (data) {
-            dataBuffer.addAll(data); // Append incoming data to the buffer
+          _bleNotificationSubscription = characteristic.lastValueStream.listen((data) {
+            _receivedBuffer.addAll(data);
 
-            if (dataBuffer.length >= 32) {
-              // If buffer contains 32 or more bytes, process the data
-              final Uint8List uint8Data = Uint8List.fromList(dataBuffer.sublist(0, 32));
-              decryptedDataHandler.processReceivedData(uint8Data);
+            if (_receivedBuffer.length >= 32) {
+              debugPrint("📩 Full 32-Byte BLE Data Received: $_receivedBuffer");
 
-              // Debug message: print and show a snackbar
-              print('Data received: $uint8Data');
-              _showSnackbar('Data received');
-
-              // Remove the processed 32-byte chunk from the buffer
-              dataBuffer.removeRange(0, 32);
+              decryptedDataHandler.processReceivedData(_receivedBuffer.sublist(0, 32));
+              _receivedBuffer.clear(); // ✅ Reset buffer for next transmission
             }
-          },
-          onError: (error) {
-            _showSnackbar('Notification error: $error');
-          },
-        );
-
-        characteristic.setNotifyValue(true);
+          });
+        });
       } catch (e) {
-        _showSnackbar('Error discovering services: $e');
+        debugPrint("❌ Error during service discovery: $e");
       }
-    }).catchError((error) {
-      _showSnackbar('Service discovery failed: $error');
     });
   }
 
-
-  /// Show a snackbar with a debug message
-  void _showSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  /// **If Arduino Disconnects → Start 15-sec Scan Again Immediately**
+  void startMonitoringConnection() {
+    _monitorConnectionTimer?.cancel();
+    _monitorConnectionTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (connectedDevice == null || !isConnected()) {
+        debugPrint("🔴 Arduino Disconnected → Starting Scan Again...");
+        _updateConnectionStatus("Disconnected → Reconnecting...");
+        scanAndConnect();
+      }
+    });
   }
 
-  /// Cancels all subscriptions and disconnects the device
-  void dispose() {
-    _disconnectDevice();
-    _scanSubscription?.cancel();
-    _bleNotificationSubscription?.cancel();
+  /// **Manual Retry Button**
+  Future<void> retryScan() async {
+    if (_lastStatus == "Arduino Not Found" || _lastStatus == "Disconnected") {
+      scanAndConnect();
+    }
   }
 
-  Future<void> _disconnectDevice() async {
+  /// **Disconnect from Device**
+  Future<void> disconnectDevice() async {
     if (connectedDevice != null) {
       await connectedDevice!.disconnect();
       connectedDevice = null;
+      _updateConnectionStatus("Disconnected");
+      _monitorConnectionTimer?.cancel(); // ✅ Stop automatic reconnection attempts
     }
+  }
+
+  /// **Clean Up Resources**
+  void dispose() {
+    _monitorConnectionTimer?.cancel();
+    _scanSubscription?.cancel();
+    _bleNotificationSubscription?.cancel();
+    _adapterStateSubscription?.cancel();
+    connectedDevice = null;
   }
 }

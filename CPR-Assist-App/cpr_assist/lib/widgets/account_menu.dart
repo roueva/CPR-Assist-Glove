@@ -40,6 +40,10 @@ class _AccountMenuState extends State<AccountMenu> {
     await prefs.remove('user_id');
     await prefs.remove('username');
 
+    setState(() {
+      username = "Account"; // ✅ Reset UI state
+    });
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => LoginScreen(
@@ -93,7 +97,7 @@ class _AccountMenuState extends State<AccountMenu> {
             children: [
               const Icon(Icons.account_circle),
               const SizedBox(width: 10),
-              Text(username),
+              Text(username), // ✅ Shows correct username
             ],
           ),
         ),

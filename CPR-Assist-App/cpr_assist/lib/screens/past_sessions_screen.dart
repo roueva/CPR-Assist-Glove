@@ -33,7 +33,6 @@ class _PastSessionsScreenState extends State<PastSessionsScreen> {
     try {
       print('Fetching session summaries...');
       final response = await NetworkService.get('/sessions/summaries', requiresAuth: true);
-      print('Response: $response');
 
       if (response['success'] == true && response['data'] is List) {
         setState(() {

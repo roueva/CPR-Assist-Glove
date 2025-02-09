@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import '../services/network_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'training_screen.dart';
+import 'home_screen.dart';
 import 'registration_screen.dart';
-import 'home_screen.dart'; // Import HomeScreen
 import '../services/decrypted_data.dart'; // Import DecryptedData handler
 import '../widgets/account_menu.dart'; // Import AccountMenu widget
 
 class LoginScreen extends StatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
-  final DecryptedData decryptedDataHandler; // Add DecryptedData handler
+  final DecryptedData decryptedDataHandler;
 
   const LoginScreen({
     super.key,
@@ -45,28 +44,30 @@ class _LoginScreenState extends State<LoginScreen> {
         'password': _passwordController.text.trim(),
       });
 
-      print('Login response: $response');
-
       if (response['token'] != null && response['user_id'] != null) {
-        await NetworkService.saveToken(response['token']);
+        await NetworkService.saveToken(response['token']);  // ✅ Store token
         await NetworkService.saveUserId(response['user_id']);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('username', _usernameController.text.trim());
 
-        print('User logged in successfully.');
+        print('✅ User logged in successfully.');
 
-        // Navigate to TrainingScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TrainingScreen(
-              dataStream: widget.dataStream,
-              decryptedDataHandler: widget.decryptedDataHandler,
+        // ✅ Return to previous screen or redirect to HomeScreen
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context, true); // ✅ Go back to previous screen
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(
+                decryptedDataHandler: widget.decryptedDataHandler,
+                isLoggedIn: true, // ✅ Ensure HomeScreen updates login state
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
         setState(() {
           _errorMessage = response['message'] ?? 'Login failed. Please try again.';
@@ -92,14 +93,9 @@ class _LoginScreenState extends State<LoginScreen> {
           title: const Text('Login'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeScreen(
-                  decryptedDataHandler: widget.decryptedDataHandler, // Pass handler
-                ),
-              ),
-            ),
+            onPressed: () {
+              Navigator.pop(context, false); // ✅ Explicitly return `false`
+            },
           ),
           actions: [
             AccountMenu(decryptedDataHandler: widget.decryptedDataHandler), // Add account menu
@@ -173,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       MaterialPageRoute(
                         builder: (context) => RegistrationScreen(
                           dataStream: widget.dataStream,
-                          decryptedDataHandler: widget.decryptedDataHandler, // Pass handler
+                          decryptedDataHandler: widget.decryptedDataHandler,
                         ),
                       ),
                     );

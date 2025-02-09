@@ -1,7 +1,7 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-61:12
-MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-61:12
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-73:12
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:1-73:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml:1:1-7:12
@@ -73,22 +73,25 @@ MERGED from [androidx.annotation:annotation-experimental:1.4.0] C:\Users\evaro\.
 MERGED from [io.reactivex.rxjava2:rxandroid:2.1.1] C:\Users\evaro\.gradle\caches\transforms-3\def6a43a416de6d350d9f6c9a422b875\transformed\jetified-rxandroid-2.1.1\AndroidManifest.xml:15:1-20:12
 MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\evaro\.gradle\caches\transforms-3\84b17be5f49a910e04e8c35fea028f28\transformed\jetified-relinker-1.4.5\AndroidManifest.xml:2:1-7:12
 	package
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:2:5-37
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:3:5-37
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	android:versionName
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
+	xmlns:tools
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:2:5-51
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:2:5-51
 	android:versionCode
 		INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 	xmlns:android
 		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:1:11-69
 uses-permission#android.permission.INTERNET
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
-MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
-MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:5-67
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:5-67
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:5-67
+MERGED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:5-67
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:5:22-64
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:22-64
 uses-permission#android.permission.BLUETOOTH
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:5-68
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:5-68
 MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:8:5-10:38
 MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:8:5-10:38
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:10:5-12:38
@@ -96,9 +99,9 @@ MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.grad
 	android:maxSdkVersion
 		ADDED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:10:9-35
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:6:22-65
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:22-65
 uses-permission#android.permission.BLUETOOTH_ADMIN
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:5-74
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:5-74
 MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:11:5-13:38
 MERGED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:11:5-13:38
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:13:5-15:38
@@ -106,49 +109,53 @@ MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.grad
 	android:maxSdkVersion
 		ADDED from [:reactive_ble_mobile] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\reactive_ble_mobile\intermediates\merged_manifest\debug\AndroidManifest.xml:13:9-35
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:7:22-71
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:22-71
 uses-permission#android.permission.BLUETOOTH_SCAN
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:5-73
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:5-120
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:22:5-25:31
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:22:5-25:31
 	android:usesPermissionFlags
-		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:24:9-55
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:71-117
 	tools:targetApi
 		ADDED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:25:9-28
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:8:22-70
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:22-70
 uses-permission#android.permission.BLUETOOTH_CONNECT
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:5-76
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:5-76
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:21:5-76
 MERGED from [com.polidea.rxandroidble2:rxandroidble:1.16.0] C:\Users\evaro\.gradle\caches\transforms-3\59ead1617e8b7940084ad3f5575a6452\transformed\jetified-rxandroidble-1.16.0\AndroidManifest.xml:21:5-76
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:9:22-73
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:22-73
 uses-permission#android.permission.BLUETOOTH_ADVERTISE
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:5-78
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:5-78
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:10:22-75
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:22-75
 uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:5-79
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:5-79
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:11:22-76
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:22-76
 uses-permission#android.permission.ACCESS_COARSE_LOCATION
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:5-81
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:5-81
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:12:22-78
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:13:22-78
 uses-feature#android.hardware.bluetooth
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:5-87
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:17:5-18:36
+	tools:targetApi
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:9-33
 	android:required
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:61-84
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:17:61-84
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:15:19-60
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:17:19-60
 uses-feature#android.hardware.bluetooth_le
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:5-90
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:5-20:36
+	tools:targetApi
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:9-33
 	android:required
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:64-87
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:64-87
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:16:19-63
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:19-63
 application
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:18:5-51:19
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:22:5-59:19
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml
 MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-13:19
 MERGED from [:geolocator_android] C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\geolocator_android\intermediates\merged_manifest\debug\AndroidManifest.xml:7:5-13:19
@@ -179,71 +186,81 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\ev
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Users\evaro\.gradle\caches\transforms-3\889ae3adf7a24645889ee22f4dad2cac\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:22:9-35
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:26:9-35
 	android:label
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:19:9-35
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:23:9-35
+	tools:targetApi
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:9-35
 	android:icon
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:20:9-43
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:9-43
 	android:allowBackup
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:21:9-35
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:9-35
+	android:enableOnBackInvokedCallback
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:9-51
 activity#com.example.cpr_assist.MainActivity
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:24:9-42:20
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:9-48:20
 	android:launchMode
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:27:13-43
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:33:13-43
 	android:hardwareAccelerated
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:31:13-47
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:37:13-47
 	android:windowSoftInputMode
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:13-55
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:38:13-55
 	android:exported
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:26:13-36
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:32:13-36
 	android:configChanges
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:30:13-163
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:36:13-163
 	android:theme
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:29:13-47
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:35:13-47
 	android:taskAffinity
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:28:13-36
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:34:13-36
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:25:13-63
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:31:13-63
 meta-data#io.flutter.embedding.android.NormalTheme
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:34:13-36:57
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:40:13-42:57
 	android:resource
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:36:17-54
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:42:17-54
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:35:17-72
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:41:17-72
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:38:13-41:29
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:44:13-47:29
 action#android.intent.action.MAIN
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:17-69
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:45:17-69
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:39:25-66
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:45:25-66
 category#android.intent.category.LAUNCHER
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:40:17-77
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:17-77
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:40:27-74
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:27-74
 meta-data#flutterEmbedding
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:44:9-46:33
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:51:9-53:33
 	android:value
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:46:13-30
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:53:13-30
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:45:13-44
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:52:13-44
 meta-data#com.google.android.bluetooth.le.BLE_ADVERTISING_SUPPORTED
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:48:9-50:36
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:56:9-58:36
 	android:value
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:50:13-33
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:58:13-33
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:49:13-85
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:57:13-85
 queries
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:53:5-59:15
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:62:5-72:15
 intent#action:name:android.intent.action.PROCESS_TEXT+data:mimeType:text/plain
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:55:9-58:18
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:63:9-66:18
 action#android.intent.action.PROCESS_TEXT
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:56:13-73
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:64:13-73
 	android:name
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:56:21-70
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:64:21-70
 data
-ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:57:13-51
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:65:13-51
 	android:mimeType
-		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:57:19-48
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:65:19-48
+intent#action:name:android.bluetooth.device.action.FOUND
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:69:9-71:18
+action#android.bluetooth.device.action.FOUND
+ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:70:13-76
+	android:name
+		ADDED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\main\AndroidManifest.xml:70:21-73
 uses-sdk
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\android\app\src\debug\AndroidManifest.xml

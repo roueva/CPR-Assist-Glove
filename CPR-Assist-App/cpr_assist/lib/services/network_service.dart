@@ -1,101 +1,171 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
 
 class NetworkService {
   //static const String baseUrl = 'https://cpr-assist-app.up.railway.app';
-  static String get baseUrl => 'http://192.168.2.18:3000'; // Local IP
- // static String get baseUrl => 'http://192.168.0.121:3000'; // captaincoach
+  static String get baseUrl => 'http://192.168.2.21:3000'; // Local IP
+  //static String get baseUrl => 'http://192.168.0.121:3000'; // captaincoach
+  //static String get baseUrl => 'http://192.168.1.14:3000'; // therapevin
 
-  // Get the token from SharedPreferences
-  static Future<String?> getToken() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
-
-  // Save token in SharedPreferences
   static Future<void> saveToken(String token) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
   }
 
-  // Remove token from SharedPreferences
-  static Future<void> removeToken() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
-    await prefs.remove('user_id');
-  }
-
-  // Save user ID to SharedPreferences
   static Future<void> saveUserId(int userId) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('user_id', userId);
   }
 
-  // Get user ID from SharedPreferences
+  static Future<void> removeToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token'); // ✅ Only remove the JWT token
+    await prefs.remove('user_id');   // ✅ Remove user ID as well
+  }
+
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('jwt_token');
+  }
+
   static Future<int?> getUserId() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     return prefs.getInt('user_id');
   }
 
-  // POST request method
+  static Future<bool> refreshToken() async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) {
+      print('❌ No token found, cannot refresh.');
+      return false;
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/refresh-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token}),
+    );
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(response.body);
+      final newToken = jsonResponse["token"];
+      final userId = jsonResponse["user_id"];
+
+      if (newToken != null && userId != null) {
+        await saveToken(newToken);
+        await saveUserId(userId);
+        return true;
+      }
+    }
+
+    print("❌ Token refresh failed: ${response.body}");
+    return false;
+  }
+
+  static Future<bool> isTokenValid() async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      return !JwtDecoder.isExpired(token);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> ensureAuthenticated() async {
+    if (await isTokenValid()) {
+      print("✅ Token is still valid.");
+      return true;
+    }
+
+    print("❌ Token expired. Attempting to refresh...");
+    bool refreshed = await refreshToken();
+
+    if (!refreshed) {
+      print("❌ Token refresh failed. Logging user out.");
+      await removeToken();
+      return false;
+    }
+
+    print("🔄 Token refreshed successfully.");
+    return true;
+  }
+
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body, {bool requiresAuth = false}) async {
     try {
-      final url = Uri.parse('$baseUrl$endpoint');
-      final headers = {
-        'Content-Type': 'application/json',
-        if (requiresAuth) 'Authorization': 'Bearer ${await getToken()}',
-      };
-
-      // Debugging logs
-      print('POST Request URL: $url');
-      print('POST Request Headers: $headers');
-      print('POST Request Body: ${jsonEncode(body)}');
-
-      final response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode(body),
-      );
-
-      return _handleResponse(response);
+      return await _makeRequest('POST', endpoint, body: body, requiresAuth: requiresAuth);
     } catch (e) {
-      print('Error during POST request: $e');
-      throw Exception('Network error: $e');
+      throw Exception('Error during POST request: $e');
     }
   }
 
-  // GET request method
   static Future<dynamic> get(String endpoint, {bool requiresAuth = false}) async {
     try {
-      final url = Uri.parse('$baseUrl$endpoint');
-      final headers = {
-        if (requiresAuth) 'Authorization': 'Bearer ${await getToken()}',
-      };
-
-      final response = await http.get(url, headers: headers);
-
-      return _handleResponse(response);
+      return await _makeRequest('GET', endpoint, requiresAuth: requiresAuth);
     } catch (e) {
-      throw Exception('Network error: $e');
+      throw Exception('Error during GET request: $e');
     }
   }
 
-  // Handle HTTP responses
-  static dynamic _handleResponse(http.Response response) {
-    print('Response Status Code: ${response.statusCode}');
-    print('Response Body: ${response.body}');
+  static Future<dynamic> _makeRequest(String method, String endpoint, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    final token = await getToken();
 
+    if (requiresAuth && (token == null || token.isEmpty)) {
+      throw Exception("Unauthorized: Missing authentication token.");
+    }
+
+    final headers = {
+      'Content-Type': 'application/json',
+      if (requiresAuth) 'Authorization': 'Bearer $token',
+    };
+
+    http.Response response;
+
+    try {
+      if (method == 'POST') {
+        response = await http.post(url, headers: headers, body: jsonEncode(body));
+      } else if (method == 'GET') {
+        response = await http.get(url, headers: headers);
+      } else {
+        throw Exception('Unsupported HTTP method: $method');
+      }
+
+      return _handleResponse(response, endpoint, method, body: body, requiresAuth: requiresAuth);
+    } catch (e) {
+      throw Exception('Network request failed.');
+    }
+  }
+
+  static dynamic _handleResponse(http.Response response, String endpoint, String method, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
-    } else if (response.statusCode == 401) {
-      print('Token expired or unauthorized access.');
-      throw Exception('401 Unauthorized');
-    } else {
-      final errorMessage = jsonDecode(response.body)['errors']
-          ?? jsonDecode(response.body)['error']
-          ?? 'Unknown error';
-      throw Exception('HTTP Error ${response.statusCode}: $errorMessage');
     }
+
+    if (response.statusCode == 401 && requiresAuth) {
+      print('🔄 Token expired. Attempting to refresh...');
+      final refreshed = await refreshToken();
+
+      if (refreshed) {
+        return await _makeRequest(method, endpoint, body: body, requiresAuth: requiresAuth);
+      } else {
+        await removeToken();
+        throw Exception('401 Unauthorized and token refresh failed.');
+      }
+    }
+
+    final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+    final errorMessage = jsonResponse.containsKey('errors')
+        ? jsonResponse['errors']
+        : jsonResponse.containsKey('error')
+        ? jsonResponse['error']
+        : jsonResponse.containsKey('message')
+        ? jsonResponse['message']
+        : 'Unknown error';
+
+    throw Exception('HTTP Error ${response.statusCode}: $errorMessage');
   }
 }

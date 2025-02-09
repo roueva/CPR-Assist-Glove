@@ -230,6 +230,12 @@
       "languageVersion": "3.1"
     },
     {
+      "name": "jwt_decoder",
+      "rootUri": "file:///C:/Users/evaro/AppData/Local/Pub/Cache/hosted/pub.dev/jwt_decoder-2.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "leak_tracker",
       "rootUri": "file:///C:/Users/evaro/AppData/Local/Pub/Cache/hosted/pub.dev/leak_tracker-10.0.7",
       "packageUri": "lib/",
@@ -590,10 +596,10 @@
       "languageVersion": "2.18"
     }
   ],
-  "generated": "2025-01-12T17:49:08.441446Z",
+  "generated": "2025-02-07T11:03:49.876427Z",
   "generator": "pub",
-  "generatorVersion": "3.6.0",
+  "generatorVersion": "3.6.1",
   "flutterRoot": "file:///C:/src/flutter",
-  "flutterVersion": "3.27.1",
+  "flutterVersion": "3.27.3",
   "pubCache": "file:///C:/Users/evaro/AppData/Local/Pub/Cache"
 }
