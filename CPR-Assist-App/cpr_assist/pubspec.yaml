@@ -1,6 +1,6 @@
 name: cpr_assist
 description: "A Flutter app for CPR assistance with real-time feedback and BLE integration."
-publish_to: 'none' # Prevent accidental publishing to pub.dev
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -37,6 +37,9 @@ dependencies:
 
   # For location services
   geolocator: ^13.0.2
+  google_maps_flutter: ^2.5.0
+  google_maps_flutter_platform_interface: ^2.2.0
+  google_maps_flutter_android: ^2.4.0
 
   # For AES decryption
   encrypt: ^5.0.0

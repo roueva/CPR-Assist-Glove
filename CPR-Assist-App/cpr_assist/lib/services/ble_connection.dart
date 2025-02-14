@@ -25,6 +25,7 @@ class BLEConnection {
     required this.prefs,
     required this.onStatusUpdate,
   }) {
+    _disableBleLogs();
     _listenToAdapterState();
 
     Future.delayed(const Duration(seconds: 1), () async {
@@ -226,6 +227,14 @@ class BLEConnection {
       _monitorConnectionTimer?.cancel(); // ✅ Stop automatic reconnection attempts
     }
   }
+  void _disableBleLogs() {
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message == null || message.contains("BluetoothAdapter")) return;
+      if (message.contains("getBluetoothLeScanner")) return;
+      print(message);
+    };
+  }
+
 
   /// **Clean Up Resources**
   void dispose() {

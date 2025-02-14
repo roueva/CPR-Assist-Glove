@@ -9,6 +9,7 @@ import 'training_screen.dart';
 import 'login_screen.dart';
 import '../services/ble_connection.dart';
 import '../widgets/ble_status_indicator.dart';
+import '../widgets/aed_map_widget.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -131,33 +132,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 30),
 
-                // 🏥 AED Location Placeholder
+                // 🏥 AED Map Widget (Scrollable)
                 Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black26, width: 1.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color.fromRGBO(0, 0, 0, 0.1),
-                          blurRadius: 5,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Closest AED Location',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 22,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12), // ✅ Rounded edges
+                    child: AEDMapWidget(), // ✅ Add the Map Widget here
                   ),
                 ),
 

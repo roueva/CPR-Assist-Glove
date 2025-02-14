@@ -1,4 +1,5 @@
-require('dotenv').config();
+﻿require('dotenv').config(); // Ensure environment variables are loaded first
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -6,15 +7,17 @@ const { Pool } = require('pg');
 const winston = require('winston');
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
+const createAedRoutes = require('./routes/aed'); // ✅ Ensure it's imported as a function
+
 
 // Create PostgreSQL connection pool
 const pool = new Pool({
     user: process.env.POSTGRES_USER,
     host: process.env.POSTGRES_HOST,
     database: process.env.POSTGRES_DATABASE,
-    password: process.env.POSTGRES_PASSWORD,
-    port: process.env.POSTGRES_PORT || 5432, // Default port fallback
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false // Enable SSL in production
+    password: String(process.env.POSTGRES_PASSWORD).trim(), // ✅ Ensure it's a string
+    port: process.env.POSTGRES_PORT || 5432,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
@@ -42,6 +45,11 @@ app.get('/', (req, res) => {
     res.json({ message: 'Server is running', status: 'healthy' });
 });
 
+app.get('/api/maps-key', (req, res) => {
+    res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
+});
+
+
 // Register routes
 app.use('/auth', (req, res, next) => {
     req.db = pool; // Attach pool to the request object for auth routes
@@ -52,6 +60,8 @@ app.use('/sessions', (req, res, next) => {
     req.db = pool;
     next();
 }, createSessionRoutes(pool));
+
+app.use('/aed', createAedRoutes(pool)); // ✅ Correct: Call function and pass `pool`
 
 // Handle unknown routes
 app.use((req, res, next) => {
@@ -68,14 +78,11 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-console.log(`Using port: ${PORT}`);
 
 (async () => {
     try {
         // Test database connection before starting the server
         await pool.query('SELECT 1');
-        console.log('Database connection successful');
 
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT}`);

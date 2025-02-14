@@ -9,14 +9,26 @@ class NetworkService {
   //static String get baseUrl => 'http://192.168.0.121:3000'; // captaincoach
   //static String get baseUrl => 'http://192.168.1.14:3000'; // therapevin
 
-  static Future<void> saveToken(String token) async {
+
+  // 🔹 TOKEN MANAGEMENT 🔹
+  static Future<int?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('jwt_token', token);
+    return prefs.getInt('user_id');
   }
 
   static Future<void> saveUserId(int userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('user_id', userId);
+  }
+
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('jwt_token');
+  }
+
+  static Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('jwt_token', token);
   }
 
   static Future<void> removeToken() async {
@@ -25,16 +37,8 @@ class NetworkService {
     await prefs.remove('user_id');   // ✅ Remove user ID as well
   }
 
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
 
-  static Future<int?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('user_id');
-  }
-
+  // 🔹 AUTHENTICATION 🔹
   static Future<bool> refreshToken() async {
     final token = await getToken();
     if (token == null || token.isEmpty) {
@@ -94,6 +98,7 @@ class NetworkService {
     return true;
   }
 
+  // 🔹 GENERIC NETWORK REQUESTS 🔹
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body, {bool requiresAuth = false}) async {
     try {
       return await _makeRequest('POST', endpoint, body: body, requiresAuth: requiresAuth);
@@ -167,5 +172,47 @@ class NetworkService {
         : 'Unknown error';
 
     throw Exception('HTTP Error ${response.statusCode}: $errorMessage');
+  }
+
+  // 🔹 FETCH AED LOCATIONS 🔹
+  static Future<List<dynamic>> fetchAEDLocations() async {
+    try {
+      final response = await get('/aed', requiresAuth: false);
+
+      if (response is Map<String, dynamic> && response.containsKey("data")) {
+        return response["data"];
+      } else {
+        throw Exception("Invalid response format from backend");
+      }
+    } catch (e) {
+      print("❌ Error fetching AED locations: $e");
+      return [];
+    }
+  }
+
+  static Future<String?> fetchGoogleMapsApiKey() async {
+    try {
+      final response = await get('/api/maps-key', requiresAuth: false);
+      if (response is Map<String, dynamic> && response.containsKey('apiKey')) {
+        return response['apiKey'];
+      }
+    } catch (e) {
+      print("❌ Error fetching Google Maps API Key: $e");
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getExternal(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      print("❌ Failed external request: ${response.body}");
+      return null;
+    } catch (e) {
+      print("❌ Error in external GET request: $e");
+      return null;
+    }
   }
 }

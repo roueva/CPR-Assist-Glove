@@ -25,7 +25,24 @@
         android:allowBackup="true"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
-        tools:targetApi="tiramisu"> <!-- Enable OnBackInvokedCallback for Android 13+ -->
+        tools:targetApi="tiramisu"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true"
+        tools:replace="android:usesCleartextTraffic">
+
+        <!-- Suppress ProxyAndroidLoggerBackend logs -->
+        <meta-data
+            android:name="log.tag.ProxyAndroidLoggerBackend"
+            android:value="ERROR" />
+
+        <meta-data
+            android:name="log.tag.ViewRootImpl"
+            android:value="ERROR" />
+
+        <!-- ✅ Correctly placed Google Maps API key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyD-xmn9AihdJDh4k5IVrc-aSQnir_Jkwls"/>
 
         <activity
             android:name="com.example.cpr_assist.MainActivity"
@@ -57,6 +74,7 @@
             android:name="com.google.android.bluetooth.le.BLE_ADVERTISING_SUPPORTED"
             android:value="true" />
     </application>
+
 
     <!-- Queries for process text intents -->
     <queries>

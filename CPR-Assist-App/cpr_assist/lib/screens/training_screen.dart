@@ -1,12 +1,12 @@
   import 'dart:async';
   import 'package:flutter/material.dart';
   import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+  import 'package:shared_preferences/shared_preferences.dart';
   import '../main.dart';
   import '../widgets/account_menu.dart';
   import '../services/decrypted_data.dart';
   import 'login_screen.dart';
-import 'past_sessions_screen.dart';
+  import 'past_sessions_screen.dart';
   import '../services/network_service.dart';
   import '../widgets/ble_status_indicator.dart';
 

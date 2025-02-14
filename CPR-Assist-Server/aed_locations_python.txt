@@ -1,0 +1,124 @@
+import requests
+import pandas as pd
+
+
+# Overpass API Query for AEDs in Greece & Cyprus
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+
+# OpenAEDMap Export URL
+OPENAEDMAP_URL = "https://openaedmap.org/api/v1/countries/GR.geojson"
+
+
+OVERPASS_QUERY = """
+[out:json][timeout:60];
+(
+  node["emergency"="defibrillator"](34.6,19.4,41.8,29.7);
+  node["healthcare"="defibrillator"](34.6,19.4,41.8,29.7);
+  node["medical_equipment"="aed"](34.6,19.4,41.8,29.7);
+  node["amenity"="aed"](34.6,19.4,41.8,29.7);
+
+  node["emergency"="defibrillator"](34.5,32.2,35.7,34.6);
+  node["healthcare"="defibrillator"](34.5,32.2,35.7,34.6);
+  node["medical_equipment"="aed"](34.5,32.2,35.7,34.6);
+  node["amenity"="aed"](34.5,32.2,35.7,34.6);
+);
+out body;
+"""
+
+
+def fetch_overpass_data():
+    """Fetch AED locations from Overpass API with fixed request"""
+    print("Fetching AED data from Overpass API...")
+
+    try:
+        response = requests.post(OVERPASS_URL, data=OVERPASS_QUERY, timeout=60)  # ✅ Use POST instead of GET
+        response.raise_for_status()  # Raises HTTPError for bad responses
+
+        elements = response.json().get("elements", [])
+        print(f"✅ Fetched {len(elements)} AEDs from Overpass API.")
+        return [
+            {
+                "id": aed.get("id"),
+                "latitude": aed.get("lat"),
+                "longitude": aed.get("lon"),
+                "name": aed.get("tags", {}).get("name", "Unknown"),
+                "address": aed.get("tags", {}).get("addr:full", "Unknown Address"),
+                "emergency": "defibrillator",
+                "operator": aed.get("tags", {}).get("operator", "Unknown"),
+                "indoor": aed.get("tags", {}).get("indoor", "no") == "yes",
+                "access": aed.get("tags", {}).get("access", "unknown"),
+                "defibrillator_location": aed.get("tags", {}).get("defibrillator:location", "Not specified"),
+                "level": aed.get("tags", {}).get("level", "unknown"),
+                "opening_hours": aed.get("tags", {}).get("opening_hours", "unknown"),
+                "phone": aed.get("tags", {}).get("phone", "unknown"),
+                "wheelchair": aed.get("tags", {}).get("wheelchair", "unknown"),
+                "source": "Overpass API"
+            }
+            for aed in elements
+        ]
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Overpass API request failed: {e}")
+        return []
+ 
+
+def fetch_openaedmap_data():
+    """Fetch AED locations from OpenAEDMap with fixed URL"""
+    print("Fetching AED data from OpenAEDMap...")
+    try:
+        response = requests.get(OPENAEDMAP_URL)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        geojson_data = response.json()
+        features = geojson_data.get("features", [])
+        print(f"✅ Fetched {len(features)} AEDs from OpenAEDMap.")
+        return [
+            {
+                "id": feature["properties"].get("@id"),
+                "latitude": feature["geometry"]["coordinates"][1],
+                "longitude": feature["geometry"]["coordinates"][0],
+                "name": feature["properties"].get("name", "Unknown"),
+                "address": feature["properties"].get("address", "Unknown Address"),
+                "emergency": "defibrillator",
+                "operator": feature["properties"].get("operator", "Unknown"),
+                "indoor": feature["properties"].get("indoor", "no") == "yes",
+                "access": feature["properties"].get("access", "unknown"),
+                "defibrillator_location": feature["properties"].get("defibrillator:location", "Not specified"),
+                "level": feature["properties"].get("level", "unknown"),
+                "opening_hours": feature["properties"].get("opening_hours", "unknown"),
+                "phone": feature["properties"].get("phone", "unknown"),
+                "wheelchair": feature["properties"].get("wheelchair", "unknown"),
+                "source": "OpenAEDMap"
+            }
+            for feature in features
+        ]
+    except requests.exceptions.RequestException as e:
+        print(f"❌ OpenAEDMap request failed: {e}")
+        return []
+
+
+def merge_data():
+    """Merge data from Overpass API and OpenAEDMap, removing duplicates"""
+    overpass_data = fetch_overpass_data()
+    openaedmap_data = fetch_openaedmap_data()
+
+    print(f"Overpass AEDs: {len(overpass_data)}, OpenAEDMap AEDs: {len(openaedmap_data)}")
+
+    # Merge data and remove duplicates based on lat/lon
+    all_aeds = {f"{aed['latitude']},{aed['longitude']}": aed for aed in overpass_data + openaedmap_data}
+
+    final_data = list(all_aeds.values())
+    print(f"Total unique AEDs: {len(final_data)}")
+
+    return final_data
+
+
+def save_to_excel(aed_data):
+    """Save AED data to an Excel file"""
+    df = pd.DataFrame(aed_data)
+    df.to_excel("aed_locations.xlsx", index=False)
+    print("✅ AED data saved to aed_locations.xlsx")
+
+
+if __name__ == "__main__":
+    aed_data = merge_data()
+    save_to_excel(aed_data)

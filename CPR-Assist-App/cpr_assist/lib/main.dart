@@ -6,9 +6,12 @@ import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'services/decrypted_data.dart';
 import 'services/ble_connection.dart';
+import 'dart:developer' as developer; // ✅ Import to use developer.log
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  filterLogs(); // ✅ Suppress unwanted logs before app starts
+
   final decryptedDataHandler = DecryptedData();
   final prefs = await SharedPreferences.getInstance();
 
@@ -24,7 +27,7 @@ void main() async {
       isLoggedIn = false;
     }
   } else {
-    print("⚠️ No user is logged in.");
+    print("❌ No user is logged in.");
   }
 
   runApp(MyApp(
@@ -88,3 +91,17 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ✅ Global BLE Connection Instance
 late BLEConnection globalBLEConnection;
+
+/// **🔇 Filter Unwanted Logs**
+void filterLogs() {
+  debugPrint = (String? message, {int? wrapWidth}) {
+    if (message == null) return;
+    if (message.contains("FrameEvents") ||
+        message.contains("updateAcquireFence") ||
+        message.contains("ProxyAndroidLoggerBackend") ||
+        message.contains("Too many Flogger logs")) {
+      return; // ✅ Suppress logs
+    }
+    developer.log(message);
+  };
+}

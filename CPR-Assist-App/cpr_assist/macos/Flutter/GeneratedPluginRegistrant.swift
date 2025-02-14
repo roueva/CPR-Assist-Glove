@@ -5,7 +5,7 @@
 import FlutterMacOS
 import Foundation
 
-import flutter_blue_plus
+import flutter_blue_plus_darwin
 import flutter_secure_storage_darwin
 import geolocator_apple
 import path_provider_foundation
