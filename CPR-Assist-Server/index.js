@@ -57,23 +57,14 @@ app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-// ✅ 5️⃣ Auth Routes
-app.use('/auth', (req, res, next) => {
-  req.db = pool;
-  next();
-}, createAuthRoutes(pool));
+// ✅ 5️⃣ Auth Routes (Pass `pool` directly)
+app.use('/auth', createAuthRoutes(pool));
 
-// ✅ 6️⃣ Session Routes
-app.use('/sessions', (req, res, next) => {
-  req.db = pool;
-  next();
-}, createSessionRoutes(pool));
+// ✅ 6️⃣ Session Routes (Pass `pool` directly)
+app.use('/sessions', createSessionRoutes(pool));
 
-// ✅ 7️⃣ AED Routes (use `req.db` from `index.js`)
-app.use('/aed', (req, res, next) => {
-  req.db = pool;
-  next();
-}, createAedRoutes(pool));
+// ✅ 7️⃣ AED Routes (Pass `pool` directly)
+app.use('/aed', createAedRoutes(pool));
 
 // ✅ 8️⃣ 404 Handler
 app.use((req, res) => {
@@ -107,14 +98,16 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣2️⃣ Correct Keep-Alive for Railway (Blocks Node.js Exit)
-// 🚨 Explanation: `process.stdin.resume()` blocks the event loop indefinitely.
+// ✅ 1️⃣2️⃣ Proper Railway Keep-Alive (Blocks Node.js Exit)
+// 🚨 Explanation: Use `setInterval()` with `process.stdin.resume()` to block event loop.
 function keepAlive() {
-  console.log('💓 Starting Railway Keep-Alive...');
-  process.stdin.resume(); // 🚀 Keeps Node.js alive
+  console.log('💓 Starting Keep-Alive for Railway...');
   setInterval(() => {
-    console.log('💓 Keep-Alive Ping: Railway, I am still active');
+    console.log('💓 Railway Keep-Alive Ping: Still active...');
   }, 1000 * 60 * 5); // Ping every 5 minutes
+
+  // ✅ This keeps Node.js alive in Railway (blocks exit)
+  process.stdin.resume();
 }
 
 // ✅ 1️⃣3️⃣ Start Keep-Alive Immediately
@@ -131,7 +124,7 @@ keepAlive();
   }
 })();
 
-// ✅ 1️⃣5️⃣ Single Graceful Shutdown (from `index.js` only)
+// ✅ 1️⃣5️⃣ Single Graceful Shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();

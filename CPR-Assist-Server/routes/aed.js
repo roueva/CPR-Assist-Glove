@@ -1,8 +1,5 @@
 ﻿const express = require('express');
 const router = express.Router();
-router.get('/', async (req, res) => {
-    const db = req.db; // ✅ Use shared pool from index.js
-});
 
 module.exports = (pool) => {
     // ✅ Fetch all AED locations
@@ -16,21 +13,30 @@ module.exports = (pool) => {
         }
     });
 
-    // ✅ Insert new AED locations (Triggered by Python Script)
+    // ✅ Insert or Update AED locations (Triggered by Python Script)
     router.post('/update', async (req, res) => {
         const { aeds } = req.body; // Expecting an array of AED objects
         if (!Array.isArray(aeds)) {
-            return res.status(400).json({ success: false, message: "Invalid data format." });
+            return res.status(400).json({ success: false, message: "Invalid data format. Expected an array." });
         }
 
+        const client = await pool.connect();
         try {
-            const client = await pool.connect();
             for (const aed of aeds) {
                 await client.query(`
-                    INSERT INTO aed_locations (id, latitude, longitude, name, address, emergency, operator, indoor, access, defibrillator_location, level, opening_hours, phone, wheelchair, last_updated)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-                    ON CONFLICT (id) DO UPDATE
-                    SET latitude = EXCLUDED.latitude,
+                    INSERT INTO aed_locations (
+                        id, latitude, longitude, name, address, emergency, 
+                        operator, indoor, access, defibrillator_location, 
+                        level, opening_hours, phone, wheelchair, last_updated
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, 
+                        $7, $8, $9, $10, 
+                        $11, $12, $13, $14, NOW()
+                    )
+                    ON CONFLICT (id) 
+                    DO UPDATE SET 
+                        latitude = EXCLUDED.latitude,
                         longitude = EXCLUDED.longitude,
                         name = EXCLUDED.name,
                         address = EXCLUDED.address,
@@ -44,13 +50,20 @@ module.exports = (pool) => {
                         phone = EXCLUDED.phone,
                         wheelchair = EXCLUDED.wheelchair,
                         last_updated = NOW();
-                `, [aed.id, aed.latitude, aed.longitude, aed.name, aed.address, aed.emergency, aed.operator, aed.indoor, aed.access, aed.defibrillator_location, aed.level, aed.opening_hours, aed.phone, aed.wheelchair]);
+                `, [
+                    aed.id, aed.latitude, aed.longitude, aed.name, 
+                    aed.address, aed.emergency, aed.operator, 
+                    aed.indoor, aed.access, aed.defibrillator_location, 
+                    aed.level, aed.opening_hours, aed.phone, aed.wheelchair
+                ]);
             }
-            client.release();
-            res.json({ success: true, message: "AED locations updated successfully." });
+
+            res.json({ success: true, message: "✅ AED locations updated successfully." });
         } catch (error) {
             console.error("❌ Error updating AED locations:", error);
             res.status(500).json({ success: false, message: "Failed to update AED locations." });
+        } finally {
+            client.release(); // ✅ Ensure the client is released
         }
     });
 
