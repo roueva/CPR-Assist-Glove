@@ -1,4 +1,4 @@
-﻿require('dotenv').config(); // Ensure environment variables are loaded first
+﻿require('dotenv').config(); // Load environment variables
 
 const express = require('express');
 const cors = require('cors');
@@ -7,22 +7,21 @@ const { Pool } = require('pg');
 const winston = require('winston');
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
-const createAedRoutes = require('./routes/aed'); // ✅ Ensure it's imported as a function
+const createAedRoutes = require('./routes/aed');
 
-
-// Create PostgreSQL connection pool
+// ✅ 1️⃣ PostgreSQL Connection Pool
 const pool = new Pool({
     user: process.env.POSTGRES_USER,
     host: process.env.POSTGRES_HOST,
     database: process.env.POSTGRES_DATABASE,
-    password: String(process.env.POSTGRES_PASSWORD).trim(), // ✅ Ensure it's a string
+    password: String(process.env.POSTGRES_PASSWORD).trim(),
     port: process.env.POSTGRES_PORT || 5432,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
-// Create a Winston logger for application-wide logging
+// ✅ 2️⃣ Winston Logger
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
@@ -31,69 +30,94 @@ const logger = winston.createLogger({
     ),
     transports: [
         new winston.transports.File({ filename: 'error.log', level: 'error' }),
-        new winston.transports.File({ filename: 'combined.log' })
-    ]
+        new winston.transports.File({ filename: 'combined.log' }),
+        new winston.transports.Console(), // ✅ Show logs in Railway dashboard
+    ],
 });
 
+// ✅ 3️⃣ Express App Setup
 const app = express();
-app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
-// Root route for health check
+// ✅ 4️⃣ CORS Configuration (Important for Flutter Web/Android)
+app.use(cors({
+    origin: '*', // ✅ Allow all origins (replace with Flutter domain for security)
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+}));
+app.options('*', cors()); // ✅ Handle preflight requests
+
+// ✅ 5️⃣ Health Check Route
 app.get('/', (req, res) => {
-    res.json({ message: 'Server is running', status: 'healthy' });
+    res.json({ message: '🚀 Server is running on Railway!', status: 'healthy' });
 });
 
+// ✅ 6️⃣ Google Maps API Route
 app.get('/api/maps-key', (req, res) => {
     res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-
-// Register routes
+// ✅ 7️⃣ Auth Routes
 app.use('/auth', (req, res, next) => {
-    req.db = pool; // Attach pool to the request object for auth routes
+    req.db = pool;
     next();
 }, createAuthRoutes(pool));
 
+// ✅ 8️⃣ Session Routes
 app.use('/sessions', (req, res, next) => {
     req.db = pool;
     next();
 }, createSessionRoutes(pool));
 
-app.use('/aed', createAedRoutes(pool)); // ✅ Correct: Call function and pass pool
+// ✅ 9️⃣ AED Routes
+app.use('/aed', createAedRoutes(pool));
 
-// Handle unknown routes
-app.use((req, res, next) => {
-    res.status(404).json({ error: 'Route not found' });
+// ✅ 1️⃣0️⃣ 404 Handler
+app.use((req, res) => {
+    res.status(404).json({ error: '❌ Route not found' });
 });
 
-// Global error handler
+// ✅ 1️⃣1️⃣ Global Error Handler
 app.use((err, req, res, next) => {
-    logger.error(err.message, { stack: err.stack });
+    logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
     res.status(500).json({
-        message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? err.message : null
+        message: '❌ Internal server error',
+        error: process.env.NODE_ENV === 'development' ? err.message : null,
     });
 });
 
+// ✅ 1️⃣2️⃣ Use Railway Provided PORT or Fallback
 const PORT = process.env.PORT || 3000;
 
+// ✅ 1️⃣3️⃣ Start the Server Gracefully
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// ✅ Handle Port Already in Use Error Gracefully
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use. Shutting down...`);
+        process.exit(1);
+    } else {
+        throw err;
+    }
+});
+
+// ✅ 1️⃣4️⃣ Test Database Connection Before Fully Starting
 (async () => {
     try {
-        // Test database connection before starting the server
         await pool.query('SELECT 1');
-
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(Server running on port ${PORT});
-        });
+        console.log('✅ Database connected successfully!');
     } catch (error) {
-        console.error('Error during startup:', error.message);
-        process.exit(1); // Exit with error code if something goes wrong
+        console.error('❌ Database connection error:', error.message);
+        process.exit(1);
     }
 })();
 
-// Graceful shutdown
+// ✅ 1️⃣5️⃣ Graceful Shutdown for Railway
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, closing pool...');
     await pool.end();
