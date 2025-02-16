@@ -9,7 +9,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ PostgreSQL Connection Pool (Conditional SSL)
+// ✅ PostgreSQL Connection Pool
 const pool = new Pool({
   user: process.env.POSTGRES_USER,
   host: process.env.POSTGRES_HOST,
@@ -105,6 +105,11 @@ server.on('error', (err) => {
   }
 });
 
+// ✅ Add a Background Keep-Alive Process to Hold the Container Open
+setInterval(() => {
+  console.log('💓 Keep-alive ping to Railway...');
+}, 1000 * 60 * 5); // Every 5 minutes
+
 // ✅ Test Database Connection Before Fully Starting
 (async () => {
   try {
@@ -130,3 +135,6 @@ process.on('SIGINT', async () => {
   console.log('Pool closed. Exiting process.');
   process.exit(0);
 });
+
+// ✅ Prevent Railway Container from Stopping Immediately
+process.stdin.resume();
