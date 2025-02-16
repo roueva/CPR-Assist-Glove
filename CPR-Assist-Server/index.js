@@ -34,7 +34,7 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 1️⃣ Add `/health` Route for Railway Health Check
+// ✅ 1️⃣ `/health` Route for Railway Health Check
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -52,7 +52,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ✅ 2️⃣ Google Maps API Route
+// ✅ 2️⃣ Google Maps API Key Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
@@ -107,6 +107,23 @@ server.on('error', (err) => {
   }
 });
 
+// ✅ 1️⃣0️⃣ Add Proper Keep-Alive (Prevents Railway Stop)
+// 🚨 Explanation: Block the event loop using `setInterval()` and never resolve a promise.
+function keepAlive() {
+  console.log('💓 Starting Keep-Alive for Railway...');
+  setInterval(() => {
+    console.log('💓 Railway Keep-Alive Ping: Still running...');
+  }, 1000 * 60 * 5); // Ping every 5 minutes
+
+  // Block the event loop with a never-resolving promise
+  return new Promise(() => {});
+}
+
+// ✅ 1️⃣1️⃣ Start Keep-Alive Immediately (This Fixes the Auto-Shutdown)
+keepAlive().catch(err => {
+  console.error('❌ Keep-Alive Error:', err.message);
+});
+
 // ✅ 1️⃣2️⃣ Test Database Connection
 (async () => {
   try {
@@ -118,7 +135,7 @@ server.on('error', (err) => {
   }
 })();
 
-// ✅ 1️⃣3️⃣ Single Graceful Shutdown (Remove from `db.js`)
+// ✅ 1️⃣3️⃣ Single Graceful Shutdown (from `index.js` only)
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
