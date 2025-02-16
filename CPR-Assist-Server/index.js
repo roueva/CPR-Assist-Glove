@@ -2,13 +2,14 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const fetch = require('node-fetch'); // ✅ Add fetch for self-ping
 const winston = require('winston');
 const pool = require('./db');
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ Environment Variable Logs
+// ✅ Log Environment Variables
 console.log("✅ Current Environment Variables:");
 console.log(`POSTGRES_USER: ${process.env.POSTGRES_USER}`);
 console.log(`POSTGRES_PASSWORD: ${process.env.POSTGRES_PASSWORD ? 'Set' : 'Not Set'}`);
@@ -91,39 +92,27 @@ const PORT = process.env.PORT || 8080;
 // ✅ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  pingSelf(); // ✅ Start Self-Ping to Prevent Auto-Sleep
 });
 
-// ✅ Handle Port Conflicts
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use.`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
-
-// ✅ Database Startup Check (Retries if Database Is Not Ready)
-async function waitForDatabase(retries = 5, delay = 5000) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
+// ✅ Self-Ping Task to Keep Railway Active
+async function pingSelf() {
+  const url = `http://localhost:${PORT}/health`;
+  setInterval(async () => {
     try {
-      await pool.query('SELECT 1');
-      console.log('✅ Database is ready!');
-      return;
-    } catch (error) {
-      console.warn(`⚠️ Database not ready (attempt ${attempt}/${retries}):`, error.message);
-      if (attempt < retries) {
-        await new Promise(res => setTimeout(res, delay));
+      const response = await fetch(url);
+      if (response.ok) {
+        console.log(`💓 Self-ping successful to ${url}`);
       } else {
-        console.error('❌ Database failed to connect after retries.');
-        process.exit(1);
+        console.warn(`⚠️ Self-ping failed: ${response.status}`);
       }
+    } catch (error) {
+      console.error(`❌ Error during self-ping: ${error.message}`);
     }
-  }
+  }, 10000); // Ping every 10 seconds
 }
 
-// ✅ FINAL AND CORRECT KEEP-ALIVE
-// 🚨 This blocks the event loop permanently
+// ✅ FINAL AND CORRECT KEEP-ALIVE (BLOCKS NODE.JS FOREVER)
 async function keepAlive() {
   console.log('💓 Starting FINAL Railway Keep-Alive...');
   await new Promise(() => {}); // ✅ BLOCKS EVENT LOOP FOREVER
@@ -131,8 +120,7 @@ async function keepAlive() {
 
 // ✅ Start Database Check and Keep-Alive
 (async () => {
-  await waitForDatabase(); // ✅ Wait for DB before proceeding
-  keepAlive();             // ✅ Keep container alive for Railway
+  keepAlive(); // ✅ Keep container alive for Railway
 })();
 
 // ✅ Graceful Shutdown Handler
