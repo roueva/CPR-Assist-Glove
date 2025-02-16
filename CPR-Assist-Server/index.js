@@ -8,6 +8,16 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
+
+console.log("✅ Current Environment Variables:");
+console.log(`POSTGRES_USER: ${process.env.POSTGRES_USER}`);
+console.log(`POSTGRES_PASSWORD: ${process.env.POSTGRES_PASSWORD ? 'Set' : 'Not Set'}`);
+console.log(`POSTGRES_HOST: ${process.env.POSTGRES_HOST}`);
+console.log(`POSTGRES_DATABASE: ${process.env.POSTGRES_DATABASE}`);
+console.log(`POSTGRES_PORT: ${process.env.POSTGRES_PORT}`);
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+
+
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
@@ -111,6 +121,28 @@ async function waitForDatabase(retries = 5, delay = 5000) {
     }
   }
 }
+
+// Catch Uncaught Exceptions (hard crashes)
+process.on('uncaughtException', (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  process.exit(1);
+});
+
+// Catch Unhandled Promise Rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error("❌ Unhandled Rejection:", reason);
+});
+
+
+console.log('🚀 Loading Routes...');
+app.use('/auth', createAuthRoutes(pool));
+console.log('✅ Auth route loaded');
+app.use('/sessions', createSessionRoutes(pool));
+console.log('✅ Sessions route loaded');
+app.use('/aed', createAedRoutes(pool));
+console.log('✅ AED route loaded');
+console.log('🚀 All routes loaded successfully');
+
 
 // ✅ Railway Keep-Alive (Prevents Container Exit)
 function keepAlive() {

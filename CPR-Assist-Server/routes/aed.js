@@ -2,6 +2,9 @@
 const router = express.Router();
 
 module.exports = (pool) => {
+
+console.log("🟠 AED routes loaded");
+
     // ✅ Fetch all AED locations
     router.get('/', async (req, res) => {
         try {

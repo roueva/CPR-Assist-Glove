@@ -1,6 +1,17 @@
 ﻿require('dotenv').config();
 const { Pool } = require('pg');
 
+console.log("🟢 PostgreSQL Pool created from db.js");
+
+pool.on('connect', () => {
+  console.log('✅ PostgreSQL pool connected');
+});
+
+pool.on('error', (err) => {
+  console.error('❌ PostgreSQL Pool error:', err);
+});
+
+
 // Ensure required environment variables are set
 if (!process.env.POSTGRES_PASSWORD) {
     console.error("❌ Error: POSTGRES_PASSWORD is missing in the .env file!");
