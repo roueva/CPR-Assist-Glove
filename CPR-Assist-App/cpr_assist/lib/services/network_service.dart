@@ -14,6 +14,26 @@ class NetworkService {
     return url;
   }
 
+
+  Future<void> testConnection() async {
+    try {
+      final response = await http.get(Uri.parse('${NetworkService.baseUrl}/api/test'));
+      print("🚀 Server Test Response: ${response.body}");
+    } catch (e) {
+      print("❌ Failed to connect to Railway server: $e");
+    }
+  }
+
+  Future<void> testRailwayConnection() async {
+    try {
+      final response = await http.get(Uri.parse('${NetworkService.baseUrl}/api/test'));
+      print("🚀 Railway Test Response: ${response.body}");
+    } catch (e) {
+      print("❌ Railway connection failed: $e");
+    }
+  }
+
+
   // 🔹 TOKEN MANAGEMENT 🔹
   static Future<int?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
