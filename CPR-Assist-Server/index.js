@@ -1,4 +1,4 @@
-﻿require('dotenv').config(); // Load environment variables
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,7 +8,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ Winston Logger
+// ✅ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -34,12 +34,25 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 1️⃣ Health Check Route
-app.get('/', (req, res) => {
-  res.json({ message: '🚀 Server is running on Railway!', status: 'healthy' });
+// ✅ 1️⃣ Add `/health` Route for Railway Health Check
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({
+      status: 'healthy',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'error',
+      error: error.message,
+    });
+  }
 });
 
-// ✅ 2️⃣ Google Maps API Key Route
+// ✅ 2️⃣ Google Maps API Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
@@ -56,8 +69,11 @@ app.use('/sessions', (req, res, next) => {
   next();
 }, createSessionRoutes(pool));
 
-// ✅ 5️⃣ AED Routes
-app.use('/aed', createAedRoutes(pool));
+// ✅ 5️⃣ AED Routes (use `req.db` instead of direct import)
+app.use('/aed', (req, res, next) => {
+  req.db = pool;
+  next();
+}, createAedRoutes(pool));
 
 // ✅ 6️⃣ 404 Handler
 app.use((req, res) => {
@@ -91,23 +107,6 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣0️⃣ Railway Keep-Alive Mechanism (Best Practice)
-// 🚨 Explanation: Create a blocking Promise to keep the event loop alive.
-async function keepAlive() {
-  console.log('💓 Starting Keep-Alive process for Railway');
-  // Block the event loop with a long-running promise
-  await new Promise(() => {
-    setInterval(() => {
-      console.log('💓 Keep-Alive Ping: Railway, I am still active');
-    }, 1000 * 60 * 5); // Ping every 5 minutes
-  });
-}
-
-// ✅ 1️⃣1️⃣ Start Keep-Alive Immediately (No Timeout)
-keepAlive().catch(err => {
-  console.error('❌ Keep-Alive Error:', err.message);
-});
-
 // ✅ 1️⃣2️⃣ Test Database Connection
 (async () => {
   try {
@@ -119,17 +118,16 @@ keepAlive().catch(err => {
   }
 })();
 
-// ✅ 1️⃣3️⃣ Graceful Shutdown for Railway
+// ✅ 1️⃣3️⃣ Single Graceful Shutdown (Remove from `db.js`)
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing pool...');
+  console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
-  console.log('✅ Pool closed. Exiting process.');
+  console.log('✅ PostgreSQL pool closed. Exiting process.');
   process.exit(0);
 });
-
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing pool...');
+  console.log('SIGINT received, closing PostgreSQL pool...');
   await pool.end();
-  console.log('✅ Pool closed. Exiting process.');
+  console.log('✅ PostgreSQL pool closed. Exiting process.');
   process.exit(0);
 });

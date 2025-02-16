@@ -1,6 +1,8 @@
 ﻿const express = require('express');
 const router = express.Router();
-const pool = require('../db');  // Ensure correct database connection
+router.get('/', async (req, res) => {
+    const db = req.db; // ✅ Use shared pool from index.js
+});
 
 module.exports = (pool) => {
     // ✅ Fetch all AED locations
