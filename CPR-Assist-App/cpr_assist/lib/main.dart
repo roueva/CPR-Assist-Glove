@@ -7,9 +7,15 @@ import 'screens/registration_screen.dart';
 import 'services/decrypted_data.dart';
 import 'services/ble_connection.dart';
 import 'dart:developer' as developer; // ✅ Import to use developer.log
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Load .env from the correct location
+    await dotenv.load(fileName: ".env");
+
+
   filterLogs(); // ✅ Suppress unwanted logs before app starts
 
   final decryptedDataHandler = DecryptedData();

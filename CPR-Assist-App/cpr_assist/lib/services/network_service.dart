@@ -2,13 +2,17 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 class NetworkService {
-  //static const String baseUrl = 'https://cpr-assist-app.up.railway.app';
-  static String get baseUrl => 'http://192.168.2.21:3000'; // Local IP
-  //static String get baseUrl => 'http://192.168.0.121:3000'; // captaincoach
-  //static String get baseUrl => 'http://192.168.1.14:3000'; // therapevin
-
+  static String get baseUrl {
+    String? url = dotenv.env['BASE_URL'];
+    if (url == null || url.isEmpty) {
+      throw Exception("❌ BASE_URL is missing from .env");
+    }
+    return url;
+  }
 
   // 🔹 TOKEN MANAGEMENT 🔹
   static Future<int?> getUserId() async {
@@ -63,8 +67,6 @@ class NetworkService {
         return true;
       }
     }
-
-    print("❌ Token refresh failed: ${response.body}");
     return false;
   }
 
@@ -89,7 +91,6 @@ class NetworkService {
     bool refreshed = await refreshToken();
 
     if (!refreshed) {
-      print("❌ Token refresh failed. Logging user out.");
       await removeToken();
       return false;
     }
@@ -151,7 +152,6 @@ class NetworkService {
     }
 
     if (response.statusCode == 401 && requiresAuth) {
-      print('🔄 Token expired. Attempting to refresh...');
       final refreshed = await refreshToken();
 
       if (refreshed) {
@@ -189,6 +189,15 @@ class NetworkService {
       return [];
     }
   }
+
+  static String get googleMapsApiKey {
+    String? key = dotenv.env['GOOGLE_MAPS_API_KEY'];
+    if (key == null || key.isEmpty) {
+      throw Exception("❌ GOOGLE_MAPS_API_KEY is missing from .env");
+    }
+    return key;
+  }
+
 
   static Future<String?> fetchGoogleMapsApiKey() async {
     try {

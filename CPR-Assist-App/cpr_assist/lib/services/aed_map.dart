@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/network_service.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
+import '../widgets/aed_map_view.dart';
+
 
 
 class AEDMapWidget extends StatefulWidget {
@@ -194,26 +196,17 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
   /// **📍 Handle Small Map Click**
   LatLng? _selectedAED; // Store selected AED for map update
 
-  void _onSmallMapTap(LatLng aedLocation) async {
+  Future<void> _onSmallMapTap(LatLng aedLocation, {String mode = "walking"}) async {
     if (_userLocation == null) return; // Prevent crashes
 
     setState(() {
       _selectedAED = aedLocation;
     });
 
-    // ✅ Fetch directions and draw route
-    List<LatLng> routePoints = await _fetchRouteFromGoogleMaps(_userLocation!, aedLocation);
+    // ✅ Fetch actual route from Google Directions API
+    await _fetchRoute(_userLocation!, aedLocation, mode); // ✅ Mode now updates dynamically
 
-    setState(() {
-      _navigationLine = Polyline(
-        polylineId: const PolylineId("route"),
-        points: routePoints.isNotEmpty ? routePoints : [_userLocation!, _selectedAED!], // ✅ Use actual route if available
-        color: Colors.blue,
-        width: 5,
-      );
-    });
-
-    // ✅ Adjust the big map to fit User & Selected AED with proper zoom
+    // ✅ Adjust the big map to fit both points **exactly** (no extra padding)
     LatLngBounds bounds = LatLngBounds(
       southwest: LatLng(
         _userLocation!.latitude < aedLocation.latitude ? _userLocation!.latitude : aedLocation.latitude,
@@ -226,40 +219,93 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
     );
 
     Future.delayed(Duration(milliseconds: 300), () {
-      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 30)); // ✅ Zoom to just fit both locations
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20)); // ✅ Less padding
     });
   }
 
 
-  Future<List<LatLng>> _fetchRouteFromGoogleMaps(LatLng start, LatLng end) async {
+  String _selectedMode = "walking"; // ✅ Track selected mode globally
+
+  String _estimatedTime = "";
+
+  Future<void> _fetchRoute(LatLng origin, LatLng destination, String mode) async {
     if (_googleMapsApiKey == null) {
-      print("❌ Google Maps API Key is missing.");
-      return [];
+      print("❌ Missing API Key.");
+      return;
     }
 
-    final String url =
+    final url = Uri.parse(
         "https://maps.googleapis.com/maps/api/directions/json?"
-        "origin=${start.latitude},${start.longitude}"
-        "&destination=${end.latitude},${end.longitude}"
-        "&mode=walking" // ✅ Get walking directions
-        "&key=$_googleMapsApiKey";
+            "origin=${origin.latitude},${origin.longitude}"
+            "&destination=${destination.latitude},${destination.longitude}"
+            "&mode=$mode"
+            "&key=$_googleMapsApiKey"
+    );
 
     try {
-      final response = await NetworkService.getExternal(url); // ✅ Fetch data from Google
-      if (response == null || response["status"] != "OK") {
-        print("❌ Error fetching route: ${response?['status']}");
-        return [];
-      }
+      final response = await NetworkService.getExternal(url.toString());
 
-      // ✅ Extract polyline points from Google Maps API response
-      List<LatLng> routePoints = _decodePolyline(response["routes"][0]["overview_polyline"]["points"]);
-      return routePoints;
+      if (response != null && response['status'] == 'OK') {
+        List<LatLng> routePoints = _decodePolyline(response["routes"][0]["overview_polyline"]["points"]);
+        String durationText = response["routes"][0]["legs"][0]["duration"]["text"];
+
+        setState(() {
+          _estimatedTime = durationText; // ✅ Store estimated time first
+
+          // ✅ Set navigation polyline first
+          _navigationLine = Polyline(
+            polylineId: PolylineId(mode),
+            points: routePoints,
+            color: _selectedMode == "driving" ? Colors.blue : Colors.green,
+            width: 5,
+          );
+
+          // ✅ Remove previous estimated time marker before adding a new one
+          _aedMarkers.removeWhere((marker) => marker.markerId.value == "route_info");
+
+          // ✅ Add the estimated time marker dynamically
+          _aedMarkers = Set.from(_aedMarkers)..add(
+            Marker(
+              markerId: const MarkerId("route_info"),
+              position: routePoints[routePoints.length ~/ 2],  // ✅ Use midpoint
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+              infoWindow: InfoWindow(
+                title: "⏳ $_estimatedTime",
+                snippet: "ETA via $_selectedMode",
+              ),
+            ),
+          );
+        });
+
+        // ✅ Auto-adjust zoom to fit route
+        _adjustZoomToFitRoute(routePoints);
+      } else {
+        print("❌ Failed to fetch route.");
+      }
     } catch (e) {
-      print("❌ Exception in fetching directions: $e");
-      return [];
+      print("❌ Error fetching route: $e");
     }
   }
 
+
+  void _adjustZoomToFitRoute(List<LatLng> routePoints) {
+    if (routePoints.isEmpty || _mapController == null) return;
+
+    double minLat = routePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+    double maxLat = routePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+    double minLng = routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+    double maxLng = routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+
+    LatLngBounds bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+
+    // ✅ Ensure zoom adjustment happens before UI updates
+    Future.delayed(Duration(milliseconds: 300), () {
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80)); // ✅ Adjusted zoom to fit route
+    });
+  }
 
 
   List<LatLng> _decodePolyline(String encoded) {
@@ -310,120 +356,32 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
     }
   }
 
+// Replace your previous `build()` method with:
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 🗺️ Big Map
-        Expanded(
-          flex: 5,
-          child: Stack(
-            children: [
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : GoogleMap(
-                onMapCreated: (controller) {
-                  _mapController = controller;
-                  Future.delayed(Duration(milliseconds: 500), () { // ✅ Delay ensures smooth loading
-                    _updateMapView();
-                  });
-                },
-                initialCameraPosition: CameraPosition(
-                  target: _userLocation ?? LatLng(37.9838, 23.7275),
-                  zoom: 15,
-                ),
-                markers: _aedMarkers,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
-                polylines: _navigationLine != null ? {_navigationLine!} : {},
-              ),
-            ],
-          ),
-        ),
-
-        // 📍 Scrollable Small AED Maps
-        SizedBox(
-          height: 120,
-          child: NotificationListener<ScrollEndNotification>(
-            onNotification: (scrollNotification) {
-              if (scrollNotification.metrics.pixels == scrollNotification.metrics.maxScrollExtent) {
-                _updateBatch(); // ✅ Use the function here
-              }
-              return true;
-            },
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _currentBatch,
-              itemBuilder: (context, index) {
-                if (index >= _aedLocations.length) return const SizedBox.shrink();
-                return _buildSmallMap(index);
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-// 📍 **Helper Function for Small AED Maps**
-  Widget _buildSmallMap(int index) {
-    final LatLng aedLocation = _aedLocations[index];
-
-    if (_googleMapsApiKey == null) {
-      return const Center(child: Text("⚠ Error Loading Map"));
-    }
-
-    final String staticMapUrl =
-        "https://maps.googleapis.com/maps/api/staticmap?"
-        "center=${aedLocation.latitude},${aedLocation.longitude}"
-        "&zoom=15"
-        "&size=300x300"
-        "&maptype=roadmap"
-        "&markers=color:red%7Clabel:A%7C${aedLocation.latitude},${aedLocation.longitude}"
-        "&key=$_googleMapsApiKey";
-
-    return GestureDetector(
-      onTap: () => _onSmallMapTap(aedLocation),
-      child: Container(
-        width: 120,
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 5)],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            children: [
-              // ✅ Load Static Map Image
-              Image.network(
-                staticMapUrl,
-                fit: BoxFit.cover,
-                width: 120,
-                height: 120,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const Center(child: CircularProgressIndicator());
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(child: Icon(Icons.map, size: 40, color: Colors.grey));
-                },
-              ),
-
-              // ✅ Navigation Button
-              Positioned(
-                bottom: 5,
-                right: 5,
-                child: FloatingActionButton.small(
-                  onPressed: () => _startNavigation(aedLocation),
-                  backgroundColor: Colors.blue,
-                  child: const Icon(Icons.navigation, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AEDMapDisplay(
+      isLoading: _isLoading,
+      aedMarkers: _aedMarkers,
+      userLocation: _userLocation,
+      mapController: _mapController,
+      navigationLine: _navigationLine,
+      estimatedTime: _estimatedTime,
+      selectedAED: _selectedAED,
+      aedLocations: _aedLocations,
+      currentBatch: _currentBatch,
+      selectedMode: _selectedMode,
+      onSmallMapTap: _onSmallMapTap,
+      onStartNavigation: _startNavigation,
+      onTransportModeSelected: (mode) {
+        setState(() {
+          _selectedMode = mode;
+        });
+        if (_selectedAED != null) {
+          _fetchRoute(_userLocation!, _selectedAED!, mode);
+        }
+      },
+      onBatchUpdate: _updateBatch,
+      googleMapsApiKey: _googleMapsApiKey,
     );
   }
 }

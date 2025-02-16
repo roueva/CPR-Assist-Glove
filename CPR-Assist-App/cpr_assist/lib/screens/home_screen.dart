@@ -9,7 +9,7 @@ import 'training_screen.dart';
 import 'login_screen.dart';
 import '../services/ble_connection.dart';
 import '../widgets/ble_status_indicator.dart';
-import '../widgets/aed_map_widget.dart';
+import '../services/aed_map.dart';
 
 
 class HomeScreen extends StatefulWidget {

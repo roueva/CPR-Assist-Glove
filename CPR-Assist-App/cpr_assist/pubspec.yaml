@@ -47,6 +47,7 @@ dependencies:
   # DateFormat
   intl: ^0.20.1
   jwt_decoder: ^2.0.1
+  flutter_dotenv: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -55,3 +56,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env
