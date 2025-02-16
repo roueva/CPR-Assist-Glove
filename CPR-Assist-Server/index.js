@@ -75,15 +75,39 @@ const PORT = process.env.PORT || 8080;
 // ✅ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`✅ Hang route available at http://<your-domain>/hang`);
 });
+
+
+
+// ✅ Dummy Route to Force Long-Running Service
+app.get('/hang', (req, res) => {
+  console.log('💤 Hang route hit: Keeping Railway active');
+  // Keeps the connection open indefinitely
+  req.on('close', () => {
+    console.log('❌ Hang route connection closed');
+  });
+});
+
+
+// ✅ Start Keep-Alive
+(async () => {
+  keepAlive(); // ✅ Block event loop to keep Railway active
+})();
+
 
 // 🚫 Removed Self-Ping (`pingSelf()`) for Testing
 
-// ✅ FINAL AND CORRECT KEEP-ALIVE (BLOCKS NODE.JS FOREVER)
+// ✅ FINAL BLOCKER (Prevents Node.js from exiting)
 async function keepAlive() {
   console.log('💓 Starting FINAL Railway Keep-Alive...');
-  await new Promise(() => {}); // ✅ BLOCKS EVENT LOOP FOREVER
+  setInterval(() => {
+    console.log('💓 Keep-alive heartbeat...');
+  }, 10000); // Print heartbeat every 10 seconds
+
+  await new Promise(() => {}); // BLOCKS FOREVER
 }
+
 
 // ✅ Start Database Check and Keep-Alive
 (async () => {
