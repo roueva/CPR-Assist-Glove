@@ -90,8 +90,13 @@ app.use((err, req, res, next) => {
     });
 });
 
-// ✅ 1️⃣2️⃣ Start Server and Test Database Connection
-const PORT = process.env.PORT || 3000;
+// ✅ Use Railway provided port or fallback to 8080
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
 
 (async () => {
     try {
