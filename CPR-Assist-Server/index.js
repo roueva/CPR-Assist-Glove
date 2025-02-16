@@ -1,46 +1,51 @@
 ﻿require('dotenv').config(); // Load environment variables
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { Pool } = require('pg');
-const winston = require('winston');
+const { parse } = require('pg-connection-string');
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ PostgreSQL Connection Pool
+// ✅ 1️⃣ Ensure `DATABASE_URL` is Provided (Primary Source of Truth)
+if (!process.env.DATABASE_URL) {
+  console.error('❌ Error: DATABASE_URL is missing in Railway environment variables!');
+  process.exit(1);
+}
+
+// ✅ 2️⃣ Parse `DATABASE_URL`
+const databaseUrl = process.env.DATABASE_URL.includes('?')
+  ? process.env.DATABASE_URL
+  : `${process.env.DATABASE_URL}?sslmode=require`;
+
+const connection = parse(databaseUrl);
+
+// ✅ 3️⃣ PostgreSQL Pool Configuration (No More `POSTGRES_PASSWORD` from `.env`)
 const pool = new Pool({
-  user: process.env.POSTGRES_USER,
-  host: process.env.POSTGRES_HOST,
-  database: process.env.POSTGRES_DATABASE,
-  password: String(process.env.POSTGRES_PASSWORD).trim(),
-  port: process.env.POSTGRES_PORT || 5432,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ...connection,
+  ssl: { rejectUnauthorized: false },
+  keepAlive: true,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 10000,
+  max: process.env.DB_MAX_CONNECTIONS || 5,
 });
 
-pool.on('error', (err) => console.error('Unexpected error on idle client', err));
-
-// ✅ Logging with Winston
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-  ],
+// ✅ 4️⃣ Handle Database Errors Gracefully
+pool.on('error', (err) => {
+  console.error('❌ Database error:', err.message);
+  setTimeout(() => {
+    console.log('ℹ️ Retrying database connection...');
+  }, 5000);
 });
 
-// ✅ Express App Setup
+// ✅ 5️⃣ Express App Setup
 const app = express();
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ CORS Configuration
+// ✅ 6️⃣ CORS Configuration
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -48,54 +53,54 @@ app.use(cors({
   credentials: true,
 }));
 
-// ✅ Health Check Route
+// ✅ 7️⃣ Health Check Route
 app.get('/', (req, res) => {
   res.json({ message: '🚀 Server is running on Railway!', status: 'healthy' });
 });
 
-// ✅ Google Maps API Key Route
+// ✅ 8️⃣ Google Maps API Key Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-// ✅ Auth Routes
+// ✅ 9️⃣ Auth Routes
 app.use('/auth', (req, res, next) => {
   req.db = pool;
   next();
 }, createAuthRoutes(pool));
 
-// ✅ Session Routes
+// ✅ 🔟 Session Routes
 app.use('/sessions', (req, res, next) => {
   req.db = pool;
   next();
 }, createSessionRoutes(pool));
 
-// ✅ AED Routes
+// ✅ 1️⃣1️⃣ AED Routes
 app.use('/aed', createAedRoutes(pool));
 
-// ✅ 404 Handler
+// ✅ 1️⃣2️⃣ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ Global Error Handler
+// ✅ 1️⃣3️⃣ Global Error Handler
 app.use((err, req, res, next) => {
-  logger.error(err.message, { stack: err.stack });
+  console.error('❌ Server Error:', err);
   res.status(500).json({
     message: '❌ Internal server error',
     error: process.env.NODE_ENV === 'development' ? err.message : null,
   });
 });
 
-// ✅ Use Railway Assigned PORT or Default to 3000
+// ✅ 1️⃣4️⃣ Use Railway Assigned PORT or Default to 3000
 const PORT = process.env.PORT || 3000;
 
-// ✅ Start the Server (Only Once!)
+// ✅ 1️⃣5️⃣ Start the Server Properly
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// ✅ Handle `EADDRINUSE` Port Conflict Error Gracefully
+// ✅ 1️⃣6️⃣ Handle `EADDRINUSE` Port Conflict Error Gracefully
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`❌ Port ${PORT} is already in use. Exiting...`);
@@ -105,36 +110,32 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ Add a Background Keep-Alive Process to Hold the Container Open
-setInterval(() => {
-  console.log('💓 Keep-alive ping to Railway...');
-}, 1000 * 60 * 5); // Every 5 minutes
-
-// ✅ Test Database Connection Before Fully Starting
-(async () => {
+// ✅ 1️⃣7️⃣ Test Database Connection
+async function connectDatabase() {
   try {
-    await pool.query('SELECT 1');
-    console.log('✅ Database connected successfully!');
+    const result = await pool.query('SELECT NOW()');
+    console.log(`✅ Database connected at ${result.rows[0].now}`);
   } catch (error) {
     console.error('❌ Database connection error:', error.message);
-    process.exit(1);
+    console.error('🟠 Retrying in 5 seconds...');
+    setTimeout(connectDatabase, 5000);
   }
-})();
+}
+connectDatabase();
 
-// ✅ Graceful Shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing pool...');
+// ✅ 1️⃣8️⃣ Graceful Shutdown
+async function shutdown() {
+  console.log('🛑 Shutting down gracefully...');
   await pool.end();
-  console.log('Pool closed. Exiting process.');
-  process.exit(0);
-});
+  console.log('✅ Database pool closed.');
+  setTimeout(() => {
+    console.log('👋 Exiting process...');
+    process.exit(0);
+  }, 1000);
+}
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing pool...');
-  await pool.end();
-  console.log('Pool closed. Exiting process.');
-  process.exit(0);
-});
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
-// ✅ Prevent Railway Container from Stopping Immediately
+// ✅ 1️⃣9️⃣ Keep Railway Container Alive
 process.stdin.resume();
