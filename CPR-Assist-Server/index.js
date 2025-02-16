@@ -40,6 +40,17 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 
+
+// ✅ Add Proper CORS Configuration
+app.use(
+  cors({
+    origin: '*', // You can restrict to your Flutter app domain if needed
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+
 // Root route for health check
 app.get('/', (req, res) => {
     res.json({ message: 'Server is running', status: 'healthy' });
