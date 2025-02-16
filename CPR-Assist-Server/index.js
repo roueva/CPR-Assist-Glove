@@ -1,4 +1,4 @@
-﻿require('dotenv').config(); // Load environment variables
+﻿require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -22,7 +22,6 @@ const connection = parse(databaseUrl);
 const pool = new Pool({
   ...connection,
   ssl: { rejectUnauthorized: false },
-  keepAlive: true,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 10000,
   max: process.env.DB_MAX_CONNECTIONS || 5,
@@ -30,9 +29,7 @@ const pool = new Pool({
 
 pool.on('error', (err) => {
   console.error('❌ Database error:', err.message);
-  setTimeout(() => {
-    console.log('ℹ️ Retrying database connection...');
-  }, 5000);
+  setTimeout(connectDatabase, 5000);
 });
 
 const app = express();
@@ -75,7 +72,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err);
+  console.error('❌ Server Error:', err.message);
   res.status(500).json({
     message: '❌ Internal server error',
     error: process.env.NODE_ENV === 'development' ? err.message : null,
@@ -103,7 +100,7 @@ async function connectDatabase() {
     console.log(`✅ Database connected at ${result.rows[0].now}`);
   } catch (error) {
     console.error('❌ Database connection error:', error.message);
-    console.error('🟠 Retrying in 5 seconds...');
+    console.log('🟠 Retrying in 5 seconds...');
     setTimeout(connectDatabase, 5000);
   }
 }
