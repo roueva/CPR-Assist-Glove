@@ -1,122 +1,109 @@
-﻿require('dotenv').config();
+﻿require('dotenv').config(); // Ensure environment variables are loaded first
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { Pool } = require('pg');
-const { parse } = require('pg-connection-string');
+const winston = require('winston');
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
-const createAedRoutes = require('./routes/aed');
+const createAedRoutes = require('./routes/aed'); // ✅ Ensure it's imported as a function
 
-if (!process.env.DATABASE_URL) {
-  console.error('❌ Error: DATABASE_URL is missing in Railway environment variables!');
-  process.exit(1);
-}
 
-const databaseUrl = process.env.DATABASE_URL.includes('?')
-  ? process.env.DATABASE_URL
-  : `${process.env.DATABASE_URL}?sslmode=require`;
-
-const connection = parse(databaseUrl);
-
+// Create PostgreSQL connection pool
 const pool = new Pool({
-  ...connection,
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 5000,
-  idleTimeoutMillis: 10000,
-  max: process.env.DB_MAX_CONNECTIONS || 5,
+    user: process.env.POSTGRES_USER,
+    host: process.env.POSTGRES_HOST,
+    database: process.env.POSTGRES_DATABASE,
+    password: String(process.env.POSTGRES_PASSWORD).trim(), // ✅ Ensure it's a string
+    port: process.env.POSTGRES_PORT || 5432,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-pool.on('error', (err) => {
-  console.error('❌ Database error:', err.message);
-  setTimeout(connectDatabase, 5000);
+pool.on('error', (err) => console.error('Unexpected error on idle client', err));
+
+// Create a Winston logger for application-wide logging
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+    ),
+    transports: [
+        new winston.transports.File({ filename: 'error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'combined.log' })
+    ]
 });
 
 const app = express();
+app.use(cors());
 app.use(helmet());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
-
+// Root route for health check
 app.get('/', (req, res) => {
-  res.json({ message: '🚀 Server is running on Railway!', status: 'healthy' });
+    res.json({ message: 'Server is running', status: 'healthy' });
 });
 
 app.get('/api/maps-key', (req, res) => {
-  res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
+    res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
+
+// Register routes
 app.use('/auth', (req, res, next) => {
-  req.db = pool;
-  next();
+    req.db = pool; // Attach pool to the request object for auth routes
+    next();
 }, createAuthRoutes(pool));
 
 app.use('/sessions', (req, res, next) => {
-  req.db = pool;
-  next();
+    req.db = pool;
+    next();
 }, createSessionRoutes(pool));
 
-app.use('/aed', (req, res, next) => {
-  req.db = pool;
-  next();
-}, createAedRoutes(pool));
+app.use('/aed', createAedRoutes(pool)); // ✅ Correct: Call function and pass pool
 
-app.use((req, res) => {
-  res.status(404).json({ error: '❌ Route not found' });
+// Handle unknown routes
+app.use((req, res, next) => {
+    res.status(404).json({ error: 'Route not found' });
 });
 
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err.message);
-  res.status(500).json({
-    message: '❌ Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : null,
-  });
+    logger.error(err.message, { stack: err.stack });
+    res.status(500).json({
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? err.message : null
+    });
 });
 
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+(async () => {
+    try {
+        // Test database connection before starting the server
+        await pool.query('SELECT 1');
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use. Exiting...`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(Server running on port ${PORT});
+        });
+    } catch (error) {
+        console.error('Error during startup:', error.message);
+        process.exit(1); // Exit with error code if something goes wrong
+    }
+})();
 
-async function connectDatabase() {
-  try {
-    const result = await pool.query('SELECT NOW()');
-    console.log(`✅ Database connected at ${result.rows[0].now}`);
-  } catch (error) {
-    console.error('❌ Database connection error:', error.message);
-    console.log('🟠 Retrying in 5 seconds...');
-    setTimeout(connectDatabase, 5000);
-  }
-}
-connectDatabase();
-
-async function shutdown() {
-  console.log('🛑 Shutting down gracefully...');
-  await pool.end();
-  console.log('✅ Database pool closed.');
-  setTimeout(() => {
-    console.log('👋 Exiting process...');
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, closing pool...');
+    await pool.end();
+    console.log('Pool closed. Exiting process.');
     process.exit(0);
-  }, 1000);
-}
+});
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-
-process.stdin.resume();
+process.on('SIGINT', async () => {
+    console.log('SIGINT received, closing pool...');
+    await pool.end();
+    console.log('Pool closed. Exiting process.');
+    process.exit(0);
+});
