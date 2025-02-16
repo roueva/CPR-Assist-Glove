@@ -8,7 +8,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-
+// ✅ Environment Variable Logs
 console.log("✅ Current Environment Variables:");
 console.log(`POSTGRES_USER: ${process.env.POSTGRES_USER}`);
 console.log(`POSTGRES_PASSWORD: ${process.env.POSTGRES_PASSWORD ? 'Set' : 'Not Set'}`);
@@ -16,7 +16,6 @@ console.log(`POSTGRES_HOST: ${process.env.POSTGRES_HOST}`);
 console.log(`POSTGRES_DATABASE: ${process.env.POSTGRES_DATABASE}`);
 console.log(`POSTGRES_PORT: ${process.env.POSTGRES_PORT}`);
 console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-
 
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
@@ -62,14 +61,15 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ✅ Auth Routes (Pass `pool` directly)
+// ✅ Auth Routes
+console.log('🚀 Loading Routes...');
 app.use('/auth', createAuthRoutes(pool));
-
-// ✅ Session Routes (Pass `pool` directly)
+console.log('✅ Auth route loaded');
 app.use('/sessions', createSessionRoutes(pool));
-
-// ✅ AED Routes (Pass `pool` directly)
+console.log('✅ Sessions route loaded');
 app.use('/aed', createAedRoutes(pool));
+console.log('✅ AED route loaded');
+console.log('🚀 All routes loaded successfully');
 
 // ✅ 404 Handler
 app.use((req, res) => {
@@ -122,37 +122,11 @@ async function waitForDatabase(retries = 5, delay = 5000) {
   }
 }
 
-// Catch Uncaught Exceptions (hard crashes)
-process.on('uncaughtException', (error) => {
-  console.error("❌ Uncaught Exception:", error);
-  process.exit(1);
-});
-
-// Catch Unhandled Promise Rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error("❌ Unhandled Rejection:", reason);
-});
-
-
-console.log('🚀 Loading Routes...');
-app.use('/auth', createAuthRoutes(pool));
-console.log('✅ Auth route loaded');
-app.use('/sessions', createSessionRoutes(pool));
-console.log('✅ Sessions route loaded');
-app.use('/aed', createAedRoutes(pool));
-console.log('✅ AED route loaded');
-console.log('🚀 All routes loaded successfully');
-
-
-// ✅ Railway Keep-Alive (Prevents Container Exit)
-function keepAlive() {
-  console.log('💓 Starting Railway Keep-Alive...');
-  setInterval(() => {
-    console.log('💓 Railway Keep-Alive Ping...');
-  }, 1000 * 60 * 5); // Ping every 5 minutes
-
-  // ✅ Proper Infinite Loop for Railway (Blocks Exit)
-  setTimeout(() => {}, 1 << 30); // 2^30 milliseconds = blocks indefinitely
+// ✅ FINAL AND CORRECT KEEP-ALIVE
+// 🚨 This blocks the event loop permanently
+async function keepAlive() {
+  console.log('💓 Starting FINAL Railway Keep-Alive...');
+  await new Promise(() => {}); // ✅ BLOCKS EVENT LOOP FOREVER
 }
 
 // ✅ Start Database Check and Keep-Alive
