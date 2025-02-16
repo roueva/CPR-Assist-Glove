@@ -8,7 +8,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ 1️⃣ Winston Logger Setup
+// ✅ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -22,7 +22,7 @@ const logger = winston.createLogger({
   ],
 });
 
-// ✅ 2️⃣ Express Configuration
+// ✅ Express Configuration
 const app = express();
 app.use(helmet());
 app.use(express.json());
@@ -34,7 +34,7 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 3️⃣ `/health` Route for Railway Health Check
+// ✅ 1️⃣ `/health` Route for Railway Health Check
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -52,26 +52,26 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ✅ 4️⃣ Google Maps API Route
+// ✅ 2️⃣ Google Maps API Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-// ✅ 5️⃣ Auth Routes (Pass `pool` directly)
+// ✅ 3️⃣ Auth Routes (Pass `pool` directly)
 app.use('/auth', createAuthRoutes(pool));
 
-// ✅ 6️⃣ Session Routes (Pass `pool` directly)
+// ✅ 4️⃣ Session Routes (Pass `pool` directly)
 app.use('/sessions', createSessionRoutes(pool));
 
-// ✅ 7️⃣ AED Routes (Pass `pool` directly)
+// ✅ 5️⃣ AED Routes (Pass `pool` directly)
 app.use('/aed', createAedRoutes(pool));
 
-// ✅ 8️⃣ 404 Handler
+// ✅ 6️⃣ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ 9️⃣ Global Error Handler
+// ✅ 7️⃣ Global Error Handler
 app.use((err, req, res, next) => {
   logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
   res.status(500).json({
@@ -80,10 +80,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ 1️⃣0️⃣ Use Railway Port or Fallback
+// ✅ 8️⃣ Use Railway Port or Fallback
 const PORT = process.env.PORT || 8080;
 
-// ✅ 1️⃣1️⃣ Start Express Server
+// ✅ 9️⃣ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
@@ -98,33 +98,42 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣2️⃣ Proper Railway Keep-Alive (Blocks Node.js Exit)
-// 🚨 Explanation: Use `setInterval()` with `process.stdin.resume()` to block event loop.
-function keepAlive() {
-  console.log('💓 Starting Keep-Alive for Railway...');
-  setInterval(() => {
-    console.log('💓 Railway Keep-Alive Ping: Still active...');
-  }, 1000 * 60 * 5); // Ping every 5 minutes
-
-  // ✅ This keeps Node.js alive in Railway (blocks exit)
-  process.stdin.resume();
+// ✅ 1️⃣0️⃣ Database Startup Check (Retries if Database Is Not Ready)
+async function waitForDatabase(retries = 5, delay = 5000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      console.log('✅ Database is ready!');
+      return;
+    } catch (error) {
+      console.warn(`⚠️ Database not ready (attempt ${attempt}/${retries}):`, error.message);
+      if (attempt < retries) {
+        await new Promise(res => setTimeout(res, delay)); // Wait before retry
+      } else {
+        console.error('❌ Database failed to connect after retries.');
+        process.exit(1);
+      }
+    }
+  }
 }
 
-// ✅ 1️⃣3️⃣ Start Keep-Alive Immediately
-keepAlive();
+// ✅ 1️⃣1️⃣ Railway Keep-Alive (Prevents Container Exit)
+function keepAlive() {
+  console.log('💓 Starting Railway Keep-Alive...');
+  setInterval(() => {
+    console.log('💓 Railway Keep-Alive Ping...');
+  }, 1000 * 60 * 5); // Every 5 minutes
 
-// ✅ 1️⃣4️⃣ Test Database Connection
+  process.stdin.resume(); // Blocks Node.js from exiting
+}
+
+// ✅ 1️⃣2️⃣ Start Database Check and Keep-Alive
 (async () => {
-  try {
-    await pool.query('SELECT 1');
-    console.log('✅ Database connected successfully!');
-  } catch (error) {
-    console.error('❌ Database connection error:', error.message);
-    process.exit(1);
-  }
+  await waitForDatabase(); // ✅ Wait for DB before proceeding
+  keepAlive();             // ✅ Keep container alive for Railway
 })();
 
-// ✅ 1️⃣5️⃣ Single Graceful Shutdown
+// ✅ 1️⃣3️⃣ Graceful Shutdown Handler
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
