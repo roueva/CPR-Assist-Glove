@@ -1,5 +1,4 @@
-﻿require('dotenv').config(); // Load environment variables
-
+﻿require('dotenv').config();
 const { Pool } = require('pg');
 
 // Ensure required environment variables are set
@@ -8,19 +7,19 @@ if (!process.env.POSTGRES_PASSWORD) {
     process.exit(1);
 }
 
-const password = String(process.env.POSTGRES_PASSWORD).trim(); // ✅ Use correct env variable
+const password = String(process.env.POSTGRES_PASSWORD).trim();
 
 const pool = new Pool({
-    user: process.env.POSTGRES_USER,  // ✅ Corrected variable
-    host: process.env.POSTGRES_HOST,  // ✅ Corrected variable
-    database: process.env.POSTGRES_DATABASE,  // ✅ Corrected variable
-    password: password, // ✅ Now using correct password variable
+    user: process.env.POSTGRES_USER,
+    host: process.env.POSTGRES_HOST,
+    database: process.env.POSTGRES_DATABASE,
+    password: password,
     port: process.env.POSTGRES_PORT || 5432,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// ✅ Ensure AED locations table exists
-(async () => {
+// ✅ Ensure AED locations table exists (Block until Ready)
+async function ensureAedTable() {
     const client = await pool.connect();
     try {
         await client.query(`
@@ -42,12 +41,22 @@ const pool = new Pool({
                 last_updated TIMESTAMP DEFAULT NOW()
             );
         `);
+        console.log("✅ AED table ensured.");
     } catch (err) {
         console.error("❌ Error ensuring AED table:", err);
+        process.exit(1); // Exit if DB fails
     } finally {
         client.release();
     }
-})();
+}
+
+// ✅ Call Ensure Table Immediately (before export)
+ensureAedTable().then(() => {
+    console.log("✅ Database structure ready!");
+}).catch((error) => {
+    console.error("❌ Database setup failed:", error);
+    process.exit(1);
+});
 
 // ✅ Handle unexpected errors on the pool
 pool.on('error', (err) => {

@@ -34,7 +34,7 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 1️⃣ `/health` Route for Railway Health Check
+// ✅ `/health` Route for Railway Health Check
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -52,26 +52,21 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ✅ 2️⃣ Google Maps API Route
-app.get('/api/maps-key', (req, res) => {
-  res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
-});
-
-// ✅ 3️⃣ Auth Routes (Pass `pool` directly)
+// ✅ Auth Routes (Pass `pool` directly)
 app.use('/auth', createAuthRoutes(pool));
 
-// ✅ 4️⃣ Session Routes (Pass `pool` directly)
+// ✅ Session Routes (Pass `pool` directly)
 app.use('/sessions', createSessionRoutes(pool));
 
-// ✅ 5️⃣ AED Routes (Pass `pool` directly)
+// ✅ AED Routes (Pass `pool` directly)
 app.use('/aed', createAedRoutes(pool));
 
-// ✅ 6️⃣ 404 Handler
+// ✅ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ 7️⃣ Global Error Handler
+// ✅ Global Error Handler
 app.use((err, req, res, next) => {
   logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
   res.status(500).json({
@@ -80,10 +75,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ 8️⃣ Use Railway Port or Fallback
+// ✅ Use Railway Port or Fallback
 const PORT = process.env.PORT || 8080;
 
-// ✅ 9️⃣ Start Express Server
+// ✅ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
@@ -98,7 +93,7 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣0️⃣ Database Startup Check (Retries if Database Is Not Ready)
+// ✅ Database Startup Check (Retries if Database Is Not Ready)
 async function waitForDatabase(retries = 5, delay = 5000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -108,7 +103,7 @@ async function waitForDatabase(retries = 5, delay = 5000) {
     } catch (error) {
       console.warn(`⚠️ Database not ready (attempt ${attempt}/${retries}):`, error.message);
       if (attempt < retries) {
-        await new Promise(res => setTimeout(res, delay)); // Wait before retry
+        await new Promise(res => setTimeout(res, delay));
       } else {
         console.error('❌ Database failed to connect after retries.');
         process.exit(1);
@@ -117,23 +112,24 @@ async function waitForDatabase(retries = 5, delay = 5000) {
   }
 }
 
-// ✅ 1️⃣1️⃣ Railway Keep-Alive (Prevents Container Exit)
+// ✅ Railway Keep-Alive (Prevents Container Exit)
 function keepAlive() {
   console.log('💓 Starting Railway Keep-Alive...');
   setInterval(() => {
     console.log('💓 Railway Keep-Alive Ping...');
-  }, 1000 * 60 * 5); // Every 5 minutes
+  }, 1000 * 60 * 5); // Ping every 5 minutes
 
-  process.stdin.resume(); // Blocks Node.js from exiting
+  // ✅ Proper Infinite Loop for Railway (Blocks Exit)
+  setTimeout(() => {}, 1 << 30); // 2^30 milliseconds = blocks indefinitely
 }
 
-// ✅ 1️⃣2️⃣ Start Database Check and Keep-Alive
+// ✅ Start Database Check and Keep-Alive
 (async () => {
   await waitForDatabase(); // ✅ Wait for DB before proceeding
   keepAlive();             // ✅ Keep container alive for Railway
 })();
 
-// ✅ 1️⃣3️⃣ Graceful Shutdown Handler
+// ✅ Graceful Shutdown Handler
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
