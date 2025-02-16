@@ -8,7 +8,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ Winston Logger Setup
+// ✅ 1️⃣ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -22,7 +22,7 @@ const logger = winston.createLogger({
   ],
 });
 
-// ✅ Express Configuration
+// ✅ 2️⃣ Express Configuration
 const app = express();
 app.use(helmet());
 app.use(express.json());
@@ -34,7 +34,7 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 1️⃣ `/health` Route for Railway Health Check
+// ✅ 3️⃣ `/health` Route for Railway Health Check
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -52,35 +52,35 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// ✅ 2️⃣ Google Maps API Key Route
+// ✅ 4️⃣ Google Maps API Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-// ✅ 3️⃣ Auth Routes
+// ✅ 5️⃣ Auth Routes
 app.use('/auth', (req, res, next) => {
   req.db = pool;
   next();
 }, createAuthRoutes(pool));
 
-// ✅ 4️⃣ Session Routes
+// ✅ 6️⃣ Session Routes
 app.use('/sessions', (req, res, next) => {
   req.db = pool;
   next();
 }, createSessionRoutes(pool));
 
-// ✅ 5️⃣ AED Routes (use `req.db` instead of direct import)
+// ✅ 7️⃣ AED Routes (use `req.db` from `index.js`)
 app.use('/aed', (req, res, next) => {
   req.db = pool;
   next();
 }, createAedRoutes(pool));
 
-// ✅ 6️⃣ 404 Handler
+// ✅ 8️⃣ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ 7️⃣ Global Error Handler
+// ✅ 9️⃣ Global Error Handler
 app.use((err, req, res, next) => {
   logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
   res.status(500).json({
@@ -89,10 +89,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ 8️⃣ Use Railway Port or Fallback
+// ✅ 1️⃣0️⃣ Use Railway Port or Fallback
 const PORT = process.env.PORT || 8080;
 
-// ✅ 9️⃣ Start Express Server
+// ✅ 1️⃣1️⃣ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
@@ -107,24 +107,20 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣0️⃣ Add Proper Keep-Alive (Prevents Railway Stop)
-// 🚨 Explanation: Block the event loop using `setInterval()` and never resolve a promise.
+// ✅ 1️⃣2️⃣ Correct Keep-Alive for Railway (Blocks Node.js Exit)
+// 🚨 Explanation: `process.stdin.resume()` blocks the event loop indefinitely.
 function keepAlive() {
-  console.log('💓 Starting Keep-Alive for Railway...');
+  console.log('💓 Starting Railway Keep-Alive...');
+  process.stdin.resume(); // 🚀 Keeps Node.js alive
   setInterval(() => {
-    console.log('💓 Railway Keep-Alive Ping: Still running...');
+    console.log('💓 Keep-Alive Ping: Railway, I am still active');
   }, 1000 * 60 * 5); // Ping every 5 minutes
-
-  // Block the event loop with a never-resolving promise
-  return new Promise(() => {});
 }
 
-// ✅ 1️⃣1️⃣ Start Keep-Alive Immediately (This Fixes the Auto-Shutdown)
-keepAlive().catch(err => {
-  console.error('❌ Keep-Alive Error:', err.message);
-});
+// ✅ 1️⃣3️⃣ Start Keep-Alive Immediately
+keepAlive();
 
-// ✅ 1️⃣2️⃣ Test Database Connection
+// ✅ 1️⃣4️⃣ Test Database Connection
 (async () => {
   try {
     await pool.query('SELECT 1');
@@ -135,7 +131,7 @@ keepAlive().catch(err => {
   }
 })();
 
-// ✅ 1️⃣3️⃣ Single Graceful Shutdown (from `index.js` only)
+// ✅ 1️⃣5️⃣ Single Graceful Shutdown (from `index.js` only)
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
