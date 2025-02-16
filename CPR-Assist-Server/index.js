@@ -2,7 +2,6 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const fetch = require('node-fetch'); // ✅ Add fetch for self-ping
 const winston = require('winston');
 const pool = require('./db');
 const createAuthRoutes = require('./routes/auth');
@@ -44,23 +43,7 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ `/health` Route for Railway Health Check
-app.get('/health', async (req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'healthy',
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'error',
-      error: error.message,
-    });
-  }
-});
+// 🚫 Removed `/health` Route for Testing
 
 // ✅ Auth Routes
 console.log('🚀 Loading Routes...');
@@ -92,26 +75,9 @@ const PORT = process.env.PORT || 8080;
 // ✅ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  pingSelf(); // ✅ Start Self-Ping to Prevent Auto-Sleep
 });
 
-// ✅ Self-Ping Task to Keep Railway Active
-// ✅ Self-Ping Task to Keep Railway Active
-async function pingSelf() {
-  const url = `http://127.0.0.1:${PORT}/health`; // ✅ Use IPv4 to Fix ECONNREFUSED
-  setInterval(async () => {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        console.log(`💓 Self-ping successful to ${url}`);
-      } else {
-        console.warn(`⚠️ Self-ping failed: ${response.status}`);
-      }
-    } catch (error) {
-      console.error(`❌ Error during self-ping: ${error.message}`);
-    }
-  }, 10000); // Ping every 10 seconds
-}
+// 🚫 Removed Self-Ping (`pingSelf()`) for Testing
 
 // ✅ FINAL AND CORRECT KEEP-ALIVE (BLOCKS NODE.JS FOREVER)
 async function keepAlive() {
