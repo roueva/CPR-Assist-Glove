@@ -90,12 +90,23 @@ app.use((err, req, res, next) => {
     });
 });
 
-// ✅ Use Railway provided port or fallback to 8080
-const PORT = process.env.PORT || 8080;
+// ✅ Use Railway Assigned PORT
+const PORT = process.env.PORT || 3000; // Default to 3000 only if Railway doesn't set PORT
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+// ✅ Handle Port Errors Gracefully
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
 
 
 (async () => {
