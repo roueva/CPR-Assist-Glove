@@ -96,8 +96,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ✅ Self-Ping Task to Keep Railway Active
+// ✅ Self-Ping Task to Keep Railway Active
 async function pingSelf() {
-  const url = `http://localhost:${PORT}/health`;
+  const url = `http://127.0.0.1:${PORT}/health`; // ✅ Use IPv4 to Fix ECONNREFUSED
   setInterval(async () => {
     try {
       const response = await fetch(url);
