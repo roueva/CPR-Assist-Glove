@@ -100,9 +100,6 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
         setState(() {
           _userLocation = LatLng(position.latitude, position.longitude);
         });
-
-        // ❌ REMOVE THIS TO PREVENT INFINITE LOOP
-        // _updateMapView();
       }
     } catch (error) {
       print("❌ Error getting user location: $error");
