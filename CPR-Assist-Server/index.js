@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const winston = require('winston');
-const pool = require('./db'); // ✅ Use the single pool from db.js
+const pool = require('./db'); // ✅ Use shared pool from db.js
 const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
@@ -76,14 +76,14 @@ app.use((err, req, res, next) => {
 });
 
 // ✅ 8️⃣ Use Railway Provided Port
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
-// ✅ 9️⃣ Start the Server (Only Once)
+// ✅ 9️⃣ Start the Server (Keep Alive Fix Included)
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// ✅ Handle `EADDRINUSE` (Port Conflict) Gracefully
+// ✅ 1️⃣0️⃣ Handle `EADDRINUSE` (Port Conflict) Gracefully
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`❌ Port ${PORT} is already in use.`);
@@ -93,12 +93,14 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 🔄 Add Keep-Alive Ping to Prevent Railway Sleep
+// ✅ 1️⃣1️⃣ Add Railway Keep-Alive Mechanism
+// Explanation: Railway stops containers when they are "idle." 
+// This loop prevents Railway from shutting down the container.
 setInterval(() => {
-  console.log('💓 Railway Keep-Alive Ping');
-}, 10 * 60 * 1000); // Every 10 minutes
+  console.log('💓 Keep-Alive Ping: Railway, I am still active!');
+}, 5 * 60 * 1000); // Every 5 minutes
 
-// ✅ 🔍 Verify Database Connection Once
+// ✅ 1️⃣2️⃣ Verify Database Connection Once
 (async () => {
   try {
     await pool.query('SELECT 1');
@@ -109,7 +111,7 @@ setInterval(() => {
   }
 })();
 
-// ✅ 🛑 Graceful Shutdown for Railway
+// ✅ 1️⃣3️⃣ Graceful Shutdown for Railway
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing pool...');
   await pool.end();
