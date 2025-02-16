@@ -8,7 +8,7 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ 1️⃣ Winston Logger
+// ✅ Winston Logger
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -22,7 +22,7 @@ const logger = winston.createLogger({
   ],
 });
 
-// ✅ 2️⃣ Express Configuration
+// ✅ Express Configuration
 const app = express();
 app.use(helmet());
 app.use(express.json());
@@ -34,50 +34,37 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ 3️⃣ Health Check Route (For Railway Green Status)
-app.get('/health', async (req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'healthy',
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      database: 'error',
-      error: error.message,
-    });
-  }
+// ✅ 1️⃣ Health Check Route
+app.get('/', (req, res) => {
+  res.json({ message: '🚀 Server is running on Railway!', status: 'healthy' });
 });
 
-// ✅ 4️⃣ Google Maps API Key Route
+// ✅ 2️⃣ Google Maps API Key Route
 app.get('/api/maps-key', (req, res) => {
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
 });
 
-// ✅ 5️⃣ Auth Routes
+// ✅ 3️⃣ Auth Routes
 app.use('/auth', (req, res, next) => {
   req.db = pool;
   next();
 }, createAuthRoutes(pool));
 
-// ✅ 6️⃣ Session Routes
+// ✅ 4️⃣ Session Routes
 app.use('/sessions', (req, res, next) => {
   req.db = pool;
   next();
 }, createSessionRoutes(pool));
 
-// ✅ 7️⃣ AED Routes
+// ✅ 5️⃣ AED Routes
 app.use('/aed', createAedRoutes(pool));
 
-// ✅ 8️⃣ 404 Handler
+// ✅ 6️⃣ 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ 9️⃣ Global Error Handler
+// ✅ 7️⃣ Global Error Handler
 app.use((err, req, res, next) => {
   logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
   res.status(500).json({
@@ -86,10 +73,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ 1️⃣0️⃣ Use Railway Port or Fallback
+// ✅ 8️⃣ Use Railway Port or Fallback
 const PORT = process.env.PORT || 8080;
 
-// ✅ 1️⃣1️⃣ Start Express Server
+// ✅ 9️⃣ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
@@ -104,23 +91,24 @@ server.on('error', (err) => {
   }
 });
 
-// ✅ 1️⃣2️⃣ Railway Keep-Alive (Prevent Auto-Shutdown)
-// 🚨 Explanation: Keeps Railway container active with a blocking promise.
-function keepAlive() {
+// ✅ 1️⃣0️⃣ Railway Keep-Alive Mechanism (Best Practice)
+// 🚨 Explanation: Create a blocking Promise to keep the event loop alive.
+async function keepAlive() {
   console.log('💓 Starting Keep-Alive process for Railway');
-  return new Promise(() => {
+  // Block the event loop with a long-running promise
+  await new Promise(() => {
     setInterval(() => {
       console.log('💓 Keep-Alive Ping: Railway, I am still active');
     }, 1000 * 60 * 5); // Ping every 5 minutes
   });
 }
 
-// ✅ 1️⃣3️⃣ Start Keep-Alive Immediately
+// ✅ 1️⃣1️⃣ Start Keep-Alive Immediately (No Timeout)
 keepAlive().catch(err => {
   console.error('❌ Keep-Alive Error:', err.message);
 });
 
-// ✅ 1️⃣4️⃣ Test Database Connection
+// ✅ 1️⃣2️⃣ Test Database Connection
 (async () => {
   try {
     await pool.query('SELECT 1');
@@ -131,17 +119,17 @@ keepAlive().catch(err => {
   }
 })();
 
-// ✅ 1️⃣5️⃣ Graceful Shutdown for Railway
+// ✅ 1️⃣3️⃣ Graceful Shutdown for Railway
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing PostgreSQL pool...');
+  console.log('SIGTERM received, closing pool...');
   await pool.end();
-  console.log('✅ PostgreSQL pool closed. Exiting process.');
+  console.log('✅ Pool closed. Exiting process.');
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing PostgreSQL pool...');
+  console.log('SIGINT received, closing pool...');
   await pool.end();
-  console.log('✅ PostgreSQL pool closed. Exiting process.');
+  console.log('✅ Pool closed. Exiting process.');
   process.exit(0);
 });
