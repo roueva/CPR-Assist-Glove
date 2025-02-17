@@ -109,6 +109,8 @@ const checkDatabaseConnection = async () => {
   }
 };
 
+let server; 
+
 // ✅ Graceful Shutdown Handler
 const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received, starting graceful shutdown...`);
@@ -118,10 +120,14 @@ const gracefulShutdown = async (signal) => {
     await pool.end();
     logger.info('✅ PostgreSQL pool closed');
     
-    server.close(() => {
-      logger.info('✅ Express server closed');
-      process.exit(0);
-    });
+    if (server) {
+      server.close(() => {
+        logger.info('✅ Express server closed');
+        process.exit(0);
+      });
+    } else {
+      logger.warn('⚠️ Server was not defined during shutdown');
+    }
 
     // Force close after 10 seconds
     setTimeout(() => {
@@ -147,21 +153,15 @@ const startServer = async () => {
     // Load routes
     await startRoutes();
 
-    // Start server
-    const server = app.listen(PORT, HOST, () => {
+    // ✅ Assign `server` to global variable
+    server = app.listen(PORT, HOST, () => {
       logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
     });
 
-        await new Promise(() => {}); // 🚀 Blocks event loop indefinitely
-
-
-    // Event handlers
-    server.on('error', (error) => {
-      logger.error('Server error:', error);
-      process.exit(1);
-    });
-
-    return server;
+    // 🚀 Keep event loop alive
+    setInterval(() => {
+      logger.info('💓 Railway Keep-Alive Ping');
+    }, 60000);
 
   } catch (error) {
     logger.error('Failed to start server:', error);
