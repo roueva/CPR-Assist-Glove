@@ -8,7 +8,6 @@ const initializeAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = '0.0.0.0';
@@ -24,9 +23,7 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.File({ filename: 'error.log', level: 'error' }),
     new winston.transports.File({ filename: 'combined.log' }),
-    new winston.transports.Console({
-      format: winston.format.simple()
-    })
+    new winston.transports.Console({ format: winston.format.simple() })
   ]
 });
 
@@ -34,19 +31,13 @@ const logger = winston.createLogger({
 const app = express();
 app.use(helmet());
 app.use(express.json());
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], credentials: true }));
 app.options('*', cors());
 
 // ✅ Improved Health Check Route
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection
-    await pool.query('SELECT 1');
+    await pool.query('SELECT 1'); // Test database connection
     res.status(200).json({ 
       status: 'healthy',
       database: 'connected',
@@ -55,11 +46,7 @@ app.get('/health', async (req, res) => {
     });
   } catch (error) {
     logger.error('Health check failed:', error);
-    res.status(500).json({ 
-      status: 'unhealthy',
-      database: 'disconnected',
-      error: isProduction ? 'Internal server error' : error.message
-    });
+    res.status(500).json({ status: 'unhealthy', database: 'disconnected', error: isProduction ? 'Internal server error' : error.message });
   }
 });
 
@@ -67,16 +54,12 @@ app.get('/health', async (req, res) => {
 const startRoutes = async () => {
   try {
     logger.info('🚀 Loading Routes...');
-    
     app.use('/auth', initializeAuthRoutes(pool));
     logger.info('✅ Auth route loaded');
-    
     app.use('/sessions', createSessionRoutes(pool));
     logger.info('✅ Sessions route loaded');
-    
     app.use('/aed', createAedRoutes(pool));
     logger.info('✅ AED route loaded');
-    
     logger.info('🚀 All routes loaded successfully');
   } catch (error) {
     logger.error('Failed to load routes:', error);
@@ -85,16 +68,10 @@ const startRoutes = async () => {
 };
 
 // ✅ Error Handlers
-app.use((req, res) => {
-  res.status(404).json({ error: '❌ Route not found' });
-});
-
+app.use((req, res) => res.status(404).json({ error: '❌ Route not found' }));
 app.use((err, req, res, next) => {
   logger.error('❌ Error:', err);
-  res.status(500).json({
-    message: '❌ Internal server error',
-    error: isProduction ? null : err.message
-  });
+  res.status(500).json({ message: '❌ Internal server error', error: isProduction ? null : err.message });
 });
 
 // ✅ Database Connection Check
@@ -109,7 +86,7 @@ const checkDatabaseConnection = async () => {
   }
 };
 
-let server; 
+global.server = null; // ✅ Global Server Reference
 
 // ✅ Graceful Shutdown Handler
 const gracefulShutdown = async (signal) => {
@@ -120,16 +97,16 @@ const gracefulShutdown = async (signal) => {
     await pool.end();
     logger.info('✅ PostgreSQL pool closed');
     
-    if (server) {
-      server.close(() => {
+    if (global.server && typeof global.server.close === 'function') {
+      global.server.close(() => {
         logger.info('✅ Express server closed');
         process.exit(0);
       });
     } else {
-      logger.warn('⚠️ Server was not defined during shutdown');
+      logger.warn('⚠️ Express server was not running or already closed.');
+      process.exit(0);
     }
 
-    // Force close after 10 seconds
     setTimeout(() => {
       logger.error('Could not close connections in time, forcefully shutting down');
       process.exit(1);
@@ -144,24 +121,19 @@ const gracefulShutdown = async (signal) => {
 // ✅ Start Server Function
 const startServer = async () => {
   try {
-    // Verify database connection first
     const dbConnected = await checkDatabaseConnection();
     if (!dbConnected) {
       throw new Error('Unable to connect to database');
     }
 
-    // Load routes
     await startRoutes();
 
-    // ✅ Assign `server` to global variable
-    server = app.listen(PORT, HOST, () => {
+    // ✅ Assign `server` to `global.server`
+    global.server = app.listen(PORT, HOST, () => {
       logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
     });
 
-    // 🚀 Keep event loop alive
-    setInterval(() => {
-      logger.info('💓 Railway Keep-Alive Ping');
-    }, 60000);
+    setInterval(() => { logger.info('💓 Railway Keep-Alive Ping'); }, 60000); // 🚀 Keep event loop alive
 
   } catch (error) {
     logger.error('Failed to start server:', error);
