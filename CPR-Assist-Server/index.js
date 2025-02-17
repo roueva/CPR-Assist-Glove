@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
 const initializeRoutes = () => {
     app.use('/auth', initializeAuthRoutes(pool));
     app.use('/sessions', createSessionRoutes(pool));
-    app.use('/aed/locations', aedRouter);
+    app.use('/aed/locations', createAedRoutes);
     logger.info('✅ All routes initialized');
 };
 
