@@ -63,8 +63,11 @@ app.use((err, req, res, next) => {
   });
 });
 
+console.log(`🚀 Using PORT: ${PORT} (Type: ${typeof PORT})`);
+
+
 // ✅ Railway-Optimized Port Binding
-const PORT = parseInt(process.env.PORT, 10) || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 const HOST = '0.0.0.0';
 
 // ✅ Start Express Server
