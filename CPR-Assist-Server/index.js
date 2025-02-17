@@ -152,15 +152,8 @@ const startServer = async () => {
       logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
     });
 
-    // Keep-alive ping (helps with Railway)
-    setInterval(async () => {
-      try {
-        await pool.query('SELECT 1');
-        logger.debug('💓 Keep-alive ping successful');
-      } catch (error) {
-        logger.error('Keep-alive ping failed:', error);
-      }
-    }, 15000);
+        await new Promise(() => {}); // 🚀 Blocks event loop indefinitely
+
 
     // Event handlers
     server.on('error', (error) => {
