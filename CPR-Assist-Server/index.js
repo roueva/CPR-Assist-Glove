@@ -98,15 +98,19 @@ const checkDatabaseConnection = async () => {
 
 global.server = null; // ✅ Global Server Reference
 
-// ✅ Graceful Shutdown Handler
+let keepAliveInterval;
+
 const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received, starting graceful shutdown...`);
-  
+
   try {
     logger.info('Closing PostgreSQL pool...');
     await pool.end();
     logger.info('✅ PostgreSQL pool closed');
-    
+
+    // ✅ Stop Keep-Alive Interval
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+
     if (global.server && typeof global.server.close === 'function') {
       global.server.close(() => {
         logger.info('✅ Express server closed');
@@ -121,12 +125,13 @@ const gracefulShutdown = async (signal) => {
       logger.error('Could not close connections in time, forcefully shutting down');
       process.exit(1);
     }, 10000);
-    
+
   } catch (error) {
     logger.error('Error during shutdown:', error);
     process.exit(1);
   }
 };
+
 
 // ✅ Start Server Function
 const startServer = async () => {
@@ -138,18 +143,25 @@ const startServer = async () => {
 
     await startRoutes();
 
-    // ✅ Assign `server` to `global.server`
+    // ✅ Start Express Server
     global.server = app.listen(PORT, HOST, () => {
       logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
     });
 
-    setInterval(() => { logger.info('💓 Railway Keep-Alive Ping'); }, 60000); // 🚀 Keep event loop alive
+    // ✅ Keep Railway Alive Properly
+    setInterval(() => {
+      logger.info('💓 Railway Keep-Alive Ping');
+    }, 60000);
+
+    // ✅ Block Node.js from Exiting
+    process.stdin.resume();
 
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
   }
 };
+
 
 // ✅ Process Event Handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

@@ -9,13 +9,10 @@ const connectionString = process.env.DATABASE_URL
 
 // ✅ PostgreSQL Pool Configuration
 const pool = new Pool({
-    connectionString,
+    connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    // Add these connection pool settings
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-    retryDelay: 3000,
+    idleTimeoutMillis: 30000, // ✅ Close idle clients after 30s
+    connectionTimeoutMillis: 5000, // ✅ Return error if connection fails after 5s
 });
 
 // ✅ Pool Events
