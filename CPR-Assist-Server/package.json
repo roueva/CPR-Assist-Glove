@@ -1,19 +1,16 @@
 ﻿{
   "name": "cpr-backend",
   "version": "1.0.0",
-  "description": "Backend for CPR Assist Glove",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js", 
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "engines": {
-    "node": ">=16.0.0"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "keywords": [],
-  "author": "Your Name",
+  "author": "",
   "license": "ISC",
+  "description": "",
   "dependencies": {
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

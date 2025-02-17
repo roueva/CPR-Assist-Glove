@@ -11,6 +11,11 @@ const connectionString = process.env.DATABASE_URL
 const pool = new Pool({
     connectionString,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    // Add these connection pool settings
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+    retryDelay: 3000,
 });
 
 // ✅ Pool Events

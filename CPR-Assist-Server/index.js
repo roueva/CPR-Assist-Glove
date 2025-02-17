@@ -4,14 +4,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const winston = require('winston');
 const pool = require('./db');
-const createAuthRoutes = require('./routes/auth');
-const createSessionRoutes = require('./routes/session');
-const createAedRoutes = require('./routes/aed');
 
-// ✅ Parse PORT Correctly (Fix Railway quotes issue)
+// ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = '0.0.0.0';
-console.log(`🚀 Using PORT: ${PORT} (Type: ${typeof PORT})`);
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
@@ -23,8 +20,10 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.File({ filename: 'error.log', level: 'error' }),
     new winston.transports.File({ filename: 'combined.log' }),
-    new winston.transports.Console(),
-  ],
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
+  ]
 });
 
 // ✅ Express Configuration
@@ -39,70 +38,156 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ Health Check Route (for Railway)
-app.get('/health', (req, res) => {
-  res.status(200).json({ message: '✅ Health OK', status: 'healthy' });
+// ✅ Improved Health Check Route
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    await pool.query('SELECT 1');
+    res.status(200).json({ 
+      status: 'healthy',
+      database: 'connected',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    res.status(500).json({ 
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: isProduction ? 'Internal server error' : error.message
+    });
+  }
 });
 
 // ✅ Load Routes
-console.log('🚀 Loading Routes...');
-app.use('/auth', createAuthRoutes(pool));
-console.log('✅ Auth route loaded');
-app.use('/sessions', createSessionRoutes(pool));
-console.log('✅ Sessions route loaded');
-app.use('/aed', createAedRoutes(pool));
-console.log('✅ AED route loaded');
-console.log('🚀 All routes loaded successfully');
+const startRoutes = async () => {
+  try {
+    logger.info('🚀 Loading Routes...');
+    
+    app.use('/auth', createAuthRoutes(pool));
+    logger.info('✅ Auth route loaded');
+    
+    app.use('/sessions', createSessionRoutes(pool));
+    logger.info('✅ Sessions route loaded');
+    
+    app.use('/aed', createAedRoutes(pool));
+    logger.info('✅ AED route loaded');
+    
+    logger.info('🚀 All routes loaded successfully');
+  } catch (error) {
+    logger.error('Failed to load routes:', error);
+    throw error;
+  }
+};
 
-// ✅ 404 Handler
+// ✅ Error Handlers
 app.use((req, res) => {
   res.status(404).json({ error: '❌ Route not found' });
 });
 
-// ✅ Global Error Handler
 app.use((err, req, res, next) => {
-  logger.error(`❌ Error: ${err.message}`, { stack: err.stack });
+  logger.error('❌ Error:', err);
   res.status(500).json({
     message: '❌ Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : null,
+    error: isProduction ? null : err.message
   });
 });
 
-// ✅ Start Express Server
-const server = app.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-});
+// ✅ Database Connection Check
+const checkDatabaseConnection = async () => {
+  try {
+    await pool.query('SELECT 1');
+    logger.info('✅ Database connection verified');
+    return true;
+  } catch (error) {
+    logger.error('❌ Database connection failed:', error);
+    return false;
+  }
+};
 
-// ✅ Keep Event Loop Active (Prevents Railway Stop)
-setInterval(() => {
-  console.log('💓 Railway Keep-Alive Ping');
-}, 10000); // Every 10 seconds
+// ✅ Graceful Shutdown Handler
+const gracefulShutdown = async (signal) => {
+  logger.info(`${signal} received, starting graceful shutdown...`);
+  
+  try {
+    logger.info('Closing PostgreSQL pool...');
+    await pool.end();
+    logger.info('✅ PostgreSQL pool closed');
+    
+    server.close(() => {
+      logger.info('✅ Express server closed');
+      process.exit(0);
+    });
 
-// ✅ Prevent Node.js from Exiting (Railway fix)
-process.stdin.resume();
+    // Force close after 10 seconds
+    setTimeout(() => {
+      logger.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 10000);
+    
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+};
 
-// ✅ Graceful Shutdown Handling
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing PostgreSQL pool...');
-  await pool.end();
-  console.log('✅ PostgreSQL pool closed. Exiting process.');
-  process.exit(0);
-});
+// ✅ Start Server Function
+const startServer = async () => {
+  try {
+    // Verify database connection first
+    const dbConnected = await checkDatabaseConnection();
+    if (!dbConnected) {
+      throw new Error('Unable to connect to database');
+    }
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing PostgreSQL pool...');
-  await pool.end();
-  console.log('✅ PostgreSQL pool closed. Exiting process.');
-  process.exit(0);
-});
+    // Load routes
+    await startRoutes();
 
-// ✅ Global Crash Handlers (Very Important)
+    // Start server
+    const server = app.listen(PORT, HOST, () => {
+      logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
+    });
+
+    // Keep-alive ping (helps with Railway)
+    setInterval(async () => {
+      try {
+        await pool.query('SELECT 1');
+        logger.debug('💓 Keep-alive ping successful');
+      } catch (error) {
+        logger.error('Keep-alive ping failed:', error);
+      }
+    }, 15000);
+
+    // Event handlers
+    server.on('error', (error) => {
+      logger.error('Server error:', error);
+      process.exit(1);
+    });
+
+    return server;
+
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// ✅ Process Event Handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-  process.exit(1);
+  logger.error('❌ Uncaught Exception:', err);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection:', promise, 'reason:', reason);
+  logger.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+});
+
+// ✅ Start the server
+startServer().catch((error) => {
+  logger.error('Failed to start application:', error);
   process.exit(1);
 });
