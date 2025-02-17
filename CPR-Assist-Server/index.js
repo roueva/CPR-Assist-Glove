@@ -68,6 +68,16 @@ const startRoutes = async () => {
 };
 
 // ✅ Error Handlers
+
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: '🚀 CPR Assist API is running',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use((req, res) => res.status(404).json({ error: '❌ Route not found' }));
 app.use((err, req, res, next) => {
   logger.error('❌ Error:', err);
