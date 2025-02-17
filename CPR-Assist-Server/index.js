@@ -4,6 +4,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const winston = require('winston');
 const pool = require('./db');
+const initializeAuthRoutes = require('./routes/auth');
+const createSessionRoutes = require('./routes/session');
+const createAedRoutes = require('./routes/aed');
+
 
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
@@ -64,7 +68,7 @@ const startRoutes = async () => {
   try {
     logger.info('🚀 Loading Routes...');
     
-    app.use('/auth', createAuthRoutes(pool));
+    app.use('/auth', initializeAuthRoutes(pool));
     logger.info('✅ Auth route loaded');
     
     app.use('/sessions', createSessionRoutes(pool));
