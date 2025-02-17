@@ -8,15 +8,6 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
-// ✅ Log Environment Variables
-console.log("✅ Current Environment Variables:");
-console.log(`POSTGRES_USER: ${process.env.POSTGRES_USER}`);
-console.log(`POSTGRES_PASSWORD: ${process.env.POSTGRES_PASSWORD ? 'Set' : 'Not Set'}`);
-console.log(`POSTGRES_HOST: ${process.env.POSTGRES_HOST}`);
-console.log(`POSTGRES_DATABASE: ${process.env.POSTGRES_DATABASE}`);
-console.log(`POSTGRES_PORT: ${process.env.POSTGRES_PORT}`);
-console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
@@ -43,9 +34,12 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// 🚫 Removed `/health` Route for Testing
+// ✅ Add `/health` Route for Railway Health Checks
+app.get('/health', (req, res) => {
+  res.json({ message: '✅ Health OK', status: 'healthy' });
+});
 
-// ✅ Auth Routes
+// ✅ Load Routes
 console.log('🚀 Loading Routes...');
 app.use('/auth', createAuthRoutes(pool));
 console.log('✅ Auth route loaded');
@@ -69,60 +63,37 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ Use Railway Port or Fallback
+// ✅ Railway-Optimized Port Binding
 const PORT = parseInt(process.env.PORT, 10) || 8080;
+const HOST = '0.0.0.0';
 
 // ✅ Start Express Server
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
 });
 
-
-
-// ✅ Dummy Route to Force Long-Running Service
-app.get('/hang', (req, res) => {
-  console.log('💤 Hang route hit: Keeping Railway active');
-  // Keeps the connection open indefinitely
-  req.on('close', () => {
-    console.log('❌ Hang route connection closed');
-  });
-});
-
-
-// ✅ Start Keep-Alive
-(async () => {
-  keepAlive(); // ✅ Block event loop to keep Railway active
-})();
-
-
-// 🚫 Removed Self-Ping (`pingSelf()`) for Testing
-
-// ✅ FINAL BLOCKER (Prevents Node.js from exiting)
-async function keepAlive() {
-  console.log('💓 Starting FINAL Railway Keep-Alive...');
-  setInterval(() => {
-    console.log('💓 Keep-alive heartbeat...');
-  }, 10000); // Print heartbeat every 10 seconds
-
-  await new Promise(() => {}); // BLOCKS FOREVER
-}
-
-
-// ✅ Start Database Check and Keep-Alive
-(async () => {
-  keepAlive(); // ✅ Keep container alive for Railway
-})();
-
-// ✅ Graceful Shutdown Handler
+// ✅ Graceful Shutdown Handling
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing PostgreSQL pool...');
   await pool.end();
   console.log('✅ PostgreSQL pool closed. Exiting process.');
   process.exit(0);
 });
+
 process.on('SIGINT', async () => {
   console.log('SIGINT received, closing PostgreSQL pool...');
   await pool.end();
   console.log('✅ PostgreSQL pool closed. Exiting process.');
   process.exit(0);
+});
+
+// ✅ Global Crash Handlers (Very Important)
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection:', promise, 'reason:', reason);
+  process.exit(1);
 });

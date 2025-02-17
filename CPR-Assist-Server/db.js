@@ -2,27 +2,25 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-// 🟢 Log creation of the pool
-console.log("🟢 PostgreSQL Pool created from db.js");
+// 🚀 Use Railway DATABASE_URL (Preferred)
+const connectionString = process.env.DATABASE_URL 
+    || `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}` +
+       `@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DATABASE}`;
 
-// ✅ Use DATABASE_URL for Railway (Preferred)
-// Fallback to manual config for local development
+// ✅ PostgreSQL Pool Configuration
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DATABASE}`,
+    connectionString,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// ✅ Pool Events for Logging
-pool.on('connect', () => {
-  console.log('✅ PostgreSQL pool connected');
-});
-
+// ✅ Pool Events
+pool.on('connect', () => console.log('✅ PostgreSQL connected successfully'));
 pool.on('error', (err) => {
   console.error('❌ PostgreSQL Pool error:', err);
-  process.exit(1); // Exit immediately on pool error
+  process.exit(1);
 });
 
-// ✅ Function to Ensure AED Table Exists
+// ✅ Ensure AED Table
 async function ensureAedTable() {
     const client = await pool.connect();
     try {
@@ -49,25 +47,25 @@ async function ensureAedTable() {
         console.log("✅ AED table ensured.");
     } catch (err) {
         console.error("❌ Error ensuring AED table:", err);
-        process.exit(1); // Fail fast if table creation fails
+        process.exit(1);
     } finally {
         client.release();
     }
 }
 
-// ✅ Call Ensure Table Immediately (before export)
+// ✅ Run Table Setup Immediately
 ensureAedTable()
-  .then(() => console.log("✅ Database structure ready!"))
-  .catch((error) => {
-      console.error("❌ Database setup failed:", error);
-      process.exit(1);
-  });
+    .then(() => console.log("✅ Database structure ready"))
+    .catch((error) => {
+        console.error("❌ Database setup failed:", error);
+        process.exit(1);
+    });
 
-// ✅ Handle Unexpected Errors on the Pool
+// ✅ Handle Unexpected Pool Errors
 pool.on('error', (err) => {
-    console.error('❌ Unexpected error on idle PostgreSQL client:', err);
+    console.error('❌ Unexpected PostgreSQL pool error:', err);
     process.exit(-1);
 });
 
-// ✅ Export the pool to use in other files
+// ✅ Export Pool
 module.exports = pool;
