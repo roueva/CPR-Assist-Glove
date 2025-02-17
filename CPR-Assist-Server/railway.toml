@@ -6,5 +6,3 @@ buildCommand = "npm install"
 startCommand = "node index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 5
