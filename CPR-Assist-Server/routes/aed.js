@@ -6,15 +6,22 @@ module.exports = (pool) => {
 console.log("🟠 AED routes loaded");
 
     // ✅ Fetch all AED locations
-    router.get('/', async (req, res) => {
-        try {
-            const result = await pool.query("SELECT * FROM aed_locations;");
-            res.json({ success: true, data: result.rows });
-        } catch (error) {
-            console.error("❌ Error fetching AED locations:", error);
-            res.status(500).json({ success: false, message: "Failed to fetch AED locations." });
+   router.get('/', async (req, res) => {
+    console.log('🟠 Received GET request on /aed');
+    try {
+        const result = await pool.query("SELECT * FROM aed_locations;");
+        
+        if (result.rows.length === 0) {
+            return res.json({ success: true, message: "No AED locations found.", data: [] });
         }
-    });
+
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        console.error("❌ Error fetching AED locations:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch AED locations." });
+    }
+});
+
 
     // ✅ Insert or Update AED locations (Triggered by Python Script)
     router.post('/update', async (req, res) => {

@@ -1,15 +1,22 @@
 ﻿require('dotenv').config();
 const { Pool } = require('pg');
 
+
+const connectionString = process.env.DATABASE_URL;
+
+
 // ✅ Enhanced Pool Configuration
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    max: 20, // maximum number of clients in the pool
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-    allowExitOnIdle: true
+  connectionString,
+  ssl: process.env.DATABASE_URL?.includes('railway.app') ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  allowExitOnIdle: true,
 });
+
+console.log(`Connected to database: ${connectionString}`);
+
 
 // ✅ Improved Pool Error Handling
 pool.on('connect', () => {
@@ -69,7 +76,4 @@ async function ensureAedTable() {
 }
 
 // ✅ Export both pool and initialization function
-module.exports = {
-    pool,
-    ensureAedTable
-};
+module.exports = { pool, ensureAedTable };

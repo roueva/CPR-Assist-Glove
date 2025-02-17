@@ -27,11 +27,18 @@ function initializeAuthRoutes(pool) {
      res.json({ message: '✅ Auth routes are working' });
     });
 
+
+    // Add this in auth.js:
+    router.get('/', (req, res) => {
+    res.json({ message: 'Auth endpoint is working' });
+    });
+
+
     // ✅ Log Incoming Requests to Auth.js
-router.use((req, res, next) => {
+    router.use((req, res, next) => {
   console.log(`📥 Received ${req.method} request on ${req.url}`);
   next();
-});
+    });
 
 
 

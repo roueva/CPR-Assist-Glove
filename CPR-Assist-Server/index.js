@@ -10,8 +10,17 @@ const createAedRoutes = require('./routes/aed');
 
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
-const HOST = '0.0.0.0';
-const isProduction = process.env.NODE_ENV === 'production';
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+
+console.log(`🟢 Server running at http://${HOST}:${PORT}`);
+console.log(`🟢 Environment: ${process.env.NODE_ENV}`);
+
+console.log(`🟢 Auth Routes: /auth`);
+console.log(`🟢 AED Routes: /aed/locations`);
+console.log(`🟢 Session Routes: /sessions/summary`);
+
+pool.on('connect', () => console.log('✅ Database connected.'));
+
 
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
@@ -32,10 +41,12 @@ const app = express();
 app.use(helmet());
 app.use(express.json());
 app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+  origin: '*', // Accepts requests from everywhere (for development only)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
 
 // ✅ Quick Health Check (Must be first route)
 app.get('/health', async (req, res) => {
@@ -49,23 +60,38 @@ app.get('/health', async (req, res) => {
 
 // ✅ Base Route
 app.get('/', (req, res) => {
-    res.status(200).json({
-        status: 'online',
-        environment: process.env.NODE_ENV
-    });
+  res.status(200).json({
+    status: 'online',
+    environment: process.env.NODE_ENV,
+    database: process.env.DATABASE_URL || 'No DB URL Set'
+  });
 });
 
 // ✅ Initialize Routes
 const initializeRoutes = () => {
     app.use('/auth', initializeAuthRoutes(pool));
     app.use('/sessions', createSessionRoutes(pool));
-    app.use('/aed/locations', createAedRoutes(pool)); 
+    app.use('/aed', createAedRoutes(pool)); 
     logger.info('✅ All routes initialized');
 };
 
+initializeRoutes();
+
+
+// ✅ Add this route to serve Google Maps API Key
+app.get('/api/maps-key', (req, res) => {
+  if (!process.env.GOOGLE_MAPS_API_KEY) {
+    return res.status(500).json({ error: 'Google Maps API Key not set' });
+  }
+  res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
+  console.log('🟢 /api/maps-key accessed');
+});
+
+
 // ✅ Error Handlers
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
+app.use('*', (req, res) => {
+    console.error(`❌ Route Not Found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ error: `Route not found: ${req.originalUrl}` });
 });
 
 app.use((err, req, res, next) => {
@@ -104,9 +130,9 @@ const startServer = async () => {
         initializeRoutes();
 
         // Start server
-        server = app.listen(PORT, HOST, () => {
-            logger.info(`Server running on http://${HOST}:${PORT}`);
-        });
+        server = app.listen(PORT, '0.0.0.0', () => {
+          console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
+         });
 
         // Keep-alive ping
         setInterval(async () => {
