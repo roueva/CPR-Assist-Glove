@@ -1,31 +1,26 @@
-﻿{
-  "name": "cpr-backend",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "dev": "nodemon index.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "bcrypt": "^5.1.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "dotenv-safe": "^9.1.0",
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.4.1",
-    "express-validator": "^7.2.0",
-    "helmet": "^8.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.9.16",
-    "pg": "^8.11.3",
-    "winston": "^3.11.0"
-  },
-  "devDependencies": {
-    "eslint": "^8.56.0"
-  }
+{
+"name": "cpr-assist-glove",
+"version": "1.0.0",
+"main": "index.js",
+"scripts": {
+"start": "node index.js",
+"dev": "nodemon index.js"
+},
+"dependencies": {
+"bcrypt": "5.1.1",
+"cors": "2.8.5",
+"dotenv": "16.4.5",
+"dotenv-safe": "9.1.0",
+"express": "4.18.2",
+"express-rate-limit": "7.4.1",
+"express-validator": "7.2.0",
+"helmet": "8.0.0",
+"jsonwebtoken": "9.0.2",
+"nodemailer": "6.9.16",
+"pg": "8.11.3",
+"winston": "3.11.0"
+},
+"devDependencies": {
+"eslint": "8.56.0"
+}
 }
