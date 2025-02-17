@@ -8,6 +8,11 @@ const createAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 
+// ✅ Parse PORT Correctly (Fix Railway quotes issue)
+const PORT = Number(process.env.PORT) || 8080;
+const HOST = '0.0.0.0';
+console.log(`🚀 Using PORT: ${PORT} (Type: ${typeof PORT})`);
+
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
   level: 'info',
@@ -34,9 +39,9 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// ✅ Add `/health` Route for Railway Health Checks
+// ✅ Health Check Route (for Railway)
 app.get('/health', (req, res) => {
-  res.json({ message: '✅ Health OK', status: 'healthy' });
+  res.status(200).json({ message: '✅ Health OK', status: 'healthy' });
 });
 
 // ✅ Load Routes
@@ -63,17 +68,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-console.log(`🚀 Using PORT: ${PORT} (Type: ${typeof PORT})`);
-
-
-// ✅ Railway-Optimized Port Binding
-const PORT = Number(process.env.PORT) || 8080;
-const HOST = '0.0.0.0';
-
 // ✅ Start Express Server
 const server = app.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
 });
+
+// ✅ Keep Event Loop Active (Prevents Railway Stop)
+setInterval(() => {
+  console.log('💓 Railway Keep-Alive Ping');
+}, 10000); // Every 10 seconds
+
+// ✅ Prevent Node.js from Exiting (Railway fix)
+process.stdin.resume();
 
 // ✅ Graceful Shutdown Handling
 process.on('SIGTERM', async () => {
