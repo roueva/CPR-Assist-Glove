@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const createAuthController = require('../controllers/authController');
 const {
@@ -21,6 +21,19 @@ router.use((req, res, next) => {
 function initializeAuthRoutes(pool) {
     poolInstance = pool;
     const authController = createAuthController(pool);
+
+    // ✅ Test Route for "/auth"
+    router.get('/test', (req, res) => {
+     res.json({ message: '✅ Auth routes are working' });
+    });
+
+    // ✅ Log Incoming Requests to Auth.js
+router.use((req, res, next) => {
+  console.log(`📥 Received ${req.method} request on ${req.url}`);
+  next();
+});
+
+
 
     // Registration route
     router.post(

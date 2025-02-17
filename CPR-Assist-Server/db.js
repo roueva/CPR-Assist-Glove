@@ -1,32 +1,41 @@
-﻿// ✅ Load environment variables
-require('dotenv').config();
+﻿require('dotenv').config();
 const { Pool } = require('pg');
 
-// 🚀 Use Railway DATABASE_URL (Preferred)
-const connectionString = process.env.DATABASE_URL 
-    || `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}` +
-       `@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DATABASE}`;
-
-// ✅ PostgreSQL Pool Configuration
+// ✅ Enhanced Pool Configuration
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    idleTimeoutMillis: 30000, // ✅ Close idle clients after 30s
-    connectionTimeoutMillis: 5000, // ✅ Return error if connection fails after 5s
+    max: 20, // maximum number of clients in the pool
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+    allowExitOnIdle: true
 });
 
-// ✅ Pool Events
-pool.on('connect', () => console.log('✅ PostgreSQL connected successfully'));
+// ✅ Improved Pool Error Handling
+pool.on('connect', () => {
+    console.log('✅ PostgreSQL connected successfully');
+});
+
 pool.on('error', (err) => {
-  console.error('❌ PostgreSQL Pool error:', err);
-  process.exit(1);
+    console.error('❌ Unexpected PostgreSQL pool error:', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        console.error('Database connection was closed.');
+    }
+    if (err.code === 'ER_CON_COUNT_ERROR') {
+        console.error('Database has too many connections.');
+    }
+    if (err.code === 'ECONNREFUSED') {
+        console.error('Database connection was refused.');
+    }
 });
 
-// ✅ Ensure AED Table
+// ✅ Better Table Creation
 async function ensureAedTable() {
-    const client = await pool.connect();
+    let client;
     try {
+        client = await pool.connect();
         console.log("🟡 Checking for AED table...");
+        
         await client.query(`
             CREATE TABLE IF NOT EXISTS aed_locations (
                 id BIGINT PRIMARY KEY,
@@ -46,28 +55,21 @@ async function ensureAedTable() {
                 last_updated TIMESTAMP DEFAULT NOW()
             );
         `);
+        
         console.log("✅ AED table ensured.");
+        return true;
     } catch (err) {
         console.error("❌ Error ensuring AED table:", err);
-        process.exit(1);
+        return false;
     } finally {
-        client.release();
+        if (client) {
+            client.release();
+        }
     }
 }
 
-// ✅ Run Table Setup Immediately
-ensureAedTable()
-    .then(() => console.log("✅ Database structure ready"))
-    .catch((error) => {
-        console.error("❌ Database setup failed:", error);
-        process.exit(1);
-    });
-
-// ✅ Handle Unexpected Pool Errors
-pool.on('error', (err) => {
-    console.error('❌ Unexpected PostgreSQL pool error:', err);
-    process.exit(-1);
-});
-
-// ✅ Export Pool
-module.exports = pool;
+// ✅ Export both pool and initialization function
+module.exports = {
+    pool,
+    ensureAedTable
+};
