@@ -1,40 +1,32 @@
-﻿require('dotenv').config();
+﻿// ✅ Load environment variables
+require('dotenv').config();
 const { Pool } = require('pg');
 
+// 🟢 Log creation of the pool
 console.log("🟢 PostgreSQL Pool created from db.js");
 
-// Ensure required environment variables are set
-if (!process.env.POSTGRES_PASSWORD) {
-    console.error("❌ Error: POSTGRES_PASSWORD is missing in the .env file!");
-    process.exit(1);
-}
-
-const password = String(process.env.POSTGRES_PASSWORD).trim();
-
+// ✅ Use DATABASE_URL for Railway (Preferred)
+// Fallback to manual config for local development
 const pool = new Pool({
-    user: process.env.POSTGRES_USER,
-    host: process.env.POSTGRES_HOST,
-    database: process.env.POSTGRES_DATABASE,
-    password: password,
-    port: process.env.POSTGRES_PORT || 5432,
+    connectionString: process.env.DATABASE_URL || `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST}:${process.env.POSTGRES_PORT}/${process.env.POSTGRES_DATABASE}`,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-
+// ✅ Pool Events for Logging
 pool.on('connect', () => {
   console.log('✅ PostgreSQL pool connected');
 });
 
 pool.on('error', (err) => {
   console.error('❌ PostgreSQL Pool error:', err);
+  process.exit(1); // Exit immediately on pool error
 });
 
-
-
-// ✅ Ensure AED locations table exists (Block until Ready)
+// ✅ Function to Ensure AED Table Exists
 async function ensureAedTable() {
     const client = await pool.connect();
     try {
+        console.log("🟡 Checking for AED table...");
         await client.query(`
             CREATE TABLE IF NOT EXISTS aed_locations (
                 id BIGINT PRIMARY KEY,
@@ -57,23 +49,23 @@ async function ensureAedTable() {
         console.log("✅ AED table ensured.");
     } catch (err) {
         console.error("❌ Error ensuring AED table:", err);
-        process.exit(1); // Exit if DB fails
+        process.exit(1); // Fail fast if table creation fails
     } finally {
         client.release();
     }
 }
 
 // ✅ Call Ensure Table Immediately (before export)
-ensureAedTable().then(() => {
-    console.log("✅ Database structure ready!");
-}).catch((error) => {
-    console.error("❌ Database setup failed:", error);
-    process.exit(1);
-});
+ensureAedTable()
+  .then(() => console.log("✅ Database structure ready!"))
+  .catch((error) => {
+      console.error("❌ Database setup failed:", error);
+      process.exit(1);
+  });
 
-// ✅ Handle unexpected errors on the pool
+// ✅ Handle Unexpected Errors on the Pool
 pool.on('error', (err) => {
-    console.error('Unexpected error on idle client:', err);
+    console.error('❌ Unexpected error on idle PostgreSQL client:', err);
     process.exit(-1);
 });
 

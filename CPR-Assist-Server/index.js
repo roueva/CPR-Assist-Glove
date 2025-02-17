@@ -70,12 +70,11 @@ app.use((err, req, res, next) => {
 });
 
 // ✅ Use Railway Port or Fallback
-const PORT = process.env.PORT || 8080;
+const PORT = parseInt(process.env.PORT, 10) || 8080;
 
 // ✅ Start Express Server
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`✅ Hang route available at http://<your-domain>/hang`);
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
 });
 
 
