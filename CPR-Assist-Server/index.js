@@ -109,7 +109,10 @@ const gracefulShutdown = async (signal) => {
     logger.info('✅ PostgreSQL pool closed');
 
     // ✅ Stop Keep-Alive Interval
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      logger.info('⏳ Keep-Alive Interval Cleared');
+    }
 
     if (global.server && typeof global.server.close === 'function') {
       global.server.close(() => {
@@ -133,7 +136,6 @@ const gracefulShutdown = async (signal) => {
 };
 
 
-// ✅ Start Server Function
 const startServer = async () => {
   try {
     const dbConnected = await checkDatabaseConnection();
@@ -149,18 +151,19 @@ const startServer = async () => {
     });
 
     // ✅ Keep Railway Alive Properly
-    setInterval(() => {
+    keepAliveInterval = setInterval(() => {
       logger.info('💓 Railway Keep-Alive Ping');
     }, 60000);
 
     // ✅ Block Node.js from Exiting
-    process.stdin.resume();
+    process.stdin.resume(); // ✅ Prevents Railway from stopping the process
 
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
   }
 };
+
 
 
 // ✅ Process Event Handlers
@@ -180,5 +183,5 @@ process.on('unhandledRejection', (reason, promise) => {
 // ✅ Start the server
 startServer().catch((error) => {
   logger.error('Failed to start application:', error);
-  process.exit(1);
+  process.exit(1); // ✅ Exit properly if server fails
 });
