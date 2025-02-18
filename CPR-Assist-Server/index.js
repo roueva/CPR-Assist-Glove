@@ -13,7 +13,6 @@ const PORT = Number(process.env.PORT) || 8080;
 const isProduction = process.env.NODE_ENV === 'production';
 
 
-
 // ✅ Winston Logger Setup
 const logger = winston.createLogger({
     level: 'info',
@@ -42,6 +41,11 @@ app.use(cors({
 }));
 
 
+initializeRoutes();
+
+
+
+
 ['DATABASE_URL', 'GOOGLE_MAPS_API_KEY'].forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);
@@ -54,7 +58,7 @@ app.use(cors({
 app.get('/', (req, res) => {
     const uptime = process.uptime();
     const info = {
-        status: 'online',
+        status: 'Online',
         service: 'CPR Assist Backend',
         environment: process.env.NODE_ENV || 'development',
         database: process.env.DATABASE_URL ? 'Connected' : 'Not Set',
@@ -103,8 +107,8 @@ app.get('/health', async (req, res) => {
         await pool.query('SELECT 1');
         const duration = Date.now() - start;
         const healthInfo = {
-            status: 'ok',
-            database: 'connected',
+            status: 'Healthy',
+            database: 'Connected',
             responseTime: `${duration}ms`,
             environment: process.env.NODE_ENV || 'development',
             timestamp: new Date().toISOString()
@@ -198,8 +202,6 @@ process.on('uncaughtException', (error) => {
     logger.error(`🚨 Uncaught Exception: ${error.message}`);
     process.exit(1);
 });
-
-initializeRoutes();
 
 
 // ✅ Server Startup
