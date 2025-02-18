@@ -1,5 +1,4 @@
-﻿// ✅ Cleaned db.js (Removed `CREATE TABLE`)
-require('dotenv').config();
+﻿require('dotenv').config();
 const { Pool } = require('pg');
 
 // ✅ Database Connection Configuration
@@ -15,7 +14,7 @@ const pool = new Pool({
 
 // ✅ Pool Event Logs
 pool.on('connect', () => {
-    console.log(`[${new Date().toISOString()}] ✅ Connected to PostgreSQL pool`);
+  //  console.log(`[${new Date().toISOString()}] ✅ Connected to PostgreSQL pool`);
 });
 
 pool.on('remove', () => {
@@ -24,10 +23,54 @@ pool.on('remove', () => {
 
 pool.on('error', (err) => {
     console.error(`[${new Date().toISOString()}] ❌ PostgreSQL Pool Error:
-  Code: ${err.code}
-  Message: ${err.message}
-  Stack: ${err.stack || 'No stack trace'}`);
+    Code: ${err.code}
+    Message: ${err.message}
+    Stack: ${err.stack || 'No stack trace'}`);
 });
 
-// ✅ Export Pool Only (No Table Creation)
-module.exports = { pool };
+// ✅ Create AED Table
+async function ensureAedTable() {
+    let client;
+    const startTime = Date.now(); // Start time for duration tracking
+    try {
+        client = await pool.connect();
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS aed_locations (
+                id BIGINT PRIMARY KEY,
+                latitude DOUBLE PRECISION NOT NULL,
+                longitude DOUBLE PRECISION NOT NULL,
+                name TEXT DEFAULT 'Unknown',
+                address TEXT DEFAULT 'Unknown',
+                emergency TEXT DEFAULT 'defibrillator',
+                operator TEXT DEFAULT 'Unknown',
+                indoor BOOLEAN,
+                access TEXT DEFAULT 'unknown',
+                defibrillator_location TEXT DEFAULT 'Not specified',
+                level TEXT DEFAULT 'unknown',
+                opening_hours TEXT DEFAULT 'unknown',
+                phone TEXT DEFAULT 'unknown',
+                wheelchair TEXT DEFAULT 'unknown',
+                last_updated TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        const duration = Date.now() - startTime;
+       // console.log(`[${new Date().toISOString()}] ✅ AED table ensured successfully in ${duration}ms`);
+        return true;
+
+    } catch (err) {
+        console.error(`[${new Date().toISOString()}] ❌ Error ensuring AED table:
+        Message: ${err.message}
+        Stack: ${err.stack || 'No stack trace'}`);
+        return false;
+
+    } finally {
+        if (client) {
+            client.release();
+        }
+    }
+}
+
+// ✅ Export both pool and initialization function
+module.exports = { pool, ensureAedTable };
