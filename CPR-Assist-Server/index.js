@@ -41,11 +41,6 @@ app.use(cors({
 }));
 
 
-initializeRoutes();
-
-
-
-
 ['DATABASE_URL', 'GOOGLE_MAPS_API_KEY'].forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);
@@ -157,6 +152,10 @@ const initializeRoutes = () => {
     app.use('/sessions', createSessionRoutes(pool));
     app.use('/aed', createAedRoutes(pool)); 
 };
+
+
+initializeRoutes();
+
 
 
 // ✅ Add this route to serve Google Maps API Key
