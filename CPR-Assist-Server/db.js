@@ -1,40 +1,48 @@
 ﻿require('dotenv').config();
 const { Pool } = require('pg');
 
-// ✅ Database Connection Configuration
+
 const connectionString = process.env.DATABASE_URL;
+
+
+// ✅ Enhanced Pool Configuration
 const pool = new Pool({
-    connectionString,
-    ssl: process.env.DATABASE_URL?.includes('railway.app') ? { rejectUnauthorized: false } : false,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-    allowExitOnIdle: true,
+  connectionString,
+  ssl: process.env.DATABASE_URL?.includes('railway.app') ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  allowExitOnIdle: true,
 });
 
-// ✅ Pool Event Logs
+console.log(`Connected to database`);
+
+
+// ✅ Improved Pool Error Handling
 pool.on('connect', () => {
-  //  console.log(`[${new Date().toISOString()}] ✅ Connected to PostgreSQL pool`);
-});
-
-pool.on('remove', () => {
-    console.log(`[${new Date().toISOString()}] 🛑 Client removed from PostgreSQL pool`);
+   // console.log('✅ PostgreSQL connected successfully');
 });
 
 pool.on('error', (err) => {
-    console.error(`[${new Date().toISOString()}] ❌ PostgreSQL Pool Error:
-    Code: ${err.code}
-    Message: ${err.message}
-    Stack: ${err.stack || 'No stack trace'}`);
+    console.error('❌ Unexpected PostgreSQL pool error:', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        console.error('Database connection was closed.');
+    }
+    if (err.code === 'ER_CON_COUNT_ERROR') {
+        console.error('Database has too many connections.');
+    }
+    if (err.code === 'ECONNREFUSED') {
+        console.error('Database connection was refused.');
+    }
 });
 
-// ✅ Create AED Table
+// ✅ Better Table Creation
 async function ensureAedTable() {
     let client;
-    const startTime = Date.now(); // Start time for duration tracking
     try {
         client = await pool.connect();
-
+       // console.log("🟡 Checking for AED table...");
+        
         await client.query(`
             CREATE TABLE IF NOT EXISTS aed_locations (
                 id BIGINT PRIMARY KEY,
@@ -54,17 +62,12 @@ async function ensureAedTable() {
                 last_updated TIMESTAMP DEFAULT NOW()
             );
         `);
-
-        const duration = Date.now() - startTime;
-       // console.log(`[${new Date().toISOString()}] ✅ AED table ensured successfully in ${duration}ms`);
+        
+       // console.log("✅ AED table ensured.");
         return true;
-
     } catch (err) {
-        console.error(`[${new Date().toISOString()}] ❌ Error ensuring AED table:
-        Message: ${err.message}
-        Stack: ${err.stack || 'No stack trace'}`);
+        console.error("❌ Error ensuring AED table:", err);
         return false;
-
     } finally {
         if (client) {
             client.release();
