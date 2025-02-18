@@ -15,7 +15,7 @@ const pool = new Pool({
   allowExitOnIdle: true,
 });
 
-console.log(`Connected to database`);
+console.log(`✅ Connected to database`);
 
 
 // ✅ Improved Pool Error Handling

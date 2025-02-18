@@ -18,15 +18,17 @@ const isProduction = process.env.NODE_ENV === 'production';
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    ),
-    transports: [
-        new winston.transports.Console({
-            format: winston.format.simple()
+        winston.format.printf(({ level, message }) => {
+            if (level === 'error') {
+                return `[${new Date().toISOString()}] ${message}`; // Only timestamp on errors
+            }
+            return `${message}`;
         })
-    ]
+    ),
+    transports: [new winston.transports.Console()]
 });
+
+
 
 // ✅ Express Configuration
 const app = express();
@@ -181,7 +183,7 @@ app.use((err, req, res, next) => {
 const checkDatabase = async () => {
     try {
         await pool.query('SELECT 1');
-        logger.info('✅ Database connection successful.');
+       // logger.info('✅ Database connection successful.');
         return true;
     } catch {
         throw new Error('❌ Database connection failed');
