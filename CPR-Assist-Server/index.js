@@ -10,9 +10,8 @@ const createAedRoutes = require('./routes/aed');
 
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
-const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+const isProduction = process.env.NODE_ENV === 'production';
 
-console.log(`🟢 Server running at http://${HOST}:${PORT}`);
 
 
 // ✅ Winston Logger Setup
@@ -41,24 +40,110 @@ app.use(cors({
 }));
 
 
-// ✅ Quick Health Check (Must be first route)
-app.get('/health', async (req, res) => {
-    try {
-        await pool.query('SELECT 1');
-        res.status(200).send('ok');
-    } catch (error) {
-        res.status(500).send('error');
+['DATABASE_URL', 'GOOGLE_MAPS_API_KEY'].forEach(key => {
+    if (!process.env[key]) {
+        logger.error(`🚨 Missing environment variable: ${key}`);
+        process.exit(1);
     }
 });
 
-// ✅ Base Route
+
+/// ✅ Improved Base Route (HTML or JSON)
 app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'online',
-    environment: process.env.NODE_ENV,
-    database: process.env.DATABASE_URL || 'No DB URL Set'
-  });
+    const uptime = process.uptime();
+    const info = {
+        status: 'online',
+        service: 'CPR Assist Backend',
+        environment: process.env.NODE_ENV || 'development',
+        database: process.env.DATABASE_URL ? 'Connected' : 'Not Set',
+        version: '1.0.0',
+        uptime: `${Math.floor(uptime / 60)} minutes, ${Math.floor(uptime % 60)} seconds`,
+        timestamp: new Date().toISOString()
+    };
+
+    if (req.headers.accept && req.headers.accept.includes('text/html')) {
+        // Show Pretty HTML if viewed in Browser
+        res.send(`
+      <html>
+        <head>
+          <title>CPR Assist Backend Status</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; background-color: #f0f8ff; }
+            h1 { color: #2c3e50; }
+            p { font-size: 16px; line-height: 1.5; }
+            .info-box { border: 1px solid #2c3e50; padding: 15px; background-color: #dff9fb; border-radius: 5px; }
+          </style>
+        </head>
+        <body>
+          <h1>🚀 CPR Assist Backend Status</h1>
+          <div class="info-box">
+            <p><strong>Status:</strong> ${info.status}</p>
+            <p><strong>Service:</strong> ${info.service}</p>
+            <p><strong>Environment:</strong> ${info.environment}</p>
+            <p><strong>Database:</strong> ${info.database}</p>
+            <p><strong>Version:</strong> ${info.version}</p>
+            <p><strong>Uptime:</strong> ${info.uptime}</p>
+            <p><strong>Timestamp:</strong> ${info.timestamp}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    } else {
+        // Return JSON if requested by API clients
+        res.status(200).json(info);
+    }
 });
+
+// ✅ Improved Health Check Route (HTML or JSON)
+app.get('/health', async (req, res) => {
+    const start = Date.now();
+    try {
+        await pool.query('SELECT 1');
+        const duration = Date.now() - start;
+        const healthInfo = {
+            status: 'ok',
+            database: 'connected',
+            responseTime: `${duration}ms`,
+            environment: process.env.NODE_ENV || 'development',
+            timestamp: new Date().toISOString()
+        };
+
+        if (req.headers.accept && req.headers.accept.includes('text/html')) {
+            res.send(`
+        <html>
+          <head>
+            <title>Health Check</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; background-color: #eafaf1; }
+              h1 { color: #16a085; }
+              .status-box { border: 1px solid #16a085; padding: 15px; background-color: #e8f5e9; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <h1>💚 Service Health Check</h1>
+            <div class="status-box">
+              <p><strong>Status:</strong> ${healthInfo.status}</p>
+              <p><strong>Database:</strong> ${healthInfo.database}</p>
+              <p><strong>Response Time:</strong> ${healthInfo.responseTime}</p>
+              <p><strong>Environment:</strong> ${healthInfo.environment}</p>
+              <p><strong>Timestamp:</strong> ${healthInfo.timestamp}</p>
+            </div>
+          </body>
+        </html>
+      `);
+        } else {
+            res.status(200).json(healthInfo);
+        }
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            database: 'not connected',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 
 // ✅ Initialize Routes
 const initializeRoutes = () => {
@@ -66,8 +151,6 @@ const initializeRoutes = () => {
     app.use('/sessions', createSessionRoutes(pool));
     app.use('/aed', createAedRoutes(pool)); 
 };
-
-initializeRoutes();
 
 
 // ✅ Add this route to serve Google Maps API Key
@@ -81,62 +164,54 @@ app.get('/api/maps-key', (req, res) => {
 
 // ✅ Error Handlers
 app.use('*', (req, res) => {
-    console.error(`❌ Route Not Found: ${req.method} ${req.originalUrl}`);
+    logger.warn(`❌ Route Not Found: ${req.method} ${req.originalUrl}`);
     res.status(404).json({ error: `Route not found: ${req.originalUrl}` });
 });
 
 app.use((err, req, res, next) => {
-    logger.error('Error:', err);
+    logger.error(`❌ Internal Server Error: ${err.message}`);
     res.status(500).json({
         message: 'Internal server error',
         error: isProduction ? null : err.message
     });
 });
 
+
 // ✅ Database Check
 const checkDatabase = async () => {
     try {
         await pool.query('SELECT 1');
+        logger.info('✅ Database connection successful.');
         return true;
-    } catch (error) {
-        logger.error('Database connection failed:', error);
-        return false;
+    } catch {
+        throw new Error('❌ Database connection failed');
     }
 };
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error(`🚨 Unhandled Rejection: ${reason.stack || reason}`);
+});
+
+process.on('uncaughtException', (error) => {
+    logger.error(`🚨 Uncaught Exception: ${error.message}`);
+    process.exit(1);
+});
+
+initializeRoutes();
+
 
 // ✅ Server Startup
 let server;
 const startServer = async () => {
     try {
-        // Check database connection
-        const dbConnected = await checkDatabase();
-        if (!dbConnected) {
-            throw new Error('Database connection failed');
-        }
-
-        // Ensure tables exist
+        await checkDatabase();
         await ensureAedTable();
-        
-        // Initialize routes
-        initializeRoutes();
 
-        // Start server
         server = app.listen(PORT, '0.0.0.0', () => {
-          console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
-         });
-
-        // Keep-alive ping
-        setInterval(async () => {
-            try {
-                await pool.query('SELECT 1');
-                logger.debug('Keep-alive ping successful');
-            } catch (error) {
-                logger.error('Keep-alive ping failed:', error);
-            }
-        }, 5000);
-
+            logger.info(`🌐 Server running on http://0.0.0.0:${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
     } catch (error) {
-        logger.error('Server startup failed:', error);
+        logger.error(`🚨 Server startup failed: ${error.message}`);
         process.exit(1);
     }
 };
