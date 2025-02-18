@@ -13,13 +13,6 @@ const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 
 console.log(`🟢 Server running at http://${HOST}:${PORT}`);
-console.log(`🟢 Environment: ${process.env.NODE_ENV}`);
-
-console.log(`🟢 Auth Routes: /auth`);
-console.log(`🟢 AED Routes: /aed/locations`);
-console.log(`🟢 Session Routes: /sessions/summary`);
-
-pool.on('connect', () => console.log('✅ Database connected.'));
 
 
 // ✅ Winston Logger Setup
@@ -72,7 +65,6 @@ const initializeRoutes = () => {
     app.use('/auth', initializeAuthRoutes(pool));
     app.use('/sessions', createSessionRoutes(pool));
     app.use('/aed', createAedRoutes(pool)); 
-    logger.info('✅ All routes initialized');
 };
 
 initializeRoutes();
@@ -84,7 +76,6 @@ app.get('/api/maps-key', (req, res) => {
     return res.status(500).json({ error: 'Google Maps API Key not set' });
   }
   res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
-  console.log('🟢 /api/maps-key accessed');
 });
 
 

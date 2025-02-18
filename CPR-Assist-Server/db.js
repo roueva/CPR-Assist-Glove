@@ -15,13 +15,6 @@ const pool = new Pool({
   allowExitOnIdle: true,
 });
 
-console.log(`Connected to database: ${connectionString}`);
-
-
-// ✅ Improved Pool Error Handling
-pool.on('connect', () => {
-    console.log('✅ PostgreSQL connected successfully');
-});
 
 pool.on('error', (err) => {
     console.error('❌ Unexpected PostgreSQL pool error:', err);
@@ -41,7 +34,6 @@ async function ensureAedTable() {
     let client;
     try {
         client = await pool.connect();
-        console.log("🟡 Checking for AED table...");
         
         await client.query(`
             CREATE TABLE IF NOT EXISTS aed_locations (
@@ -63,7 +55,6 @@ async function ensureAedTable() {
             );
         `);
         
-        console.log("✅ AED table ensured.");
         return true;
     } catch (err) {
         console.error("❌ Error ensuring AED table:", err);
