@@ -1,0 +1,31 @@
+[
+  {
+    "featureType": "transit",
+    "stylers": [{"visibility": "off"}]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {"color": "#00ff00"},
+      {"visibility": "simplified"},
+      {"weight": 2}
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {"color": "#00ff00"},
+      {"visibility": "simplified"}
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {"color": "#00ff00"},
+      {"visibility": "on"}
+    ]
+  }
+]

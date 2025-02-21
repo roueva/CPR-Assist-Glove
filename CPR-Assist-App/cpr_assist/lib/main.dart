@@ -1,4 +1,5 @@
 import 'package:cpr_assist/services/network_service.dart';
+import 'package:cpr_assist/widgets/aed_map_display.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
@@ -14,6 +15,7 @@ void main() async {
 
   // ✅ Load .env from the correct location
     await dotenv.load(fileName: ".env");
+     await MapStyleLoader.loadMapStyle(); // ✅ Load map style globally
 
 
   filterLogs(); // ✅ Suppress unwanted logs before app starts

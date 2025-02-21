@@ -5,8 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/network_service.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
-import '../widgets/aed_map_view.dart';
-
+import '../widgets/aed_map_display.dart';
 
 
 class AEDMapWidget extends StatefulWidget {
@@ -146,6 +145,13 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
         _isLoading = false;
       });
 
+      // ✅ Trigger zoom from parent when AEDs are ready
+      if (_mapController != null && _userLocation != null) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _updateMapView();
+        });
+      }
+
       _updateMapView(); // ✅ Update big map once sorted AEDs are available
     } catch (error) {
       print("❌ Error fetching AEDs: $error");
@@ -159,36 +165,24 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
   void _updateMapView() {
     if (_userLocation == null || _aedLocations.isEmpty || _mapController == null) return;
 
-    // ✅ Ensure at least two AEDs are included
     List<LatLng> includedPoints = [_userLocation!];
-    int numAEDsToInclude = _aedLocations.length >= 2 ? 2 : 1;
-
-    for (int i = 0; i < numAEDsToInclude && i < _aedLocations.length; i++) {
-      includedPoints.add(_aedLocations[i]);
-    }
-
-    if (includedPoints.length < 2) {
-      print("⚠ Not enough AEDs to adjust the map view.");
-      return;
-    }
-
-    // ✅ Calculate exact bounds (remove excessive padding)
-    double minLat = includedPoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
-    double maxLat = includedPoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
-    double minLng = includedPoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
-    double maxLng = includedPoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+    includedPoints.addAll(_aedLocations.take(2)); // 🚀 Use first 2 AEDs
 
     LatLngBounds bounds = LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
+      southwest: LatLng(
+        includedPoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b),
+        includedPoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b),
+      ),
+      northeast: LatLng(
+        includedPoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b),
+        includedPoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b),
+      ),
     );
 
-    // ✅ Move the camera **with minimal zoom-out, only just enough**
-    Future.delayed(Duration(milliseconds: 300), () {
-      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50)); // Reduced padding
-    });
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 20),
+    );
   }
-
 
   /// **📍 Handle Small Map Click**
   LatLng? _selectedAED; // Store selected AED for map update
@@ -198,31 +192,20 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
 
     setState(() {
       _selectedAED = aedLocation;
+      _selectedMode = "walking"; // ✅ Default to walking mode
     });
 
-    // ✅ Fetch actual route from Google Directions API
-    await _fetchRoute(_userLocation!, aedLocation, mode); // ✅ Mode now updates dynamically
+    // ✅ Fetch walking directions from Google Directions API
+    await _fetchRoute(_userLocation!, aedLocation, "walking");
 
-    // ✅ Adjust the big map to fit both points **exactly** (no extra padding)
-    LatLngBounds bounds = LatLngBounds(
-      southwest: LatLng(
-        _userLocation!.latitude < aedLocation.latitude ? _userLocation!.latitude : aedLocation.latitude,
-        _userLocation!.longitude < aedLocation.longitude ? _userLocation!.longitude : aedLocation.longitude,
-      ),
-      northeast: LatLng(
-        _userLocation!.latitude > aedLocation.latitude ? _userLocation!.latitude : aedLocation.latitude,
-        _userLocation!.longitude > aedLocation.longitude ? _userLocation!.longitude : aedLocation.longitude,
-      ),
-    );
-
-    Future.delayed(Duration(milliseconds: 300), () {
-      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20)); // ✅ Less padding
-    });
+    // ✅ Zoom out to fit the entire route if available
+    if (_navigationLine != null && _navigationLine!.points.isNotEmpty) {
+      _adjustZoomToFitRoute(_navigationLine!.points);
+    }
   }
 
 
   String _selectedMode = "walking"; // ✅ Track selected mode globally
-
   String _estimatedTime = "";
 
   Future<void> _fetchRoute(LatLng origin, LatLng destination, String mode) async {
@@ -253,24 +236,11 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
           _navigationLine = Polyline(
             polylineId: PolylineId(mode),
             points: routePoints,
-            color: _selectedMode == "driving" ? Colors.blue : Colors.green,
+            color: mode == "walking" ? Colors.green : Colors.blue,
+            patterns: mode == "walking"
+                ? [PatternItem.dash(20), PatternItem.gap(10)]
+                : [],
             width: 5,
-          );
-
-          // ✅ Remove previous estimated time marker before adding a new one
-          _aedMarkers.removeWhere((marker) => marker.markerId.value == "route_info");
-
-          // ✅ Add the estimated time marker dynamically
-          _aedMarkers = Set.from(_aedMarkers)..add(
-            Marker(
-              markerId: const MarkerId("route_info"),
-              position: routePoints[routePoints.length ~/ 2],  // ✅ Use midpoint
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
-              infoWindow: InfoWindow(
-                title: "⏳ $_estimatedTime",
-                snippet: "ETA via $_selectedMode",
-              ),
-            ),
           );
         });
 
@@ -298,9 +268,9 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
       northeast: LatLng(maxLat, maxLng),
     );
 
-    // ✅ Ensure zoom adjustment happens before UI updates
-    Future.delayed(Duration(milliseconds: 300), () {
-      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80)); // ✅ Adjusted zoom to fit route
+    // ✅ Ensure zoom adjustment happens with padding
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 20)); // ✅ 60 padding for full route
     });
   }
 
@@ -379,6 +349,18 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
       },
       onBatchUpdate: _updateBatch,
       googleMapsApiKey: _googleMapsApiKey,
+      onMapCreated: (controller) {
+        setState(() {
+          _mapController = controller;
+        });
+
+        // Adjust if user and AEDs are ready
+        if (_userLocation != null && _aedLocations.isNotEmpty) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _updateMapView();
+          });
+        }
+      },
     );
   }
 }
