@@ -230,9 +230,6 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
         String durationText = response["routes"][0]["legs"][0]["duration"]["text"];
 
         setState(() {
-          _estimatedTime = durationText; // ✅ Store estimated time first
-
-          // ✅ Set navigation polyline first
           _navigationLine = Polyline(
             polylineId: PolylineId(mode),
             points: routePoints,
@@ -242,6 +239,15 @@ class _AEDMapWidgetState extends State<AEDMapWidget> {
                 : [],
             width: 5,
           );
+          _estimatedTime = durationText;
+
+          // Ensure the map display updates the bubble position
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (_mapController != null) {
+              // This will trigger a rebuild which will update the ETA bubble
+              setState(() {});
+            }
+          });
         });
 
         // ✅ Auto-adjust zoom to fit route

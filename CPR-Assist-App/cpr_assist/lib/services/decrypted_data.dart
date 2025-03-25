@@ -43,6 +43,7 @@ class DecryptedData {
       // Combine decrypted blocks (first 28 bytes are meaningful data)
       final decryptedData = [...decryptedBlock1, ...decryptedBlock2.sublist(0, 12)];
 
+
       // Parse and stream the data
       final parsedData = _parseDecryptedData(Uint8List.fromList(decryptedData));
       _dataStreamController.add(parsedData);

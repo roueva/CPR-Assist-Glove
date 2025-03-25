@@ -6,9 +6,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 class NetworkService {
-  static String get baseUrl {
+  static String? get baseUrl {
     String? url = dotenv.env['BASE_URL'];
-    if (url == null || url.isEmpty) {
+    if (url!.isEmpty) {
       throw Exception("❌ BASE_URL is missing from .env");
     }
     return url;
@@ -210,9 +210,9 @@ class NetworkService {
     }
   }
 
-  static String get googleMapsApiKey {
+  static String? get googleMapsApiKey {
     String? key = dotenv.env['GOOGLE_MAPS_API_KEY'];
-    if (key == null || key.isEmpty) {
+    if (key!.isEmpty) {
       throw Exception("❌ GOOGLE_MAPS_API_KEY is missing from .env");
     }
     return key;
