@@ -29,7 +29,7 @@ dependencies:
 
   # For BLE communication
   flutter_reactive_ble: ^5.0.2
-  flutter_blue_plus: ^1.3.1
+  flutter_blue_plus: ^1.34.4
   permission_handler: ^11.3.1
 
   # For NFC Card
@@ -37,25 +37,64 @@ dependencies:
 
   # For location services
   geolocator: ^13.0.2
-  google_maps_flutter: ^2.5.0
+  google_maps_flutter: ^2.12.1
   google_maps_flutter_platform_interface: ^2.2.0
-  google_maps_flutter_android: ^2.4.0
+  google_maps_flutter_android: ^2.16.1
+  flutter_compass: ^0.8.1
+
 
   # For AES decryption
   encrypt: ^5.0.0
+
+  # For icons
+  flutter_svg: ^2.0.7
 
   # DateFormat
   intl: ^0.20.1
   jwt_decoder: ^2.0.1
   flutter_dotenv: ^5.2.1
 
+  #Fonts
+  google_fonts: ^6.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+
+dependency_overrides:
+  flutter_blue_plus_android: 4.0.2
 
 flutter:
   uses-material-design: true
   assets:
     - .env
     - assets/map_style.json
+    - assets/icons/AEDs.png
+    - assets/icons/AEDs_c.png
+    - assets/icons/phone_call.svg
+    - assets/icons/compass.svg
+    - assets/icons/logo.svg
+    - assets/icons/account.svg
+    - assets/icons/bluetooth_on.svg
+    - assets/icons/bluetooth_off.svg
+    - assets/icons/bluetooth_search.svg
+    - assets/icons/bluetooth_retry.svg
+    - assets/icons/battery_100.svg
+    - assets/icons/battery_70.svg
+    - assets/icons/battery_50.svg
+    - assets/icons/battery_30.svg
+    - assets/icons/battery_1.svg
+    - assets/icons/battery_charging.svg
+    - assets/icons/locations.svg
+    - assets/icons/live.svg
+    - assets/icons/training.svg
+    - assets/icons/frequency_arc.svg
+    - assets/icons/frequency_arrow.svg
+    - assets/icons/depth.svg
+    - assets/icons/depth_line.svg
+    - assets/icons/depth_circle.svg
+    - assets/icons/depth_background.svg
+
+
+

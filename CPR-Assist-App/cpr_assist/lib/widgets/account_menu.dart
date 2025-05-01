@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/login_screen.dart';
 import '../services/decrypted_data.dart';
@@ -82,10 +83,15 @@ class _AccountMenuState extends State<AccountMenu> {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<int>(
-      icon: const Icon(Icons.account_circle),
+      icon: _buildIconButton("assets/icons/account.svg"),
+      color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       onSelected: (value) {
         if (value == 1) {
-          // Account settings can be handled here in the future
+          // Account settings placeholder
         } else if (value == 2) {
           _confirmLogout();
         }
@@ -95,24 +101,37 @@ class _AccountMenuState extends State<AccountMenu> {
           value: 1,
           child: Row(
             children: [
-              const Icon(Icons.account_circle),
+              SvgPicture.asset(
+                "assets/icons/account.svg",
+                width: 18,
+                height: 18,
+              ),
               const SizedBox(width: 10),
-              Text(username), // ✅ Shows correct username
+              Text(username),
             ],
           ),
         ),
         const PopupMenuDivider(),
-        PopupMenuItem(
+        const PopupMenuItem(
           value: 2,
           child: Row(
-            children: const [
-              Icon(Icons.logout),
+            children: [
+              Icon(Icons.logout, size: 20),
               SizedBox(width: 10),
               Text("Log Out"),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// Helper
+  Widget _buildIconButton(String assetPath) {
+    return SvgPicture.asset(
+      assetPath,
+      width: 22,   // ✅ Correct size
+      height: 22,
     );
   }
 }

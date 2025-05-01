@@ -26,6 +26,8 @@ class DecryptedData {
   Stream<Map<String, dynamic>> get dataStream => _dataStreamController.stream;
 
   void processReceivedData(List<int> data) {
+    print('📩 Full 32-Byte BLE Data Received: $data');
+
     if (data.length != 32) {
       print("Incorrect data length: ${data.length}. Expected 32 bytes.");
       return;
@@ -40,36 +42,62 @@ class DecryptedData {
       final decryptedBlock1 = _aesEncrypter.decryptBytes(encrypt.Encrypted(encryptedBlock1));
       final decryptedBlock2 = _aesEncrypter.decryptBytes(encrypt.Encrypted(encryptedBlock2));
 
+      print('🔓 Decrypted Block 1: $decryptedBlock1');
+      print('🔓 Decrypted Block 2: $decryptedBlock2');
+
+
       // Combine decrypted blocks (first 28 bytes are meaningful data)
-      final decryptedData = [...decryptedBlock1, ...decryptedBlock2.sublist(0, 12)];
+      final Uint8List combinedData = Uint8List.fromList([...decryptedBlock1, ...decryptedBlock2]);
 
 
-      // Parse and stream the data
-      final parsedData = _parseDecryptedData(Uint8List.fromList(decryptedData));
+      final buffer = ByteData.sublistView(combinedData);
+
+
+      // Extract the actual measurements
+      final weight = buffer.getFloat32(0, Endian.little);
+      final frequency = buffer.getFloat32(4, Endian.little);
+      final angle = buffer.getFloat32(8, Endian.little);
+
+      print('📊 Parsed Data: Weight: $weight, Frequency: $frequency, Angle: $angle');
+
+      final parsedData = {
+        'weight': weight,
+        'frequency': frequency,
+        'angle': angle
+      };
+
       _dataStreamController.add(parsedData);
     } catch (e) {
       print("Failed to decrypt or process data: $e");
     }
   }
 
-  Map<String, dynamic> _parseDecryptedData(Uint8List decryptedData) {
-    final buffer = ByteData.sublistView(decryptedData);
+      // Parse and stream the data
+    //  final parsedData = _parseDecryptedData(Uint8List.fromList(decryptedData));
+   //   _dataStreamController.add(parsedData);
+   // } catch (e) {
+   //   print("Failed to decrypt or process data: $e");
+   // }
+ // }
 
-    try {
-      return {
-        'totalCompressions': buffer.getUint32(0, Endian.little),
-        'correctWeightCompressions': buffer.getUint32(4, Endian.little),
-        'correctFrequencyCompressions': buffer.getUint32(8, Endian.little),
-        'weightGrade': buffer.getUint32(12, Endian.little) / 100.0,
-        'frequencyGrade': buffer.getUint32(16, Endian.little) / 100.0,
-        'angleGrade': buffer.getUint32(20, Endian.little) / 100.0,
-        'totalGrade': buffer.getUint32(24, Endian.little) / 100.0,
-      };
-    } catch (e) {
-      print("Error parsing decrypted data: $e");
-      return {};
-    }
-  }
+  // Map<String, dynamic> _parseDecryptedData(Uint8List decryptedData) {
+    //final buffer = ByteData.sublistView(decryptedData);
+
+    //try {
+      //return {
+        //'totalCompressions': buffer.getUint32(0, Endian.little),
+        //'correctWeightCompressions': buffer.getUint32(4, Endian.little),
+        //'correctFrequencyCompressions': buffer.getUint32(8, Endian.little),
+        //'weightGrade': buffer.getUint32(12, Endian.little) / 100.0,
+        //'frequencyGrade': buffer.getUint32(16, Endian.little) / 100.0,
+        //'angleGrade': buffer.getUint32(20, Endian.little) / 100.0,
+        //'totalGrade': buffer.getUint32(24, Endian.little) / 100.0,
+      //};
+    //} catch (e) {
+      //print("Error parsing decrypted data: $e");
+      //return {};
+    //}
+  //}
 
   void dispose() {
     _dataStreamController.close();

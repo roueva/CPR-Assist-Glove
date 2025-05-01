@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/network_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'home_screen.dart';
 import 'registration_screen.dart';
 import '../services/decrypted_data.dart'; // Import DecryptedData handler
 import '../widgets/account_menu.dart'; // Import AccountMenu widget
@@ -9,11 +8,14 @@ import '../widgets/account_menu.dart'; // Import AccountMenu widget
 class LoginScreen extends StatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
   final DecryptedData decryptedDataHandler;
+  final VoidCallback? onLoginSuccess;
+
 
   const LoginScreen({
     super.key,
     required this.dataStream,
     required this.decryptedDataHandler,
+    this.onLoginSuccess,
   });
 
   @override
@@ -55,19 +57,12 @@ class _LoginScreenState extends State<LoginScreen> {
         print('✅ User logged in successfully.');
 
         // ✅ Return to previous screen or redirect to HomeScreen
-        if (Navigator.canPop(context)) {
-          Navigator.pop(context, true); // ✅ Go back to previous screen
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(
-                decryptedDataHandler: widget.decryptedDataHandler,
-                isLoggedIn: true, // ✅ Ensure HomeScreen updates login state
-              ),
-            ),
-          );
+        if (widget.onLoginSuccess != null) {
+          widget.onLoginSuccess!(); // ✅ Call the success callback
         }
+
+        Navigator.pop(context, true); // ✅ Return success to caller
+        return;
       } else {
         setState(() {
           _errorMessage = response['message'] ?? 'Login failed. Please try again.';

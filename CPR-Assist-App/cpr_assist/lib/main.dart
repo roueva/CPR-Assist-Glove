@@ -1,22 +1,21 @@
+import 'package:cpr_assist/screens/main_layout.dart';
 import 'package:cpr_assist/services/network_service.dart';
-import 'package:cpr_assist/widgets/aed_map_display.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/home_screen.dart';
+import 'custom_icons.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'services/decrypted_data.dart';
 import 'services/ble_connection.dart';
-import 'dart:developer' as developer; // ✅ Import to use developer.log
+import 'dart:developer' as developer;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await CustomIcons.loadIcons();
 
   // ✅ Load .env from the correct location
     await dotenv.load(fileName: ".env");
-     await MapStyleLoader.loadMapStyle(); // ✅ Load map style globally
-
 
   filterLogs(); // ✅ Suppress unwanted logs before app starts
 
@@ -76,10 +75,10 @@ class _MyAppState extends State<MyApp> {
       title: 'CPR Assist App',
       theme: ThemeData(primarySwatch: Colors.blue),
       navigatorKey: navigatorKey,
-      home: HomeScreen(
-        decryptedDataHandler: widget.decryptedDataHandler,
-        isLoggedIn: widget.prefs.getBool('isLoggedIn') ?? false, // ✅ Ensure it's passed
-      ),
+      home: MainNavigationScreen(
+      decryptedDataHandler: widget.decryptedDataHandler,
+      isLoggedIn: widget.prefs.getBool('isLoggedIn') ?? false,
+    ),
       routes: {
         '/login': (context) => LoginScreen(
           dataStream: widget.decryptedDataHandler.dataStream,

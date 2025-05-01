@@ -3,29 +3,32 @@
   import 'package:flutter_blue_plus/flutter_blue_plus.dart';
   import 'package:shared_preferences/shared_preferences.dart';
   import '../main.dart';
-  import '../widgets/account_menu.dart';
   import '../services/decrypted_data.dart';
   import 'login_screen.dart';
   import 'past_sessions_screen.dart';
   import '../services/network_service.dart';
-  import '../widgets/ble_status_indicator.dart';
 
 
   class TrainingScreen extends StatefulWidget {
     final Stream<Map<String, dynamic>> dataStream;
     final DecryptedData decryptedDataHandler;
+    final Function(int) onTabTapped;
 
     const TrainingScreen({
       super.key,
       required this.dataStream,
       required this.decryptedDataHandler,
+      required this.onTabTapped,
     });
 
     @override
     _TrainingScreenState createState() => _TrainingScreenState();
   }
 
-  class _TrainingScreenState extends State<TrainingScreen> {
+  class _TrainingScreenState extends State<TrainingScreen> with AutomaticKeepAliveClientMixin {
+
+    @override
+    bool get wantKeepAlive => true;
     String connectionStatus = "Disconnected";
     int compressionCount = 0;
     int correctWeight = 0;
@@ -187,23 +190,16 @@
 
     @override
     Widget build(BuildContext context) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Training Mode'),
-          actions: [
-            AccountMenu(decryptedDataHandler: widget.decryptedDataHandler),
-          ],
-        ),
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
+      super.build(context); // ✅ must call this
+      return Stack(
+        children: [
+          Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -261,6 +257,32 @@
                             ),
                             child: const Text('Save Session'),
                           ),
+
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              if (globalBLEConnection.isConnected()) {
+                                widget.onTabTapped(1); // ✅ Navigate to LiveCPR tab
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('No active Bluetooth connection'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+
+                            icon: const Icon(Icons.monitor_heart),
+                            label: const Text("View Live CPR Feedback"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              textStyle: const TextStyle(fontSize: 18),
+                            ),
+                          ),
+
+
                           const SizedBox(height: 10),
 
                           TextButton(
@@ -282,18 +304,10 @@
                       ),
                     ),
                   ),
-                ),
               ],
             ),
-
-            // ✅ BLE Connection Status Indicator (Bottom Right)
-            BLEStatusIndicator(
-              bleConnection: globalBLEConnection,
-              connectionStatusNotifier: globalBLEConnection.connectionStatusNotifier, // ✅ Pass ValueNotifier
-            ),
           ],
-        ),
-      );
+        );
     }
 
     /// 📦 **Reusable UI Box for Metrics**

@@ -6,6 +6,16 @@ import '../services/decrypted_data.dart';
 
 class BLEConnection {
   static BLEConnection? _instance; // ✅ Track the single instance
+  static BLEConnection get instance {
+    if (_instance == null) {
+      throw Exception("BLEConnection not initialized");
+    }
+    return _instance!;
+  }
+
+  Stream<Map<String, dynamic>> get dataStream => decryptedDataHandler.dataStream;
+
+  BluetoothCharacteristic? liveCharacteristic;
 
   factory BLEConnection({
     required DecryptedData decryptedDataHandler,
@@ -28,12 +38,15 @@ class BLEConnection {
     _disableBleLogs();
     _listenToAdapterState();
 
-    Future.delayed(const Duration(seconds: 1), () async {
-      if (await isBluetoothOn()) {
-        scanAndConnect(); // ✅ Start scanning ONLY if Bluetooth is ON
-      } else {
-        _updateConnectionStatus("Bluetooth OFF");
-      }
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      FlutterBluePlus.adapterState.first.then((state) {
+        if (state == BluetoothAdapterState.on) {
+          scanAndConnect();
+        } else {
+          _updateConnectionStatus("Bluetooth OFF");
+        }
+      });
     });
   }
 
@@ -50,6 +63,8 @@ class BLEConnection {
   final Function(String) onStatusUpdate;
 
   String? _lastStatus; // ✅ Track last status to prevent duplicates
+  int _connectionAttempts = 0; // Track how many times we've tried to reconnect
+
 
   void _updateConnectionStatus(String status) {
     if (_lastStatus == status) return; // ✅ Avoid duplicate updates
@@ -116,6 +131,12 @@ class BLEConnection {
       return;
     }
 
+    // Exponential backoff delay
+    final delaySeconds = _getBackoffDelay(_connectionAttempts);
+    _connectionAttempts++;
+    debugPrint("⏳ Waiting $delaySeconds sec before scanning (attempt $_connectionAttempts)");
+    await Future.delayed(Duration(seconds: delaySeconds));
+
     isScanning = true;
     _updateConnectionStatus("Scanning for Arduino...");
 
@@ -133,6 +154,7 @@ class BLEConnection {
           debugPrint("✅ Found Arduino, stopping scan...");
           FlutterBluePlus.stopScan();
           isScanning = false;
+          _connectionAttempts = 0; // ✅ Reset attempts on success
           connectToDevice(result.device);
           return;
         }
@@ -146,8 +168,16 @@ class BLEConnection {
       FlutterBluePlus.stopScan();
       _updateConnectionStatus("Arduino Not Found");
     }
+
     isScanning = false;
   }
+
+  int _getBackoffDelay(int attempts) {
+    if (attempts <= 1) return 5;
+    final delay = 5 * attempts;
+    return delay.clamp(5, 30); // Cap delay at 30 sec
+  }
+
 
   /// **Connect to Arduino**
   Future<void> connectToDevice(BluetoothDevice device) async {
@@ -178,6 +208,8 @@ class BLEConnection {
       try {
         final service = services.firstWhere((s) => s.uuid.toString() == serviceUuid);
         final characteristic = service.characteristics.firstWhere((c) => c.uuid.toString() == characteristicUuid);
+        liveCharacteristic = characteristic; // ✅ Store the reference
+
 
         characteristic.setNotifyValue(true).then((_) {
           debugPrint("✅ BLE Notifications Enabled");

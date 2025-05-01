@@ -218,6 +218,19 @@ class NetworkService {
     return key;
   }
 
+  static Future<void> updateAEDLocation(Map<String, dynamic> aedData) async {
+    final response = await post(
+      "/aed/locations/update",
+      {"aed_list": [aedData]},
+      requiresAuth: false,
+    );
+
+    if (response == null || response['status'] != 'success') {
+      throw Exception("Backend AED update failed");
+    }
+  }
+
+
 
   static Future<String?> fetchGoogleMapsApiKey() async {
     try {

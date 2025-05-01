@@ -1,0 +1,1 @@
+C:\Users\evaro\Personal Apps\CPR-Assist-Glove\CPR-Assist-App\cpr_assist\build\app\intermediates\cxx\Debug\28194c3m\obj\arm64-v8a

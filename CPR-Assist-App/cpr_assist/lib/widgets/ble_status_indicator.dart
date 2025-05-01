@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../services/ble_connection.dart';
 
 class BLEStatusIndicator extends StatefulWidget {
   final BLEConnection bleConnection;
-  final ValueNotifier<String> connectionStatusNotifier; // ✅ Listen to BLE status updates
+  final ValueNotifier<String> connectionStatusNotifier;
 
   const BLEStatusIndicator({
     super.key,
@@ -29,75 +30,35 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   }
 
   void _updateState() {
-    if (mounted) {
-      setState(() {}); // ✅ Trigger rebuild when BLE status changes
+    if (mounted) setState(() {});
+  }
+
+  String _getBluetoothIcon(String status) {
+    switch (status) {
+      case "Connected":
+        return 'assets/icons/bluetooth_on.svg';
+      case "Scanning for Arduino...":
+        return 'assets/icons/bluetooth_search.svg';
+      case "Arduino Not Found":
+        return 'assets/icons/bluetooth_retry.svg';
+      case "Bluetooth OFF":
+        return 'assets/icons/bluetooth_search.svg';
+      default:
+        return 'assets/icons/bluetooth_off.svg';
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      bottom: 12,
-      right: 12,
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: widget.connectionStatusNotifier.value == "Arduino Not Found"
-                ? () {
-              debugPrint("🔄 Retrying BLE scan...");
-              widget.bleConnection.scanAndConnect();
-            }
-                : null,
-            child: Icon(
-              _getIconForStatus(widget.connectionStatusNotifier.value),
-              color: _getColorForStatus(widget.connectionStatusNotifier.value),
-              size: 28,
-            ),
-          ),
-          if (widget.connectionStatusNotifier.value == "Arduino Not Found") ...[
-            const SizedBox(height: 6),
-            const Text(
-              "Retry",
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.orange,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ],
+    final status = widget.connectionStatusNotifier.value;
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      child: SvgPicture.asset(
+        _getBluetoothIcon(status),
+        width: 22,
+        height: 22,
       ),
     );
-  }
-
-  IconData _getIconForStatus(String status) {
-    switch (status) {
-      case "Connected":
-        return Icons.check_circle;
-      case "Arduino Not Found":
-        return Icons.refresh;
-      case "Bluetooth OFF":
-        return Icons.bluetooth_disabled;
-      case "Scanning for Arduino...": // ✅ New state
-        return Icons.search; // 🔍 Use a search icon to indicate scanning
-      default:
-        return Icons.cancel;
-    }
-  }
-
-
-  Color _getColorForStatus(String status) {
-    switch (status) {
-      case "Connected":
-        return Colors.green;
-      case "Arduino Not Found":
-        return Colors.orange;
-      case "Bluetooth OFF":
-        return Colors.grey;
-      case "Scanning...": // ✅ New state
-        return Colors.blue; // 🔵 Scanning color
-      default:
-        return Colors.red;
-    }
   }
 }
