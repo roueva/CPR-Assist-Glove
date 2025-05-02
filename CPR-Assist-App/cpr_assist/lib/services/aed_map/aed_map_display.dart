@@ -134,23 +134,29 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         context: context,
         removeTop: true,
         removeBottom: true,
-        child: Stack(
-          children: [
+      child: Stack(
+        children: [
           _buildGoogleMap(),
-            _buildRecenterOrLoadingButton(),
-            if (widget.config.selectedAED != null && !widget.config.navigationMode)
+
+          // 🟢 Recenter OR Loading button (never show both)
+          _buildRecenterOrLoadingButton(),
+
+          if (widget.config.selectedAED != null && !widget.config.navigationMode)
             _buildTransportButtons(),
-            if (widget.config.hasSelectedRoute && !widget.config.navigationMode)
-              _buildCloseButton(),
-            if (!widget.config.isLoading &&
-                widget.config.aedLocations.isNotEmpty &&
-                !widget.config.navigationMode &&
-                !widget.config.hasSelectedRoute)
-              _buildAEDListPanel(),
-            if (widget.config.hasSelectedRoute)
-              _buildNavigationPanel(),
-          ],
-        )
+
+          if (widget.config.hasSelectedRoute && !widget.config.navigationMode)
+            _buildCloseButton(),
+
+          if (!widget.config.isLoading &&
+              widget.config.aedLocations.isNotEmpty &&
+              !widget.config.navigationMode &&
+              !widget.config.hasSelectedRoute)
+            _buildAEDListPanel(),
+
+          if (widget.config.hasSelectedRoute)
+            _buildNavigationPanel(),
+        ],
+      ),
     );
   }
 
@@ -223,8 +229,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     final isRefreshing = widget.config.isRefreshingAEDs;
 
     return Positioned(
-      top: 6,
-      right: 6,
+      top: 12,
+      right: 12,
       child: isRefreshing
           ? const SizedBox(
         width: 40,
@@ -248,7 +254,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       ),
     );
   }
-
 
   Widget _buildCloseButton() {
     return Positioned(
@@ -390,94 +395,94 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       padding: const EdgeInsets.all(16),
       child: ListView(
         controller: scrollController,
-          children: [
-            /// Grab Handle
-            Center(
-              child: Container(
-                width: 56,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFBFBFBF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
+        children: [
+          /// Grab Handle
+          Center(
+            child: Container(
+              width: 56,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFBFBFBF),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
+          ),
 
-            /// Main content (controlled via IF/ELSE)
-            if (hasUserLocation) ...[
-              /// Section: Nearest Defibrillator
-              Text(
-                "Nearest Defibrillator",
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF2C2C2C),
-                ),
+          /// Main content (controlled via IF/ELSE)
+          if (hasUserLocation) ...[
+            /// Section: Nearest Defibrillator
+            Text(
+              "Nearest Defibrillator",
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2C2C2C),
               ),
-              const SizedBox(height: 8),
-              _buildAEDCard(
-                aed: sortedAEDs.first,
-                distance: Geolocator.distanceBetween(
-                  widget.config.userLocation!.latitude,
-                  widget.config.userLocation!.longitude,
-                  sortedAEDs.first.location.latitude,
-                  sortedAEDs.first.location.longitude,
-                ).round(),
-                onTap: () => widget.onSmallMapTap(sortedAEDs.first.location),
+            ),
+            const SizedBox(height: 8),
+            _buildAEDCard(
+              aed: sortedAEDs.first,
+              distance: Geolocator.distanceBetween(
+                widget.config.userLocation!.latitude,
+                widget.config.userLocation!.longitude,
+                sortedAEDs.first.location.latitude,
+                sortedAEDs.first.location.longitude,
+              ).round(),
+              onTap: () => widget.onSmallMapTap(sortedAEDs.first.location),
+              showButton: true,
+              isFirst: true,
+            ),
+            const SizedBox(height: 12),
+
+            /// Section: Other
+            Text(
+              "Other",
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2C2C2C),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            ...List.generate(sortedAEDs.length - 1, (i) {
+              final aed = sortedAEDs[i + 1];
+              final distance = Geolocator.distanceBetween(
+                widget.config.userLocation!.latitude,
+                widget.config.userLocation!.longitude,
+                aed.location.latitude,
+                aed.location.longitude,
+              ).round();
+
+              return _buildAEDCard(
+                aed: aed,
+                distance: distance,
+                onTap: () => widget.onSmallMapTap(aed.location),
                 showButton: true,
-                isFirst: true,
+              );
+            }),
+          ] else ...[
+            /// Fallback: No location
+            Text(
+              "List of AEDs",
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2C2C2C),
               ),
-              const SizedBox(height: 12),
-
-              /// Section: Other
-              Text(
-                "Other",
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF2C2C2C),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              ...List.generate(sortedAEDs.length - 1, (i) {
-                final aed = sortedAEDs[i + 1];
-                final distance = Geolocator.distanceBetween(
-                  widget.config.userLocation!.latitude,
-                  widget.config.userLocation!.longitude,
-                  aed.location.latitude,
-                  aed.location.longitude,
-                ).round();
-
-                return _buildAEDCard(
-                  aed: aed,
-                  distance: distance,
-                  onTap: () => widget.onSmallMapTap(aed.location),
-                  showButton: true,
-                );
-              }),
-            ] else ...[
-              /// Fallback: No location
-              Text(
-                "List of AEDs",
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF2C2C2C),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ...List.generate(sortedAEDs.length, (i) {
-                return _buildAEDCard(
-                  aed: sortedAEDs[i],
-                  distance: null, // no location = no distance
-                  onTap: () => widget.onSmallMapTap(sortedAEDs[i].location),
-                  showButton: true,
-                );
-              }),
-            ],
+            ),
+            const SizedBox(height: 8),
+            ...List.generate(sortedAEDs.length, (i) {
+              return _buildAEDCard(
+                aed: sortedAEDs[i],
+                distance: null, // no location = no distance
+                onTap: () => widget.onSmallMapTap(sortedAEDs[i].location),
+                showButton: true,
+              );
+            }),
           ],
+        ],
       ),
     );
   }
