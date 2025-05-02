@@ -137,10 +137,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         child: Stack(
           children: [
           _buildGoogleMap(),
-            if (widget.config.isRefreshingAEDs) _buildLoadingIndicator(),
+            _buildRecenterOrLoadingButton(),
             if (widget.config.selectedAED != null && !widget.config.navigationMode)
             _buildTransportButtons(),
-            _buildRecenterButton(),
             if (widget.config.hasSelectedRoute && !widget.config.navigationMode)
               _buildCloseButton(),
             if (!widget.config.isLoading &&
@@ -205,26 +204,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     }
   }
 
-  Widget _buildLoadingIndicator() {
-    return Positioned(
-      bottom: 16,
-      right: 16,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-        ),
-        child: const Padding(
-          padding: EdgeInsets.all(6),
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTransportButtons() {
     return Positioned(
       bottom: 90,
@@ -240,19 +219,36 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   }
 
 
-  Widget _buildRecenterButton() {
+  Widget _buildRecenterOrLoadingButton() {
+    final isRefreshing = widget.config.isRefreshingAEDs;
+
     return Positioned(
-      top: 4,
-      right: 4,
-      child: FloatingActionButton(
+      top: 6,
+      right: 6,
+      child: isRefreshing
+          ? const SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF194E9D)),
+          ),
+        ),
+      )
+          : FloatingActionButton(
         heroTag: "recenter_button",
-        backgroundColor: Colors.white,
         onPressed: widget.onRecenterPressed,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 3,
         mini: true,
-        child: const Icon(Icons.my_location, color: Colors.black),
+        shape: const CircleBorder(), // ✅ Ensures perfect circle
+        child: const Icon(Icons.my_location),
       ),
     );
   }
+
 
   Widget _buildCloseButton() {
     return Positioned(

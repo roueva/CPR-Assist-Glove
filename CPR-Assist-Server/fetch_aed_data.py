@@ -10,7 +10,9 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 OPENAEDMAP_URL = "https://openaedmap.org/api/v1/countries/GR.geojson"
 
 # Your Backend API Endpoint
-BACKEND_URL = "http://localhost:3000/aed/update"  # ✅ Adjust if backend runs on a different port
+BACKEND_URL = "http://localhost:8080/aed/bulk-update"
+# BACKEND_URL = "https://cpr-assist-app.up.railway.app/aed/bulk-update"
+
 
 # Overpass API Query for AEDs in Greece & Cyprus
 OVERPASS_QUERY = """
@@ -31,7 +33,6 @@ out body;
 
 def fetch_overpass_data():
     """Fetch AED locations from Overpass API"""
-    print("Fetching AED data from Overpass API...")
     try:
         response = requests.post(OVERPASS_URL, data=OVERPASS_QUERY, timeout=60)
         response.raise_for_status()
@@ -43,7 +44,7 @@ def fetch_overpass_data():
                 "latitude": aed.get("lat"),
                 "longitude": aed.get("lon"),
                 "name": aed.get("tags", {}).get("name", "Unknown"),
-                "address": aed.get("tags", {}).get("addr:full", "Unknown Address"),
+                "address": aed.get("tags", {}).get("addr:full", "unknown"),
                 "emergency": "defibrillator",
                 "operator": aed.get("tags", {}).get("operator", "Unknown"),
                 "indoor": aed.get("tags", {}).get("indoor", "no") == "yes",
@@ -63,7 +64,6 @@ def fetch_overpass_data():
 
 def fetch_openaedmap_data():
     """Fetch AED locations from OpenAEDMap"""
-    print("Fetching AED data from OpenAEDMap...")
     try:
         response = requests.get(OPENAEDMAP_URL)
         response.raise_for_status()
@@ -76,7 +76,7 @@ def fetch_openaedmap_data():
                 "latitude": feature["geometry"]["coordinates"][1],
                 "longitude": feature["geometry"]["coordinates"][0],
                 "name": feature["properties"].get("name", "Unknown"),
-                "address": feature["properties"].get("address", "Unknown Address"),
+                "address": feature["properties"].get("address", "unknown"),
                 "emergency": "defibrillator",
                 "operator": feature["properties"].get("operator", "Unknown"),
                 "indoor": feature["properties"].get("indoor", "no") == "yes",
@@ -123,7 +123,6 @@ def merge_and_send_data():
     try:
         response = requests.post(BACKEND_URL, json=final_data, headers={'Content-Type': 'application/json'}, timeout=30)
         response.raise_for_status()
-        print("✅ AED data updated successfully:", response.json())
     except requests.exceptions.RequestException as e:
         print(f"❌ Failed to update AED data: {e}")
 
@@ -132,7 +131,7 @@ def save_to_excel(aed_data):
     """Save AED data to an Excel file"""
     df = pd.DataFrame(aed_data)
     df.to_excel("aed_locations.xlsx", index=False)
-    print("✅ AED data saved to aed_locations.xlsx")
+    print("AED data saved to aed_locations.xlsx")
 
 if __name__ == "__main__":
     aed_data = merge_and_send_data()

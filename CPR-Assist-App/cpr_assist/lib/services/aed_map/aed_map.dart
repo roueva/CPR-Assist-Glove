@@ -215,12 +215,10 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
       _state = _state.copyWith(
         navigation: _state.navigation.copyWith(
           destination: aedLocation,
-          isActive: false, // ❗ not active yet
+          isActive: false,
         ),
       );
     });
-
-    // ✅ That's it — no fetching route, no looking up AED
   }
 
 
