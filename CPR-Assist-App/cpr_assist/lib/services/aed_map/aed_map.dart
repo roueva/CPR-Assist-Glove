@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../models/aed.dart';
 import '../network_service.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
@@ -34,7 +35,7 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
   MapViewController? _mapViewController;   // Map animation controller
   StreamSubscription<ServiceStatus>? _serviceStatusSubscription;  // Location service status subscription
   bool _isLocationAvailable = true;
-
+  List<AED> _lastFetchedAEDs = [];
 
 
   @override
@@ -163,9 +164,9 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
       final aedRepository = AEDRepository();
       final aeds = await aedRepository.fetchAEDs(forceRefresh: isRefresh);
 
-      // ❗ NO SORTING by distance yet ❗
-      final sortedAEDs = aeds;
+      _lastFetchedAEDs = aeds; // ✅ Store latest
 
+      final sortedAEDs = aeds; // (you could sort here if needed)
       final markers = aedRepository.createMarkers(sortedAEDs, _startNavigation);
 
       setState(() {
@@ -178,7 +179,6 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
       });
     } catch (error) {
       print("❌ Error fetching AEDs: $error");
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -242,11 +242,12 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
         );
       });
 
-      if (_mapViewController != null) {
-        _mapViewController!.updateMapView(
-          MapViewRequest.routeAndEndpoints(routeResult.points, padding: 40),
-        );
-      }
+      await _mapViewController?.updateMapView(
+        MapViewRequest.routeAndEndpoints(
+          points: [...routeResult.points, origin, destination],
+          padding: MediaQuery.of(context).size.height * 0.30,
+        ),
+      );
     }
   }
 
@@ -390,13 +391,28 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
     if (_positionSubscription?.isPaused ?? false) {
       _positionSubscription?.resume();
     }
-    _fetchAEDLocations(isRefresh: true);
 
     // 🛰️ Check if GPS is available
     final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
     setState(() {
       _isLocationAvailable = isServiceEnabled;
     });
+
+    // 👇 New silent AED refresh logic
+    final aedRepository = AEDRepository();
+    final newAEDs = await aedRepository.fetchAEDs(forceRefresh: true);
+    final changed = aedRepository.haveAEDsChanged(_lastFetchedAEDs, newAEDs);
+
+    if (changed) {
+      _lastFetchedAEDs = newAEDs; // ✅ Update the cache
+      final markers = aedRepository.createMarkers(newAEDs, _startNavigation);
+      setState(() {
+        _state = _state.copyWith(
+          aedList: newAEDs,
+          markers: markers,
+        );
+      });
+    }
   }
 
 
@@ -435,7 +451,9 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
               navigation: _state.navigation.copyWith(transportMode: mode)
           );
         });
-        if (_state.navigation.destination != null && _state.userLocation != null) {
+        if (_state.navigation.isActive &&
+            _state.navigation.destination != null &&
+            _state.userLocation != null) {
           _fetchRoute(_state.userLocation!, _state.navigation.destination!, mode);
         }
       },

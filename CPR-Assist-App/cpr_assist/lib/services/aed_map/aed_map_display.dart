@@ -134,29 +134,22 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         context: context,
         removeTop: true,
         removeBottom: true,
-      child: Stack(
-        children: [
-          _buildGoogleMap(),
-
-          // 🟢 Recenter OR Loading button (never show both)
-          _buildRecenterOrLoadingButton(),
-
-          if (widget.config.selectedAED != null && !widget.config.navigationMode)
-            _buildTransportButtons(),
-
-          if (widget.config.hasSelectedRoute && !widget.config.navigationMode)
-            _buildCloseButton(),
-
-          if (!widget.config.isLoading &&
-              widget.config.aedLocations.isNotEmpty &&
-              !widget.config.navigationMode &&
-              !widget.config.hasSelectedRoute)
-            _buildAEDListPanel(),
-
-          if (widget.config.hasSelectedRoute)
-            _buildNavigationPanel(),
-        ],
-      ),
+        child: Stack(
+          children: [
+            _buildGoogleMap(),
+            if (widget.config.isRefreshingAEDs) _buildLoadingIndicator(),
+            if (widget.config.selectedAED != null && !widget.config.navigationMode)
+              _buildTransportButtons(),
+            _buildRecenterButton(),
+            if (!widget.config.isLoading &&
+                widget.config.aedLocations.isNotEmpty &&
+                !widget.config.navigationMode &&
+                !widget.config.hasSelectedRoute)
+              _buildAEDListPanel(),
+            if (widget.config.hasSelectedRoute)
+              _buildNavigationSheet(),
+          ],
+        )
     );
   }
 
@@ -210,6 +203,26 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     }
   }
 
+  Widget _buildLoadingIndicator() {
+    return Positioned(
+      bottom: 70,
+      right: 16,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(6),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTransportButtons() {
     return Positioned(
       bottom: 90,
@@ -225,49 +238,22 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   }
 
 
-  Widget _buildRecenterOrLoadingButton() {
-    final isRefreshing = widget.config.isRefreshingAEDs;
-
+  Widget _buildRecenterButton() {
     return Positioned(
-      top: 12,
-      right: 12,
-      child: isRefreshing
-          ? const SizedBox(
-        width: 40,
-        height: 40,
-        child: Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF194E9D)),
-          ),
-        ),
-      )
-          : FloatingActionButton(
-        heroTag: "recenter_button",
-        onPressed: widget.onRecenterPressed,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 3,
-        mini: true,
-        shape: const CircleBorder(), // ✅ Ensures perfect circle
-        child: const Icon(Icons.my_location),
-      ),
-    );
-  }
-
-  Widget _buildCloseButton() {
-    return Positioned(
-      top: 16,
-      left: 16,
+      top: 4,
+      right: 4,
       child: FloatingActionButton(
-        heroTag: "close_preview_button",
+        heroTag: "recenter_button",
         backgroundColor: Colors.white,
-        onPressed: widget.onCancelNavigation,
+        onPressed: widget.onRecenterPressed,
         mini: true,
-        child: const Icon(Icons.close, color: Colors.black),
+        shape: const CircleBorder(), // 👈 ensures circular shape on all platforms
+        elevation: 2,
+        child: const Icon(Icons.my_location, color: Colors.black),
       ),
     );
   }
+
 
   Widget _buildAEDListPanel() {
     return DraggableScrollableSheet(
@@ -280,15 +266,147 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildNavigationPanel() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: _buildNavigationPreview(),
+  Widget _buildNavigationSheet() {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.35,
+      minChildSize: 0.12,
+      maxChildSize: 0.35,
+      builder: (context, scrollController) {
+        final selectedAedInfo = widget.config.aeds.firstWhere(
+              (aed) =>
+          aed.location.latitude == widget.config.selectedAED?.latitude &&
+              aed.location.longitude == widget.config.selectedAED?.longitude,
+          orElse: () => AED(
+            id: -1,
+            name: 'Unknown AED',
+            address: "Selected AED",
+            location: widget.config.selectedAED!,
+          ),
+        );
+
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8)],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            children: [
+              /// Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+
+              /// Title row: Address + Close
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(
+                    child: Text(
+                      selectedAedInfo.address,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Positioned(
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close Navigation',
+                        onPressed: widget.onCancelNavigation,
+                      )
+                  )
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              /// ETA, Distance, Mode
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildInfoColumn(Icons.access_time, widget.config.estimatedTime, "ETA"),
+                  _buildInfoColumn(
+                      Icons.straighten,
+                      widget.config.distance != null
+                          ? (widget.config.distance! < 1000
+                          ? "${widget.config.distance!.round()} m"
+                          : "${(widget.config.distance! / 1000).toStringAsFixed(1)} km")
+                          : "N/A",
+                      "Distance"),
+                  _buildInfoColumn(
+                    widget.config.selectedMode == "walking"
+                        ? Icons.directions_walk
+                        : Icons.directions_car,
+                    widget.config.selectedMode == "walking" ? "Walking" : "Driving",
+                    "Mode",
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              /// Buttons row
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: widget.config.selectedAED != null
+                          ? () => widget.onStartNavigation(widget.config.selectedAED!)
+                          : null,
+                      child: const Text("Start Navigation", style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(Icons.map_outlined),
+                    tooltip: "Open in Maps",
+                    onPressed: widget.config.selectedAED != null
+                        ? () => widget.onExternalNavigation?.call(widget.config.selectedAED!)
+                        : null,
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey.shade200,
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        );
+      },
     );
   }
 
+  Widget _buildInfoColumn(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.blue),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+      ],
+    );
+  }
 
   Widget _buildAEDCard({
     required AED aed,
@@ -483,210 +601,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             }),
           ],
         ],
-      ),
-    );
-  }
-
-  // 🗺️ Navigation Preview interface (Google Maps style)
-  Widget _buildNavigationPreview() {
-    // Find the selected AED info
-    AED? selectedAedInfo;
-
-    if (widget.config.selectedAED != null) {
-      for (final aed in widget.config.aeds) {
-        if (aed.location.latitude == widget.config.selectedAED!.latitude &&
-            aed.location.longitude == widget.config.selectedAED!.longitude) {
-          selectedAedInfo = aed;
-          break;
-        }
-      }
-    }
-
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          boxShadow: [BoxShadow(color: Colors.black26,
-              blurRadius: 8,
-              offset: Offset(0, -2))
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Bar indicator
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 8, bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-
-            // AED address
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: selectedAedInfo != null
-                  ? Text(
-                selectedAedInfo.address,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-                  : const Text(
-                "Selected AED",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-
-            // Time and distance row
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  // Time indicator
-                  Column(
-                    children: [
-                      const Icon(Icons.access_time, color: Colors.blue),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.config.estimatedTime,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        "ETA",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Distance indicator
-                  Column(
-                    children: [
-                      const Icon(Icons.straighten, color: Colors.blue),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.config.distance != null
-                            ? widget.config.distance! < 1000
-                            ? "${widget.config.distance!.round()} m"
-                            : "${(widget.config.distance! / 1000)
-                            .toStringAsFixed(1)} km"
-                            : "N/A",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        "Distance",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Mode indicator
-                  Column(
-                    children: [
-                      Icon(
-                        widget.config.selectedMode == "walking"
-                            ? Icons.directions_walk
-                            : Icons.directions_car,
-                        color: Colors.blue,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.config.selectedMode == "walking"
-                            ? "Walking"
-                            : "Driving",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        "Mode",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Buttons row
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 14),
-              child: Row(
-                children: [
-                  // Start navigation button
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: widget.config.selectedAED != null
-                          ? () =>
-                          widget.onStartNavigation(widget.config.selectedAED!)
-                          : null,
-                      child: const Text(
-                        "Start Navigation",
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // External maps button
-                  IconButton(
-                    icon: const Icon(Icons.map_outlined),
-                    onPressed: widget.config.selectedAED != null
-                        ? () =>
-                        widget.onExternalNavigation?.call(
-                            widget.config.selectedAED!)
-                        : null,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.grey.shade200,
-                    ),
-                    tooltip: "Open in Maps",
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

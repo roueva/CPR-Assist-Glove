@@ -161,6 +161,20 @@ class AEDRepository {
 
     return sorted;
   }
+
+  bool haveAEDsChanged(List<AED> oldList, List<AED> newList) {
+    if (oldList.length != newList.length) return true;
+    for (int i = 0; i < oldList.length; i++) {
+      if (oldList[i].id != newList[i].id ||
+          oldList[i].location.latitude != newList[i].location.latitude ||
+          oldList[i].location.longitude != newList[i].location.longitude ||
+          oldList[i].address != newList[i].address) {
+        return true;
+      }
+    }
+    return false;
+  }
+
 }
 
 // -- AEDCache --
