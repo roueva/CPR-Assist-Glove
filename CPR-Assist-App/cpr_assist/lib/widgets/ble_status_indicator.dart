@@ -42,7 +42,7 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
       case "Arduino Not Found":
         return 'assets/icons/bluetooth_retry.svg';
       case "Bluetooth OFF":
-        return 'assets/icons/bluetooth_search.svg';
+        return 'assets/icons/bluetooth_off.svg';
       default:
         return 'assets/icons/bluetooth_off.svg';
     }

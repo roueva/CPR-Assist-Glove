@@ -99,7 +99,7 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
 
   Future<void> _onMapCreated(GoogleMapController controller) async {
     _mapController = controller;
-    _mapViewController = MapViewController(controller);
+    _mapViewController = MapViewController(controller, context); // Pass context here
     _mapIsReady = true;
 
     if (!_mapReadyCompleter.isCompleted) {
@@ -135,6 +135,9 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
       _state = _state.copyWith(userLocation: location);
       _isLocationAvailable = true;
     });
+    if (_state.navigation.isActive && _currentHeading != null) {
+      _animateCameraToUserWithHeading(location, _currentHeading!);
+    }
 
     if (previousLocation == null) {
       _resortAEDs();
@@ -144,7 +147,9 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
     final distance = LocationService.distanceBetween(previousLocation, location);
     if (distance > 10) {
       _resortAEDs();
-      if (_state.aedList.isNotEmpty && _state.navigation.isActive) {
+
+      // ✅ Only enable navigation camera if real navigation has started
+      if (_state.aedList.isNotEmpty && _state.navigation.hasStarted) {
         _mapViewController?.enableNavigationMode(
           _state.userLocation!,
           _currentHeading,
@@ -166,8 +171,14 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
 
       _lastFetchedAEDs = aeds; // ✅ Store latest
 
-      final sortedAEDs = aeds; // (you could sort here if needed)
-      final markers = aedRepository.createMarkers(sortedAEDs, _startNavigation);
+      final userLocation = _state.userLocation;
+      final sortedAEDs = userLocation != null
+          ? aedRepository.sortAEDsByDistance(aeds, userLocation)
+          : aeds;
+      final markers = aedRepository.createMarkers(
+        sortedAEDs,
+        _showNavigationPreviewForAED, // ✅ Preview only
+      );
 
       setState(() {
         _state = _state.copyWith(
@@ -210,45 +221,64 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
     });
   }
 
-  Future<void> _onSmallMapTap(LatLng aedLocation) async {
+  Future<void> _showNavigationPreviewForAED(LatLng aedLocation) async {
+    final currentLocation = await _locationService.getCurrentLatLng();
+    if (currentLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not get current location')),
+      );
+      return;
+    }
+
     setState(() {
       _state = _state.copyWith(
         navigation: _state.navigation.copyWith(
+          isActive: true,
           destination: aedLocation,
-          isActive: false,
+          route: null,
+          estimatedTime: '',
+          distance: null,
+          hasStarted: false,
         ),
       );
     });
-  }
 
-
-
-  Future<void> _fetchRoute(LatLng origin, LatLng destination, String mode) async {
-    if (!_mapIsReady || _mapController == null || !mounted) return;
-
-    final routeService = RouteService(_googleMapsApiKey ?? '');
-    final routeResult = await routeService.fetchRoute(origin, destination, mode);
+    // ✅ FIX: Add this line to actually fetch the route
+    final routeResult = await _calculateRoute(
+      currentLocation,
+      aedLocation,
+      _state.navigation.transportMode,
+    );
 
     if (routeResult != null) {
-      final distance = LocationService.distanceBetween(origin, destination);
-
       setState(() {
         _state = _state.copyWith(
-            navigation: _state.navigation.copyWith(
-              route: routeResult.polyline,
-              estimatedTime: routeResult.duration,
-              distance: distance,
-            )
+          navigation: _state.navigation.copyWith(
+            route: routeResult.polyline,
+            estimatedTime: routeResult.duration,
+            distance: LocationService.distanceBetween(currentLocation, aedLocation),
+          ),
         );
       });
 
-      await _mapViewController?.updateMapView(
-        MapViewRequest.routeAndEndpoints(
-          points: [...routeResult.points, origin, destination],
-          padding: MediaQuery.of(context).size.height * 0.30,
-        ),
+      await _mapViewController?.zoomToUserAndAED(
+        userLocation: currentLocation,
+        aedLocation: aedLocation,
+        polylinePoints: routeResult.points,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not generate route')),
       );
     }
+  }
+
+
+  Future<RouteResult?> _calculateRoute(LatLng origin, LatLng destination, String mode) async {
+    if (!_mapIsReady || _mapController == null || !mounted) return null;
+
+    final routeService = RouteService(_googleMapsApiKey ?? '');
+    return await routeService.fetchRoute(origin, destination, mode);
   }
 
   void _startNavigation(LatLng aedLocation) async {
@@ -266,18 +296,64 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
       return;
     }
 
+    _compassSubscription?.cancel(); // prevent duplicates
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      _currentHeading = event.heading;
+      if (_state.navigation.isActive && _state.userLocation != null) {
+        _animateCameraToUserWithHeading(_state.userLocation!, _currentHeading!);
+      }
+    });
+
+
     setState(() {
       _state = _state.copyWith(
         navigation: _state.navigation.copyWith(
           isActive: true,
           destination: aedLocation,
+          hasStarted: true,
         ),
       );
     });
 
-    await _fetchRoute(currentLocation, aedLocation, _state.navigation.transportMode);
+    final routeResult = await _calculateRoute(
+      currentLocation,
+      aedLocation,
+      _state.navigation.transportMode,
+    );
+
+    if (routeResult != null) {
+      final distance = LocationService.distanceBetween(currentLocation, aedLocation);
+
+      setState(() {
+        _state = _state.copyWith(
+          navigation: _state.navigation.copyWith(
+            route: routeResult.polyline,
+            estimatedTime: routeResult.duration,
+            distance: distance,
+          ),
+        );
+      });
+
+      await _mapViewController?.zoomToUserAndAED(
+        userLocation: currentLocation,
+        aedLocation: aedLocation,
+        polylinePoints: routeResult.points,
+      );
+    }
   }
 
+  void _animateCameraToUserWithHeading(LatLng location, double heading) {
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: location,
+          zoom: 17.5,       // Not max zoom, feels a little softer
+          tilt: 45.0,       // Enough for perspective without extreme angle
+          bearing: heading, // Use compass heading for direction
+        ),
+      ),
+    );
+  }
 
   void _cancelNavigation() {
     _compassSubscription?.cancel();
@@ -442,7 +518,8 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
         navigationMode: _state.navigation.isActive,
         distance: _state.navigation.distance,
       ),
-      onSmallMapTap: _onSmallMapTap,
+      onSmallMapTap: _showNavigationPreviewForAED,
+      onPreviewNavigation: _showNavigationPreviewForAED,
       userLocationAvailable: _isLocationAvailable,
       onStartNavigation: _startNavigation,
       onTransportModeSelected: (mode) {
@@ -454,7 +531,28 @@ class _AEDMapWidgetState extends State<AEDMapWidget> with WidgetsBindingObserver
         if (_state.navigation.isActive &&
             _state.navigation.destination != null &&
             _state.userLocation != null) {
-          _fetchRoute(_state.userLocation!, _state.navigation.destination!, mode);
+          _calculateRoute(_state.userLocation!, _state.navigation.destination!, mode).then((routeResult) {
+            if (routeResult != null) {
+              setState(() {
+                _state = _state.copyWith(
+                  navigation: _state.navigation.copyWith(
+                    route: routeResult.polyline,
+                    estimatedTime: routeResult.duration,
+                    distance: LocationService.distanceBetween(
+                      _state.userLocation!,
+                      _state.navigation.destination!,
+                    ),
+                  ),
+                );
+              });
+
+              _mapViewController?.zoomToUserAndAED(
+                userLocation: _state.userLocation!,
+                aedLocation: _state.navigation.destination!,
+                polylinePoints: routeResult.points,
+              );
+            }
+          });
         }
       },
       onRecenterPressed: _recenterMapToUserAndAEDs,

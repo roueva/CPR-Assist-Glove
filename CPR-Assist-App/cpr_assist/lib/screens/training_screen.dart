@@ -4,7 +4,8 @@
   import 'package:shared_preferences/shared_preferences.dart';
   import '../main.dart';
   import '../services/decrypted_data.dart';
-  import 'login_screen.dart';
+  import 'live_cpr_screen.dart';
+import 'login_screen.dart';
   import 'past_sessions_screen.dart';
   import '../services/network_service.dart';
 
@@ -191,168 +192,150 @@
     @override
     Widget build(BuildContext context) {
       super.build(context); // ✅ must call this
-      return Stack(
-        children: [
-          Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildMetricBox('Patient Heart Rate', '${patientHeartRate ?? "N/A"} bpm'),
-                              _buildMetricBox('Patient Temperature', '${patientTemperature?.toStringAsFixed(1) ?? "N/A"} °C'),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
 
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.black),
-                            ),
-                            child: Table(
-                              columnWidths: const {0: FlexColumnWidth(), 1: FlexColumnWidth()},
-                              border: TableBorder.symmetric(
-                                inside: const BorderSide(color: Colors.black38),
-                              ),
-                              children: [
-                                _buildTableRow('Total Compressions', '$compressionCount'),
-                                _buildTableRow('Correct Frequency', '$correctFrequency'),
-                                _buildTableRow('Correct Weight', '$correctWeight'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
+      return Container(
+        color: const Color(0xFFEDF4F9),
+        child: StreamBuilder<Map<String, dynamic>>(
+          stream: widget.dataStream,
+          builder: (context, snapshot) {
+            final data = snapshot.data ?? {};
 
-                          Text(
-                            'Total Grade: ${totalGrade.toStringAsFixed(2)}%',
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 20),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildMetricBox('User Heart Rate', '${userHeartRate ?? "N/A"} bpm'),
-                              _buildMetricBox('User Temperature', '${userTemperatureRate?.toStringAsFixed(1) ?? "N/A"} °C'),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          ElevatedButton(
-                            onPressed: _saveSessionData,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                              textStyle: const TextStyle(fontSize: 18),
-                            ),
-                            child: const Text('Save Session'),
-                          ),
-
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              if (globalBLEConnection.isConnected()) {
-                                widget.onTabTapped(1); // ✅ Navigate to LiveCPR tab
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('No active Bluetooth connection'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-
-                            icon: const Icon(Icons.monitor_heart),
-                            label: const Text("View Live CPR Feedback"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurple,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                              textStyle: const TextStyle(fontSize: 18),
-                            ),
-                          ),
-
-
-                          const SizedBox(height: 10),
-
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (context) =>
-                                    PastSessionsScreen(
-                                      dataStream: widget.dataStream,
-                                      decryptedDataHandler: widget.decryptedDataHandler,
-                                    ),
-                              ));
-                            },
-                            child: const Text(
-                              'View Past Sessions',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const PatientVitalsCard(), // reuse same widget
+                  const SizedBox(height: 16),
+                  CprMetricsCard(
+                    frequency: (data['frequency'] as num?)?.toDouble() ?? 0,
+                    depth: (data['weight'] as num?)?.toDouble() ?? 0,
                   ),
-              ],
-            ),
-          ],
-        );
-    }
-
-    /// 📦 **Reusable UI Box for Metrics**
-    Widget _buildMetricBox(String title, String value) {
-      return Expanded( // ✅ Ensures the boxes take available space but don't force overflow
-        child: Container(
-          height: 90, // 🔹 Reduced height slightly to prevent overflow
-          margin: const EdgeInsets.symmetric(horizontal: 8), // 🔹 Adds space between boxes
-          padding: const EdgeInsets.all(10), // 🔹 Ensures content doesn't touch edges
-          decoration: BoxDecoration(
-            color: Colors.blue[100],
-            borderRadius: BorderRadius.circular(12), // ✅ Rounded corners
-            border: Border.all(color: Colors.black),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), // 🔹 Smaller font
-                textAlign: TextAlign.center,
+                  const SizedBox(height: 16),
+                  // Custom version of UserVitalsCard that replaces simulate button with save/past sessions
+                  _trainingUserVitalsCard(),
+                ],
               ),
-              const SizedBox(height: 5),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 14), // 🔹 Smaller font
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            );
+          },
         ),
       );
     }
 
-    /// 📊 **Reusable Table Row for Compression Metrics**
-    TableRow _buildTableRow(String metric, String value) {
-      return TableRow(
+    Widget _trainingUserVitalsCard() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(metric, style: const TextStyle(fontSize: 16)),
+          const Text(
+            "Your Vitals",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: Color(0xFF194E9D),
+            ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(13),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${userHeartRate ?? "N/A"} bpm",
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 20,
+                          color: Color(0xFF4D4A4A),
+                        ),
+                      ),
+                      const Text(
+                        "HEART RATE",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          color: Color(0xFF727272),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "${userTemperatureRate?.toStringAsFixed(1) ?? "N/A"}°C",
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 20,
+                          color: Color(0xFF4D4A4A),
+                        ),
+                      ),
+                      const Text(
+                        "TEMPERATURE",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          color: Color(0xFF727272),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _saveSessionData,
+            icon: const Icon(Icons.save),
+            label: const Text("Save Session"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              textStyle: const TextStyle(fontSize: 16),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PastSessionsScreen(
+                    dataStream: widget.dataStream,
+                    decryptedDataHandler: widget.decryptedDataHandler,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.history),
+            label: const Text("View Past Sessions"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              textStyle: const TextStyle(fontSize: 16),
+            ),
           ),
         ],
       );

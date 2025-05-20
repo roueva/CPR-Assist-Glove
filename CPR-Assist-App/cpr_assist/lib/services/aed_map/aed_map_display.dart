@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../models/aed.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../../utils/map_utils.dart';
 
 
@@ -59,6 +57,8 @@ class AEDMapDisplay extends StatefulWidget {
   final VoidCallback? onCancelNavigation;
   final Function(LatLng)? onExternalNavigation;
   final bool userLocationAvailable;
+  final Function(LatLng)? onPreviewNavigation;
+
 
   const AEDMapDisplay({
     super.key,
@@ -71,12 +71,21 @@ class AEDMapDisplay extends StatefulWidget {
     required this.onRecenterPressed,
     this.onCancelNavigation,
     this.onExternalNavigation,
-    required this.userLocationAvailable
+    required this.userLocationAvailable,
+    this.onPreviewNavigation,
   });
 
   @override
   State<AEDMapDisplay> createState() => _AEDMapDisplayState();
 }
+
+class _AEDWithDistance {
+  final AED aed;
+  final int distance;
+
+  _AEDWithDistance({required this.aed, required this.distance});
+}
+
 
 class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserver {
   String? _mapStyle;
@@ -138,8 +147,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           children: [
             _buildGoogleMap(),
             if (widget.config.isRefreshingAEDs) _buildLoadingIndicator(),
-            if (widget.config.selectedAED != null && !widget.config.navigationMode)
-              _buildTransportButtons(),
             _buildRecenterButton(),
             if (!widget.config.isLoading &&
                 widget.config.aedLocations.isNotEmpty &&
@@ -228,11 +235,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       bottom: 90,
       right: 16,
       child: Column(
-        children: [
-          _buildTransportButton(Icons.directions_walk, "walking"),
-          const SizedBox(height: 12),
-          _buildTransportButton(Icons.directions_car, "driving"),
-        ],
+        children: TransportMode.values.map((mode) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildTransportButton(mode),
+          );
+        }).toList(),
       ),
     );
   }
@@ -269,7 +277,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   Widget _buildNavigationSheet() {
     return DraggableScrollableSheet(
       initialChildSize: 0.35,
-      minChildSize: 0.12,
+      minChildSize: 0.10,
       maxChildSize: 0.35,
       builder: (context, scrollController) {
         final selectedAedInfo = widget.config.aeds.firstWhere(
@@ -315,7 +323,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     child: Text(
                       selectedAedInfo.address,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -341,16 +349,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                   _buildInfoColumn(
                       Icons.straighten,
                       widget.config.distance != null
-                          ? (widget.config.distance! < 1000
-                          ? "${widget.config.distance!.round()} m"
-                          : "${(widget.config.distance! / 1000).toStringAsFixed(1)} km")
+                          ? LocationService.formatDistance(widget.config.distance!)
                           : "N/A",
                       "Distance"),
                   _buildInfoColumn(
-                    widget.config.selectedMode == "walking"
-                        ? Icons.directions_walk
-                        : Icons.directions_car,
-                    widget.config.selectedMode == "walking" ? "Walking" : "Driving",
+                    TransportModeUtils.fromString(widget.config.selectedMode).icon,
+                    TransportModeUtils.fromString(widget.config.selectedMode).label,
                     "Mode",
                   ),
                 ],
@@ -433,7 +437,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _shortenAddress(aed.address),
+                    LocationService.shortenAddress(aed.address),
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -487,23 +491,37 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
-  String _shortenAddress(String fullAddress) {
-    // Take only the first part before the first comma
-    final parts = fullAddress.split(',');
-    if (parts.isNotEmpty) {
-      return parts.first.trim();
-    }
-    return fullAddress;
-  }
-
   Widget _buildAEDSheetContent(ScrollController scrollController) {
     if (widget.config.aedLocations.isEmpty) {
       return const Center(child: Text("No AEDs available"));
     }
 
-    // Only show nearest AED if we have user location
     final hasUserLocation = widget.config.userLocation != null;
-    final List<AED> sortedAEDs = widget.config.aeds;
+    final sortedAEDs = widget.config.aeds;
+
+    AED? nearestAED;
+    int? nearestDistance;
+    List<_AEDWithDistance> aedsWithDistances = [];
+
+    if (hasUserLocation && sortedAEDs.isNotEmpty) {
+      nearestAED = sortedAEDs.first;
+      nearestDistance = LocationService.distanceBetween(
+        widget.config.userLocation!,
+        nearestAED.location,
+      ).round();
+
+      if (sortedAEDs.length > 1) {
+        final otherAEDs = sortedAEDs.sublist(1);
+        aedsWithDistances = otherAEDs.map((aed) {
+          final distance = LocationService.distanceBetween(
+            widget.config.userLocation!,
+            aed.location,
+          ).round();
+          return _AEDWithDistance(aed: aed, distance: distance);
+        }).toList();
+      }
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -514,7 +532,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       child: ListView(
         controller: scrollController,
         children: [
-          /// Grab Handle
           Center(
             child: Container(
               width: 56,
@@ -527,9 +544,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             ),
           ),
 
-          /// Main content (controlled via IF/ELSE)
-          if (hasUserLocation) ...[
-            /// Section: Nearest Defibrillator
+          if (hasUserLocation && nearestAED != null) ...[
             Text(
               "Nearest Defibrillator",
               style: GoogleFonts.inter(
@@ -540,20 +555,13 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             ),
             const SizedBox(height: 8),
             _buildAEDCard(
-              aed: sortedAEDs.first,
-              distance: Geolocator.distanceBetween(
-                widget.config.userLocation!.latitude,
-                widget.config.userLocation!.longitude,
-                sortedAEDs.first.location.latitude,
-                sortedAEDs.first.location.longitude,
-              ).round(),
-              onTap: () => widget.onSmallMapTap(sortedAEDs.first.location),
+              aed: nearestAED,
+              distance: nearestDistance,
+              onTap: () => widget.onSmallMapTap(nearestAED!.location),
               showButton: true,
               isFirst: true,
             ),
             const SizedBox(height: 12),
-
-            /// Section: Other
             Text(
               "Other",
               style: GoogleFonts.inter(
@@ -563,25 +571,16 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
               ),
             ),
             const SizedBox(height: 8),
-
-            ...List.generate(sortedAEDs.length - 1, (i) {
-              final aed = sortedAEDs[i + 1];
-              final distance = Geolocator.distanceBetween(
-                widget.config.userLocation!.latitude,
-                widget.config.userLocation!.longitude,
-                aed.location.latitude,
-                aed.location.longitude,
-              ).round();
-
+            const SizedBox(height: 8),
+            ...aedsWithDistances.map((entry) {
               return _buildAEDCard(
-                aed: aed,
-                distance: distance,
-                onTap: () => widget.onSmallMapTap(aed.location),
+                aed: entry.aed,
+                distance: entry.distance,
+                onTap: () => widget.onPreviewNavigation?.call(entry.aed.location),
                 showButton: true,
               );
             }),
           ] else ...[
-            /// Fallback: No location
             Text(
               "List of AEDs",
               style: GoogleFonts.inter(
@@ -591,11 +590,11 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
               ),
             ),
             const SizedBox(height: 8),
-            ...List.generate(sortedAEDs.length, (i) {
+            ...sortedAEDs.map((aed) {
               return _buildAEDCard(
-                aed: sortedAEDs[i],
-                distance: null, // no location = no distance
-                onTap: () => widget.onSmallMapTap(sortedAEDs[i].location),
+                aed: aed,
+                distance: null,
+                onTap: () => widget.onSmallMapTap(aed.location),
                 showButton: true,
               );
             }),
@@ -606,17 +605,17 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   }
 
   /// 🚗 Walking & Driving Mode Buttons
-  Widget _buildTransportButton(IconData icon, String mode) {
-    final isActive = widget.config.selectedMode == mode;
+  Widget _buildTransportButton(TransportMode mode) {
+    final isActive = widget.config.selectedMode == mode.name;
+
     return FloatingActionButton(
-      heroTag: "transport_$mode",
+      heroTag: "transport_${mode.name}",
       backgroundColor: isActive ? Colors.orange : Colors.blue,
-      onPressed: () =>
-      widget.config.selectedAED != null
-          ? widget.onTransportModeSelected(mode)
+      onPressed: widget.config.selectedAED != null
+          ? () => widget.onTransportModeSelected(mode.name)
           : null,
       mini: true,
-      child: Icon(icon, color: Colors.white, size: 20),
+      child: Icon(mode.icon, color: Colors.white, size: 20),
     );
   }
 }

@@ -15,6 +15,11 @@ class NavigationState {
   final String transportMode;
   final String estimatedTime;
   final double? distance;
+  final double? currentBearing;
+  final double? currentSpeed;
+  final DateTime? lastUpdated;
+  final bool hasStarted;
+
 
   const NavigationState({
     this.isActive = false,
@@ -23,6 +28,10 @@ class NavigationState {
     this.transportMode = 'walking',
     this.estimatedTime = '',
     this.distance,
+    this.currentBearing,
+    this.currentSpeed,
+    this.lastUpdated,
+    this.hasStarted = false,
   });
 
   NavigationState copyWith({
@@ -32,6 +41,10 @@ class NavigationState {
     String? transportMode,
     String? estimatedTime,
     double? distance,
+    double? currentBearing,
+    double? currentSpeed,
+    DateTime? lastUpdated,
+    bool? hasStarted,
   }) {
     return NavigationState(
       isActive: isActive ?? this.isActive,
@@ -40,6 +53,10 @@ class NavigationState {
       transportMode: transportMode ?? this.transportMode,
       estimatedTime: estimatedTime ?? this.estimatedTime,
       distance: distance ?? this.distance,
+      currentBearing: currentBearing ?? this.currentBearing,
+      currentSpeed: currentSpeed ?? this.currentSpeed,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      hasStarted: hasStarted ?? this.hasStarted,
     );
   }
 }
@@ -136,15 +153,15 @@ class AEDRepository {
     }).whereType<AED>().toList();
   }
 
-  Set<Marker> createMarkers(List<AED> aeds, Function(LatLng) onNavigatePressed) {
+  Set<Marker> createMarkers(List<AED> aeds, Function(LatLng) onPreviewPressed){
     return aeds.map((aed) => Marker(
       markerId: MarkerId(aed.id.toString()),
       position: aed.location,
       icon: CustomIcons.aedUpdated,
       infoWindow: InfoWindow(
-        title: "${aed.address} ➤",
+        title: aed.address,
         snippet: null,
-        onTap: () => onNavigatePressed(aed.location),
+        onTap: () => onPreviewPressed(aed.location),
       ),
     )).toSet();
   }

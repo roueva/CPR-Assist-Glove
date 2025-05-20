@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../services/ble_connection.dart';
 import '../services/fake_ble_data.dart';
 import '../widgets/depth_bar.dart';
 import '../widgets/rotating_arrow.dart';
@@ -19,11 +20,6 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
   bool get wantKeepAlive => true;
 
   //fake ble data start
-  @override
-  void initState() {
-    super.initState();
-    FakeBleStreamService.startManualMode(); // 🔥 Manual simulation
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +27,8 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
     return Container(
       color: const Color(0xFFEDF4F9), // Light blue background
       child: StreamBuilder<Map<String, dynamic>>(
-        //stream: BLEConnection.instance.dataStream,
-        stream: FakeBleStreamService.stream,
+        // stream: FakeBleStreamService.stream,
+        stream: BLEConnection.instance.dataStream,
         builder: (context, snapshot) {
           final data = snapshot.data ?? {};
 
@@ -43,8 +39,10 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
                 PatientVitalsCard(),
                 const SizedBox(height: 16),
                 CprMetricsCard(
-                  frequency: (data['frequency'] as num?)?.toDouble() ?? 90,
-                  depth: (data['depth'] as num?)?.toDouble() ?? 0,
+                 // frequency: (data['frequency'] as num?)?.toDouble() ?? 90, // simulation
+                  frequency: (data['frequency'] as num?)?.toDouble() ?? 0,
+                  // depth: (data['depth'] as num?)?.toDouble() ?? 0,  // simulation
+                  depth: (data['weight'] as num?)?.toDouble() ?? 0, // depth comes from FSR (weight)
                 ),
                 const SizedBox(height: 16),
                 UserVitalsCard(),

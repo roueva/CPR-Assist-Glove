@@ -16,6 +16,8 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
   late Animation<double> _animation;
   double _currentValue = _maxDepth / 2;
   static const double _maxDepth = 6.0; // Replace with real max
+  bool _hasReceivedData = false;
+
 
   @override
   void initState() {
@@ -44,6 +46,11 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
       ));
       _controller.forward(from: 0);
       _currentValue = target;
+
+      // ✅ Set flag true once first update comes
+      if (!_hasReceivedData && target > 0.01) {
+        _hasReceivedData = true;
+      }
     }
   }
 
@@ -78,7 +85,7 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
               top: 0,
               child: AnimatedPill(
                 label: 'RELEASE',
-                isCorrect: widget.depth < 0.2,
+                isCorrect: _hasReceivedData && widget.depth < 0.2,
               ),
             ),
 
@@ -87,7 +94,7 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
               bottom: 0,
               child: AnimatedPill(
                 label: 'DEPTH',
-                isCorrect: widget.depth > 5.0,
+                isCorrect: _hasReceivedData && widget.depth > 5.0,
               ),
             ),
 

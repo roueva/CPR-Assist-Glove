@@ -121,7 +121,7 @@ import 'package:google_fonts/google_fonts.dart';
                 ],
               ),
             centerTitle: true,
-            backgroundColor: _currentIndex == 1 ? const Color(0xFFEDF4F9) : Colors.white,
+            backgroundColor: (_currentIndex == 1 || _currentIndex == 2) ? const Color(0xFFEDF4F9) : Colors.white,
             foregroundColor: Colors.black,
             elevation: 0,
               actions: [
@@ -131,7 +131,7 @@ import 'package:google_fonts/google_fonts.dart';
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
                     decoration: BoxDecoration(
-                      color: _currentIndex == 1 ? Colors.white : const Color(0xFFE3EFF8),
+                      color: (_currentIndex == 1 || _currentIndex == 2) ? Colors.white : const Color(0xFFE3EFF8),
                       borderRadius: BorderRadius.circular(32),
                     ),
                     child: Row(
@@ -181,7 +181,7 @@ import 'package:google_fonts/google_fonts.dart';
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _currentIndex == 1 ? Colors.white : const Color(0xFFE3EFF8),
+                      color:  (_currentIndex == 1 || _currentIndex == 2) ? Colors.white : const Color(0xFFE3EFF8),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
