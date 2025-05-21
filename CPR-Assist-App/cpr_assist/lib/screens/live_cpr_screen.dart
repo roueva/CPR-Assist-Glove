@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../services/ble_connection.dart';
-import '../services/fake_ble_data.dart';
 import '../widgets/depth_bar.dart';
 import '../widgets/rotating_arrow.dart';
 
@@ -16,42 +17,68 @@ class LiveCPRScreen extends StatefulWidget {
 }
 
 class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveClientMixin {
+  double lastDepth = 0.0;
+  double lastFrequency = 0.0;
+  Timer? _resetTimer;
+
+
   @override
   bool get wantKeepAlive => true;
-
-  //fake ble data start
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return Container(
-      color: const Color(0xFFEDF4F9), // Light blue background
+      color: const Color(0xFFEDF4F9),
       child: StreamBuilder<Map<String, dynamic>>(
-        // stream: FakeBleStreamService.stream,
         stream: BLEConnection.instance.dataStream,
         builder: (context, snapshot) {
-          final data = snapshot.data ?? {};
+          final data = snapshot.data;
+
+          // ✅ Only update if data exists
+          if (data != null) {
+            if (data['weight'] != null) {
+              lastDepth = (data['weight'] as num).toDouble();
+            }
+            final freq = (data['frequency'] as num?)?.toDouble();
+            if (freq != null && freq > 0 && freq < 300) {
+              lastFrequency = freq;
+            }
+
+            // Reset timer on each data update
+            _resetTimer?.cancel();
+            _resetTimer = Timer(const Duration(seconds: 1), () {
+              setState(() {
+                lastDepth = 0;
+                lastFrequency = 0;
+              });
+            });
+          }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                PatientVitalsCard(),
+                const PatientVitalsCard(),
                 const SizedBox(height: 16),
                 CprMetricsCard(
-                 // frequency: (data['frequency'] as num?)?.toDouble() ?? 90, // simulation
-                  frequency: (data['frequency'] as num?)?.toDouble() ?? 0,
-                  // depth: (data['depth'] as num?)?.toDouble() ?? 0,  // simulation
-                  depth: (data['weight'] as num?)?.toDouble() ?? 0, // depth comes from FSR (weight)
+                  depth: lastDepth,
+                  frequency: lastFrequency,
                 ),
                 const SizedBox(height: 16),
-                UserVitalsCard(),
+                const UserVitalsCard(),
               ],
             ),
           );
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
   }
 }
 
@@ -412,33 +439,6 @@ class UserVitalsCard extends StatelessWidget {
             ],
           ),
         ),
-        // TEMPORARY MANUAL SIMULATION BUTTON
-        GestureDetector(
-          onLongPressStart: (_) {
-            // Simulate compression
-            FakeBleStreamService.simulatePress();
-          },
-          onLongPressEnd: (_) {
-            // Simulate release
-            FakeBleStreamService.simulateRelease();
-          },
-          child: Container(
-            margin: const EdgeInsets.only(top: 24),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF319E77),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              "Hold to Simulate Compression",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        )
       ],
     );
   }
