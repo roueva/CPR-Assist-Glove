@@ -95,7 +95,8 @@ class NetworkService {
     if (token == null) return false;
 
     try {
-      return !JwtDecoder.isExpired(token);
+      JwtDecoder.decode(token); // This will throw if token is malformed
+      return true;
     } catch (e) {
       return false;
     }

@@ -66,7 +66,7 @@ class AuthController {
             const token = jwt.sign(
                 { id: user.id, username: user.username }, // Include user ID
                 process.env.JWT_SECRET,
-                { expiresIn: '1h' }
+                { expiresIn: '5y' }
             );
 
             // Send back the token and user ID
@@ -100,12 +100,10 @@ class AuthController {
             const newToken = jwt.sign(
                 { id: decoded.id, username: decoded.username }, // Include user ID
                 process.env.JWT_SECRET,
-                { expiresIn: '1h' }
+                { expiresIn: '5y' }
             );
             res.json({ token: newToken, user_id: decoded.id }); // Return both
 
-
-            res.json({ token: newToken });
         } catch (error) {
             console.error('Token refresh error:', error.message);
             res.status(401).json({ error: 'Invalid token' });

@@ -37,7 +37,7 @@ class _AccountMenuState extends State<AccountMenu> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('isLoggedIn');
-    await prefs.remove('token');
+    await prefs.remove('jwt_token');
     await prefs.remove('user_id');
     await prefs.remove('username');
 
