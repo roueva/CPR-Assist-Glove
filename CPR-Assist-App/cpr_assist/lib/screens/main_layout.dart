@@ -36,8 +36,9 @@ import 'package:google_fonts/google_fonts.dart';
     TrainingScreen? _trainingScreen;
 
     //Battery status
-    int get gloveBatteryPercentage => 96; // replace later
-    bool get isGloveCharging => false; // replace later
+    int get gloveBatteryPercentage => widget.decryptedDataHandler.batteryPercentageNotifier.value;
+    bool get isGloveCharging => widget.decryptedDataHandler.isChargingNotifier.value;
+
 
 
     @override
@@ -142,34 +143,44 @@ import 'package:google_fonts/google_fonts.dart';
                           connectionStatusNotifier: globalBLEConnection.connectionStatusNotifier,
                         ),
                         const SizedBox(width: 4),
-                        Tooltip(
-                          message: isGloveCharging
-                              ? 'Charging: $gloveBatteryPercentage%'
-                              : 'Battery: $gloveBatteryPercentage%',
-                          triggerMode: TooltipTriggerMode.tap,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                    ValueListenableBuilder<int>(
+                      valueListenable: widget.decryptedDataHandler.batteryPercentageNotifier,
+                      builder: (context, battery, _) {
+                        return ValueListenableBuilder<bool>(
+                          valueListenable: widget.decryptedDataHandler.isChargingNotifier,
+                          builder: (context, isCharging, _) {
+                            return Tooltip(
+                              message: isCharging
+                                  ? 'Charging: $battery%'
+                                  : 'Battery: $battery%',
+                              triggerMode: TooltipTriggerMode.tap,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          textStyle: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          showDuration: const Duration(seconds: 2),
-                          child: GloveBatteryIndicator(
-                            batteryPercentage: gloveBatteryPercentage,
-                            isCharging: isGloveCharging,
-                          ),
-                        ),
+                              textStyle: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              showDuration: const Duration(seconds: 2),
+                              child: GloveBatteryIndicator(
+                                batteryPercentage: battery,
+                                isCharging: isCharging,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                       ],
                     ),
                   ),

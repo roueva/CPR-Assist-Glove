@@ -7,7 +7,6 @@ import '../services/ble_connection.dart';
 import '../widgets/depth_bar.dart';
 import '../widgets/rotating_arrow.dart';
 
-
 class LiveCPRScreen extends StatefulWidget {
   final Function(int) onTabTapped;
   const LiveCPRScreen({super.key, required this.onTabTapped});
@@ -20,7 +19,16 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
   double lastDepth = 0.0;
   double lastFrequency = 0.0;
   Timer? _resetTimer;
-
+  int _displayCompressionCount = 0;
+  Duration _displaySessionDuration = Duration.zero;
+  bool _isSessionActive = false;
+  double _displayDepth = 0.0;
+  double _displayFrequency = 0.0;
+  bool _hasHandledEndPing = false;
+  double? _heartRatePatient;
+  double? _temperaturePatient;
+  double? _heartRateUser;
+  double? _temperatureUser;
 
   @override
   bool get wantKeepAlive => true;
@@ -30,43 +38,38 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
     super.build(context);
     return Container(
       color: const Color(0xFFEDF4F9),
-      child: StreamBuilder<Map<String, dynamic>>(
+      child:
+      StreamBuilder<Map<String, dynamic>>(
         stream: BLEConnection.instance.dataStream,
         builder: (context, snapshot) {
-          final data = snapshot.data;
-
-          // ✅ Only update if data exists
-          if (data != null) {
-            if (data['weight'] != null) {
-              lastDepth = (data['weight'] as num).toDouble();
-            }
-            final freq = (data['frequency'] as num?)?.toDouble();
-            if (freq != null && freq > 0 && freq < 300) {
-              lastFrequency = freq;
-            }
-
-            // Reset timer on each data update
-            _resetTimer?.cancel();
-            _resetTimer = Timer(const Duration(seconds: 1), () {
-              setState(() {
-                lastDepth = 0;
-                lastFrequency = 0;
-              });
+          if (snapshot.hasData) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _updateDisplayValues(snapshot.data!);
+              }
             });
           }
-
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                const PatientVitalsCard(),
+                PatientVitalsCard(
+              heartRate: _heartRatePatient,
+              temperature: _temperaturePatient,
+            ),
                 const SizedBox(height: 16),
                 CprMetricsCard(
-                  depth: lastDepth,
-                  frequency: lastFrequency,
+                  depth: _displayDepth,
+                  frequency: _displayFrequency,
+                  cprTime: _displaySessionDuration,
+                  compressionCount: _displayCompressionCount,
+                  isSessionActive: _isSessionActive,
                 ),
                 const SizedBox(height: 16),
-                const UserVitalsCard(),
+                 UserVitalsCard(
+                  heartRate: _heartRateUser,
+                  temperature: _temperatureUser,
+                ),
               ],
             ),
           );
@@ -80,17 +83,107 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
     _resetTimer?.cancel();
     super.dispose();
   }
+
+  void _updateDisplayValues(Map<String, dynamic> data) {
+    final sessionActive = data['isSessionActive'] == true;
+    final isStartPing = data['startPing'] == true;
+    final isEndPing = data['endPing'] == true;
+
+    if (data.containsKey('heartRatePatient')) {
+      final hr = (data['heartRatePatient'] as num).toDouble();
+      if (hr > 0) _heartRatePatient = hr;
+    }
+
+    if (data.containsKey('temperaturePatient')) {
+      final temp = (data['temperaturePatient'] as num).toDouble();
+      if (temp > 0) _temperaturePatient = temp;
+    }
+
+    if (data.containsKey('heartRateUser')) {
+      final hr = (data['heartRateUser'] as num).toDouble();
+      if (hr > 0) _heartRateUser = hr;
+    }
+
+    if (data.containsKey('temperatureUser')) {
+      final temp = (data['temperatureUser'] as num).toDouble();
+      if (temp > 0) _temperatureUser = temp;
+    }
+
+    // Handle session state changes
+    if (isStartPing) {
+      setState(() {
+        _isSessionActive = true;
+        _displayDepth = 0.0;
+        _displayFrequency = 0.0;
+        _displayCompressionCount = 0;
+        _displaySessionDuration = Duration.zero;
+      });
+      _hasHandledEndPing = false; // Reset here
+      print('🟢 UI: Session started - all displays reset');
+      return;
+    }
+
+    if (isEndPing && !_hasHandledEndPing) {
+      setState(() {
+        _isSessionActive = false;
+        _displayDepth = 0.0;
+        _displayFrequency = 0.0;
+      });
+      print('🔴 UI: Session ended - depth/frequency reset, count/time preserved');
+      _hasHandledEndPing = true;
+      return;
+    }
+
+    // Update values during active session or for final display
+    if (mounted) {
+      setState(() {
+        _isSessionActive = sessionActive;
+
+        // Always update compression count and session duration
+        if (data.containsKey('compressionCount')) {
+          _displayCompressionCount = data['compressionCount'] as int;
+        }
+
+        if (data.containsKey('sessionDuration')) {
+          _displaySessionDuration = data['sessionDuration'] as Duration;
+        }
+
+        // Only update depth and frequency during active session
+        if (_isSessionActive) {
+          if (data.containsKey('depth')) {
+            _displayDepth = (data['depth'] as num).toDouble();
+          }
+
+          if (data.containsKey('frequency')) {
+            _displayFrequency = (data['frequency'] as num).toDouble();
+          }
+        }
+      });
+    }
+  }
 }
 
+String _formatDuration(Duration d) {
+  final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return "$minutes:$seconds";
+}
+
+
 class PatientVitalsCard extends StatelessWidget {
-  const PatientVitalsCard({super.key});
+  final double? heartRate;
+  final double? temperature;
+  const PatientVitalsCard({
+    super.key,
+    this.heartRate,
+    this.temperature,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title outside the card
         Text(
           "Patient Vitals",
           style: const TextStyle(
@@ -121,10 +214,10 @@ class PatientVitalsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "110 bpm", // Placeholder value
+                      heartRate != null ? "${heartRate!.toStringAsFixed(0)} bpm" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 20,
                         color: Color(0xFF4D4A4A),
                       ),
@@ -147,7 +240,7 @@ class PatientVitalsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "36.4°C", // Placeholder value
+                      temperature != null ? "${temperature!.toStringAsFixed(1)}°C" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600, // SemiBold
@@ -178,11 +271,17 @@ class PatientVitalsCard extends StatelessWidget {
 class CprMetricsCard extends StatelessWidget {
   final double frequency;
   final double depth;
+  final Duration cprTime;
+  final int compressionCount;
+  final bool isSessionActive;
 
   const CprMetricsCard({
     super.key,
     required this.frequency,
     required this.depth,
+    required this.cprTime,
+    required this.compressionCount,
+    required this.isSessionActive,
   });
 
   @override
@@ -206,9 +305,14 @@ class CprMetricsCard extends StatelessWidget {
           // Two small stat cards: Compressions and CPR Time
           Row(
             children: [
-              Expanded(child: _SmallInfoCard(value: "12", label: "COMPRESSIONS")),
+              Expanded(child: _SmallInfoCard(value: compressionCount.toString(), label: "COMPRESSIONS")),
               const SizedBox(width: 12),
-              Expanded(child: _SmallInfoCard(value: "04:25", label: "CPR TIME")),
+              Expanded(
+                child: _SmallInfoCard(
+                  value: _formatDuration(cprTime),
+                  label: "CPR TIME",
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -348,9 +452,15 @@ class _SmallInfoCard extends StatelessWidget {
   }
 }
 
-
 class UserVitalsCard extends StatelessWidget {
-  const UserVitalsCard({super.key});
+  final double? heartRate;
+  final double? temperature;
+
+  const UserVitalsCard({
+    super.key,
+    required this.heartRate,
+    required this.temperature,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +500,7 @@ class UserVitalsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "98 bpm", // Placeholder for user heart rate
+                      heartRate != null ? "${heartRate!.toStringAsFixed(0)} bpm" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600, // SemiBold
@@ -416,7 +526,7 @@ class UserVitalsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "36.7°C", // Placeholder for user temperature
+                      temperature != null ? "${temperature!.toStringAsFixed(1)}°C" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600, // SemiBold

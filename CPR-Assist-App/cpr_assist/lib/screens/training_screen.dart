@@ -4,7 +4,6 @@
   import 'package:shared_preferences/shared_preferences.dart';
   import '../main.dart';
   import '../services/decrypted_data.dart';
-  import 'live_cpr_screen.dart';
 import 'login_screen.dart';
   import 'past_sessions_screen.dart';
   import '../services/network_service.dart';
@@ -32,14 +31,19 @@ import 'login_screen.dart';
     bool get wantKeepAlive => true;
     String connectionStatus = "Disconnected";
     int compressionCount = 0;
-    int correctWeight = 0;
+    int correctDepth = 0;
     int correctFrequency = 0;
     int? patientHeartRate;
     double? patientTemperature;
     int? userHeartRate;
     double? userTemperatureRate;
-    bool? correctRebound;
+    int correctRecoil = 0;
     double totalGrade = 0.0;
+    int depthRateCombo = 0;
+    double latestDepth = 0.0;
+    double latestFrequency = 0.0;
+    Duration sessionDuration = Duration.zero;
+    DateTime? sessionStartTime;
     late StreamSubscription<Map<String, dynamic>> dataSubscription;
     bool? isLoggedIn;
     bool _isDisposed = false;
@@ -49,11 +53,17 @@ import 'login_screen.dart';
       super.initState();
       _startReceivingData();
 
+      final cached = widget.decryptedDataHandler.getLastEndPingData();
+      if (cached != null && !_isDisposed) {
+        _handleEndPing(cached);
+      }
+
+
       // ✅ Listen to BLE Status
       globalBLEConnection.adapterStateStream.listen((state) {
         if (mounted) {
           setState(() {
-            connectionStatus = (state == BluetoothAdapterState.on && globalBLEConnection.isConnected())
+            connectionStatus = (state == BluetoothAdapterState.on && globalBLEConnection.isConnected)
                 ? "Connected"
                 : "Bluetooth OFF";
           });
@@ -83,41 +93,53 @@ import 'login_screen.dart';
       }
     }
 
+    void _handleEndPing(Map<String, dynamic> data) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isDisposed && mounted) {
+          setState(() {
+            compressionCount = data['totalCompressions'] ?? 0;
+            correctDepth = data['correctDepth'] ?? 0;
+            correctFrequency = data['correctFrequency'] ?? 0;
+            correctRecoil = data['correctRecoil'] ?? 0;
+            depthRateCombo = data['depthRateCombo'] ?? 0;
+            sessionDuration = data['sessionDuration'] ?? Duration.zero;
+            latestDepth = data['depth'] ?? 0.0;
+            latestFrequency = data['frequency'] ?? 0.0;
+            userHeartRate = data['userHeartRate'] ?? 0;
+            userTemperatureRate = data['userTemperature'] ?? 0.0;
+            patientHeartRate = data['patientHeartRate'] ?? 0;
+            patientTemperature = data['patientTemperature'] ?? 0.0;
+
+            totalGrade = _calculateTotalGrade(
+              depth: correctDepth,
+              freq: correctFrequency,
+              recoil: correctRecoil,
+              combo: depthRateCombo,
+              total: compressionCount,
+            );
+          });
+          _saveSessionData();
+        }
+      });
+    }
+
     void _startReceivingData() {
       if (_isDisposed) return;
 
-      dataSubscription = widget.dataStream.listen(
-            (data) {
-          if (_isDisposed) return;
-          setState(() {
-            compressionCount = data['totalCompressions'] ?? 0;
-            correctWeight = data['correctWeightCompressions'] ?? 0;
-            correctFrequency = data['correctFrequencyCompressions'] ?? 0;
-            patientHeartRate = data['patientHeartRate'] ?? 0;
-            patientTemperature = data['patientTemperature'] ?? 0.0;
-            userHeartRate = data['userHeartRate'] ?? 0;
-            userTemperatureRate = data['userTemperatureRate'] ?? 0.0;
-            correctRebound = data['correctRebound'] ?? false;
-            totalGrade = data['totalGrade'] ?? 0.0;
+      dataSubscription = widget.dataStream.listen((data) {
+        if (_isDisposed) return;
 
-          });
-        },
-        onError: (error) {
-          if (_isDisposed) return;
-          _showSnackbar("Data stream error: $error");
+        final isStartPing = data['startPing'] == true;
+        final isEndPing = data['endPing'] == true;
 
-          // ✅ Only mark as disconnected if it was previously connected
-          if (connectionStatus == "Connected") {
-            setState(() => connectionStatus = "Disconnected");
-          }
-        },
-        onDone: () {
-          if (_isDisposed) return;
-          if (connectionStatus == "Connected") {
-            setState(() => connectionStatus = "Disconnected");
-          }
-        },
-      );
+        if (isStartPing) {
+          sessionStartTime = DateTime.now(); // ✅ Save timestamp when session starts
+        }
+
+        if (isEndPing) {
+          _handleEndPing(data); // ✅ Call this to update all fields
+        }
+      });
     }
 
     /// **💾 Save Session Data (Only if Logged In)**
@@ -148,17 +170,19 @@ import 'login_screen.dart';
       try {
         final sessionData = {
           'compression_count': compressionCount,
-          'correct_depth': correctWeight,
+          'correct_depth': correctDepth,
           'correct_frequency': correctFrequency,
           'correct_angle': 0.0,
           'patient_heart_rate': patientHeartRate ?? 0,
           'patient_temperature': patientTemperature ?? 0.0,
           'user_heart_rate': userHeartRate ?? 0,
           'user_temperature_rate': userTemperatureRate ?? 0.0,
-          'correct_rebound': correctRebound ?? false,
+          'correct_recoil': correctRecoil,
+          'average_depth': latestDepth,
+          'average_frequency': latestFrequency,
+          'session_duration': sessionDuration.inSeconds,
           'total_grade': totalGrade,
-          'session_start': DateTime.now().toIso8601String(),
-          'session_duration': 0,
+          'session_start': (sessionStartTime ?? DateTime.now()).toIso8601String(),
         };
 
         final response = await NetworkService.post(
@@ -198,22 +222,21 @@ import 'login_screen.dart';
         child: StreamBuilder<Map<String, dynamic>>(
           stream: widget.dataStream,
           builder: (context, snapshot) {
-            final data = snapshot.data ?? {};
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  GradeCard(
-                    totalCompressions: compressionCount,
-                    correctFrequency: correctFrequency,
-                    correctWeight: correctWeight,
-                    totalGrade: totalGrade,
-                    correctAngle: 7,         // You can pass a real value
-                    correctRebound: 6,       // You can pass a real value
-                  ),
+                GradeCard(
+                totalCompressions: compressionCount,
+                correctFrequency: correctFrequency,
+                correctDepth: correctDepth,
+                  correctCombo: depthRateCombo,
+                  correctRecoil: correctRecoil,
+                totalGrade: totalGrade,
+              ),
                   const SizedBox(height: 16),
-                  const UserVitalsCard(),
+                  // const UserVitalsCard(heartRate: '0',),
                   const SizedBox(height: 16),
                   _pastSessionsButton(),
 
@@ -266,21 +289,34 @@ import 'login_screen.dart';
     }
   }
 
+  double _calculateTotalGrade({
+    required int depth,
+    required int freq,
+    required int recoil,
+    required int combo,
+    required int total,
+  }) {
+    if (total == 0) return 0.0;
+    double score =
+        (depth + freq + recoil + combo) / (4 * total) * 100;
+    return score.clamp(0, 100);
+  }
+
   class GradeCard extends StatelessWidget {
     final int totalCompressions;
     final int correctFrequency;
-    final int correctWeight;
-    final int correctAngle;        // NEW
-    final int correctRebound;      // NEW
+    final int correctDepth;
+    final int correctCombo;
+    final int correctRecoil;
     final double totalGrade;
 
     const GradeCard({
       super.key,
       required this.totalCompressions,
       required this.correctFrequency,
-      required this.correctWeight,
-      required this.correctAngle,
-      required this.correctRebound,
+      required this.correctDepth,
+      required this.correctCombo,
+      required this.correctRecoil,
       required this.totalGrade,
     });
 
@@ -376,9 +412,9 @@ import 'login_screen.dart';
                 childAspectRatio: 1.8,
                 children: [
                   _statBox("CORRECT FREQUENCY", correctFrequency),
-                  _statBox("CORRECT WEIGHT", correctWeight),
-                  _statBox("CORRECT ANGLE", correctAngle),
-                  _statBox("CORRECT REBOUND", correctRebound),
+                  _statBox("CORRECT DEPTH", correctDepth),
+                  _statBox("FREQUENCY AND DEPTH", correctCombo),
+                  _statBox("CORRECT RECOIL", correctRecoil),
                 ],
               ),
             ],
