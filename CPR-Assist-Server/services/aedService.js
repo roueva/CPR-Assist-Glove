@@ -4,6 +4,8 @@ class AEDService {
     constructor(pool) {
         this.pool = pool;
         this.API_URL = 'https://isavelivesapi-qa.azurewebsites.net/aed_endpoint';
+        this.API_KEY = process.env.ISAVELIVES_API_KEY;
+
     }
 
     /**
@@ -15,7 +17,8 @@ class AEDService {
             
             const response = await axios.get(this.API_URL, {
                 headers: {
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'x-api-key': this.API_KEY
                 },
                 timeout: 30000 // 30 second timeout
             });
