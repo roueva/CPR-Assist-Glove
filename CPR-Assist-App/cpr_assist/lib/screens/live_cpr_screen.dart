@@ -1,21 +1,20 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
-import '../services/ble_connection.dart';
+import '../main.dart';
 import '../widgets/depth_bar.dart';
 import '../widgets/rotating_arrow.dart';
 
-class LiveCPRScreen extends StatefulWidget {
+class LiveCPRScreen extends ConsumerStatefulWidget {
   final Function(int) onTabTapped;
   const LiveCPRScreen({super.key, required this.onTabTapped});
 
   @override
-  State<LiveCPRScreen> createState() => _LiveCPRScreenState();
+  ConsumerState<LiveCPRScreen> createState() => _LiveCPRScreenState();
 }
 
-class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveClientMixin {
+class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKeepAliveClientMixin {
   double lastDepth = 0.0;
   double lastFrequency = 0.0;
   Timer? _resetTimer;
@@ -36,13 +35,14 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final bleConnection = ref.watch(bleConnectionProvider);
+
     return Container(
       color: const Color(0xFFEDF4F9),
-      child:
-      StreamBuilder<Map<String, dynamic>>(
-        stream: BLEConnection.instance.dataStream,
+      child: StreamBuilder<Map<String, dynamic>>(
+        stream: bleConnection.dataStream,
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
+          if (snapshot.hasData && snapshot.data != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 _updateDisplayValues(snapshot.data!);
@@ -89,22 +89,22 @@ class _LiveCPRScreenState extends State<LiveCPRScreen> with AutomaticKeepAliveCl
     final isStartPing = data['startPing'] == true;
     final isEndPing = data['endPing'] == true;
 
-    if (data.containsKey('heartRatePatient')) {
+    if (data.containsKey('heartRatePatient') && data['heartRatePatient'] != null) {
       final hr = (data['heartRatePatient'] as num).toDouble();
       if (hr > 0) _heartRatePatient = hr;
     }
 
-    if (data.containsKey('temperaturePatient')) {
+    if (data.containsKey('temperaturePatient') && data['temperaturePatient'] != null) {
       final temp = (data['temperaturePatient'] as num).toDouble();
       if (temp > 0) _temperaturePatient = temp;
     }
 
-    if (data.containsKey('heartRateUser')) {
+    if (data.containsKey('heartRateUser') && data['heartRateUser'] != null) {
       final hr = (data['heartRateUser'] as num).toDouble();
       if (hr > 0) _heartRateUser = hr;
     }
 
-    if (data.containsKey('temperatureUser')) {
+    if (data.containsKey('temperatureUser') && data['temperatureUser'] != null) {
       final temp = (data['temperatureUser'] as num).toDouble();
       if (temp > 0) _temperatureUser = temp;
     }
@@ -226,7 +226,7 @@ class PatientVitalsCard extends StatelessWidget {
                       "HEART RATE",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                         color: Color(0xFF727272),
                       ),
@@ -243,7 +243,7 @@ class PatientVitalsCard extends StatelessWidget {
                       temperature != null ? "${temperature!.toStringAsFixed(1)}°C" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 20,
                         color: Color(0xFF4D4A4A),
                       ),
@@ -252,7 +252,7 @@ class PatientVitalsCard extends StatelessWidget {
                       "TEMPERATURE",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                         color: Color(0xFF727272),
                       ),
@@ -289,7 +289,7 @@ class CprMetricsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF335484), // Big dark blue card
+        color: const Color(0xFF335484),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -354,7 +354,7 @@ class CprMetricsCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              frequency.toStringAsFixed(0), // show as whole number
+                              frequency.toStringAsFixed(0),
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontWeight: FontWeight.bold,
@@ -422,7 +422,7 @@ class _SmallInfoCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF315FA3), // Small card blue
+        color: const Color(0xFF315FA3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -503,7 +503,7 @@ class UserVitalsCard extends StatelessWidget {
                       heartRate != null ? "${heartRate!.toStringAsFixed(0)} bpm" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 20,
                         color: Color(0xFF4D4A4A),
                       ),
@@ -529,7 +529,7 @@ class UserVitalsCard extends StatelessWidget {
                       temperature != null ? "${temperature!.toStringAsFixed(1)}°C" : "--",
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, // SemiBold
+                        fontWeight: FontWeight.w600,
                         fontSize: 20,
                         color: Color(0xFF4D4A4A),
                       ),

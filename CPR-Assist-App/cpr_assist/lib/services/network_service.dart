@@ -1,21 +1,30 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-
 class NetworkService {
-  static String? get baseUrl {
+  final SharedPreferences _prefs;
+  static StreamController<bool>? _connectivityController;
+  static bool _lastConnectivityState = true;
+  static Timer? _connectivityTimer;
+  static final List<Function(bool)> _connectivityListeners = [];
+  NetworkService(this._prefs);
+
+  static String get baseUrl {
     String? url = dotenv.env['BASE_URL'];
-    if (url!.isEmpty) {
+    if (url == null || url.isEmpty) {
       throw Exception("❌ BASE_URL is missing from .env");
     }
     return url;
   }
 
-
-  Future<void> testConnection() async {
+  static Future<void> testConnection() async {
     try {
       final response = await http.get(Uri.parse('${NetworkService.baseUrl}/api/test'));
       print("🚀 Server Test Response: ${response.body}");
@@ -24,46 +33,99 @@ class NetworkService {
     }
   }
 
-  Future<void> testRailwayConnection() async {
+  static Future<bool> isConnected() async {
     try {
-      final response = await http.get(Uri.parse('${NetworkService.baseUrl}/api/test'));
-      print("🚀 Railway Test Response: ${response.body}");
+      final connectivityResult = await Connectivity().checkConnectivity();
+
+      if (connectivityResult == ConnectivityResult.none) {
+        return false;
+      }
+
+      // Quick DNS lookup instead of full HTTP request
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (e) {
-      print("❌ Railway connection failed: $e");
+      return false;
     }
   }
 
+  // Add this for your app-specific connectivity
+  static Future<bool> canReachBackend() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/health'), // ← Add a lightweight health endpoint
+      ).timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static void startConnectivityMonitoring({Duration interval = const Duration(seconds: 10)}) {
+    _connectivityTimer?.cancel();
+    _connectivityController ??= StreamController<bool>.broadcast();
+
+    _connectivityTimer = Timer.periodic(interval, (timer) async {
+      final isConnected = await NetworkService.isConnected();
+
+      if (isConnected != _lastConnectivityState) {
+        _lastConnectivityState = isConnected;
+        _connectivityController?.add(isConnected);
+
+        // Notify all listeners
+        for (final listener in _connectivityListeners) {
+          listener(isConnected);
+        }
+      }
+    });
+  }
+
+  static void stopConnectivityMonitoring() {
+    _connectivityTimer?.cancel();
+    _connectivityController?.close();
+    _connectivityController = null;
+    _connectivityListeners.clear();
+  }
+
+  static Stream<bool> get connectivityStream =>
+      _connectivityController?.stream ?? Stream.empty();
+
+  static void addConnectivityListener(Function(bool) listener) {
+    _connectivityListeners.add(listener);
+  }
+
+  static void removeConnectivityListener(Function(bool) listener) {
+    _connectivityListeners.remove(listener);
+  }
+
+  static bool get lastKnownConnectivityState => _lastConnectivityState;
 
   // 🔹 TOKEN MANAGEMENT 🔹
-  static Future<int?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('user_id');
+  Future<int?> getUserId() async {
+    return _prefs.getInt('user_id');
   }
 
-  static Future<void> saveUserId(int userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('user_id', userId);
+  Future<void> saveUserId(int userId) async {
+    await _prefs.setInt('user_id', userId);
   }
 
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
+  Future<String?> getToken() async {
+    return _prefs.getString('jwt_token');
   }
 
-  static Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('jwt_token', token);
+  Future<void> saveToken(String token) async {
+    await _prefs.setString('jwt_token', token);
   }
 
-  static Future<void> removeToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token'); // ✅ Only remove the JWT token
-    await prefs.remove('user_id');   // ✅ Remove user ID as well
+  Future<void> removeToken() async {
+    await _prefs.remove('jwt_token'); // ✅ Only remove the JWT token
+    await _prefs.remove('user_id');   // ✅ Remove user ID as well
   }
-
 
   // 🔹 AUTHENTICATION 🔹
-  static Future<bool> refreshToken() async {
+  Future<bool> refreshToken() async {
     final token = await getToken();
     if (token == null || token.isEmpty) {
       print('❌ No token found, cannot refresh.');
@@ -90,19 +152,20 @@ class NetworkService {
     return false;
   }
 
-  static Future<bool> isTokenValid() async {
+  Future<bool> isTokenValid() async {
     final token = await getToken();
     if (token == null) return false;
 
     try {
-      JwtDecoder.decode(token); // This will throw if token is malformed
-      return true;
+      // ✅ Check both format AND expiration
+      return !JwtDecoder.isExpired(token);
     } catch (e) {
       return false;
     }
   }
 
-  static Future<bool> ensureAuthenticated() async {
+
+  Future<bool> ensureAuthenticated() async {
     if (await isTokenValid()) {
       print("✅ Token is still valid.");
       return true;
@@ -121,7 +184,7 @@ class NetworkService {
   }
 
   // 🔹 GENERIC NETWORK REQUESTS 🔹
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> body, {bool requiresAuth = false}) async {
+  Future<dynamic> post(String endpoint, Map<String, dynamic> body, {bool requiresAuth = false}) async {
     try {
       return await _makeRequest('POST', endpoint, body: body, requiresAuth: requiresAuth);
     } catch (e) {
@@ -129,7 +192,7 @@ class NetworkService {
     }
   }
 
-  static Future<dynamic> get(String endpoint, {bool requiresAuth = false}) async {
+  Future<dynamic> get(String endpoint, {bool requiresAuth = false}) async {
     try {
       return await _makeRequest('GET', endpoint, requiresAuth: requiresAuth);
     } catch (e) {
@@ -137,7 +200,7 @@ class NetworkService {
     }
   }
 
-  static Future<dynamic> _makeRequest(String method, String endpoint, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
+  Future<dynamic> _makeRequest(String method, String endpoint, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final token = await getToken();
 
@@ -167,7 +230,7 @@ class NetworkService {
     }
   }
 
-  static dynamic _handleResponse(http.Response response, String endpoint, String method, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
+  dynamic _handleResponse(http.Response response, String endpoint, String method, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     }
@@ -196,7 +259,7 @@ class NetworkService {
   }
 
   // 🔹 FETCH AED LOCATIONS 🔹
-  static Future<List<dynamic>> fetchAEDLocations() async {
+  Future<List<dynamic>> fetchAEDLocations() async {
     try {
       final response = await get('/aed', requiresAuth: false);
 
@@ -213,13 +276,13 @@ class NetworkService {
 
   static String? get googleMapsApiKey {
     String? key = dotenv.env['GOOGLE_MAPS_API_KEY'];
-    if (key!.isEmpty) {
+    if (key == null || key.isEmpty) {
       throw Exception("❌ GOOGLE_MAPS_API_KEY is missing from .env");
     }
     return key;
   }
 
-  static Future<void> updateAEDLocation(Map<String, dynamic> aedData) async {
+  Future<void> updateAEDLocation(Map<String, dynamic> aedData) async {
     final response = await post(
       "/aed/locations/update",
       {"aed_list": [aedData]},
@@ -231,13 +294,18 @@ class NetworkService {
     }
   }
 
-
-
   static Future<String?> fetchGoogleMapsApiKey() async {
     try {
-      final response = await get('/api/maps-key', requiresAuth: false);
-      if (response is Map<String, dynamic> && response.containsKey('apiKey')) {
-        return response['apiKey'];
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/maps-key'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('apiKey')) {
+          return jsonResponse['apiKey'];
+        }
       }
     } catch (e) {
       print("❌ Error fetching Google Maps API Key: $e");

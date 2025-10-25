@@ -6,14 +6,6 @@ import '../services/decrypted_data.dart';
 import 'dart:math' as math;
 
 class BLEConnection {
-  static BLEConnection? _instance;
-  static BLEConnection get instance {
-    if (_instance == null) {
-      throw Exception("BLEConnection not initialized");
-    }
-    return _instance!;
-  }
-
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
   Timer? _stateDebounceTimer;
@@ -23,20 +15,7 @@ class BLEConnection {
 
   BluetoothCharacteristic? liveCharacteristic;
 
-  factory BLEConnection({
-    required DecryptedData decryptedDataHandler,
-    required SharedPreferences prefs,
-    required Function(String) onStatusUpdate,
-  }) {
-    _instance ??= BLEConnection._internal(
-      decryptedDataHandler: decryptedDataHandler,
-      prefs: prefs,
-      onStatusUpdate: onStatusUpdate,
-    );
-    return _instance!;
-  }
-
-  BLEConnection._internal({
+  BLEConnection({
     required this.decryptedDataHandler,
     required this.prefs,
     required this.onStatusUpdate,
@@ -228,7 +207,7 @@ class BLEConnection {
         }
       });
 
-      await _setupNotifications(device); // ✅ Don't wait for state variable
+      await _setupNotifications(device);
 
     } catch (e) {
       debugPrint("❌ Connection failed: $e");
@@ -282,10 +261,9 @@ class BLEConnection {
 
       _isConnecting = false;
       _userDisconnected = false; // Reset user disconnect flag on successful connection
-      _reconnectAttempts = 0; // Add this line
+      _reconnectAttempts = 0;
       _updateConnectionStatus("Connected");
       debugPrint("✅ Successfully connected");
-
 
     } catch (e) {
       debugPrint("❌ Notification setup failed: $e");
@@ -347,7 +325,6 @@ class BLEConnection {
     _stateDebounceTimer?.cancel();
     _receivedBuffer.clear();
 
-
     if (connectedDevice != null) {
       try {
         await connectedDevice!.disconnect();
@@ -370,7 +347,7 @@ class BLEConnection {
 
     debugPrint("🔄 Manual retry requested");
 
-    _reconnectAttempts = 0; // Add this line
+    _reconnectAttempts = 0;
     _userDisconnected = false; // Reset manual disconnect flag
 
     // Stop any ongoing operations
@@ -416,7 +393,6 @@ class BLEConnection {
     _adapterStateSubscription?.cancel();
     _connectionStateSub?.cancel();
     _cleanupConnection();
-    _instance = null;
   }
 
   /// **Enable Bluetooth (if OFF)**

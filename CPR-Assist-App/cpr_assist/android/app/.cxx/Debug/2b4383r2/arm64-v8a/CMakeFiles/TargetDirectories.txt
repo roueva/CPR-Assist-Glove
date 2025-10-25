@@ -1,0 +1,2 @@
+C:/Users/evaro/Personal Apps/CPR-Assist-Glove/CPR-Assist-App/cpr_assist/android/app/.cxx/Debug/2b4383r2/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/evaro/Personal Apps/CPR-Assist-Glove/CPR-Assist-App/cpr_assist/android/app/.cxx/Debug/2b4383r2/arm64-v8a/CMakeFiles/rebuild_cache.dir

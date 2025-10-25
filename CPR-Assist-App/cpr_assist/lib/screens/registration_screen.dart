@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/network_service_provider.dart';
 import '../services/decrypted_data.dart';
-import '../services/network_service.dart';
 import 'login_screen.dart';
 
-class RegistrationScreen extends StatefulWidget {
+class RegistrationScreen extends ConsumerStatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
   final DecryptedData decryptedDataHandler; // Pass DecryptedData handler
 
@@ -13,7 +14,7 @@ class RegistrationScreen extends StatefulWidget {
   _RegistrationScreenState createState() => _RegistrationScreenState();
 }
 
-class _RegistrationScreenState extends State<RegistrationScreen> {
+class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -34,7 +35,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
 
     try {
-      final response = await NetworkService.post('/auth/register', {
+      final networkService = ref.read(networkServiceProvider);
+      final response = await networkService.post('/auth/register', {
         'username': _usernameController.text.trim(),
         'email': _emailController.text.trim(),
         'password': _passwordController.text.trim(),

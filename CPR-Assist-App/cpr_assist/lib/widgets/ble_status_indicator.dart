@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/ble_connection.dart';
 
-class BLEStatusIndicator extends StatefulWidget {
+class BLEStatusIndicator extends ConsumerStatefulWidget {
   final BLEConnection bleConnection;
   final ValueNotifier<String> connectionStatusNotifier;
 
@@ -13,10 +14,10 @@ class BLEStatusIndicator extends StatefulWidget {
   });
 
   @override
-  _BLEStatusIndicatorState createState() => _BLEStatusIndicatorState();
+  ConsumerState<BLEStatusIndicator> createState() => _BLEStatusIndicatorState();
 }
 
-class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
+class _BLEStatusIndicatorState extends ConsumerState<BLEStatusIndicator> {
   @override
   void initState() {
     super.initState();
@@ -63,7 +64,6 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
     }
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final status = widget.connectionStatusNotifier.value;

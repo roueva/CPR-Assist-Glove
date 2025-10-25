@@ -1,32 +1,78 @@
-import 'package:cpr_assist/screens/main_layout.dart';
+import 'package:cpr_assist/screens/main_navigation.dart';
 import 'package:cpr_assist/services/network_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'custom_icons.dart';
+import 'widgets/aed_markers.dart';
 import 'screens/login_screen.dart';
 import 'screens/registration_screen.dart';
 import 'services/decrypted_data.dart';
 import 'services/ble_connection.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'providers/shared_preferences_provider.dart';
+import 'providers/auth_provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+
+
+
+// ===== PROVIDERS =====
+
+// DecryptedData Provider
+final decryptedDataProvider = Provider<DecryptedData>((ref) {
+  return DecryptedData();
+});
+
+// BLE Connection Provider
+final bleConnectionProvider = Provider<BLEConnection>((ref) {
+  final decryptedDataHandler = ref.watch(decryptedDataProvider);
+  final prefs = ref.watch(sharedPreferencesProvider);
+
+  return BLEConnection(
+    decryptedDataHandler: decryptedDataHandler,
+    prefs: prefs,
+    onStatusUpdate: (status) {},
+  );
+});
+
+// Simple auth state provider for backward compatibility
+final simpleAuthStateProvider = Provider<bool>((ref) {
+  final authState = ref.watch(authStateProvider);
+  return authState.isLoggedIn;
+});
+
+// Navigator Key Provider (if you still need global navigation)
+final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
+  return GlobalKey<NavigatorState>();
+});
+
+// ===== MAIN FUNCTION =====
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await CustomIcons.loadIcons();
 
   // ✅ Load .env from the correct location
-    await dotenv.load(fileName: ".env");
+  await dotenv.load(fileName: ".env");
 
-  filterLogs(); // ✅ Suppress unwanted logs before app starts
+  // ✅ Keep screen awake
+  WakelockPlus.enable();
 
-  final decryptedDataHandler = DecryptedData();
+
+  NetworkService.startConnectivityMonitoring();
+
+  filterLogs();
+
   final prefs = await SharedPreferences.getInstance();
 
   // ✅ Check if the user is logged in when the app starts
   bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
   if (isLoggedIn) {
     print("🔄 User is logged in. Verifying token...");
-    bool authenticated = await NetworkService.ensureAuthenticated();
+
+    // Create NetworkService instance with SharedPreferences
+    final networkService = NetworkService(prefs);
+    bool authenticated = await networkService.ensureAuthenticated();
 
     if (!authenticated) {
       print("❌ Token expired. Logging user out...");
@@ -37,67 +83,55 @@ void main() async {
     print("❌ No user is logged in.");
   }
 
-  runApp(MyApp(
-    decryptedDataHandler: decryptedDataHandler,
-    prefs: prefs,
-  ));
+  runApp(
+    ProviderScope(
+      overrides: [
+        // Override the SharedPreferences provider with the actual instance
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatefulWidget {
-  final DecryptedData decryptedDataHandler;
-  final SharedPreferences prefs;
+// ===== APP CLASS =====
 
-  const MyApp({
-    super.key,
-    required this.decryptedDataHandler,
-    required this.prefs,
-  });
+class MyApp extends ConsumerWidget {
+  const MyApp({super.key});
 
   @override
-  _MyAppState createState() => _MyAppState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch providers to get current values
+    final isLoggedIn = ref.watch(simpleAuthStateProvider);
+    final decryptedDataHandler = ref.watch(decryptedDataProvider);
+    final navigatorKey = ref.watch(navigatorKeyProvider);
 
-class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
+    // Initialize BLE connection (this will create it when first accessed)
+    ref.watch(bleConnectionProvider);
 
-    globalBLEConnection = BLEConnection(
-      decryptedDataHandler: widget.decryptedDataHandler,
-      prefs: widget.prefs,
-      onStatusUpdate: (status) {},
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'CPR Assist App',
       theme: ThemeData(primarySwatch: Colors.blue),
       navigatorKey: navigatorKey,
       home: MainNavigationScreen(
-      decryptedDataHandler: widget.decryptedDataHandler,
-      isLoggedIn: widget.prefs.getBool('isLoggedIn') ?? false,
-    ),
+        decryptedDataHandler: decryptedDataHandler,
+        isLoggedIn: isLoggedIn,
+      ),
       routes: {
         '/login': (context) => LoginScreen(
-          dataStream: widget.decryptedDataHandler.dataStream,
-          decryptedDataHandler: widget.decryptedDataHandler,
+          dataStream: decryptedDataHandler.dataStream,
+          decryptedDataHandler: decryptedDataHandler,
         ),
         '/register': (context) => RegistrationScreen(
-          dataStream: widget.decryptedDataHandler.dataStream,
-          decryptedDataHandler: widget.decryptedDataHandler,
+          dataStream: decryptedDataHandler.dataStream,
+          decryptedDataHandler: decryptedDataHandler,
         ),
       },
     );
   }
 }
 
-// ✅ Global Navigator Key for Context Access
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-// ✅ Global BLE Connection Instance
-late BLEConnection globalBLEConnection;
+// ===== UTILITY FUNCTIONS =====
 
 /// **🔇 Filter Unwanted Logs**
 void filterLogs() {
@@ -106,7 +140,8 @@ void filterLogs() {
     if (message.contains("FrameEvents") ||
         message.contains("updateAcquireFence") ||
         message.contains("ProxyAndroidLoggerBackend") ||
-        message.contains("Too many Flogger logs")) {
+        message.contains("Too many Flogger logs") ||
+        message.contains("Flogger")) {
       return; // ✅ Suppress logs
     }
     developer.log(message);

@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.18.0 <4.0.0" # Updated to a more recent Dart SDK constraint
+  sdk: ">=2.18.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -35,6 +35,9 @@ dependencies:
   # For NFC Card
   url_launcher: ^6.1.7
 
+  webview_flutter: ^4.4.2  # for in-app browser
+
+
   # For location services
   geolocator: ^13.0.2
   google_maps_flutter: ^2.12.1
@@ -42,6 +45,12 @@ dependencies:
   google_maps_flutter_android: ^2.16.1
   flutter_compass: ^0.8.1
 
+  # For proper connectivity checking
+  connectivity_plus: ^4.0.2
+
+  #For state management - Riverpod
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
 
   # For AES decryption
   encrypt: ^5.0.0
@@ -54,19 +63,47 @@ dependencies:
   jwt_decoder: ^2.0.1
   flutter_dotenv: ^5.2.1
 
-  #Fonts
+  # Fonts
   google_fonts: ^6.1.0
+
+  #Keep screen awake
+  wakelock_plus: ^1.2.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  riverpod_generator: ^2.4.0
+  build_runner: ^2.4.7
 
 dependency_overrides:
   flutter_blue_plus_android: 4.0.2
 
 flutter:
   uses-material-design: true
+
+  # FONTS CONFIGURATION
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter/Inter_18pt-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter/Inter_18pt-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter/Inter_18pt-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter/Inter_18pt-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter/Inter_18pt-Light.ttf
+          weight: 300
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins/Poppins-SemiBold.ttf
+          weight: 600
+
+  # ASSETS CONFIGURATION
   assets:
     - .env
     - assets/map_style.json
@@ -95,6 +132,3 @@ flutter:
     - assets/icons/depth_line.svg
     - assets/icons/depth_circle.svg
     - assets/icons/depth_background.svg
-
-
-

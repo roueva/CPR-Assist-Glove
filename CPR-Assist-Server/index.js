@@ -7,6 +7,7 @@ const { pool, ensureAedTable } = require('./db');
 const initializeAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
+const rateLimit = require('express-rate-limit');
 
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
@@ -34,14 +35,38 @@ const app = express();
 app.use(helmet());
 app.use(express.json());
 app.use(cors({
-  origin: '*', // Accepts requests from everywhere (for development only)
+  origin: process.env.NODE_ENV === 'production' 
+    ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*') 
+    : '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
+// ✅ Rate Limiting Configuration
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per 15 minutes per IP
+    message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-['DATABASE_URL', 'GOOGLE_MAPS_API_KEY'].forEach(key => {
+const bulkUpdateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // Only 5 bulk updates per hour
+    message: { error: 'Too many bulk updates, please try again later.' },
+});
+
+// Apply rate limiting
+app.use('/aed', generalLimiter);
+app.use('/aed/bulk-update', bulkUpdateLimiter);
+app.use('/auth', generalLimiter);
+
+
+// ✅ Check Required Environment Variables
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
+requiredEnvVars.forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);
         process.exit(1);
@@ -155,16 +180,6 @@ const initializeRoutes = () => {
 
 
 initializeRoutes();
-
-
-
-// ✅ Add this route to serve Google Maps API Key
-app.get('/api/maps-key', (req, res) => {
-  if (!process.env.GOOGLE_MAPS_API_KEY) {
-    return res.status(500).json({ error: 'Google Maps API Key not set' });
-  }
-  res.json({ apiKey: process.env.GOOGLE_MAPS_API_KEY });
-});
 
 
 // ✅ Error Handlers

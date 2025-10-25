@@ -1,160 +1,130 @@
 ﻿const express = require('express');
 const router = express.Router();
-const axios = require('axios');
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-
+const AEDService = require('../services/aedService');
 
 module.exports = (pool) => {
     // ✅ Fetch all AED locations
     router.get('/', async (req, res) => {
         try {
-            const result = await pool.query("SELECT * FROM aed_locations;");
-            const data = result.rows;
-
-            // Geocode addresses that are still missing
-            for (const aed of data) {
-                if (!aed.address || aed.address.toLowerCase().includes('unknown')) {
-                    const updatedAddress = await geocodeLatLng(aed.latitude, aed.longitude, GOOGLE_MAPS_API_KEY);
-                    if (updatedAddress) {
-                        await pool.query("UPDATE aed_locations SET address = $1 WHERE id = $2", [updatedAddress, aed.id]);
-                        aed.address = updatedAddress; // reflect in returned response
-                    }
-                }
-            }
-
-            return res.json({ success: true, data });
+            const result = await pool.query("SELECT * FROM aed_locations ORDER BY name;");
+            return res.json({ success: true, data: result.rows });
         } catch (error) {
             console.error("❌ Error fetching AED locations:", error);
             res.status(500).json({ success: false, message: "Failed to fetch AED locations." });
         }
     });
 
-
-    // ✅ Bulk Insert/Update AED locations (for Python script or admin sync)
-    router.post('/bulk-update', async (req, res) => {
-        const { aeds } = req.body;
-
-        if (!Array.isArray(aeds)) {
-            return res.status(400).json({ success: false, message: "Invalid data format. Expected 'aeds' array." });
-        }
-
-        const client = await pool.connect();
+    // ✅ Get single AED by ID
+    router.get('/:id', async (req, res) => {
+        const { id } = req.params;
+        
         try {
-            for (const aed of aeds) {
-                // If address is missing or unknown, geocode it
-                let address = aed.address?.trim() || '';
-                if (!address || address.toLowerCase().includes('unknown') || address.length < 5) {
-                    address = await geocodeLatLng(aed.latitude, aed.longitude, GOOGLE_MAPS_API_KEY);
-                }
-
-                await client.query(`
-          INSERT INTO aed_locations (
-            id, latitude, longitude, name, address, emergency,
-            operator, indoor, access, defibrillator_location,
-            level, opening_hours, phone, wheelchair, last_updated
-          )
-          VALUES (
-            $1, $2, $3, $4, $5, $6,
-            $7, $8, $9, $10,
-            $11, $12, $13, $14, NOW()
-          )
-          ON CONFLICT (id)
-          DO UPDATE SET
-            latitude = EXCLUDED.latitude,
-            longitude = EXCLUDED.longitude,
-            name = EXCLUDED.name,
-            address = EXCLUDED.address,
-            emergency = EXCLUDED.emergency,
-            operator = EXCLUDED.operator,
-            indoor = EXCLUDED.indoor,
-            access = EXCLUDED.access,
-            defibrillator_location = EXCLUDED.defibrillator_location,
-            level = EXCLUDED.level,
-            opening_hours = EXCLUDED.opening_hours,
-            phone = EXCLUDED.phone,
-            wheelchair = EXCLUDED.wheelchair,
-            last_updated = NOW();
-        `, [
-                    aed.id,
-                    aed.latitude,
-                    aed.longitude,
-                    aed.name || '',
-                    address,
-                    aed.emergency || '',
-                    aed.operator || '',
-                    !!aed.indoor,
-                    aed.access || '',
-                    aed.defibrillator_location || '',
-                    aed.level || '',
-                    aed.opening_hours || '',
-                    aed.phone || '',
-                    !!aed.wheelchair
-                ]
-               );
+            const result = await pool.query("SELECT * FROM aed_locations WHERE id = $1", [id]);
+            
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, message: "AED not found" });
             }
-
-            res.json({ success: true, message: "✅ AED locations bulk updated." });
+            
+            return res.json({ success: true, data: result.rows[0] });
         } catch (error) {
-            console.error("❌ Error in bulk AED update:", error);
-            res.status(500).json({ success: false, message: "Bulk update failed." });
-        } finally {
-            client.release();
+            console.error("❌ Error fetching AED:", error);
+            res.status(500).json({ success: false, message: "Failed to fetch AED." });
         }
     });
 
-    async function geocodeLatLng(lat, lng, apiKey) {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
+    // ✅ Sync AEDs from iSaveLives API
+    router.post('/sync-isave-lives', async (req, res) => {
+        const { deleteOld } = req.body;
+        
+        try {
+            const aedService = new AEDService(pool);
+            
+            console.log('🔄 Starting iSaveLives AED sync...');
+            const externalAEDs = await aedService.fetchFromExternalAPI();
+            
+            if (externalAEDs.length === 0) {
+                return res.json({ 
+                    success: true, 
+                    message: 'No AEDs found in iSaveLives API',
+                    inserted: 0,
+                    updated: 0,
+                    deleted: 0,
+                    total: 0
+                });
+            }
+            
+            // Insert/update into database
+            const result = await aedService.bulkInsertAEDs(externalAEDs);
+            
+            // Optionally delete old AEDs not in new data
+            let deletedCount = 0;
+            if (deleteOld === true) {
+                const newAedIds = externalAEDs.map(aed => aed.id);
+                deletedCount = await aedService.deleteOldAEDs(newAedIds);
+            }
+            
+            res.json({ 
+                success: true, 
+                message: `✅ Successfully synced ${result.total} AEDs from iSaveLives`,
+                inserted: result.inserted,
+                updated: result.updated,
+                deleted: deletedCount,
+                total: result.total
+            });
+            
+        } catch (error) {
+            console.error('❌ Error syncing iSaveLives AEDs:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Failed to sync iSaveLives AEDs',
+                error: error.message
+            });
+        }
+    });
+
+    // ✅ Get AEDs near a location (within radius in kilometers)
+    router.get('/near/:lat/:lng/:radius', async (req, res) => {
+        const { lat, lng, radius } = req.params;
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lng);
+        const radiusKm = parseFloat(radius);
+
+        if (isNaN(latitude) || isNaN(longitude) || isNaN(radiusKm)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Invalid coordinates or radius" 
+            });
+        }
 
         try {
-            const res = await axios.get(url);
-            if (res.data.status === 'OK') {
-                const result = res.data.results[0];
-                const components = result.address_components;
-                let route = '', streetNumber = '';
+            // Haversine formula to find nearby AEDs
+            const result = await pool.query(`
+                SELECT *,
+                    (6371 * acos(
+                        cos(radians($1)) * cos(radians(latitude)) * 
+                        cos(radians(longitude) - radians($2)) + 
+                        sin(radians($1)) * sin(radians(latitude))
+                    )) AS distance
+                FROM aed_locations
+                WHERE (6371 * acos(
+                    cos(radians($1)) * cos(radians(latitude)) * 
+                    cos(radians(longitude) - radians($2)) + 
+                    sin(radians($1)) * sin(radians(latitude))
+                )) <= $3
+                ORDER BY distance;
+            `, [latitude, longitude, radiusKm]);
 
-                for (const c of components) {
-                    if (c.types.includes('route')) route = c.long_name;
-                    if (c.types.includes('street_number')) streetNumber = c.long_name;
-                }
-
-                return route && streetNumber ? `${route} ${streetNumber}` : result.formatted_address;
-            } else {
-                return null;
-            }
-        } catch (err) {
-            console.error("❌ Geocoding failed:", err.message);
-            return null;
-        }
-    }
-
-
-    // ✅ Lightweight update for frontend geocoded address sync
-    router.post('/locations/update', async (req, res) => {
-        const { aed_list } = req.body;
-
-        if (!Array.isArray(aed_list)) {
-            return res.status(400).json({ message: 'aed_list is required and must be an array' });
-        }
-
-        try {
-            for (const aed of aed_list) {
-                const { id, address, latitude, longitude } = aed;
-
-                await pool.query(`
-          UPDATE aed_locations
-          SET
-            address = $1,
-            latitude = $2,
-            longitude = $3,
-            last_updated = NOW()
-          WHERE id = $4
-        `, [address, latitude, longitude, id]);
-            }
-
-            res.json({ status: 'success', updated: aed_list.length });
-        } catch (err) {
-            console.error("❌ Error updating AED addresses:", err);
-            res.status(500).json({ message: 'Server error while updating AEDs' });
+            return res.json({ 
+                success: true, 
+                count: result.rows.length,
+                data: result.rows 
+            });
+        } catch (error) {
+            console.error("❌ Error finding nearby AEDs:", error);
+            res.status(500).json({ 
+                success: false, 
+                message: "Failed to find nearby AEDs." 
+            });
         }
     });
 

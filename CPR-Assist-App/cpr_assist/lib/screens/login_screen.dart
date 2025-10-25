@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../services/network_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/network_service_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'registration_screen.dart';
-import '../services/decrypted_data.dart'; // Import DecryptedData handler
-import '../widgets/account_menu.dart'; // Import AccountMenu widget
+import '../services/decrypted_data.dart';
+import '../widgets/account_menu.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
   final DecryptedData decryptedDataHandler;
   final VoidCallback? onLoginSuccess;
@@ -22,7 +23,7 @@ class LoginScreen extends StatefulWidget {
   _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -33,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    FocusScope.of(context).unfocus(); // Dismiss keyboard
+    FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -41,14 +42,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       // Send login request to backend
-      final response = await NetworkService.post('/auth/login', {
+      final networkService = ref.read(networkServiceProvider);
+      final response = await networkService.post('/auth/login', {
         'username': _usernameController.text.trim(),
         'password': _passwordController.text.trim(),
       });
 
+
       if (response['token'] != null && response['user_id'] != null) {
-        await NetworkService.saveToken(response['token']);  // ✅ Store token
-        await NetworkService.saveUserId(response['user_id']);
+        await networkService.saveToken(response['token']);
+        await networkService.saveUserId(response['user_id']);
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
@@ -58,10 +61,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // ✅ Return to previous screen or redirect to HomeScreen
         if (widget.onLoginSuccess != null) {
-          widget.onLoginSuccess!(); // ✅ Call the success callback
+          widget.onLoginSuccess!();
         }
 
-        Navigator.pop(context, true); // ✅ Return success to caller
+        Navigator.pop(context, true);
         return;
       } else {
         setState(() {
@@ -82,18 +85,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // Dismiss keyboard on tap
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Login'),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () {
-              Navigator.pop(context, false); // ✅ Explicitly return `false`
+              Navigator.pop(context, false);
             },
           ),
           actions: [
-            AccountMenu(decryptedDataHandler: widget.decryptedDataHandler), // Add account menu
+            AccountMenu(decryptedDataHandler: widget.decryptedDataHandler),
           ],
         ),
         body: Padding(

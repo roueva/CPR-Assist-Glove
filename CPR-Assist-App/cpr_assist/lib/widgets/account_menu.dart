@@ -1,20 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/network_service_provider.dart';
+import '../providers/shared_preferences_provider.dart';
 import '../screens/login_screen.dart';
 import '../services/decrypted_data.dart';
 
-class AccountMenu extends StatefulWidget {
+class AccountMenu extends ConsumerStatefulWidget {
   final DecryptedData decryptedDataHandler;
 
   const AccountMenu({super.key, required this.decryptedDataHandler});
 
   @override
-  _AccountMenuState createState() => _AccountMenuState();
+  ConsumerState<AccountMenu> createState() => _AccountMenuState();
 }
 
-class _AccountMenuState extends State<AccountMenu> {
+class _AccountMenuState extends ConsumerState<AccountMenu> {
   String username = "Account"; // Default display when not logged in
 
   @override
@@ -24,7 +26,7 @@ class _AccountMenuState extends State<AccountMenu> {
   }
 
   Future<void> _loadUsername() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
     if (isLoggedIn) {
       final savedUsername = prefs.getString('username') ?? 'User';
@@ -35,9 +37,12 @@ class _AccountMenuState extends State<AccountMenu> {
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
+    final networkService = ref.read(networkServiceProvider);
+
     await prefs.remove('isLoggedIn');
     await prefs.remove('jwt_token');
+    await networkService.removeToken();
     await prefs.remove('user_id');
     await prefs.remove('username');
 
