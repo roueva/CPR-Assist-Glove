@@ -221,6 +221,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             children: [
               _buildGoogleMap(),
               _buildStatusBar(),
+              _buildLogo(orientation),
 
               if (!widget.config.hasSelectedRoute)
                 orientation == Orientation.portrait ? _buildAEDListPanel() : _buildAEDSideListPanel(),
@@ -252,23 +253,37 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             _animateToUserLocation(controller);
           },
 
+
           onCameraMoveStarted: () {
-            if (widget.config.hasStartedNavigation) {
-              widget.onCameraMoveStarted?.call();
-            }
+            widget.onCameraMoveStarted?.call();  // NO if statement!
           },
 
           onCameraMove: (CameraPosition position) {
-            if (widget.config.hasStartedNavigation) {
-              widget.onCameraMoved?.call();
-            }
+            widget.onCameraMoved?.call();  // NO if statement!
           },
 
           onCameraIdle: () {
-            if (widget.config.hasStartedNavigation) {
-              widget.onCameraIdle?.call();
-            }
+            widget.onCameraIdle?.call();  // NO if statement!
           },
+
+
+          // onCameraMoveStarted: () {
+          //   if (widget.config.hasStartedNavigation) {
+          //     widget.onCameraMoveStarted?.call();
+          //   }
+          // },
+
+          // onCameraMove: (CameraPosition position) {
+          //   if (widget.config.hasStartedNavigation) {
+          //     widget.onCameraMoved?.call();
+          //   }
+          // },
+          //
+          // onCameraIdle: () {
+          //   if (widget.config.hasStartedNavigation) {
+          //     widget.onCameraIdle?.call();
+          //   }
+          // },
 
           initialCameraPosition: CameraPosition(
             target: widget.config.userLocation ?? const LatLng(39.0742, 21.8243), // Greece center
@@ -300,7 +315,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
           // Add caching hint for better offline support
           cameraTargetBounds: CameraTargetBounds.unbounded,
-          minMaxZoomPreference: const MinMaxZoomPreference(6.0, 20.0),
+          minMaxZoomPreference: const MinMaxZoomPreference(3.0, 20.0),
         ),
       ),
     );
@@ -349,6 +364,43 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
+  Widget _buildLogo(Orientation orientation) {
+    // Define default padding
+    const double padding = 14.0;
+
+    // Get screen height for portrait calculation
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // These values are based on your DraggableScrollableSheet's minSize
+    // and the hardcoded width of the landscape panel.
+    final double portraitPanelMinHeight = screenHeight * 0.06; // Based on minSize: 0.20
+    const double landscapePanelWidth = 5.0; // Based on hardcoded width
+
+    // Calculate position based on orientation
+    final double left = (orientation == Orientation.landscape)
+        ? (landscapePanelWidth + padding)
+        : padding;
+
+    final double bottom = (orientation == Orientation.portrait)
+        ? (portraitPanelMinHeight + padding)
+        : padding;
+
+    return Positioned(
+      left: left,
+      bottom: bottom,
+      // Wrap in IgnorePointer so the logo doesn't block map gestures
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: 1, // Adjust opacity as needed
+          child: Image.asset(
+            'assets/icons/kids_save_lives_logo.png',
+            width: 40, // Adjust size as needed
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildPanelContainer({
     required Widget child,

@@ -9,6 +9,7 @@ const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 const rateLimit = require('express-rate-limit');
 
+
 // ✅ Environment Configuration
 const PORT = Number(process.env.PORT) || 8080;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -234,6 +235,33 @@ const startServer = async () => {
         process.exit(1);
     }
 };
+
+
+const cron = require('node-cron');
+const AEDService = require('./services/aedService');
+
+// Weekly sync - Every Sunday at 3 AM
+cron.schedule('0 3 * * 0', async () => {
+    console.log('🕐 Running scheduled weekly AED sync...');
+    try {
+        const aedService = new AEDService(pool);
+        const externalAEDs = await aedService.fetchFromExternalAPI();
+        
+        if (externalAEDs.length > 0) {
+            const result = await aedService.syncAEDs(externalAEDs);
+            console.log(`✅ Weekly sync complete: ${result.inserted} inserted, ${result.updated} updated, ${result.unchanged} unchanged`);
+        } else {
+            console.log('⚠️ No AEDs fetched during weekly sync');
+        }
+    } catch (error) {
+        console.error('❌ Scheduled sync failed:', error.message);
+    }
+}, {
+    scheduled: true,
+    timezone: "Europe/Athens"
+});
+
+console.log('⏰ Weekly AED sync scheduled for Sundays at 3:00 AM (Athens time)');
 
 // ✅ Graceful Shutdown
 const shutdown = async (signal) => {

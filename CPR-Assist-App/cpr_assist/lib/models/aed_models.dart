@@ -1,5 +1,6 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'aed_models.dart';
 import '../services/aed_map/location_service.dart';
 
 class AED {
@@ -71,8 +72,6 @@ class AED {
     };
   }
 }
-
-
 
 class NavigationState {
   final bool isActive;

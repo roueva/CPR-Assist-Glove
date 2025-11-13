@@ -6,11 +6,15 @@ module.exports = (pool) => {
     // ✅ Fetch all AED locations
     router.get('/', async (req, res) => {
         try {
-            const result = await pool.query("SELECT * FROM aed_locations ORDER BY name;");
+            const result = await pool.query("SELECT * FROM aed_locations ORDER BY foundation;");
             return res.json({ success: true, data: result.rows });
         } catch (error) {
             console.error("❌ Error fetching AED locations:", error);
-            res.status(500).json({ success: false, message: "Failed to fetch AED locations." });
+            res.status(500).json({ 
+                success: false, 
+                message: "Failed to fetch AED locations.",
+                ...(process.env.NODE_ENV === 'development' && { error: error.message })
+            });
         }
     });
 
@@ -28,56 +32,65 @@ module.exports = (pool) => {
             return res.json({ success: true, data: result.rows[0] });
         } catch (error) {
             console.error("❌ Error fetching AED:", error);
-            res.status(500).json({ success: false, message: "Failed to fetch AED." });
+            res.status(500).json({ 
+                success: false, 
+                message: "Failed to fetch AED.",
+                ...(process.env.NODE_ENV === 'development' && { error: error.message })
+            });
         }
     });
 
-    // ✅ Sync AEDs from iSaveLives API
-    router.post('/sync-isave-lives', async (req, res) => {
-        const { deleteOld } = req.body;
-        
+    // ✅ Manual sync from iSaveLives API
+    router.post('/sync', async (req, res) => {
         try {
             const aedService = new AEDService(pool);
             
-            console.log('🔄 Starting iSaveLives AED sync...');
+            console.log('🔄 Starting manual AED sync...');
             const externalAEDs = await aedService.fetchFromExternalAPI();
             
             if (externalAEDs.length === 0) {
                 return res.json({ 
                     success: true, 
-                    message: 'No AEDs found in iSaveLives API',
+                    message: 'No AEDs found to sync',
                     inserted: 0,
                     updated: 0,
-                    deleted: 0,
+                    unchanged: 0,
                     total: 0
                 });
             }
             
-            // Insert/update into database
-            const result = await aedService.bulkInsertAEDs(externalAEDs);
-            
-            // Optionally delete old AEDs not in new data
-            let deletedCount = 0;
-            if (deleteOld === true) {
-                const newAedIds = externalAEDs.map(aed => aed.id);
-                deletedCount = await aedService.deleteOldAEDs(newAedIds);
-            }
+            const result = await aedService.syncAEDs(externalAEDs);
             
             res.json({ 
                 success: true, 
-                message: `✅ Successfully synced ${result.total} AEDs from iSaveLives`,
+                message: `✅ Successfully synced ${result.total} AEDs`,
                 inserted: result.inserted,
                 updated: result.updated,
-                deleted: deletedCount,
+                unchanged: result.unchanged,
                 total: result.total
             });
             
         } catch (error) {
-            console.error('❌ Error syncing iSaveLives AEDs:', error);
+            console.error('❌ Error syncing AEDs:', error);
             res.status(500).json({ 
                 success: false, 
-                message: 'Failed to sync iSaveLives AEDs',
-                error: error.message
+                message: 'Failed to sync AEDs',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
+        }
+    });
+
+    // ✅ Get cache file information
+    router.get('/cache/info', async (req, res) => {
+        try {
+            const aedService = new AEDService(pool);
+            const cacheInfo = await aedService.getCacheInfo();
+            res.json({ success: true, cache: cacheInfo });
+        } catch (error) {
+            console.error('❌ Error getting cache info:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Failed to get cache info' 
             });
         }
     });
@@ -97,7 +110,6 @@ module.exports = (pool) => {
         }
 
         try {
-            // Haversine formula to find nearby AEDs
             const result = await pool.query(`
                 SELECT *,
                     (6371 * acos(
@@ -123,7 +135,8 @@ module.exports = (pool) => {
             console.error("❌ Error finding nearby AEDs:", error);
             res.status(500).json({ 
                 success: false, 
-                message: "Failed to find nearby AEDs." 
+                message: "Failed to find nearby AEDs.",
+                ...(process.env.NODE_ENV === 'development' && { error: error.message })
             });
         }
     });
