@@ -140,64 +140,91 @@ class AEDService {
      * Sync AEDs: Update existing records or insert new ones
      */
     async syncAEDs(aeds) {
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
+    const client = await this.pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        console.log(`📦 Processing ${aeds.length} AEDs in batches...`);
+        
+        // Process in batches of 500
+        const batchSize = 500;
+        let inserted = 0;
+        let updated = 0;
+        let unchanged = 0;
+        
+        for (let i = 0; i < aeds.length; i += batchSize) {
+            const batch = aeds.slice(i, i + batchSize);
             
-            let inserted = 0;
-            let updated = 0;
-            let unchanged = 0;
+            // Build VALUES string for batch insert
+            const values = [];
+            const params = [];
+            let paramIndex = 1;
             
-            for (const aed of aeds) {
-                const result = await client.query(`
-                    INSERT INTO aed_locations (
-                        id, foundation, address, latitude, longitude,
-                        availability, aed_webpage, last_updated
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-                    ON CONFLICT (id)
-                    DO UPDATE SET
-                        foundation = EXCLUDED.foundation,
-                        address = EXCLUDED.address,
-                        latitude = EXCLUDED.latitude,
-                        longitude = EXCLUDED.longitude,
-                        availability = EXCLUDED.availability,
-                        aed_webpage = EXCLUDED.aed_webpage,
-                        last_updated = NOW()
-                    WHERE 
-                        aed_locations.foundation IS DISTINCT FROM EXCLUDED.foundation OR
-                        aed_locations.address IS DISTINCT FROM EXCLUDED.address OR
-                        aed_locations.latitude IS DISTINCT FROM EXCLUDED.latitude OR
-                        aed_locations.longitude IS DISTINCT FROM EXCLUDED.longitude OR
-                        aed_locations.availability IS DISTINCT FROM EXCLUDED.availability OR
-                        aed_locations.aed_webpage IS DISTINCT FROM EXCLUDED.aed_webpage
-                    RETURNING (xmax = 0) AS inserted
-                `, [
-                    aed.id, aed.foundation, aed.address, aed.latitude,
-                    aed.longitude, aed.availability, aed.aed_webpage
-                ]);
-                
-                if (result.rows.length === 0) {
-                    unchanged++;
-                } else if (result.rows[0].inserted) {
-                    inserted++;
-                } else {
-                    updated++;
-                }
+            for (const aed of batch) {
+                values.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, NOW())`);
+                params.push(
+                    aed.id,
+                    aed.foundation,
+                    aed.address,
+                    aed.latitude,
+                    aed.longitude,
+                    aed.availability,
+                    aed.aed_webpage
+                );
+                paramIndex += 7;
             }
             
-            await client.query('COMMIT');
-            console.log(`✅ Sync complete: ${inserted} inserted, ${updated} updated, ${unchanged} unchanged`);
-            return { success: true, inserted, updated, unchanged, total: aeds.length };
+            const query = `
+                INSERT INTO aed_locations (
+                    id, foundation, address, latitude, longitude,
+                    availability, aed_webpage, last_updated
+                )
+                VALUES ${values.join(', ')}
+                ON CONFLICT (id)
+                DO UPDATE SET
+                    foundation = EXCLUDED.foundation,
+                    address = EXCLUDED.address,
+                    latitude = EXCLUDED.latitude,
+                    longitude = EXCLUDED.longitude,
+                    availability = EXCLUDED.availability,
+                    aed_webpage = EXCLUDED.aed_webpage,
+                    last_updated = NOW()
+                WHERE 
+                    aed_locations.foundation IS DISTINCT FROM EXCLUDED.foundation OR
+                    aed_locations.address IS DISTINCT FROM EXCLUDED.address OR
+                    aed_locations.latitude IS DISTINCT FROM EXCLUDED.latitude OR
+                    aed_locations.longitude IS DISTINCT FROM EXCLUDED.longitude OR
+                    aed_locations.availability IS DISTINCT FROM EXCLUDED.availability OR
+                    aed_locations.aed_webpage IS DISTINCT FROM EXCLUDED.aed_webpage
+            `;
             
-        } catch (error) {
-            await client.query('ROLLBACK');
-            console.error('❌ Sync operation failed:', error.message);
-            throw error;
-        } finally {
-            client.release();
+            await client.query(query, params);
+            
+            const progress = Math.min(i + batchSize, aeds.length);
+            console.log(`📦 Processed ${progress}/${aeds.length} AEDs`);
         }
+        
+        // Get statistics after sync
+        const statsResult = await client.query(`
+            SELECT COUNT(*) as total FROM aed_locations
+        `);
+        
+        const total = parseInt(statsResult.rows[0].total);
+        inserted = Math.max(0, total - (aeds.length - total));
+        updated = aeds.length - inserted;
+        
+        await client.query('COMMIT');
+        console.log(`✅ Sync complete: ${inserted} inserted, ${updated} updated`);
+        return { success: true, inserted, updated, unchanged: 0, total: aeds.length };
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Sync operation failed:', error.message);
+        throw error;
+    } finally {
+        client.release();
     }
+}
 
     /**
      * Get cache file info
