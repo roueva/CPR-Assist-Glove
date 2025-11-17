@@ -101,20 +101,6 @@ class AEDService {
   }
 
 
-
-  Set<Marker> createMarkers(List<AED> aeds, Function(LatLng) onPreviewPressed){
-    return aeds.map((aed) => Marker(
-      markerId: MarkerId(aed.id.toString()),
-      position: aed.location,
-      icon: CustomIcons.aedUpdated,
-      infoWindow: InfoWindow(
-        title: aed.address,
-        snippet: null,
-        onTap: () => onPreviewPressed(aed.location),
-      ),
-    )).toSet();
-  }
-
   List<AED> sortAEDsByDistance(List<AED> aeds, LatLng? referenceLocation, String transportMode) {
     if (referenceLocation == null || aeds.isEmpty) return aeds;
 

@@ -176,7 +176,6 @@ class NavigationState {
 }
 
 class AEDMapState {
-  final Set<Marker> markers;
   final List<AED> aedList;
   final LatLng? userLocation;
   final bool isLoading;
@@ -184,10 +183,9 @@ class AEDMapState {
   final NavigationState navigation;
   final int currentBatch;
   final bool isOffline;
-  final DateTime? lastSyncTime;  // NEW: Track when data was last synced
+  final DateTime? lastSyncTime;
 
   const AEDMapState({
-    this.markers = const {},
     this.aedList = const [],
     this.userLocation,
     this.isLoading = true,
@@ -225,7 +223,6 @@ class AEDMapState {
   }
 
   AEDMapState copyWith({
-    Set<Marker>? markers,
     List<AED>? aedList,
     LatLng? userLocation,
     bool? isLoading,
@@ -236,7 +233,6 @@ class AEDMapState {
     DateTime? lastSyncTime,
   }) {
     return AEDMapState(
-      markers: markers ?? this.markers,
       aedList: aedList ?? this.aedList,
       userLocation: userLocation ?? this.userLocation,
       isLoading: isLoading ?? this.isLoading,

@@ -26,10 +26,9 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
     state = state.copyWith(userLocation: location);
   }
 
-  void setAEDs(List<AED> aeds, Set<Marker> markers) {
+  void setAEDs(List<AED> aeds) {
     state = state.copyWith(
       aedList: aeds,
-      markers: markers,
       isLoading: false,
       isRefreshing: false,
     );
@@ -87,7 +86,9 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
     state = state.copyWith(navigation: const NavigationState());
   }
 
-  void updateAEDsAndMarkers(List<AED> aeds, Set<Marker> markers) {
-    state = state.copyWith(aedList: aeds, markers: markers);
+  void updateAEDsAndMarkers(List<AED> aeds) {
+    state = state.copyWith(
+        aedList: aeds
+    );
   }
 }

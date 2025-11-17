@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/aed_models.dart';
 import '../../services/aed_map/aed_service.dart';
 import '../../services/aed_map/cache_service.dart';
@@ -37,7 +36,10 @@ class AppInitializationManager {
   static final LocationService _locationService = LocationService();
 
   /// Main initialization - call this from your widget
-  static Future<InitializationResult> initializeApp() async {
+  static Future<InitializationResult> initializeApp(
+      AEDService aedRepository,
+      NetworkService networkService,
+      ) async {
     if (_isInitializing) {
       print("⚠️ Initialization already in progress");
       throw Exception("Initialization already in progress");
@@ -60,7 +62,7 @@ class AppInitializationManager {
       print("📍 Cached location: ${cachedLocationData['location'] != null ? 'Found' : 'None'}");
 
       // STEP 4: Load cached AEDs (instant display)
-      final cachedAEDs = await _loadCachedAEDs(cachedLocationData['location']);
+      final cachedAEDs = await _loadCachedAEDs(aedRepository, cachedLocationData['location']);
       print("📦 Cached AEDs: ${cachedAEDs.length}");
 
       // STEP 5: Get API key if online
@@ -135,11 +137,11 @@ class AppInitializationManager {
   }
 
   /// Load cached AEDs
-  static Future<List<AED>> _loadCachedAEDs(LatLng? userLocation) async {
+  static Future<List<AED>> _loadCachedAEDs(
+      AEDService aedRepository, // 👈 ACCEPT service as parameter
+      LatLng? userLocation,
+      ) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final networkService = NetworkService(prefs);
-      final aedRepository = AEDService(networkService);
 
       final cachedData = await CacheService.getAEDs();
       if (cachedData == null) {
@@ -184,16 +186,13 @@ class AppInitializationManager {
   }
 
   /// Fetch fresh AEDs (call this in background)
-  static Future<List<AED>> fetchFreshAEDs({
+  static Future<List<AED>> fetchFreshAEDs(AEDService aedRepository,
+      {
     required bool isConnected,
     LatLng? userLocation,
     String transportMode = 'walking',
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final networkService = NetworkService(prefs);
-      final aedRepository = AEDService(networkService);
-
       // Fetch AEDs
       final aeds = await aedRepository.fetchAEDs(forceRefresh: isConnected);
 
@@ -244,7 +243,8 @@ class AppInitializationManager {
   }
 
   /// Improve distance accuracy with API (call this in background)
-  static Future<void> improveDistanceAccuracy({
+  static Future<void> improveDistanceAccuracy(AEDService aedRepository,
+      {
     required List<AED> aeds,
     required LatLng userLocation,
     required String transportMode,
@@ -257,9 +257,6 @@ class AppInitializationManager {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final networkService = NetworkService(prefs);
-      final aedRepository = AEDService(networkService);
 
       await aedRepository.improveDistanceAccuracyInBackground(
         aeds,

@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../utils/app_constants.dart';
 import 'location_service.dart';
 
 class MapUtils {
-  static const double navigationZoom = 17.0;
+  static const double navigationZoom = 18.5;
   static const double navigationTilt = 45.0;
   static const double overviewPadding = 60.0;
   static const double routePadding = 20.0;
@@ -297,7 +298,7 @@ class MapViewController {
 
   double _calculateAdaptiveZoom(double speedMetersPerSecond) {
     final speedKmh = speedMetersPerSecond * 3.6;
-    return speedKmh < 5 ? 17.0 :
+    return speedKmh < 5 ? AppConstants.navigationZoom :
     speedKmh < 20 ? 16.0 :
     15.0;
   }

@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../models/aed_models.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../utils/availability_parser.dart';
 import '../../widgets/aed_markers.dart';
 
 class ClusterPoint {
@@ -18,16 +19,22 @@ class ClusterPoint {
 
 class SimpleClusterManager {
   /// Group AEDs into clusters based on zoom level
-  static List<ClusterPoint> clusterAEDs(List<AED> aeds, double zoom) {
+  static List<ClusterPoint> clusterAEDs(
+      List<AED> aeds,
+      double zoom,
+      double clusteringZoomThreshold,
+      ) {
     if (aeds.isEmpty) return [];
 
     print("🔍 clusterAEDs() called:");
     print("   → AED count: ${aeds.length}");
     print("   → Zoom level: $zoom");
+    print("   → Threshold: $clusteringZoomThreshold");
 
     // At high zoom (street level), show all individual AEDs
-    if (zoom >= 16.0) {
-      print("   → Zoom >= 16.0 - returning ALL individual AEDs");
+    if (zoom >= clusteringZoomThreshold) {
+      print(
+          "   → Zoom >= $clusteringZoomThreshold (threshold) - returning ALL individual AEDs");
       return aeds.map((aed) => ClusterPoint(aed.location, [aed])).toList();
     }
 
@@ -38,7 +45,8 @@ class SimpleClusterManager {
     }
 
     // Normal distance-based clustering for medium zoom
-    print("   → Zoom < 16.0 - performing distance clustering");
+    print(
+        "   → Zoom < $clusteringZoomThreshold (threshold) - performing distance clustering");
     final distance = _getClusterDistanceForZoom(zoom);
     print("   → Cluster distance: $distance");
 
@@ -202,6 +210,7 @@ class ClusterMarkerBuilder {
     final markerId = MarkerId(getMarkerId(cluster));
 
     if (cluster.isCluster) {
+      // --- This is the CLUSTER logic (unchanged) ---
       return Marker(
         markerId: markerId,
         position: cluster.location,
@@ -211,11 +220,28 @@ class ClusterMarkerBuilder {
         },
       );
     } else {
+      // --- This is the INDIVIDUAL AED logic (MODIFIED) ---
+
+      // 1. Get the single AED
+      final AED aed = cluster.aeds.first;
+
+      // 2. Check its availability
+      final availabilityStatus =
+      AvailabilityParser.parseAvailability(aed.availability, aedId: aed.id);
+
+      // 3. Set opacity: 1.0 for "Open", 0.5 for "Closed/Uncertain"
+      final double markerOpacity =
+      (availabilityStatus.isOpen && !availabilityStatus.isUncertain)
+          ? 1.0 // Fully visible
+          : 0.5; // 50% transparent (you can change this value!)
+
+      // 4. Return the marker with the new alpha property
       return Marker(
         markerId: markerId,
         position: cluster.location,
         icon: CustomIcons.aedUpdated,
         onTap: () => onTap(cluster.location),
+        alpha: markerOpacity, // ✅ THIS IS THE NEW PROPERTY
       );
     }
   }
@@ -258,13 +284,6 @@ class ClusterMarkerBuilder {
 
     final center = Offset(size.width / 2, size.height / 2);
     final outerRadius = size.width / 2 - 2;
-
-    // Draw circular shadow
-    final Paint shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
-    canvas.drawCircle(center + const Offset(1, 1), outerRadius, shadowPaint);
 
     // Draw outer ring (light green)
     final Paint ringPaint = Paint()
@@ -315,7 +334,8 @@ class ClusterMarkerBuilder {
       size.height.toInt(),
     );
 
-    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final ByteData? byteData =
+    await image.toByteData(format: ui.ImageByteFormat.png);
     final Uint8List imageData = byteData!.buffer.asUint8List();
 
     // ✅ CORRECT: Use BitmapDescriptor.bytes (NOT fromBytes)
