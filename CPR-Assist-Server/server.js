@@ -67,7 +67,7 @@ app.use('/auth', generalLimiter);
 
 
 // ✅ Check Required Environment Variables
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY'];
 requiredEnvVars.forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);
@@ -170,6 +170,18 @@ app.get('/health', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
+});
+
+app.get('/api/maps-key', (req, res) => {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    logger.error('🚨 Missing environment variable: GOOGLE_MAPS_API_KEY');
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
+  // Send the key in the exact format your app expects
+  res.json({ apiKey: apiKey });
 });
 
 

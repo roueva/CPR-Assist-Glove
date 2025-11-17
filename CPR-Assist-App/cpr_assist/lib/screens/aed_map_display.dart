@@ -12,6 +12,7 @@ import '../services/aed_map/aed_service.dart';
 import '../services/aed_map/cache_service.dart';
 import '../services/aed_map/location_service.dart';
 import '../services/aed_map/route_service.dart';
+import '../utils/availability_parser.dart';
 import '../utils/safe_fonts.dart';
 import 'aed_webview_screen.dart';
 
@@ -24,6 +25,7 @@ class AppColors {
   static const Color textPrimary = Color(0xFF2C2C2C);
   static const Color textSecondary = Color(0xFF727272);
   static const Color cardBackground = Color(0xFFEDF4F9);
+  static const Color clusterGreen = Color(0xFF2E7D32);
 }
 
 // Custom painter for colored arc at top of circle
@@ -132,7 +134,6 @@ class AEDMapDisplay extends StatefulWidget {
   final VoidCallback? onManualGPSSearch;
 
 
-
   const AEDMapDisplay({
     super.key,
     required this.config,
@@ -166,7 +167,8 @@ class _AEDWithDistance {
 
 class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserver {
   String? _mapStyle;
-  bool _hasAnimatedInitialCamera = false;
+  final bool _hasAnimatedInitialCamera = false;
+  MapType _currentMapType = MapType.normal;
 
 
   final GlobalKey _aedListKey = GlobalKey();
@@ -203,6 +205,15 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     }
   }
 
+  void _toggleMapType() {
+    setState(() {
+      _currentMapType = _currentMapType == MapType.normal
+          ? MapType.hybrid
+          : MapType.normal;
+    });
+    HapticFeedback.lightImpact();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_mapStyle == null) {
@@ -221,6 +232,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             children: [
               _buildGoogleMap(),
               _buildStatusBar(),
+              _buildMapTypeToggle(),
               _buildLogo(orientation),
 
               if (!widget.config.hasSelectedRoute)
@@ -250,9 +262,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         child: GoogleMap(
           onMapCreated: (controller) {
             widget.onMapCreated(controller);
-            _animateToUserLocation(controller);
           },
 
+          initialCameraPosition: CameraPosition(
+            target: widget.config.userLocation ?? const LatLng(39.0742, 21.8243),
+            zoom: widget.config.userLocation != null ? 16 : 6,
+          ),
 
           onCameraMoveStarted: () {
             widget.onCameraMoveStarted?.call();  // NO if statement!
@@ -266,32 +281,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             widget.onCameraIdle?.call();  // NO if statement!
           },
 
-
-          // onCameraMoveStarted: () {
-          //   if (widget.config.hasStartedNavigation) {
-          //     widget.onCameraMoveStarted?.call();
-          //   }
-          // },
-
-          // onCameraMove: (CameraPosition position) {
-          //   if (widget.config.hasStartedNavigation) {
-          //     widget.onCameraMoved?.call();
-          //   }
-          // },
-          //
-          // onCameraIdle: () {
-          //   if (widget.config.hasStartedNavigation) {
-          //     widget.onCameraIdle?.call();
-          //   }
-          // },
-
-          initialCameraPosition: CameraPosition(
-            target: widget.config.userLocation ?? const LatLng(39.0742, 21.8243), // Greece center
-            zoom: widget.config.userLocation != null ? 16 : 6,
-          ),
-
           // ADD THE STYLE HERE INSTEAD
           style: _mapStyle?.isNotEmpty == true ? _mapStyle : null,
+          mapType: _currentMapType,
           markers: widget.config.aedMarkers,
 
           myLocationEnabled: widget.userLocationAvailable && widget.config.userLocation != null,
@@ -321,22 +313,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
-  void _animateToUserLocation(GoogleMapController controller) {
-    if (!_hasAnimatedInitialCamera && widget.config.userLocation != null) {
-      _hasAnimatedInitialCamera = true;
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted && widget.config.userLocation != null) {
-          controller.animateCamera(
-            CameraUpdate.newCameraPosition(CameraPosition(
-              target: widget.config.userLocation!,
-              zoom: 16,
-            )),
-          );
-        }
-      });
-    }
-  }
-
   Widget _buildStatusBar() {
     if (widget.config.isLoading) return const SizedBox.shrink();
 
@@ -361,6 +337,47 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       top: 4,
       right: 10,
       child: iconWidget,
+    );
+  }
+
+
+  Widget _buildMapTypeToggle() {
+    final orientation = MediaQuery.of(context).orientation;
+
+    final double left = orientation == Orientation.landscape ? 390 : 5;
+    final double top = 3;
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: Tooltip(
+        message: _currentMapType == MapType.normal
+            ? 'Switch to Satellite View'
+            : 'Switch to Map View',
+        child: Material(
+          elevation: 4,
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: _toggleMapType,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _currentMapType == MapType.normal
+                    ? Icons.satellite_alt
+                    : Icons.map,
+                size: 20,
+                color: const Color(0xFF194E9D),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -452,7 +469,18 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: (widget.config.isUsingCachedLocation && widget.userLocationAvailable)
+                      ? const Padding( // ✅ Show a spinner
+                    padding: EdgeInsets.all(10.0), // Give it some padding
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFF194E9D),
+                      ),
+                    ),
+                  )
+                      : const Icon( // ✅ Show the icon
                     Icons.my_location,
                     color: Color(0xFF194E9D),
                     size: 20,
@@ -483,65 +511,94 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   }
 
   Widget _buildAEDListViewContent(ScrollController scrollController) {
-    return ListView(
+    return RawScrollbar(
       controller: scrollController,
-      padding: const EdgeInsets.only(left: 12, right: 12, top: 12),
-      children: [
-        // Add draggable handle for landscape
-        Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade400,
-              borderRadius: BorderRadius.circular(10),
+      thumbVisibility: false,  // Only shows when scrolling
+      thickness: 4,
+      radius: const Radius.circular(2),
+      thumbColor: AppColors.clusterGreen.withOpacity(0.5),
+      fadeDuration: const Duration(milliseconds: 300),
+      timeToFade: const Duration(milliseconds: 600),
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.only(left: 12, right: 12, top: 12),
+        children: [
+          // Add draggable handle for landscape
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
-        ),
-        Text(
-          widget.config.userLocation != null ? "Nearby AEDs" : "AED List",
-          style: SafeFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFF2C2C2C),
+
+          // ✅ ADD THIS ROW instead of just Text
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                widget.config.userLocation != null ? "Nearby AEDs" : "AED List",
+                style: SafeFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF2C2C2C),
+                ),
+              ),
+              // Show last sync time
+              if (widget.config.aeds.isNotEmpty && widget.config.aeds.first.lastUpdated != null)
+                Text(
+                  "Updated ${widget.config.aeds.first.formattedLastUpdated}",
+                  style: SafeFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: 12),
-        ...widget.config.aeds.map((aed) {
-          int? distance;
 
-          if (widget.config.userLocation != null) {
-            // First try to get cached distance (which includes estimated distances)
-            final cachedDistance = CacheService.getDistance('aed_${aed.id}');
+          const SizedBox(height: 12),
 
-            if (cachedDistance != null) {
-              distance = cachedDistance.round();
-            } else {
-              // Fallback: calculate straight-line with multiplier
-              final straightDistance = LocationService.distanceBetween(
-                  widget.config.userLocation!,
-                  aed.location
-              );
-              final multiplier = AEDService.getTransportModeMultiplier(
-                  widget.config.selectedMode
-              );
-              distance = (straightDistance * multiplier).round();
+          ...widget.config.aeds.map((aed) {
+            int? distance;
 
-              // Cache this calculation
-              CacheService.setDistance('aed_${aed.id}', distance.toDouble());
+            if (widget.config.userLocation != null) {
+              // First try to get cached distance (which includes estimated distances)
+              final cachedDistance = CacheService.getDistance('aed_${aed.id}');
+
+              if (cachedDistance != null) {
+                distance = cachedDistance.round();
+              } else {
+                // Fallback: calculate straight-line with multiplier
+                final straightDistance = LocationService.distanceBetween(
+                    widget.config.userLocation!,
+                    aed.location
+                );
+                final multiplier = AEDService.getTransportModeMultiplier(
+                    widget.config.selectedMode
+                );
+                distance = (straightDistance * multiplier).round();
+
+                // Cache this calculation
+                CacheService.setDistance('aed_${aed.id}', distance.toDouble());
+              }
             }
-          }
 
-          return _buildAEDCard(
-            aed: aed,
-            distance: distance,
-            onTap: () => widget.onSmallMapTap(aed.location),
-            showButton: true,
-            isFirst: false,
-          );
-        }),
-      ],
+            return _buildAEDCard(
+              aed: aed,
+              distance: distance,
+              onTap: () => widget.onSmallMapTap(aed.location),
+              showButton: true,
+              isFirst: false,
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -661,7 +718,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           aed.location.longitude == widget.config.selectedAED?.longitude,
       orElse: () => AED(
         id: -1,
-        name: 'Unknown AED',
+        foundation: 'Unknown AED',
         address: "Selected AED",
         location: widget.config.selectedAED!,
       ),
@@ -706,7 +763,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                   Padding(
                     padding: const EdgeInsets.only(right: 48),
                     child: Text(
-                      selectedAedInfo.address,
+                      selectedAedInfo.name, // Shows foundation name instead of address
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       maxLines: 2,
@@ -784,7 +841,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 ),
 
               // Cached location banner
-              if (widget.config.isUsingCachedLocation)
+              if (widget.config.isUsingCachedLocation && widget.userLocationAvailable)
                 Container(
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
@@ -905,7 +962,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                           // Distance
                           Expanded(
                             child: _buildCompactInfoColumn(
-                              Icons.straighten,
+                              Icons.near_me,  // Changed icon
                               widget.config.distance != null
                                   ? LocationService.formatDistance(widget.config.distance!)
                                   : "N/A",
@@ -970,19 +1027,25 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
               const SizedBox(height: 12),
 
-// ✅ WEB INFO LINK (opens in-app WebView)
-              if (selectedAedInfo.id != -1)
+              // Availability Status - Google Maps style (single line)
+              if (selectedAedInfo.availability != null && selectedAedInfo.availability!.isNotEmpty)
+                _buildGoogleMapsStyleAvailability(selectedAedInfo.availability!),
+
+              const SizedBox(height: 12),
+
+              // ✅ WEB INFO LINK (opens in-app WebView)
+              if (selectedAedInfo.id != -1 && selectedAedInfo.hasWebpage)
                 InkWell(
                   onTap: () {
-                    // ✅ PLACEHOLDER: Use a demo URL until backend provides real ones
-                    final urlString = selectedAedInfo.infoUrl ?? 'https://kidssavelives.gr/aed/1o-gel-panoramatos/';
+                    // Use the actual AED webpage from backend
+                    final urlString = selectedAedInfo.aedWebpage!;
 
-                    // Open in-app WebView instead of external browser
+                    // Open in-app WebView
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => AEDWebViewScreen(
                           url: urlString,
-                          title: 'AED Details',
+                          title: selectedAedInfo.name,
                         ),
                       ),
                     );
@@ -1005,9 +1068,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            selectedAedInfo.infoUrl != null && selectedAedInfo.infoUrl!.isNotEmpty
-                                ? "View AED Details"
-                                : "View AED Details (Demo)",
+                            "View AED Details",
                             style: SafeFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1018,7 +1079,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                         ),
                         const SizedBox(width: 4),
                         const Icon(
-                          Icons.open_in_browser, // Changed icon to indicate in-app view
+                          Icons.open_in_browser,
                           color: Color(0xFF194E9D),
                           size: 14,
                         ),
@@ -1026,7 +1087,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     ),
                   ),
                 ),
-
               const SizedBox(height: 12),
             ],
           ),
@@ -1127,7 +1187,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           aed.location.longitude == widget.config.selectedAED?.longitude,
       orElse: () => AED(
         id: -1,
-        name: 'Unknown AED',
+        foundation: 'Unknown AED',
         address: "Selected AED",
         location: widget.config.selectedAED!,
       ),
@@ -1198,7 +1258,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                 ),
                               ),
                               Text(
-                                LocationService.shortenAddress(selectedAedInfo.address),
+                                selectedAedInfo.name, // Shows foundation name
                                 style: SafeFonts.inter(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1280,7 +1340,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                           // Distance
                           Expanded(
                             child: _buildCompactInfoColumn(
-                              Icons.straighten,
+                              Icons.near_me,  // Changed icon
                               widget.config.distance != null
                                   ? LocationService.formatDistance(widget.config.distance!)
                                   : "N/A",
@@ -1357,7 +1417,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     onTap: () {
                       HapticFeedback.lightImpact();
                       widget.onRecenterNavigation?.call();
-                      },
+                    },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1378,8 +1438,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 ),
               ),
 
-            // ✅ ADD COMPASS ARROW ON THE LEFT
-            if (!widget.userLocationAvailable || widget.config.isUsingCachedLocation && widget.config.isLocationStale)
+            // Show compass if navigation has started AND we have no route line to display
+            if (widget.config.hasStartedNavigation && widget.config.navigationLine == null)
               Positioned(
                 top: 2,
                 left: 8,
@@ -1434,7 +1494,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         ),
       );
     }
-
 
     if (isSidePanel) {
       return Positioned(
@@ -1513,6 +1572,136 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
+  Widget _buildAvailabilityStatus(String? availability) {
+    final status = AvailabilityParser.parseAvailability(availability);
+
+    // Don't show if uncertain and text is too generic
+    if (status.isUncertain && status.displayText == 'Hours unknown') {
+      return const SizedBox.shrink();
+    }
+
+    Color backgroundColor;
+    Color textColor;
+    IconData icon;
+
+    if (status.isUncertain) {
+      // Gray for uncertain
+      backgroundColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade700;
+      icon = Icons.schedule;
+    } else if (status.isOpen) {
+      // Green for open
+      backgroundColor = Colors.green.shade50;
+      textColor = Colors.green.shade700;
+      icon = Icons.check_circle;
+    } else {
+      // Red for closed
+      backgroundColor = Colors.red.shade50;
+      textColor = Colors.red.shade700;
+      icon = Icons.cancel;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: textColor,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: status.displayText,
+                    style: SafeFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  if (status.detailText != null) ...[
+                    TextSpan(
+                      text: ' • ${status.detailText}',
+                      style: SafeFonts.inter(
+                        fontSize: 12,
+                        color: textColor.withOpacity(0.8),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoogleMapsStyleAvailability(String availability) {
+    final status = AvailabilityParser.parseAvailability(availability);
+
+    Color statusColor;
+    String statusText;
+    IconData icon;
+
+    if (status.isUncertain) {
+      statusColor = Colors.grey.shade600;
+      statusText = availability; // Show original text
+      icon = Icons.schedule;
+    } else if (status.isOpen) {
+      statusColor = AppColors.clusterGreen;
+      statusText = status.displayText;
+      icon = Icons.check_circle_outline;
+    } else {
+      statusColor = Colors.red.shade600;
+      statusText = status.displayText;
+      icon = Icons.cancel_outlined;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: statusColor,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: statusText,
+                    style: SafeFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                  if (status.detailText != null && !status.isUncertain) ...[
+                    TextSpan(
+                      text: ' · ${status.detailText}',
+                      style: SafeFonts.inter(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAEDCard({
     required AED aed,
     required int? distance,
@@ -1520,43 +1709,135 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     bool showButton = false,
     bool isFirst = false,
   }) {
+    // Calculate walking time
+    String? walkingTime;
+    if (distance != null && widget.config.userLocation != null) {
+      final distanceMeters = distance.toDouble();
+      walkingTime = LocationService.calculateOfflineETA(distanceMeters, 'walking');
+    }
+    final availabilityStatus = AvailabilityParser.parseAvailability(aed.availability);
+    final isOpenNow = !availabilityStatus.isUncertain && availabilityStatus.isOpen;
+
+    // Determine if we have "real" data (live GPS location + internet)
+    final bool isRealData = !widget.config.isOffline && !widget.config.isUsingCachedLocation;
+
+    final Color distanceColor = isRealData ? const Color(0xFF444444) : const Color(0xFF727272);
+    final Color distanceIconColor = Colors.grey.shade600; // This can stay gray
+
+    final Color timeColor = isRealData ? AppColors.clusterGreen : const Color(0xFF727272);
+    final Color timeIconColor = isRealData ? AppColors.clusterGreen : Colors.grey.shade600;
+
     return InkWell(
       onTap: onTap,
       child: Container(
         margin: EdgeInsets.only(bottom: 6, top: isFirst ? 8.0 : 0),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEDF4F9),
-          borderRadius: BorderRadius.circular(8),
-        ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDF4F9),
+            borderRadius: BorderRadius.circular(8),
+            // Add green glow border if open now
+            border: isOpenNow
+                ? Border.all(
+              color: AppColors.clusterGreen,
+              width: 1,
+            )
+                : null,
+            boxShadow: isOpenNow
+                ? [
+              BoxShadow(
+                color: AppColors.clusterGreen.withOpacity(0.15),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ]
+                : null,
+          ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            /// Address + Distance
+            /// Foundation + Address + Distance + Walking Time
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    LocationService.shortenAddress(aed.address),
-                    style: SafeFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF444444),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (distance != null)
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Foundation name
                     Text(
-                      LocationService.formatDistance(distance.toDouble()),
-                      style: SafeFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF727272),
+                      aed.name,
+                      style: SafeFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF444444),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                    // Address if different
+                    if (aed.address != null && aed.address != aed.foundation)
+                      Text(
+                        LocationService.shortenAddress(aed.address!),
+                        style: SafeFonts.inter(
+                          fontSize: 11,
+                          color: const Color(0xFF666666),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    // Distance + Walking Time Row
+                    if (widget.userLocationAvailable && (distance != null || walkingTime != null))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            // Distance
+                            if (distance != null) ...[
+                              Icon(
+                                Icons.near_me,  // Better icon for distance/proximity
+                                size: 11,
+                                color: distanceIconColor,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                LocationService.formatDistance(distance.toDouble()),
+                                style: SafeFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                    color: distanceColor,
+                                ),
+                              ),
+                            ],
+                            // Walking Time
+                            if (walkingTime != null) ...[
+                              if (distance != null) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  width: 1,
+                                  height: 10,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Icon(
+                                Icons.directions_walk,
+                                size: 11,
+                                color: timeIconColor,  // Changed to cluster green
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                walkingTime,
+                                style: SafeFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: timeIconColor,  // Changed to cluster green
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
 
@@ -1690,13 +1971,29 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             isFirst: true,
           ),
           const SizedBox(height: 12),
-          Text(
-            "Other",
-            style: SafeFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF2C2C2C),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "Other",
+                style: SafeFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF2C2C2C),
+                ),
+              ),
+              // Show last sync time
+              if (widget.config.aeds.isNotEmpty && widget.config.aeds.first.lastUpdated != null)
+                Text(
+                  "Updated ${widget.config.aeds.first.formattedLastUpdated}",
+                  style: SafeFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           const SizedBox(height: 8),

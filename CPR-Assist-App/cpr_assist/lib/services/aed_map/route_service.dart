@@ -160,7 +160,7 @@ class RouteService {
     final aed = aedList.firstWhere(
           (aed) => aed.location.latitude == aedLocation.latitude &&
           aed.location.longitude == aedLocation.longitude,
-      orElse: () => AED(id: -1, name: '', address: '', location: aedLocation),
+      orElse: () => AED(id: -1, foundation: '', address: '', location: aedLocation),
     );
 
     // Check if we have a preloaded route
@@ -188,12 +188,15 @@ class RouteService {
     transportMode == 'bicycling' ? 'bicycling' : 'driving';
 
     final url = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&travelmode=$googleMapsMode'
+        'https://www.google.com/maps/dir/?api=1'
+            '&origin=${origin.latitude},${origin.longitude}'
+            '&destination=${destination.latitude},${destination.longitude}'
+            '&travelmode=$googleMapsMode'
     );
 
     try {
       if (await canLaunchUrl(url)) {
-        await launchUrl(url);
+        await launchUrl(url, mode: LaunchMode.externalApplication);
         return true;
       } else {
         throw 'Could not launch maps app';
@@ -202,171 +205,6 @@ class RouteService {
       print("❌ Could not open external navigation: $e");
       return false;
     }
-  }
-}
-
-
-class NavigationController {
-  final RouteService _routeService;
-  final Function(String) _onStatusUpdate;
-
-  NavigationController(String apiKey, this._onStatusUpdate)
-      : _routeService = RouteService(apiKey);
-
-  // Navigation state
-  bool _isInNavigationMode = false;
-  LatLng? _currentDestination;
-  RouteResult? _currentRoute;
-
-  bool get isInNavigationMode => _isInNavigationMode;
-  LatLng? get currentDestination => _currentDestination;
-  RouteResult? get currentRoute => _currentRoute;
-
-  /// Shows navigation preview for an AED location
-  Future<RouteResult?> showNavigationPreview({
-    required LatLng aedLocation,
-    required LatLng currentLocation,
-    required String transportMode,
-    required List<AED> aedList,
-    required Map<int, RouteResult> preloadedRoutes,
-  }) async {
-    _onStatusUpdate("Loading route preview...");
-
-    final routeResult = await RouteService.showNavigationPreviewForAED(
-      aedLocation: aedLocation,
-      currentLocation: currentLocation,
-      transportMode: transportMode,
-      apiKey: _routeService.apiKey,
-      aedList: aedList,
-      preloadedRoutes: preloadedRoutes,
-    );
-
-    if (routeResult != null) {
-      _currentDestination = aedLocation;
-      _currentRoute = routeResult;
-      _isInNavigationMode = false; // Preview mode, not full navigation
-      _onStatusUpdate("Route preview ready");
-    } else {
-      _onStatusUpdate("Failed to load route");
-    }
-
-    return routeResult;
-  }
-
-  /// Starts full navigation mode
-  Future<RouteResult?> startNavigation({
-    required LatLng destination,
-    required LatLng currentLocation,
-    required String transportMode,
-  }) async {
-    _onStatusUpdate("Starting navigation...");
-
-    final routeResult = await _routeService.fetchRouteWithOfflineFallback(
-      currentLocation,
-      destination,
-      transportMode,
-    );
-
-    if (routeResult != null) {
-      _currentDestination = destination;
-      _currentRoute = routeResult;
-      _isInNavigationMode = true;
-      _onStatusUpdate("Navigation started");
-    } else {
-      _onStatusUpdate("Failed to start navigation");
-    }
-
-    return routeResult;
-  }
-
-  /// Recalculates the active route (for connectivity changes or location updates)
-  Future<RouteResult?> recalculateActiveRoute({
-    required LatLng currentLocation,
-    required String transportMode,
-  }) async {
-    if (_currentDestination == null) return null;
-
-    _onStatusUpdate("Recalculating route...");
-
-    final routeResult = await _routeService.fetchRouteWithOfflineFallback(
-      currentLocation,
-      _currentDestination!,
-      transportMode,
-    );
-
-    if (routeResult != null) {
-      _currentRoute = routeResult;
-      _onStatusUpdate("Route updated");
-    } else {
-      _onStatusUpdate("Failed to update route");
-    }
-
-    return routeResult;
-  }
-
-  /// Switches navigation to offline mode
-  RouteResult? switchToOfflineMode({
-    required LatLng currentLocation,
-    required String transportMode,
-  }) {
-    if (_currentDestination == null) return null;
-
-    _onStatusUpdate("Switching to offline mode...");
-
-    final distance = LocationService.distanceBetween(currentLocation, _currentDestination!);
-    final estimatedTime = LocationService.calculateOfflineETA(distance, transportMode);
-
-    final offlineRoute = RouteResult(
-      polyline: Polyline(
-        polylineId: const PolylineId('offline_navigation'),
-        points: [], // No line for offline
-        color: Colors.transparent,
-        width: 0,
-      ),
-      duration: estimatedTime,
-      points: [],
-      isOffline: true,
-      actualDistance: distance,
-      distanceText: LocationService.formatDistance(distance),
-    );
-
-    _currentRoute = offlineRoute;
-    _onStatusUpdate("Offline navigation active");
-
-    return offlineRoute;
-  }
-
-
-  /// Updates transport mode and recalculates route
-  Future<RouteResult?> updateTransportMode({
-    required String newMode,
-    required LatLng currentLocation,
-  }) async {
-    if (_currentDestination == null) return null;
-
-    _onStatusUpdate("Updating transport mode...");
-
-    return await recalculateActiveRoute(
-      currentLocation: currentLocation,
-      transportMode: newMode,
-    );
-  }
-
-  /// Cancels navigation and returns to preview mode
-  void cancelFullNavigation() {
-    if (_isInNavigationMode) {
-      _isInNavigationMode = false;
-      _onStatusUpdate("Navigation cancelled - returning to preview");
-      // Keep destination and route for preview mode
-    }
-  }
-
-  /// Completely clears navigation state
-  void clearNavigation() {
-    _isInNavigationMode = false;
-    _currentDestination = null;
-    _currentRoute = null;
-    _onStatusUpdate("Navigation cleared");
   }
 }
 
@@ -419,7 +257,7 @@ class RoutePreloader {
 
           // Cache the distance for display
           if (routeResult.actualDistance != null) {
-            CacheService.setDistance('aed_${aed.id}', routeResult.actualDistance!);
+            CacheService.setDistance('aed_${aed.id}_actual', routeResult.actualDistance!);
           }
 
           // Notify callback

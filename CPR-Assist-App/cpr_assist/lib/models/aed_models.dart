@@ -1,76 +1,135 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'aed_models.dart';
-import '../services/aed_map/location_service.dart';
 
 class AED {
   final int id;
-  final String name;
-  final String address;
+  final String? foundation;        // NEW: Organization/foundation name
+  final String? address;
   final LatLng location;
+  final String? availability;      // NEW: Availability hours
+  final String? aedWebpage;        // NEW: Info webpage URL
+  final DateTime? lastUpdated;     // NEW: Last sync timestamp
   final double distanceInMeters;
-  final String? infoUrl;
+  final double? distanceFromAPI;   // NEW: Distance from backend API (nearby query)
 
   AED({
     required this.id,
-    required this.name,
-    required this.address,
+    this.foundation,
+    this.address,
     required this.location,
+    this.availability,
+    this.aedWebpage,
+    this.lastUpdated,
     this.distanceInMeters = 0.0,
-    this.infoUrl,
+    this.distanceFromAPI,
   });
 
-  AED copyWithDistance(LatLng userLocation) {
-    final distance = LocationService.distanceBetween(userLocation, location);
+  // Get display name (prioritize foundation, fallback to address)
+  String get name => foundation ?? address ?? 'AED Location';
 
+  // Get info URL
+  String? get infoUrl => aedWebpage;
+
+  AED copyWithDistance(double distance) {
     return AED(
       id: id,
-      name: name,
+      foundation: foundation,
       address: address,
       location: location,
+      availability: availability,
+      aedWebpage: aedWebpage,
+      lastUpdated: lastUpdated,
       distanceInMeters: distance,
+      distanceFromAPI: distanceFromAPI,
     );
   }
 
   String get formattedDistance {
-    if (distanceInMeters < 1000) {
-      return '${distanceInMeters.toStringAsFixed(0)} m';
+    // Use API distance if available (from nearby query)
+    final distanceToUse = distanceFromAPI ?? distanceInMeters;
+
+    if (distanceToUse < 1000) {
+      return '${distanceToUse.toStringAsFixed(0)} m';
     } else {
-      return '${(distanceInMeters / 1000).toStringAsFixed(1)} km';
+      return '${(distanceToUse / 1000).toStringAsFixed(1)} km';
     }
   }
 
-  // Factory method to create AED from map data
+  // Format availability text
+  String get formattedAvailability {
+    if (availability == null || availability!.isEmpty) {
+      return 'Unknown availability';
+    }
+    return availability!;
+  }
+
+  // Format last updated time
+  String get formattedLastUpdated {
+    if (lastUpdated == null) return 'Unknown';
+
+    final now = DateTime.now();
+    final difference = now.difference(lastUpdated!);
+
+    if (difference.inDays > 30) {
+      final months = (difference.inDays / 30).floor();
+      return '$months ${months == 1 ? "month" : "months"} ago';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays} ${difference.inDays == 1 ? "day" : "days"} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} ${difference.inHours == 1 ? "hour" : "hours"} ago';
+    } else {
+      return 'Recently updated';
+    }
+  }
+
+  // Factory method to create AED from backend API response
   factory AED.fromMap(Map<String, dynamic> map) {
     return AED(
-      id: int.parse(map['id'].toString()),
-      name: map['name'] ?? map['address'] ?? 'AED',
-      address: map['address'] ?? '',
+      id: map['id'] is int ? map['id'] : int.parse(map['id'].toString()),
+      foundation: map['foundation'],
+      address: map['address'],
       location: LatLng(
-        double.parse(map['latitude'].toString()),
-        double.parse(map['longitude'].toString()),
+        (map['latitude'] as num).toDouble(),
+        (map['longitude'] as num).toDouble(),
       ),
+      availability: map['availability'],
+      aedWebpage: map['aed_webpage'],
+      lastUpdated: map['last_updated'] != null
+          ? DateTime.parse(map['last_updated'])
+          : null,
+      distanceFromAPI: map['distance'] != null
+          ? (map['distance'] as num).toDouble() * 1000 // Convert km to meters
+          : null,
     );
   }
 
   factory AED.empty() => AED(
     id: -1,
-    name: '',
+    foundation: null,
     address: '',
-    location: LatLng(0,0),
+    location: const LatLng(0, 0),
   );
 
-  // Convert to map for storage
+  // Convert to map for storage/caching
   Map<String, dynamic> toMap() {
     return {
-      'id': id.toString(),
-      'name': name,
+      'id': id,
+      'foundation': foundation,
       'address': address,
-      'latitude': location.latitude.toString(),
-      'longitude': location.longitude.toString(),
-      'info_url': infoUrl,
+      'latitude': location.latitude,
+      'longitude': location.longitude,
+      'availability': availability,
+      'aed_webpage': aedWebpage,
+      'last_updated': lastUpdated?.toIso8601String(),
+      if (distanceFromAPI != null) 'distance': distanceFromAPI! / 1000, // Store as km
     };
   }
+
+  // Helper to check if AED has valid location
+  bool get hasValidLocation =>
+      location.latitude != 0.0 && location.longitude != 0.0;
+
+  // Helper to check if AED has webpage
+  bool get hasWebpage => aedWebpage != null && aedWebpage!.isNotEmpty;
 }
 
 class NavigationState {
@@ -81,7 +140,6 @@ class NavigationState {
   final String estimatedTime;
   final double? distance;
   final bool hasStarted;
-
 
   const NavigationState({
     this.isActive = false,
@@ -117,8 +175,6 @@ class NavigationState {
   }
 }
 
-
-
 class AEDMapState {
   final Set<Marker> markers;
   final List<AED> aedList;
@@ -128,7 +184,7 @@ class AEDMapState {
   final NavigationState navigation;
   final int currentBatch;
   final bool isOffline;
-
+  final DateTime? lastSyncTime;  // NEW: Track when data was last synced
 
   const AEDMapState({
     this.markers = const {},
@@ -139,6 +195,7 @@ class AEDMapState {
     this.navigation = const NavigationState(),
     this.currentBatch = 3,
     this.isOffline = false,
+    this.lastSyncTime,
   });
 
   LatLng? get selectedAED => navigation.destination;
@@ -149,6 +206,24 @@ class AEDMapState {
   double? get distance => navigation.distance;
   bool get navigationMode => navigation.isActive;
 
+  // NEW: Helper to get formatted sync time
+  String get formattedSyncTime {
+    if (lastSyncTime == null) return 'Never synced';
+
+    final now = DateTime.now();
+    final difference = now.difference(lastSyncTime!);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays} ${difference.inDays == 1 ? "day" : "days"} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} ${difference.inHours == 1 ? "hour" : "hours"} ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} ${difference.inMinutes == 1 ? "minute" : "minutes"} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
   AEDMapState copyWith({
     Set<Marker>? markers,
     List<AED>? aedList,
@@ -158,6 +233,7 @@ class AEDMapState {
     NavigationState? navigation,
     int? currentBatch,
     bool? isOffline,
+    DateTime? lastSyncTime,
   }) {
     return AEDMapState(
       markers: markers ?? this.markers,
@@ -168,6 +244,7 @@ class AEDMapState {
       navigation: navigation ?? this.navigation,
       currentBatch: currentBatch ?? this.currentBatch,
       isOffline: isOffline ?? this.isOffline,
+      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
     );
   }
 }

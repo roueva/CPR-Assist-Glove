@@ -261,8 +261,7 @@ class NetworkService {
   // 🔹 FETCH AED LOCATIONS 🔹
   Future<List<dynamic>> fetchAEDLocations() async {
     try {
-      final response = await get('/aed', requiresAuth: false);
-
+      final response = await get('/aed/', requiresAuth: false);
       if (response is Map<String, dynamic> && response.containsKey("data")) {
         return response["data"];
       } else {
@@ -282,20 +281,28 @@ class NetworkService {
     return key;
   }
 
-  Future<void> updateAEDLocation(Map<String, dynamic> aedData) async {
-    final response = await post(
-      "/aed/locations/update",
-      {"aed_list": [aedData]},
-      requiresAuth: false,
-    );
+  // 🔹 GET CACHE/SYNC INFO 🔹
+  Future<Map<String, dynamic>?> getAEDCacheInfo() async {
+    try {
+      final response = await get('/aed/cache/info', requiresAuth: false);
 
-    if (response == null || response['status'] != 'success') {
-      throw Exception("Backend AED update failed");
+      if (response is Map<String, dynamic> && response.containsKey("cache")) {
+        return response["cache"];
+      }
+      return null;
+    } catch (e) {
+      print("❌ Error fetching cache info: $e");
+      return null;
     }
   }
 
+
   static Future<String?> fetchGoogleMapsApiKey() async {
     try {
+      final url = Uri.parse('$baseUrl/api/maps-key'); // <--- Find this line
+
+      // ADD THIS PRINT STATEMENT:
+      print("🐞 DEBUG: Attempting to fetch key from: $url");
       final response = await http.get(
         Uri.parse('$baseUrl/api/maps-key'),
         headers: {'Content-Type': 'application/json'},
@@ -306,9 +313,14 @@ class NetworkService {
         if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('apiKey')) {
           return jsonResponse['apiKey'];
         }
+      } else {
+        // ADD THIS ELSE BLOCK:
+        print("❌ Server returned non-200 status: ${response.statusCode}");
+        print("❌ Server response body: ${response.body}");
       }
+
     } catch (e) {
-      print("❌ Error fetching Google Maps API Key: $e");
+      print("❌ FULL ERROR fetching Google Maps API Key: $e");
     }
     return null;
   }

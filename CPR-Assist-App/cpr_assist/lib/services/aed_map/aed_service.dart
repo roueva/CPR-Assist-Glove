@@ -101,7 +101,7 @@ class AEDService {
 
       return AED(
         id: aedId,
-        name: rawAddress,
+        foundation: rawAddress,
         address: rawAddress,
         location: location,
       );

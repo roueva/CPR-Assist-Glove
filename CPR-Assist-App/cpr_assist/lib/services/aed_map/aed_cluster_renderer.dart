@@ -17,8 +17,6 @@ class ClusterPoint {
 }
 
 class SimpleClusterManager {
-  static const double _clusterDistance = 0.002; // ~200m at equator
-
   /// Group AEDs into clusters based on zoom level
   static List<ClusterPoint> clusterAEDs(List<AED> aeds, double zoom) {
     if (aeds.isEmpty) return [];
@@ -33,7 +31,7 @@ class SimpleClusterManager {
       return aeds.map((aed) => ClusterPoint(aed.location, [aed])).toList();
     }
 
-    // ✅ At very low zoom, use GRID-BASED clustering
+    // At very low zoom, use GRID-BASED clustering
     if (zoom < 8.0) {
       print("   → Low zoom - using GRID clustering");
       return _gridBasedClustering(aeds, zoom);
@@ -70,17 +68,14 @@ class SimpleClusterManager {
     return clusters;
   }
 
-  /// ✅ Grid-based clustering for low zoom levels
+  /// Grid-based clustering for low zoom levels
   static List<ClusterPoint> _gridBasedClustering(List<AED> aeds, double zoom) {
-    // Determine grid size based on zoom
     final double gridSize = _getGridSizeForZoom(zoom);
     print("   → Grid size: $gridSize degrees");
 
-    // Group AEDs into grid cells
     final Map<String, List<AED>> gridCells = {};
 
     for (final aed in aeds) {
-      // Round coordinates to grid cell
       final cellLat = (aed.location.latitude / gridSize).floor() * gridSize;
       final cellLng = (aed.location.longitude / gridSize).floor() * gridSize;
       final cellKey = '${cellLat}_$cellLng';
@@ -90,7 +85,6 @@ class SimpleClusterManager {
 
     print("   → Created ${gridCells.length} grid cells");
 
-    // Create cluster for each grid cell
     final List<ClusterPoint> clusters = [];
     for (final cell in gridCells.values) {
       final centerLat = cell.map((a) => a.location.latitude).reduce((a, b) => a + b) / cell.length;
@@ -98,7 +92,7 @@ class SimpleClusterManager {
       clusters.add(ClusterPoint(LatLng(centerLat, centerLng), cell));
     }
 
-    // ✅ Force maximum cluster count based on zoom
+    // Force maximum cluster count based on zoom
     final maxClusters = _getMaxClustersForZoom(zoom);
     if (clusters.length > maxClusters) {
       print("   → Too many clusters (${clusters.length}) - reducing to $maxClusters");
@@ -108,7 +102,7 @@ class SimpleClusterManager {
     return clusters;
   }
 
-  /// ✅ Get maximum number of clusters allowed at each zoom level
+  /// Get maximum number of clusters allowed at each zoom level
   static int _getMaxClustersForZoom(double zoom) {
     if (zoom >= 8) return 100;   // Many clusters
     if (zoom >= 7) return 50;    // Medium
@@ -118,14 +112,13 @@ class SimpleClusterManager {
     return 1;                    // ONE cluster for entire Greece ← NEW
   }
 
-  /// ✅ Merge smallest clusters until we reach target count
+  /// Merge smallest clusters until we reach target count
   static List<ClusterPoint> _mergeSmallestClusters(List<ClusterPoint> clusters, int targetCount) {
     if (clusters.length <= targetCount) return clusters;
 
     print("   → Merging ${clusters.length} clusters down to $targetCount");
 
     while (clusters.length > targetCount) {
-      // Find the two closest clusters to merge
       ClusterPoint? closest1;
       ClusterPoint? closest2;
       double minDistance = double.infinity;
@@ -142,7 +135,6 @@ class SimpleClusterManager {
       }
 
       if (closest1 != null && closest2 != null) {
-        // Merge the two closest clusters
         clusters.remove(closest1);
         clusters.remove(closest2);
 
@@ -152,14 +144,14 @@ class SimpleClusterManager {
 
         clusters.add(ClusterPoint(LatLng(centerLat, centerLng), mergedAEDs));
       } else {
-        break; // Safety exit
+        break;
       }
     }
 
     return clusters;
   }
 
-  /// Get grid size based on zoom level - MUCH more aggressive
+  /// Get grid size based on zoom level
   static double _getGridSizeForZoom(double zoom) {
     if (zoom >= 8) return 0.05;    // ~5km grid
     if (zoom >= 7) return 0.15;    // ~15km grid
@@ -170,7 +162,7 @@ class SimpleClusterManager {
     return 10.0;                   // ~1000km grid (entire Greece = 1 cluster) ← NEW
   }
 
-  /// Calculate distance between two points (simple Euclidean approximation)
+  /// Calculate distance between two points
   static double _distance(LatLng a, LatLng b) {
     final dx = a.latitude - b.latitude;
     final dy = a.longitude - b.longitude;
@@ -179,98 +171,56 @@ class SimpleClusterManager {
 
   /// Get clustering distance based on zoom level
   static double _getClusterDistanceForZoom(double zoom) {
-    if (zoom >= 17) return 0.0001;   // ~10m
-    if (zoom >= 16) return 0.0005;   // ~50m
-    if (zoom >= 15) return 0.002;    // ~200m
-    if (zoom >= 14) return 0.005;    // ~500m
-    if (zoom >= 12) return 0.015;    // ~1.5km
-    if (zoom >= 10) return 0.04;     // ~4km
-    if (zoom >= 8) return 0.1;       // ~10km
-    // Grid-based clustering takes over below zoom 8
+    if (zoom >= 17) return 0.0001;
+    if (zoom >= 16) return 0.0005;
+    if (zoom >= 15) return 0.002;
+    if (zoom >= 14) return 0.005;
+    if (zoom >= 12) return 0.015;
+    if (zoom >= 10) return 0.04;
+    if (zoom >= 8) return 0.1;
     return 0.2;
   }
 }
 
 class ClusterMarkerBuilder {
-  // Cache for cluster icons to avoid regenerating them
   static final Map<int, BitmapDescriptor> _clusterIconCache = {};
 
-  static Future<Marker> buildMarker(
-      ClusterPoint cluster,
-      Function(LatLng) onTap, {
-        Map<String, LatLng>? previousPositions,
-      }) async {
-    final markerId = MarkerId(getMarkerId(cluster));
-
-    if (cluster.isCluster) {
-      // ✅ Check if this cluster is splitting from a parent
-      LatLng? parentPosition;
-      if (previousPositions != null) {
-        // Look for nearby previous cluster that could be the parent
-        parentPosition = _findParentCluster(cluster.location, previousPositions);
-      }
-
-      // Create cluster marker with animation hint
-      return Marker(
-        markerId: markerId,
-        position: cluster.location,
-        icon: await _getCachedClusterIcon(cluster.count),
-        alpha: parentPosition != null ? 0.7 : 1.0, // Slightly transparent during split
-        anchor: const Offset(0.5, 0.5),
-        onTap: () {
-          print('📍 Cluster with ${cluster.count} AEDs tapped');
-        },
-      );
-    } else {
-      // Single AED marker - check if splitting from cluster
-      LatLng? parentPosition;
-      if (previousPositions != null) {
-        parentPosition = _findParentCluster(cluster.location, previousPositions);
-      }
-
-      return Marker(
-        markerId: markerId,
-        position: cluster.location,
-        icon: CustomIcons.aedUpdated,
-        alpha: parentPosition != null ? 0.8 : 1.0, // Fade in effect
-        anchor: const Offset(0.5, 0.5),
-        onTap: () => onTap(cluster.location),
-      );
-    }
-  }
-
-  /// ✅ NEW: Find parent cluster that this marker split from
-  static LatLng? _findParentCluster(LatLng position, Map<String, LatLng> previousPositions) {
-    // Look for a previous cluster within 0.05 degrees (~5km)
-    for (final prevPos in previousPositions.values) {
-      final distance = _distance(position, prevPos);
-      if (distance < 0.05) {
-        return prevPos;
-      }
-    }
-    return null;
-  }
-
-  /// ✅ NEW: Public method to get marker ID (used for tracking)
+  /// Get marker ID as string
   static String getMarkerId(ClusterPoint cluster) {
     if (cluster.isCluster) {
-      // Use rounded coordinates for consistent cluster IDs
-      final lat = (cluster.location.latitude * 100).round() / 100;
-      final lng = (cluster.location.longitude * 100).round() / 100;
-      return 'cluster_${lat}_${lng}_${cluster.count}';
+      return 'cluster_${cluster.location.latitude}_${cluster.location.longitude}';
     } else {
       return 'aed_${cluster.aeds.first.id}';
     }
   }
 
-  /// ✅ Helper method for distance calculation
-  static double _distance(LatLng a, LatLng b) {
-    final dx = a.latitude - b.latitude;
-    final dy = a.longitude - b.longitude;
-    return sqrt(dx * dx + dy * dy);
+  /// Build marker (main method)
+  static Future<Marker> buildMarker(
+      ClusterPoint cluster,
+      Function(LatLng) onTap,
+      ) async {
+    final markerId = MarkerId(getMarkerId(cluster));
+
+    if (cluster.isCluster) {
+      return Marker(
+        markerId: markerId,
+        position: cluster.location,
+        icon: await _getCachedClusterIcon(cluster.count),
+        onTap: () {
+          print('📍 Cluster with ${cluster.count} AEDs tapped');
+        },
+      );
+    } else {
+      return Marker(
+        markerId: markerId,
+        position: cluster.location,
+        icon: CustomIcons.aedUpdated,
+        onTap: () => onTap(cluster.location),
+      );
+    }
   }
 
-  /// Get cached cluster icon (or create and cache)
+  /// Get cached cluster icon
   static Future<BitmapDescriptor> _getCachedClusterIcon(int count) async {
     if (_clusterIconCache.containsKey(count)) {
       return _clusterIconCache[count]!;
@@ -281,6 +231,7 @@ class ClusterMarkerBuilder {
     return icon;
   }
 
+  /// Create cluster icon
   static Future<BitmapDescriptor> _createClusterIcon(int count) async {
     // ✅ Smaller base sizes for correct display
     final Size size;
@@ -369,38 +320,5 @@ class ClusterMarkerBuilder {
 
     // ✅ CORRECT: Use BitmapDescriptor.bytes (NOT fromBytes)
     return BitmapDescriptor.bytes(imageData);
-  }
-
-
-  /// Build marker at specific animated position
-  static Future<Marker> buildMarkerAtPosition(
-      ClusterPoint cluster,
-      LatLng position,
-      Function(LatLng) onTap, {
-        double alpha = 1.0,
-      }) async {
-    final markerId = MarkerId(getMarkerId(cluster));
-
-    if (cluster.isCluster) {
-      return Marker(
-        markerId: markerId,
-        position: position,
-        icon: await _getCachedClusterIcon(cluster.count),
-        alpha: 1.0,
-        anchor: const Offset(0.5, 0.5),
-        onTap: () {
-          print('📍 Cluster with ${cluster.count} AEDs tapped');
-        },
-      );
-    } else {
-      return Marker(
-        markerId: markerId,
-        position: position,
-        icon: CustomIcons.aedUpdated,
-        alpha: 1.0,
-        anchor: const Offset(0.5, 0.5),
-        onTap: () => onTap(cluster.location),
-      );
-    }
   }
 }

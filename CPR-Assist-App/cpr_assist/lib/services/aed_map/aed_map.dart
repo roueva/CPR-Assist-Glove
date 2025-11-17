@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:cpr_assist/services/aed_map/aed_service.dart';
-import 'package:cpr_assist/services/aed_map/progressive_marker_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../models/aed_models.dart';
 import '../../utils/app_constants.dart';
-import '../../utils/safe_fonts.dart';
+import 'app_initialization_manager.dart';
 import 'cache_service.dart';
 import 'location_service.dart';
 import '../network_service.dart';
@@ -54,13 +52,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   bool _isManuallySearchingGPS = false;
   bool _gpsSearchSuccess = false;
   StreamSubscription<Position>? _manualGPSSubscription;
-  ProgressiveMarkerLoader? _markerLoader;
   bool _isLoadingMarkers = false;
   double _currentZoom = 12.0;
   Set<Marker> _clusterMarkers = {};
   Timer? _clusterUpdateDebouncer;
-  Map<String, LatLng> _previousClusterPositions = {};
-  bool _isAnimatingClusters = false;
 
 
   // ==================== APP STARTUP & INITIALIZATION ====================
@@ -88,16 +83,16 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   }
 
   Future<void> _initializeApp() async {
-    SafeFonts.initializeFontCache();
-    await CacheService.initializeAllCaches();
+    // Initialize using the manager
+    final result = await AppInitializationManager.initializeApp();
 
-    // Check capabilities
-    final isLocationEnabled = await Geolocator.isLocationServiceEnabled();
-    final hasLocationPermission = await _locationService.hasPermission;
-    final hasLocation = isLocationEnabled && hasLocationPermission;
-    final isConnected = await NetworkService.isConnected();
+    print("✅ Initialization complete");
+    print("   → Location: ${result.hasLocation}");
+    print("   → AEDs: ${result.aedList.length}");
+    print("   → Connected: ${result.isConnected}");
 
-    print("🔍 Location: $hasLocation | Network: $isConnected");
+    // Store API key
+    _googleMapsApiKey = result.apiKey;
 
     // Initialize navigation controller
     _navigationController = nav.NavigationController(
@@ -105,24 +100,65 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       onRecenterButtonVisibilityChanged: (visible) => setState(() {}),
     );
 
+    // Initialize route preloader if we have API key
+    if (_googleMapsApiKey != null) {
+      _routePreloader = RoutePreloader(_googleMapsApiKey!, (status) {
+        print("Preloader status: $status");
+      });
+    }
+
     // Wait for map to be ready
     _mapReadyCompleter.future.then((_) async {
       print("✅ Map ready");
 
-      // STAGE 1: Load cached location + cached AEDs (INSTANT)
-      await _loadCachedLocationAndAEDs();
+      // Update state with cached data
+      if (result.aedList.isNotEmpty) {
+        final mapNotifier = ref.read(mapStateProvider.notifier);
+        mapNotifier.setAEDs(result.aedList, <Marker>{});
 
-      // STAGE 2: Start GPS acquisition (background, non-blocking)
+        // ✅ Only update location if it's not null
+        if (result.userLocation != null) {
+          _updateUserLocation(
+            result.userLocation!,  // ← Add the ! operator to assert non-null
+            fromCache: result.isLocationCached,
+          );
+          _locationLastUpdated = result.locationAge;
+          _isUsingCachedLocation = result.isLocationCached;
+        }
+
+        // Zoom to cached location if available
+        if (result.shouldZoom && _mapViewController != null) {
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted && !_hasPerformedInitialZoom) {
+            final closestAEDs = result.aedList.take(2).map((aed) => aed.location).toList();
+            await _mapViewController!.zoomToUserAndClosestAEDs(
+              result.userLocation!,
+              closestAEDs,
+            );
+            _hasPerformedInitialZoom = true;
+
+            // Update clusters
+            await Future.delayed(const Duration(milliseconds: 500));
+            if (mounted && _mapController != null) {
+              _currentZoom = await _mapController!.getZoomLevel();
+              await _updateClusters();
+            }
+          }
+        }
+      }
+
+      // Start GPS acquisition in background
+      final hasLocation = await AppInitializationManager.isLocationAvailable();
       if (hasLocation) {
         _startGPSAcquisition();
       } else {
         _requestLocationPermission();
       }
 
-      // STAGE 3: Load fresh AEDs (background, non-blocking)
-      if (isConnected) {
+      // Load fresh AEDs in background
+      if (result.isConnected) {
         Future.delayed(const Duration(milliseconds: 500), () {
-          _startProgressiveAEDLoading(isConnected);
+          _startProgressiveAEDLoading(result.isConnected);
         });
       }
     });
@@ -288,9 +324,26 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
         await _fetchAEDsWithPriority(isRefresh: true);
       }
     } else {
-      print("❌ User declined location - showing Greece view");
-      await _mapViewController?.showDefaultGreeceView();
+      // User declined location
       setState(() => _isLocationAvailable = false);
+
+      // ✅ CHECK: Stay at cached location if it exists
+      final currentState = ref.read(mapStateProvider);
+
+      if (currentState.userLocation != null) {
+        print("❌ User declined location - staying at cached location");
+        // Re-trigger the zoom just to be safe, as it's already zoomed
+        if (_mapViewController != null && currentState.aedList.length >= 2) {
+          final closestAEDs = currentState.aedList.take(2).map((aed) => aed.location).toList();
+          await _mapViewController!.zoomToUserAndClosestAEDs(
+            currentState.userLocation!, // Use cached location
+            closestAEDs,
+          );
+        }
+      } else {
+        print("❌ User declined location & no cache - showing Greece view");
+        await _mapViewController?.showDefaultGreeceView();
+      }
 
       // Still fetch AEDs if connected
       final isConnected = await NetworkService.isConnected();
@@ -356,12 +409,13 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   }
 
   /// Load markers in small batches with smooth animation
+  /// Load markers in small batches with smooth animation
   Future<void> _loadMarkersInBatches(
       List<AED> allAEDs,
       dynamic mapNotifier,
       AEDService aedRepository,
       ) async {
-    const batchSize = 50;
+    const batchSize = 50;  // ← Increased to 50 for faster loading
     bool hasPerformedFirstZoom = false;
     bool hasPerformedInitialClustering = false;
 
@@ -386,7 +440,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
       // Only log every 200 AEDs
       if (i % 200 == 0 || endIndex == allAEDs.length) {
-        print("📊 Loaded ${endIndex}/${allAEDs.length} AEDs");
+        print("📊 Loaded $endIndex/${allAEDs.length} AEDs");
       }
 
       // Zoom after first batch
@@ -492,7 +546,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
       // Fetch fresh API key and data
       if (_googleMapsApiKey == null) {
-        await _fetchGoogleMapsApiKey();
+        await _fetchGoogleMapsApiKey();  // ← Add await
       }
 
       // ✅ Wait a frame for state to propagate
@@ -1280,136 +1334,27 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       print("   → Individual AEDs: $individualCount");
       print("   → Clustered groups: $clusterCount");
 
-      // ✅ NEW: Animate the transition
-      await _animateClusterTransition(clusters);
-
-    } catch (e) {
-      print("⚠️ Error updating clusters: $e");
-    }
-  }
-
-  /// ✅ NEW: Animate markers from old positions to new positions
-  Future<void> _animateClusterTransition(List<ClusterPoint> newClusters) async {
-    if (_isAnimatingClusters) return;
-
-    _isAnimatingClusters = true;
-
-    // Build map of new positions
-    final Map<String, LatLng> newPositions = {};
-    for (final cluster in newClusters) {
-      final markerId = ClusterMarkerBuilder.getMarkerId(cluster);
-      newPositions[markerId] = cluster.location;
-    }
-
-    // Create animation frames
-    const totalFrames = 8;
-    const frameDuration = Duration(milliseconds: 50);
-
-    for (int frame = 0; frame <= totalFrames; frame++) {
-      if (!mounted) break;
-
-      final t = frame / totalFrames; // 0.0 to 1.0
-      final Set<Marker> animatedMarkers = {};
-
-      for (final cluster in newClusters) {
-        final markerId = ClusterMarkerBuilder.getMarkerId(cluster);
-        final targetPosition = cluster.location;
-
-        // Find parent cluster position (where this marker is coming from)
-        LatLng? sourcePosition = _findParentPosition(cluster, _previousClusterPositions);
-
-        // Interpolate position
-        final animatedPosition = sourcePosition != null
-            ? _interpolatePosition(sourcePosition, targetPosition, t)
-            : targetPosition;
-
-        // Build marker at interpolated position
-        final marker = await ClusterMarkerBuilder.buildMarkerAtPosition(
+      // Build markers
+      final Set<Marker> newMarkers = {};
+      for (final cluster in clusters) {
+        final marker = await ClusterMarkerBuilder.buildMarker(
           cluster,
-          animatedPosition,
           _showNavigationPreviewForAED,
-          alpha: 0.3 + (t * 0.7), // Fade in from 0.3 to 1.0
         );
-
-        animatedMarkers.add(marker);
+        newMarkers.add(marker);
       }
 
       if (mounted) {
         setState(() {
-          _clusterMarkers = animatedMarkers;
+          _clusterMarkers = newMarkers;
         });
+        print("✅ CLUSTERS UPDATED - ${newMarkers.length} markers on map");
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
       }
-
-      await Future.delayed(frameDuration);
+    } catch (e) {
+      print("⚠️ Error updating clusters: $e");
     }
-
-    // Store final positions for next animation
-    _previousClusterPositions.clear();
-    for (final cluster in newClusters) {
-      final markerId = ClusterMarkerBuilder.getMarkerId(cluster);
-      _previousClusterPositions[markerId] = cluster.location;
-    }
-
-    _isAnimatingClusters = false;
-
-    print("✅ CLUSTERS UPDATED - ${newClusters.length} markers on map");
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
   }
-
-  /// ✅ Find which parent cluster this marker split from
-  LatLng? _findParentPosition(ClusterPoint cluster, Map<String, LatLng> previousPositions) {
-    if (previousPositions.isEmpty) return null;
-
-    // For individual AEDs, find the nearest previous cluster
-    if (!cluster.isCluster) {
-      LatLng? nearest;
-      double minDistance = double.infinity;
-
-      for (final prevPos in previousPositions.values) {
-        final distance = _calculateDistance(cluster.location, prevPos);
-        if (distance < minDistance && distance < 0.1) { // Within ~10km
-          minDistance = distance;
-          nearest = prevPos;
-        }
-      }
-
-      return nearest;
-    }
-
-    // For clusters, try to match with previous cluster at similar location
-    for (final entry in previousPositions.entries) {
-      final distance = _calculateDistance(cluster.location, entry.value);
-      if (distance < 0.01) { // Very close = same cluster
-        return entry.value;
-      }
-    }
-
-    return null;
-  }
-
-  /// ✅ Interpolate between two positions
-  LatLng _interpolatePosition(LatLng start, LatLng end, double t) {
-    // Apply easing function for smooth animation
-    final eased = _easeOutCubic(t);
-
-    return LatLng(
-      start.latitude + (end.latitude - start.latitude) * eased,
-      start.longitude + (end.longitude - start.longitude) * eased,
-    );
-  }
-
-  /// ✅ Easing function for smooth animation
-  double _easeOutCubic(double t) {
-    return 1 - pow(1 - t, 3).toDouble();
-  }
-
-  /// ✅ Calculate distance between two points
-  double _calculateDistance(LatLng a, LatLng b) {
-    final dx = a.latitude - b.latitude;
-    final dy = a.longitude - b.longitude;
-    return sqrt(dx * dx + dy * dy);
-  }
-
 
   void _recenterNavigation() {
     final currentState = ref.read(mapStateProvider);
@@ -1420,53 +1365,71 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
   /// Recenters the map to show both the user's current location and nearby AEDs.
   Future<void> _recenterMapToUserAndAEDs({bool allowLocationPrompt = false}) async {
-    final currentState = ref.read(mapStateProvider);
 
-    // 1. If in compass-only navigation (no location), zoom to AED
+    // 1. ALWAYS try to get location. This will prompt if services are off or permissions are denied.
+    final userLocation = await _locationService.getCurrentLocationWithUI(
+      context: context,
+      showPermissionDialog: allowLocationPrompt, // This will be 'true' from your build method
+      showErrorMessages: allowLocationPrompt,  // This will be 'true'
+    );
+
+    // 2. If we got a location (it was on, or user just enabled it)
+    if (userLocation != null) {
+      _updateUserLocation(userLocation); // Update state with the fresh location
+
+      // Re-read the AED list from the state
+      final aedList = ref.read(mapStateProvider).aedList;
+
+      if (_mapViewController != null && aedList.length >= 2) {
+        print("🎯 Recentering to user + 2 closest AEDs");
+        final closestAEDs = aedList.take(2).map((aed) => aed.location).toList();
+        await _mapViewController!.zoomToUserAndClosestAEDs(
+          userLocation,
+          closestAEDs,
+        );
+      } else if (_mapController != null) { // ✅ FIX: Use _mapController directly
+        // Fallback: just zoom to user if no AEDs
+        print("🎯 Recentering to user");
+        await _mapController!.animateCamera( // Use animateCamera
+          CameraUpdate.newLatLngZoom(userLocation, 16.0), // 16.0 is a default zoom
+        );
+      }
+      return; // We are done
+    }
+
+    // --- User Denied Location (userLocation is null) ---
+
+    // 3. If location is null, check if we are in compass navigation
+    final currentState = ref.read(mapStateProvider);
     if (currentState.navigation.hasStarted &&
-        currentState.navigation.destination != null &&
-        currentState.userLocation == null) {
+        currentState.navigation.destination != null) {
       if (_mapViewController != null) {
         await _mapViewController!.zoomToAED(currentState.navigation.destination!);
       }
       return;
     }
 
-    // 2. If we have location, zoom to user + 2 closest AEDs
-    if (currentState.userLocation != null && _mapViewController != null && currentState.aedList.length >= 2) {
-      print("🎯 Recentering to user + 2 closest AEDs");
-
-      final closestAEDs = currentState.aedList.take(2).map((aed) => aed.location).toList();
-      await _mapViewController!.zoomToUserAndClosestAEDs(
-        currentState.userLocation!,
-        closestAEDs,
-      );
-      return;
-    }
-
-    // 3. No location - try to get it if allowed
-    if (allowLocationPrompt) {
-      final userLocation = await _locationService.getCurrentLocationWithUI(
-        context: context,
-        showPermissionDialog: true,
-        showErrorMessages: true,
-      );
-
-      if (userLocation != null) {
-        _updateUserLocation(userLocation);
-
-        if (_mapViewController != null && currentState.aedList.length >= 2) {
-          final closestAEDs = currentState.aedList.take(2).map((aed) => aed.location).toList();
-          await _mapViewController!.zoomToUserAndClosestAEDs(
-            userLocation,
-            closestAEDs,
-          );
-        }
-        return;
+    // 4. ✅ FIX: Check for cached location BEFORE falling back to Greece
+    final cachedLocation = ref.read(mapStateProvider).userLocation;
+    if (cachedLocation != null) {
+      print("❌ User denied location - staying at cached location");
+      // Re-zoom to the cached location + 2 AEDs, in case user panned away
+      final aedList = ref.read(mapStateProvider).aedList;
+      if (_mapViewController != null && aedList.length >= 2) {
+        final closestAEDs = aedList.take(2).map((aed) => aed.location).toList();
+        await _mapViewController!.zoomToUserAndClosestAEDs(
+          cachedLocation, // Use cached location
+          closestAEDs,
+        );
+      } else if (_mapController != null) { // Fallback to just cached location
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(cachedLocation, 16.0),
+        );
       }
+      return; // IMPORTANT: return here
     }
 
-    // 4. Fallback: show Greece view
+    // 5. True Fallback: No location, no cache, show Greece.
     if (_mapViewController != null) {
       await _mapViewController!.showDefaultGreeceView();
     }
@@ -1810,7 +1773,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     final aed = currentState.aedList.firstWhere(
           (aed) => aed.location.latitude == aedLocation.latitude &&
           aed.location.longitude == aedLocation.longitude,
-      orElse: () => AED(id: -1, name: '', address: '', location: aedLocation),
+      orElse: () => AED(id: -1, foundation: '', address: '', location: aedLocation),
     );
 
     final isStale = _isLocationStale();
@@ -1831,11 +1794,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
 // If no exact match, try nearby cached routes (within 1km)
     routeResult ??= CacheService.getCachedRouteNearby(
-        currentLocation,
-        aedLocation,
-        currentState.navigation.transportMode,
-        maxDistanceMeters: 1000, // 1km proximity
-      );
+      currentLocation,
+      aedLocation,
+      currentState.navigation.transportMode,
+      maxDistanceMeters: 1000, // 1km proximity
+    );
 
 // If no cached route and location is fresh and online, fetch new route
     if (routeResult == null && !isStale && _googleMapsApiKey != null && !currentState.isOffline) {
@@ -1984,11 +1947,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
     // If no exact match, try nearby cached routes (within 1km)
     routeResult ??= CacheService.getCachedRouteNearby(
-        currentLocation,
-        aedLocation,
-        currentState.navigation.transportMode,
-        maxDistanceMeters: 1000,
-      );
+      currentLocation,
+      aedLocation,
+      currentState.navigation.transportMode,
+      maxDistanceMeters: 1000,
+    );
 
     // Only fetch fresh route if location is fresh AND online AND no cached route
     if (routeResult == null && !isStale && !currentState.isOffline &&
@@ -2134,6 +2097,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     // ✅ Handle location state changes properly
     if (!_isLocationAvailable && shouldHaveLocation) {
       print("📍 Location became available during resume");
+      _hasPerformedInitialZoom = false;
       setState(() {
         _isLocationAvailable = true;
       });
