@@ -194,7 +194,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     final cachedAEDs = await CacheService.getAEDs();
 
     if (cachedAEDs != null) {
-      final cachedAEDList = aedRepository.convertToAEDList(cachedAEDs);
+      // Use the correct factory
+      final cachedAEDList = cachedAEDs
+          .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+          .whereType<AED>()
+          .toList();
 
       if (cachedAEDList.isNotEmpty) {
         print("📦 Loaded ${cachedAEDList.length} cached AEDs");
@@ -1455,7 +1459,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
         print("🔍 STEP 1: Attempting to load cached AEDs...");
         final cachedAEDs = await CacheService.getAEDs();
         if (cachedAEDs != null) {
-          final cachedAEDList = aedRepository.convertToAEDList(cachedAEDs);
+          // Use the correct factory
+          final cachedAEDList = cachedAEDs
+              .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+              .whereType<AED>()
+              .toList();
 
           if (cachedAEDList.isNotEmpty) {
             print("📦 Showing cached AEDs immediately (${cachedAEDList.length} AEDs)");

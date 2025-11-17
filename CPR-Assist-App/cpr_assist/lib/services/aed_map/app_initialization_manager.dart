@@ -147,7 +147,11 @@ class AppInitializationManager {
         return [];
       }
 
-      final aedList = aedRepository.convertToAEDList(cachedData);
+    // Use the correct factory from aed_models.dart
+      final aedList = cachedData
+          .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+          .whereType<AED>()
+          .toList();
 
       // Sort by distance if we have location
       if (userLocation != null && aedList.isNotEmpty) {

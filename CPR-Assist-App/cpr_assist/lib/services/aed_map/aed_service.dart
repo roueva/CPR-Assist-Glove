@@ -55,7 +55,11 @@ class AEDService {
     final staleCache = await CacheService.getAEDs();
     if (staleCache != null) {
       print("⚠️ Using stale cached AEDs as fallback");
-      return convertToAEDList(staleCache);
+      // Use the correct factory
+      return staleCache
+          .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+          .whereType<AED>()
+          .toList();
     }
 
     throw Exception("No AED data available - please connect to internet");
@@ -66,7 +70,11 @@ class AEDService {
     if (cachedAEDs == null) return null;
 
     // Always return cache if available (we'll rely on network updates when online)
-    return convertToAEDList(cachedAEDs);
+    // Use the correct factory from aed_models.dart
+    return cachedAEDs
+        .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+        .whereType<AED>()
+        .toList();
   }
 
   Future<List<AED>?> _tryGetFromNetwork() async {
@@ -80,7 +88,12 @@ class AEDService {
 
       final aeds = await _networkService.fetchAEDLocations();
       await CacheService.saveAEDs(aeds);
-      return convertToAEDList(aeds);
+
+      // Use the correct factory from aed_models.dart
+      return aeds
+          .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
+          .whereType<AED>()
+          .toList();
     } catch (e) {
       print("❌ Network fetch failed: $e");
       return null;
@@ -88,25 +101,6 @@ class AEDService {
   }
 
 
-  List<AED> convertToAEDList(List<dynamic> rawData) {
-    return rawData.map((aed) {
-      final double? lat = double.tryParse(aed["latitude"].toString());
-      final double? lng = double.tryParse(aed["longitude"].toString());
-
-      if (lat == null || lng == null) return null;
-
-      final location = LatLng(lat, lng);
-      final rawAddress = aed["address"]?.toString() ?? "Unknown address";
-      final int aedId = int.tryParse(aed["id"].toString()) ?? 0;
-
-      return AED(
-        id: aedId,
-        foundation: rawAddress,
-        address: rawAddress,
-        location: location,
-      );
-    }).whereType<AED>().toList();
-  }
 
   Set<Marker> createMarkers(List<AED> aeds, Function(LatLng) onPreviewPressed){
     return aeds.map((aed) => Marker(
