@@ -1,5 +1,7 @@
 import 'package:cpr_assist/screens/main_navigation.dart';
+import 'package:cpr_assist/services/aed_map/cache_service.dart';
 import 'package:cpr_assist/services/network_service.dart';
+import 'package:cpr_assist/utils/availability_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,9 +57,15 @@ void main() async {
   // ✅ Load .env from the correct location
   await dotenv.load(fileName: ".env");
 
+  // Load the map once at startup
+  await AvailabilityParser.loadRules();
+
   // ✅ Keep screen awake
   WakelockPlus.enable();
 
+  // ✅ Initialize all caches (distance + route)
+  await CacheService.initializeAllCaches();
+  print("✅ Caches initialized");
 
   NetworkService.startConnectivityMonitoring();
 
@@ -96,11 +104,29 @@ void main() async {
 
 // ===== APP CLASS =====
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    NetworkService.stopConnectivityMonitoring();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Watch providers to get current values
     final isLoggedIn = ref.watch(simpleAuthStateProvider);
     final decryptedDataHandler = ref.watch(decryptedDataProvider);

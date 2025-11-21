@@ -456,9 +456,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       // Update offline state FIRST
       ref.read(mapStateProvider.notifier).setOffline(false);
 
-      // Fetch fresh API key and data
+      // Ensure we have API key from .env
       if (_googleMapsApiKey == null) {
-        await _fetchGoogleMapsApiKey();  // ← Add await
+        _googleMapsApiKey = NetworkService.googleMapsApiKey;  // ✅ Get from .env
+        print("🔑 Loaded API key from .env: ${_googleMapsApiKey != null ? 'Success' : 'Failed'}");
       }
 
       // ✅ Wait a frame for state to propagate
@@ -560,19 +561,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     );
 
     print("🔴 Switched to offline navigation mode");
-  }
-
-
-  Future<void> _fetchGoogleMapsApiKey() async {
-    _googleMapsApiKey = await NetworkService.fetchGoogleMapsApiKey();
-    if (_googleMapsApiKey == null) {
-      print("❌ Failed to fetch Google Maps API Key.");
-    } else {
-      // Initialize route preloader only
-      _routePreloader = RoutePreloader(_googleMapsApiKey!, (status) {
-        print("Preloader status: $status");
-      });
-    }
   }
 
   Future<void> _onMapCreated(GoogleMapController controller) async {
@@ -1496,7 +1484,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       orElse: () => AED(id: -1, foundation: '', address: '', location: aedLocation),
     );
 
-    final isStale = _isLocationStale();
     final isTooOld = _isLocationTooOld();
 
     if (!isTooOld && !currentState.isOffline && _googleMapsApiKey != null) {

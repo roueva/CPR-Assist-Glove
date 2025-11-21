@@ -67,7 +67,7 @@ app.use('/auth', generalLimiter);
 
 
 // ✅ Check Required Environment Variables
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY'];
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY', 'ISAVELIVES_API_KEY'];
 requiredEnvVars.forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);
@@ -270,10 +270,33 @@ cron.schedule('0 3 * * 0', async () => {
     }
 }, {
     scheduled: true,
-    timezone: "Europe/Athens"
+    timezone: process.env.TZ || "Europe/Athens"
 });
 
 console.log('⏰ Weekly AED sync scheduled for Sundays at 3:00 AM (Athens time)');
+
+// ✅ Run sync on startup if database is empty
+(async () => {
+    try {
+        const result = await pool.query('SELECT COUNT(*) as count FROM aed_locations');
+        const count = parseInt(result.rows[0].count);
+        
+        if (count === 0) {
+            console.log('📦 Database empty - running initial AED sync...');
+            const aedService = new AEDService(pool);
+            const externalAEDs = await aedService.fetchFromExternalAPI();
+            
+            if (externalAEDs.length > 0) {
+                const syncResult = await aedService.syncAEDs(externalAEDs);
+                console.log(`✅ Initial sync complete: ${syncResult.inserted} inserted`);
+            }
+        } else {
+            console.log(`✅ Database has ${count} AEDs - skipping initial sync`);
+        }
+    } catch (error) {
+        console.error('⚠️ Initial sync check failed:', error.message);
+    }
+})();
 
 // ✅ Graceful Shutdown
 const shutdown = async (signal) => {

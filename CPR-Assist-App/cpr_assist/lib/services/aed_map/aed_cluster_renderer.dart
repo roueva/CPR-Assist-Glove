@@ -227,7 +227,7 @@ class ClusterMarkerBuilder {
 
       // 2. Check its availability
       final availabilityStatus =
-      AvailabilityParser.parseAvailability(aed.availability, aedId: aed.id);
+      AvailabilityParser.parseAvailability(aed.availability);
 
       // 3. Set opacity: 1.0 for "Open", 0.5 for "Closed/Uncertain"
       final double markerOpacity =

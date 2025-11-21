@@ -28,13 +28,31 @@ class CacheService {
   static const int _maxRouteCache = 100;
   static const int _maxDistanceCache = 500;
   static Timer? _saveTimer;
+  static Duration getCacheTTL() => _cacheTtl;
 
+  /// Get the age of the AED cache
+  static Future<Duration> getCacheAge() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getInt(_aedTimestampKey);
+
+      if (timestamp == null) {
+        return const Duration(days: 999); // Very old = no cache
+      }
+
+      final cacheTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      return DateTime.now().difference(cacheTime);
+    } catch (e) {
+      print("⚠️ Error getting cache age: $e");
+      return const Duration(days: 999);
+    }
+  }
 
 // Single unified distance cache
   static final Map<String, double> _distanceCache = {};
 
   // TTL constants - unified
-  static const Duration _cacheTtl = Duration(days: 250);
+  static const Duration _cacheTtl = Duration(days: 7);
 
   // Unified distance management
   static void setDistance(String key, double distance) {

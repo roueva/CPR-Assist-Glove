@@ -261,68 +261,42 @@ class NetworkService {
   // 🔹 FETCH AED LOCATIONS 🔹
   Future<List<dynamic>> fetchAEDLocations() async {
     try {
-      final response = await get('/aed/', requiresAuth: false);
-      if (response is Map<String, dynamic> && response.containsKey("data")) {
-        return response["data"];
+      final url = Uri.parse('$baseUrl/aed');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        // ✅ Parse metadata headers
+        final lastUpdated = response.headers['x-data-last-updated'];
+        final totalAEDs = response.headers['x-total-aeds'];
+
+        if (lastUpdated != null) {
+          print("🕒 Backend data last updated: $lastUpdated");
+        }
+        if (totalAEDs != null) {
+          print("📊 Total AEDs from backend: $totalAEDs");
+        }
+
+        // ✅ Backend now returns array directly
+        final List<dynamic> data = jsonDecode(response.body);
+        print("✅ Fetched ${data.length} AEDs from backend");
+        return data;
       } else {
-        throw Exception("Invalid response format from backend");
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       print("❌ Error fetching AED locations: $e");
-      return [];
+      rethrow;  // ✅ Rethrow so AEDService can handle it
     }
   }
 
   static String? get googleMapsApiKey {
-    String? key = dotenv.env['GOOGLE_MAPS_API_KEY'];
+    // ✅ Just read from .env directly
+    final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
     if (key == null || key.isEmpty) {
-      throw Exception("❌ GOOGLE_MAPS_API_KEY is missing from .env");
+      print("❌ GOOGLE_MAPS_API_KEY is missing from .env");
+      return null;
     }
     return key;
-  }
-
-  // 🔹 GET CACHE/SYNC INFO 🔹
-  Future<Map<String, dynamic>?> getAEDCacheInfo() async {
-    try {
-      final response = await get('/aed/cache/info', requiresAuth: false);
-
-      if (response is Map<String, dynamic> && response.containsKey("cache")) {
-        return response["cache"];
-      }
-      return null;
-    } catch (e) {
-      print("❌ Error fetching cache info: $e");
-      return null;
-    }
-  }
-
-
-  static Future<String?> fetchGoogleMapsApiKey() async {
-    try {
-      final url = Uri.parse('$baseUrl/api/maps-key'); // <--- Find this line
-
-      // ADD THIS PRINT STATEMENT:
-      print("🐞 DEBUG: Attempting to fetch key from: $url");
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/maps-key'),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('apiKey')) {
-          return jsonResponse['apiKey'];
-        }
-      } else {
-        // ADD THIS ELSE BLOCK:
-        print("❌ Server returned non-200 status: ${response.statusCode}");
-        print("❌ Server response body: ${response.body}");
-      }
-
-    } catch (e) {
-      print("❌ FULL ERROR fetching Google Maps API Key: $e");
-    }
-    return null;
   }
 
   static Future<Map<String, dynamic>?> getExternal(String url) async {

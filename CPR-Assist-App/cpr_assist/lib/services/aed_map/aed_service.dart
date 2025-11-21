@@ -1,6 +1,5 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../utils/app_constants.dart';
-import '../../widgets/aed_markers.dart';
 import '../../models/aed_models.dart';
 import 'cache_service.dart';
 import 'location_service.dart';
@@ -33,16 +32,24 @@ class AEDService {
   Future<List<AED>> fetchAEDs({bool forceRefresh = false}) async {
     final isConnected = NetworkService.lastKnownConnectivityState;
 
-    // ALWAYS try cache first (unless forcing refresh AND connected)
+    // STEP 1: Try cache first (unless forcing refresh AND connected)
     if (!(forceRefresh && isConnected)) {
-      final cached = await _tryGetFromCache();
-      if (cached != null) {
-        print("📦 Using cached AEDs (${cached.length} AEDs)");
-        return cached;
+      // Check if cache is expired
+      final isCacheExpired = await CacheService.isAEDCacheExpired();
+
+      if (!isCacheExpired) {
+        final cached = await _tryGetFromCache();
+        if (cached != null) {
+          final cacheAge = await CacheService.getCacheAge();
+          print("📦 Using cached AEDs (${cached.length} AEDs) - age: ${cacheAge.inHours}h");
+          return cached;
+        }
+      } else {
+        print("⏰ Cache expired (>${CacheService.getCacheTTL().inDays} days old) - fetching fresh data");
       }
     }
 
-    // Try network if connected
+    // STEP 2: Try network if connected
     if (isConnected) {
       final network = await _tryGetFromNetwork();
       if (network != null) {
@@ -51,11 +58,10 @@ class AEDService {
       }
     }
 
-    // Fallback to ANY cached data, even if expired
+    // STEP 3: Fallback to stale cache
     final staleCache = await CacheService.getAEDs();
     if (staleCache != null) {
       print("⚠️ Using stale cached AEDs as fallback");
-      // Use the correct factory
       return staleCache
           .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
           .whereType<AED>()

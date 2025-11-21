@@ -65,18 +65,15 @@ class AppInitializationManager {
       final cachedAEDs = await _loadCachedAEDs(aedRepository, cachedLocationData['location']);
       print("📦 Cached AEDs: ${cachedAEDs.length}");
 
-      // STEP 5: Get API key if online
-      String? apiKey;
-      if (isConnected) {
-        apiKey = await NetworkService.fetchGoogleMapsApiKey();
-        print("🔑 API key: ${apiKey != null ? 'Retrieved' : 'Failed'}");
-      }
+      // STEP 5: Get API key from .env
+      String? apiKey = NetworkService.googleMapsApiKey;
+      print("🔑 API key: ${apiKey != null ? 'Loaded' : 'Missing'}");
 
       // Return initial result with cached data
       return InitializationResult(
         hasLocation: cachedLocationData['location'] != null,
         userLocation: cachedLocationData['location'],
-        aedList: cachedAEDs.take(10).toList(), // Only 10 closest for instant display
+        aedList: cachedAEDs,
         isConnected: isConnected,
         apiKey: apiKey,
         shouldZoom: cachedLocationData['location'] != null && cachedAEDs.isNotEmpty,
@@ -149,11 +146,23 @@ class AppInitializationManager {
         return [];
       }
 
-    // Use the correct factory from aed_models.dart
-      final aedList = cachedData
-          .map((aed) => AED.fromMap(aed as Map<String, dynamic>))
-          .whereType<AED>()
-          .toList();
+      // ✅ Parse with error handling
+      final aedList = <AED>[];
+      int parseErrors = 0;
+
+      for (final aedData in cachedData) {
+        try {
+          final aed = AED.fromMap(aedData as Map<String, dynamic>);
+          aedList.add(aed);
+        } catch (e) {
+          parseErrors++;
+          // Silently skip invalid entries
+        }
+      }
+
+      if (parseErrors > 0) {
+        print("⚠️ Skipped $parseErrors invalid cached AEDs");
+      }
 
       // Sort by distance if we have location
       if (userLocation != null && aedList.isNotEmpty) {

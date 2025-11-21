@@ -4,9 +4,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/aed_models.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter/services.dart' show HapticFeedback, rootBundle;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback, rootBundle;
 
 import '../services/aed_map/aed_service.dart';
 import '../services/aed_map/cache_service.dart';
@@ -33,7 +35,7 @@ class _CompassArcPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF194E9D).withOpacity(0.3)
+      ..color = const Color(0xFF194E9D).withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8;
 
@@ -214,6 +216,207 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     HapticFeedback.lightImpact();
   }
 
+  void _showShareDialog(AED aed) {
+    final String googleMapsUrl =
+        'https://www.google.com/maps/search/?api=1&query=${aed.location.latitude},${aed.location.longitude}';
+
+    final String shareText =
+        '🚨 AED Location: ${aed.name}\n'
+        '📍 ${aed.address ?? "No address"}\n'
+        '🗺️ ${googleMapsUrl}';
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Title
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF194E9D).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.share,
+                      color: Color(0xFF194E9D),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Share AED Location',
+                          style: SafeFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          aed.name,
+                          style: SafeFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // QR Code
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  children: [
+                    QrImageView(
+                      data: googleMapsUrl,
+                      version: QrVersions.auto,
+                      size: 180,
+                      backgroundColor: Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Scan to open in Google Maps',
+                      style: SafeFonts.inter(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Share Options
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildShareButton(
+                      icon: Icons.copy,
+                      label: 'Copy Link',
+                      color: Colors.blue.shade600,
+                      onTap: () async {
+                        await Clipboard.setData(ClipboardData(text: googleMapsUrl));
+                        if (mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Link copied to clipboard',
+                                    style: SafeFonts.inter(fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              backgroundColor: Colors.green.shade600,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              margin: const EdgeInsets.all(16),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildShareButton(
+                      icon: Icons.share,
+                      label: 'Share',
+                      color: Colors.green.shade600,
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await Share.share(
+                          shareText,
+                          subject: 'AED Location: ${aed.name}',
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Close button
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Close',
+                  style: SafeFonts.inter(
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: SafeFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_mapStyle == null) {
@@ -243,6 +446,48 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
               if (widget.config.hasStartedNavigation)
                 _buildActiveNavigationPanel(isSidePanel: orientation == Orientation.landscape),
+
+// ✅ NEW: Report Issue Corner Button
+              if (widget.config.hasSelectedRoute)
+                Positioned(
+                  bottom: orientation == Orientation.portrait ? 16 : 16,
+                  left: orientation == Orientation.portrait ? 16 : 400,
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      onTap: _showReportIssueDialog,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.flag_outlined,
+                              color: Colors.orange.shade600,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Report",
+                              style: SafeFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -419,6 +664,145 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
+  void _showReportIssueDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.report_problem,
+                color: Colors.orange.shade700,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Report an Issue'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Help us improve AED location data',
+              style: SafeFonts.inter(
+                fontSize: 14,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildReportOption(
+              Icons.location_off,
+              'AED Not Found',
+              'This AED is missing or relocated',
+            ),
+            const SizedBox(height: 8),
+            _buildReportOption(
+              Icons.broken_image,
+              'AED Damaged',
+              'The AED appears damaged or broken',
+            ),
+            const SizedBox(height: 8),
+            _buildReportOption(
+              Icons.schedule,
+              'Wrong Hours',
+              'Availability information is incorrect',
+            ),
+            const SizedBox(height: 8),
+            _buildReportOption(
+              Icons.error_outline,
+              'Other Issue',
+              'Report a different problem',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: SafeFonts.inter(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Open contact form
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AEDWebViewScreen(
+                    url: 'https://kidssavelives.gr/epikoinonia/',
+                    title: 'Report Issue',
+                  ),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade600,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Submit Report',
+              style: SafeFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportOption(IconData icon, String title, String subtitle) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.orange.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: SafeFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF2C2C2C),
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: SafeFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPanelContainer({
     required Widget child,
     required BorderRadius borderRadius,
@@ -516,7 +900,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       thumbVisibility: false,  // Only shows when scrolling
       thickness: 4,
       radius: const Radius.circular(2),
-      thumbColor: AppColors.clusterGreen.withOpacity(0.5),
+      thumbColor: AppColors.clusterGreen.withValues(alpha: 0.5),
       fadeDuration: const Duration(milliseconds: 300),
       timeToFade: const Duration(milliseconds: 600),
       child: ListView(
@@ -908,7 +1292,29 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
+                  // ✅ NEW: Share button
+                  Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDF4F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: IconButton(
+                      onPressed: selectedAedInfo.id != -1
+                          ? () => _showShareDialog(selectedAedInfo)
+                          : null,
+                      tooltip: 'Share AED Location',
+                      icon: const Icon(
+                        Icons.share,
+                        color: Color(0xFF194E9D),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     height: 50,
                     width: 50,
@@ -921,6 +1327,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                       onPressed: widget.config.selectedAED != null
                           ? () => widget.onExternalNavigation?.call(widget.config.selectedAED!)
                           : null,
+                      tooltip: 'Open in External Maps',
                       icon: const Icon(
                         Icons.open_in_new,
                         color: Color(0xFF194E9D),
@@ -1033,7 +1440,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 _ExpandableAvailability(
                   parsedStatus: AvailabilityParser.parseAvailability(
                     selectedAedInfo.availability,
-                    aedId: selectedAedInfo.id, // Pass ID for logging
                   ),
                   rawAvailabilityText: selectedAedInfo.availability!,
                 ),
@@ -1211,294 +1617,387 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           children: [
             // Add padding to the top of the actual panel (same as AED list)
             Padding(
-              padding: const EdgeInsets.only(top: 56),
-              child: _buildPanelContainer(
-                borderRadius: isSidePanel
-                    ? const BorderRadius.only(
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                  topLeft: Radius.circular(16),
-                )
-                    : const BorderRadius.vertical(top: Radius.circular(16)),
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  children: [
-                    // Drag handle
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade400,
-                          borderRadius: BorderRadius.circular(10),
+                padding: const EdgeInsets.only(top: 56),
+                child: _buildPanelContainer(
+                  borderRadius: isSidePanel
+                      ? const BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                    topLeft: Radius.circular(16),
+                  )
+                      : const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    children: [
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade400,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
-                    ),
 
-                    // Navigation header
-                    Row(
-                      children: [
+                      // Navigation header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.navigation,
+                              color: Colors.green.shade700,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Navigating to AED",
+                                  style: SafeFonts.inter(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                Text(
+                                  selectedAedInfo.name,
+                                  style: SafeFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Stop Navigation',
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              widget.onCancelNavigation?.call();
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Enhanced offline warning
+                      if (isOfflineRoute || widget.config.isOffline)
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            shape: BoxShape.circle,
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
                           ),
-                          child: Icon(
-                            Icons.navigation,
-                            color: Colors.green.shade700,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(
-                                "Navigating to AED",
-                                style: SafeFonts.inter(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade600,
+                              Icon(Icons.wifi_off, size: 16, color: Colors.orange.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Offline navigation - estimated route",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                selectedAedInfo.name, // Shows foundation name
-                                style: SafeFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Stop Navigation',
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            widget.onCancelNavigation?.call();
-                          },
+
+                      // ✅ Availability Status (INSIDE ListView children)
+                      if (selectedAedInfo.availability != null &&
+                          selectedAedInfo.availability!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _ExpandableAvailability(
+                            parsedStatus: AvailabilityParser.parseAvailability(
+                              selectedAedInfo.availability,
+                            ),
+                            rawAvailabilityText: selectedAedInfo.availability!,
+                          ),
                         ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 16),
-
-                    // Enhanced offline warning
-                    if (isOfflineRoute || widget.config.isOffline)
+                      // Main navigation info - ETA, Distance, Mode
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade200),
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.wifi_off, size: 16, color: Colors.orange.shade700),
-                            const SizedBox(width: 8),
+                            // ETA
                             Expanded(
-                              child: Text(
-                                "Offline navigation - estimated route",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.orange.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              child: _buildCompactInfoColumn(
+                                Icons.access_time,
+                                widget.config.estimatedTime,
+                                "ETA",
+                                isOffline: isOfflineRoute || widget.config.isOffline,
+                              ),
+                            ),
+
+                            // Divider
+                            Container(
+                              width: 1,
+                              height: 50,
+                              color: Colors.grey.shade300,
+                            ),
+
+                            // Distance
+                            Expanded(
+                              child: _buildCompactInfoColumn(
+                                Icons.near_me,
+                                widget.config.distance != null
+                                    ? LocationService.formatDistance(widget.config.distance!)
+                                    : "N/A",
+                                "Distance",
+                                isOffline: isOfflineRoute || widget.config.isOffline,
+                              ),
+                            ),
+
+                            // Divider
+                            Container(
+                              width: 1,
+                              height: 50,
+                              color: Colors.grey.shade300,
+                            ),
+
+                            // Transport Mode (read-only during navigation)
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: widget.config.selectedMode == 'walking'
+                                          ? Colors.orange
+                                          : Colors.blue,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      widget.config.selectedMode == 'walking'
+                                          ? Icons.directions_walk
+                                          : Icons.directions_car,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    widget.config.selectedMode == 'walking' ? 'Walking' : 'Driving',
+                                    style: SafeFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Mode",
+                                    style: SafeFonts.inter(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
 
-                    // Main navigation info - ETA, Distance, Mode
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          // ETA
-                          Expanded(
-                            child: _buildCompactInfoColumn(
-                              Icons.access_time,
-                              widget.config.estimatedTime,
-                              "ETA",
-                              isOffline: isOfflineRoute || widget.config.isOffline,
+                      const SizedBox(height: 16),
+
+                      // ✅ Beautiful AED Details Card (INSIDE ListView children)
+                      if (selectedAedInfo.id != -1 && selectedAedInfo.hasWebpage)
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => AEDWebViewScreen(
+                                  url: selectedAedInfo.aedWebpage!,
+                                  title: selectedAedInfo.name,
+                                ),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  const Color(0xFF194E9D).withValues(alpha: 0.08),
+                                  const Color(0xFF194E9D).withValues(alpha: 0.03),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF194E9D).withValues(alpha: 0.2),
+                              ),
                             ),
-                          ),
-
-                          // Divider
-                          Container(
-                            width: 1,
-                            height: 50,
-                            color: Colors.grey.shade300,
-                          ),
-
-                          // Distance
-                          Expanded(
-                            child: _buildCompactInfoColumn(
-                              Icons.near_me,  // Changed icon
-                              widget.config.distance != null
-                                  ? LocationService.formatDistance(widget.config.distance!)
-                                  : "N/A",
-                              "Distance",
-                              isOffline: isOfflineRoute || widget.config.isOffline,
-                            ),
-                          ),
-
-                          // Divider
-                          Container(
-                            width: 1,
-                            height: 50,
-                            color: Colors.grey.shade300,
-                          ),
-
-                          // Transport Mode (read-only during navigation)
-                          Expanded(
-                            child: Column(
+                            child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: widget.config.selectedMode == 'walking'
-                                        ? Colors.orange
-                                        : Colors.blue,
-                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF194E9D).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Icon(
-                                    widget.config.selectedMode == 'walking'
-                                        ? Icons.directions_walk
-                                        : Icons.directions_car,
-                                    color: Colors.white,
-                                    size: 20,
+                                  child: const Icon(
+                                    Icons.medical_information_outlined,
+                                    color: Color(0xFF194E9D),
+                                    size: 24,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  widget.config.selectedMode == 'walking' ? 'Walking' : 'Driving',
-                                  style: SafeFonts.inter(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: Colors.grey.shade700,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "AED Details & Information",
+                                        style: SafeFonts.inter(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF194E9D),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "View location details, photos & more",
+                                        style: SafeFonts.inter(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Text(
-                                  "Mode",
-                                  style: SafeFonts.inter(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 12,
-                                  ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: const Color(0xFF194E9D).withValues(alpha: 0.6),
+                                  size: 16,
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                        ),
+                    ],  // ← ListView.children closes
+                  ),  // ← ListView closes
+                ),  // ← _buildPanelContainer closes
+            ),  // ← Padding closes
 
-            // ✅ ADD RECENTER BUTTON HERE - positioned same as AED list button
+            // ✅ ADD RECENTER BUTTON HERE
             if (widget.config.showRecenterButton)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Material(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      widget.onRecenterNavigation?.call();
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        "Recenter",
-                        style: SafeFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF194E9D),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+      Positioned(
+      top: 8,
+      right: 8,
+      child: Material(
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(20),
+      ),
+      child: InkWell(
+      onTap: () {
+      HapticFeedback.lightImpact();
+      widget.onRecenterNavigation?.call();
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+      "Recenter",
+      style: SafeFonts.inter(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: const Color(0xFF194E9D),
+      ),
+      ),
+      ),
+      ),
+      ),
+      ),
 
-            // Show compass if navigation has started AND we have no route line to display
-            if (widget.config.hasStartedNavigation && widget.config.navigationLine == null)
-              Positioned(
-                top: 2,
-                left: 8,
-                child: StreamBuilder<CompassEvent>(
-                  stream: FlutterCompass.events,
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox.shrink();
+      // Show compass if navigation has started AND we have no route line to display
+      if (widget.config.hasStartedNavigation && widget.config.navigationLine == null)
+      Positioned(
+      top: 2,
+      left: 8,
+      child: StreamBuilder<CompassEvent>(
+      stream: FlutterCompass.events,
+      builder: (context, snapshot) {
+      if (!snapshot.hasData) return const SizedBox.shrink();
 
-                    final compassBearing = snapshot.data!.heading ?? 0.0;
-                    double bearingToDestination;
+      final compassBearing = snapshot.data!.heading ?? 0.0;
+      double bearingToDestination;
 
-                    // Calculate actual bearing if we have user location
-                    if (widget.config.userLocation != null) {
-                      bearingToDestination = _calculateBearingToDestination(
-                        widget.config.userLocation!,
-                        widget.config.selectedAED!,
-                      );
-                    } else {
-                      // No location - just show north reference
-                      bearingToDestination = 0.0;
-                    }
+      // Calculate actual bearing if we have user location
+      if (widget.config.userLocation != null) {
+      bearingToDestination = _calculateBearingToDestination(
+      widget.config.userLocation!,
+      widget.config.selectedAED!,
+      );
+      } else {
+      // No location - just show north reference
+      bearingToDestination = 0.0;
+      }
 
-                    double relativeAngle = bearingToDestination - compassBearing;
-                    if (relativeAngle > 180) relativeAngle -= 360;
-                    if (relativeAngle < -180) relativeAngle += 360;
+      double relativeAngle = bearingToDestination - compassBearing;
+      if (relativeAngle > 180) relativeAngle -= 360;
+      if (relativeAngle < -180) relativeAngle += 360;
 
-                    return Material(
-                      elevation: 8,
-                      shape: const CircleBorder(),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Transform.rotate(
-                          angle: relativeAngle * (3.14159 / 180),
-                          child: const Icon(
-                            Icons.navigation,
-                            color: Color(0xFF194E9D),
-                            size: 28,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+      return Material(
+      elevation: 8,
+      shape: const CircleBorder(),
+      child: Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      ),
+      child: Transform.rotate(
+      angle: relativeAngle * (3.14159 / 180),
+      child: const Icon(
+      Icons.navigation,
+      color: Color(0xFF194E9D),
+      size: 28,
+      ),
+      ),
+      ),
+      );
+      },
+      ),
+      ),
 
-          ],
-        ),
+      ],
+      ),
       );
     }
 
@@ -1635,7 +2134,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                       text: ' • ${status.detailText}',
                       style: SafeFonts.inter(
                         fontSize: 12,
-                        color: textColor.withOpacity(0.8),
+                        color: textColor.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
@@ -1759,17 +2258,18 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     // --- END NEW LOGIC ---
 
     final availabilityStatus = AvailabilityParser.parseAvailability(
-      aed.availability,
-      aedId: aed.id, // Pass ID for logging
-    );
-    final isOpenNow = !availabilityStatus.isUncertain && availabilityStatus.isOpen;
+        aed.availability);
 
-    // Use isRealData (from our new logic) instead of the old check
+// ✅ NEW LOGIC: Determine border style based on availability
+    final bool isOpenNow = !availabilityStatus.isUncertain && availabilityStatus.isOpen;
+    final bool isUncertain = availabilityStatus.isUncertain;
+
+// Use isRealData (from our new logic) instead of the old check
     final Color distanceColor =
     isRealData ? const Color(0xFF444444) : const Color(0xFF727272);
     final Color distanceIconColor = Colors.grey.shade600;
 
-    // Use the correct icon and color for the selected mode
+// Use the correct icon and color for the selected mode
     final IconData timeIcon =
     selectedMode == 'walking' ? Icons.directions_walk : Icons.directions_car;
     final Color timeColor = isRealData
@@ -1787,17 +2287,31 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         decoration: BoxDecoration(
           color: const Color(0xFFEDF4F9),
           borderRadius: BorderRadius.circular(8),
-          // Add green glow border if open now
+          // ✅ NEW: Show green border if open, orange if uncertain
           border: isOpenNow
               ? Border.all(
             color: AppColors.clusterGreen,
             width: 1,
           )
+              : isUncertain
+              ? Border.all(
+            color: Colors.orange.shade600,  // ✅ Orange border for "Check Availability"
+            width: 1,
+          )
               : null,
+          // ✅ NEW: Matching glow for both states
           boxShadow: isOpenNow
               ? [
             BoxShadow(
-              color: AppColors.clusterGreen.withOpacity(0.15),
+              color: AppColors.clusterGreen.withValues(alpha: 0.15),
+              blurRadius: 4,
+              spreadRadius: 0,
+            ),
+          ]
+              : isUncertain
+              ? [
+            BoxShadow(
+              color: Colors.orange.shade600.withValues(alpha: 0.15),
               blurRadius: 4,
               spreadRadius: 0,
             ),
@@ -2150,7 +2664,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 }
-// 📍 At the very end of your _AEDMapDisplayState class, before the last '}'
 class _ExpandableAvailability extends StatefulWidget {
   final AvailabilityStatus parsedStatus;
   final String rawAvailabilityText;

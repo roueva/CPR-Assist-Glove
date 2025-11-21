@@ -35,8 +35,11 @@ dependencies:
   # For NFC Card
   url_launcher: ^6.1.7
 
-  webview_flutter: ^4.4.2  # for in-app browser
+  # For in-app browser
+  webview_flutter: ^4.4.2
 
+  share_plus: ^7.2.2
+  qr_flutter: ^4.1.0
 
   # For location services
   geolocator: ^13.0.2
@@ -107,6 +110,7 @@ flutter:
   assets:
     - .env
     - assets/map_style.json
+    - assets/data/parsed_availability_map.json
     - assets/icons/AEDs.png
     - assets/icons/AEDs_c.png
     - assets/icons/kids_save_lives_logo.png

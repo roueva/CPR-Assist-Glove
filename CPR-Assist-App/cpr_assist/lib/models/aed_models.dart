@@ -47,6 +47,11 @@ class AED {
     // Use API distance if available (from nearby query)
     final distanceToUse = distanceFromAPI ?? distanceInMeters;
 
+    // ✅ Handle zero/invalid distance
+    if (distanceToUse <= 0) {
+      return '--';  // Show placeholder instead of "0 m"
+    }
+
     if (distanceToUse < 1000) {
       return '${distanceToUse.toStringAsFixed(0)} m';
     } else {
@@ -64,20 +69,23 @@ class AED {
 
   // Format last updated time
   String get formattedLastUpdated {
-    if (lastUpdated == null) return 'Unknown';
+    if (lastUpdated == null) return '';  // ✅ Return empty for display logic
 
     final now = DateTime.now();
     final difference = now.difference(lastUpdated!);
 
-    if (difference.inDays > 30) {
-      final months = (difference.inDays / 30).floor();
-      return '$months ${months == 1 ? "month" : "months"} ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays} ${difference.inDays == 1 ? "day" : "days"} ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} ${difference.inHours == 1 ? "hour" : "hours"} ago';
+    if (difference.inDays == 0) {
+      return 'today';
+    } else if (difference.inDays == 1) {
+      return 'yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else if (difference.inDays < 30) {
+      final weeks = (difference.inDays / 7).floor();
+      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
     } else {
-      return 'Recently updated';
+      final months = (difference.inDays / 30).floor();
+      return '$months ${months == 1 ? 'month' : 'months'} ago';
     }
   }
 

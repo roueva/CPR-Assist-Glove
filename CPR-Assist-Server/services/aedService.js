@@ -1,13 +1,10 @@
 const axios = require('axios');
-const fs = require('fs').promises;
-const path = require('path');
 
 class AEDService {
     constructor(pool) {
         this.pool = pool;
         this.API_URL = 'https://isavelivesapi-qa.azurewebsites.net/aed_endpoint';
         this.API_KEY = process.env.ISAVELIVES_API_KEY;
-        this.CACHE_FILE = path.join(__dirname, '../data/aed_cache.json');
 
         if (!this.API_KEY) {
             throw new Error('ISAVELIVES_API_KEY environment variable is not set');
@@ -15,7 +12,7 @@ class AEDService {
     }
 
     /**
-     * Fetch AEDs from iSaveLives API
+     * Fetch AEDs from iSaveLives API with database fallback
      */
     async fetchFromExternalAPI() {
         try {
@@ -34,97 +31,70 @@ class AEDService {
             }
 
             console.log(`✅ Fetched ${response.data.length} AEDs from iSaveLives API`);
-            
-            // Save to cache file
-            await this.saveCacheFile(response.data);
-            
             return this.transformExternalData(response.data);
             
         } catch (error) {
             console.error('❌ Error fetching from iSaveLives API:', error.message);
             
-            // Try to load from cache if API fails
-            console.log('⚠️ Attempting to load from cache file...');
-            const cachedData = await this.loadCacheFile();
+            // ✅ Try database as fallback instead of file cache
+            console.log('⚠️ API failed - attempting to use existing database data...');
             
-            if (cachedData) {
-                console.log(`✅ Loaded ${cachedData.length} AEDs from cache`);
-                return this.transformExternalData(cachedData);
+            const client = await this.pool.connect();
+            try {
+                const result = await client.query(
+                    'SELECT * FROM aed_locations ORDER BY id'
+                );
+                
+                if (result.rows.length > 0) {
+                    console.log(`✅ Using ${result.rows.length} AEDs from database as fallback`);
+                    return result.rows;
+                }
+                
+                throw new Error('No data available in database');
+            } finally {
+                client.release();
             }
-            
-            throw new Error(`Failed to fetch from API and no cache available: ${error.message}`);
         }
     }
 
     /**
-     * Save API response to cache file
-     */
-    async saveCacheFile(data) {
-        try {
-            const cacheData = {
-                lastUpdated: new Date().toISOString(),
-                count: data.length,
-                data: data
-            };
-
-            // Ensure data directory exists
-            const dataDir = path.dirname(this.CACHE_FILE);
-            await fs.mkdir(dataDir, { recursive: true });
-
-            await fs.writeFile(
-                this.CACHE_FILE,
-                JSON.stringify(cacheData, null, 2),
-                'utf8'
-            );
-
-            console.log(`💾 Saved ${data.length} AEDs to cache file`);
-        } catch (error) {
-            console.error('❌ Error saving cache file:', error.message);
-            // Don't throw - cache save failure shouldn't break the sync
-        }
-    }
-
-    /**
-     * Load AEDs from cache file
-     */
-    async loadCacheFile() {
-        try {
-            const fileContent = await fs.readFile(this.CACHE_FILE, 'utf8');
-            const cacheData = JSON.parse(fileContent);
-            
-            console.log(`📂 Cache file from: ${cacheData.lastUpdated}`);
-            return cacheData.data;
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                console.log('ℹ️ No cache file found');
-            } else {
-                console.error('❌ Error loading cache file:', error.message);
-            }
-            return null;
-        }
-    }
-
-    /**
-     * Transform API data to database schema (exact match)
+     * Transform API data to database schema with validation
      */
     transformExternalData(externalData) {
-        return externalData.map(item => {
+        const transformed = [];
+        const skipped = { invalidId: 0, invalidCoords: 0, duplicates: 0 };
+        const seenIds = new Set();
+
+        for (const item of externalData) {
             const id = parseInt(item.AED_ID);
             
+            // ✅ Check for invalid ID
             if (isNaN(id)) {
-                console.warn(`⚠️ Invalid AED_ID: ${item.AED_ID}, skipping...`);
-                return null;
+                skipped.invalidId++;
+                console.warn(`⚠️ Skipped: Invalid AED_ID "${item.AED_ID}"`);
+                continue;
             }
+
+            // ✅ Check for duplicate ID
+            if (seenIds.has(id)) {
+                skipped.duplicates++;
+                console.warn(`⚠️ Skipped: Duplicate AED_ID ${id}`);
+                continue;
+            }
+            seenIds.add(id);
 
             const latitude = parseFloat(item.latitude);
             const longitude = parseFloat(item.longitude);
             
+            // ✅ Check for invalid coordinates
             if (isNaN(latitude) || isNaN(longitude)) {
-                console.warn(`⚠️ Invalid coordinates for AED ${id}, skipping...`);
-                return null;
+                skipped.invalidCoords++;
+                console.warn(`⚠️ Skipped: Invalid coordinates for AED ${id}`);
+                continue;
             }
 
-            return {
+            // ✅ Valid record
+            transformed.push({
                 id: id,
                 foundation: item.foundation || null,
                 address: item.address || null,
@@ -132,114 +102,123 @@ class AEDService {
                 longitude: longitude,
                 availability: item.availability || null,
                 aed_webpage: item.aed_webpage || null
-            };
-        }).filter(item => item !== null);
+            });
+        }
+
+        // ✅ Log skip summary
+        const totalSkipped = skipped.invalidId + skipped.invalidCoords + skipped.duplicates;
+        if (totalSkipped > 0) {
+            console.log(`⚠️ Skipped ${totalSkipped} records: ${skipped.invalidId} invalid IDs, ${skipped.invalidCoords} invalid coords, ${skipped.duplicates} duplicates`);
+        }
+
+        return transformed;
     }
 
     /**
-     * Sync AEDs: Update existing records or insert new ones
+     * Sync AEDs with accurate insert/update tracking
      */
     async syncAEDs(aeds) {
-    const client = await this.pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        console.log(`📦 Processing ${aeds.length} AEDs in batches...`);
-        
-        // Process in batches of 500
-        const batchSize = 500;
-        let inserted = 0;
-        let updated = 0;
-        let unchanged = 0;
-        
-        for (let i = 0; i < aeds.length; i += batchSize) {
-            const batch = aeds.slice(i, i + batchSize);
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
             
-            // Build VALUES string for batch insert
-            const values = [];
-            const params = [];
-            let paramIndex = 1;
+            console.log(`📦 Syncing ${aeds.length} AEDs...`);
             
-            for (const aed of batch) {
-                values.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, NOW())`);
-                params.push(
-                    aed.id,
-                    aed.foundation,
-                    aed.address,
-                    aed.latitude,
-                    aed.longitude,
-                    aed.availability,
-                    aed.aed_webpage
-                );
-                paramIndex += 7;
+            const batchSize = 500;
+            let totalInserted = 0;
+            let totalUpdated = 0;
+            
+            for (let i = 0; i < aeds.length; i += batchSize) {
+                const batch = aeds.slice(i, i + batchSize);
+                
+                // Build VALUES for batch
+                const values = [];
+                const params = [];
+                let paramIndex = 1;
+                
+                for (const aed of batch) {
+                    values.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, NOW())`);
+                    params.push(
+                        aed.id,
+                        aed.foundation,
+                        aed.address,
+                        aed.latitude,
+                        aed.longitude,
+                        aed.availability,
+                        aed.aed_webpage
+                    );
+                    paramIndex += 7;
+                }
+                
+                // ✅ Use xmax to accurately track inserts vs updates
+                const query = `
+                    WITH upsert_result AS (
+                        INSERT INTO aed_locations (
+                            id, foundation, address, latitude, longitude,
+                            availability, aed_webpage, last_updated
+                        )
+                        VALUES ${values.join(', ')}
+                        ON CONFLICT (id)
+                        DO UPDATE SET
+                            foundation = EXCLUDED.foundation,
+                            address = EXCLUDED.address,
+                            latitude = EXCLUDED.latitude,
+                            longitude = EXCLUDED.longitude,
+                            availability = EXCLUDED.availability,
+                            aed_webpage = EXCLUDED.aed_webpage,
+                            last_updated = NOW()
+                        WHERE 
+                            aed_locations.foundation IS DISTINCT FROM EXCLUDED.foundation OR
+                            aed_locations.address IS DISTINCT FROM EXCLUDED.address OR
+                            aed_locations.latitude IS DISTINCT FROM EXCLUDED.latitude OR
+                            aed_locations.longitude IS DISTINCT FROM EXCLUDED.longitude OR
+                            aed_locations.availability IS DISTINCT FROM EXCLUDED.availability OR
+                            aed_locations.aed_webpage IS DISTINCT FROM EXCLUDED.aed_webpage
+                        RETURNING (xmax = 0) AS inserted
+                    )
+                    SELECT 
+                        COUNT(*) FILTER (WHERE inserted) as inserted,
+                        COUNT(*) FILTER (WHERE NOT inserted) as updated
+                    FROM upsert_result
+                `;
+                
+                const result = await client.query(query, params);
+                
+                if (result.rows[0]) {
+                    totalInserted += parseInt(result.rows[0].inserted || 0);
+                    totalUpdated += parseInt(result.rows[0].updated || 0);
+                }
+                
+                const progress = Math.min(i + batchSize, aeds.length);
+                if (progress % 1000 === 0 || progress === aeds.length) {
+                    console.log(`📦 Processed ${progress}/${aeds.length} AEDs`);
+                }
             }
             
-            const query = `
-                INSERT INTO aed_locations (
-                    id, foundation, address, latitude, longitude,
-                    availability, aed_webpage, last_updated
-                )
-                VALUES ${values.join(', ')}
-                ON CONFLICT (id)
-                DO UPDATE SET
-                    foundation = EXCLUDED.foundation,
-                    address = EXCLUDED.address,
-                    latitude = EXCLUDED.latitude,
-                    longitude = EXCLUDED.longitude,
-                    availability = EXCLUDED.availability,
-                    aed_webpage = EXCLUDED.aed_webpage,
-                    last_updated = NOW()
-                WHERE 
-                    aed_locations.foundation IS DISTINCT FROM EXCLUDED.foundation OR
-                    aed_locations.address IS DISTINCT FROM EXCLUDED.address OR
-                    aed_locations.latitude IS DISTINCT FROM EXCLUDED.latitude OR
-                    aed_locations.longitude IS DISTINCT FROM EXCLUDED.longitude OR
-                    aed_locations.availability IS DISTINCT FROM EXCLUDED.availability OR
-                    aed_locations.aed_webpage IS DISTINCT FROM EXCLUDED.aed_webpage
-            `;
+            // ✅ Get final count
+            const countResult = await client.query('SELECT COUNT(*) as total FROM aed_locations');
+            const totalInDB = parseInt(countResult.rows[0].total);
             
-            await client.query(query, params);
+            await client.query('COMMIT');
             
-            const progress = Math.min(i + batchSize, aeds.length);
-            console.log(`📦 Processed ${progress}/${aeds.length} AEDs`);
-        }
-        
-        // Get statistics after sync
-        const statsResult = await client.query(`
-            SELECT COUNT(*) as total FROM aed_locations
-        `);
-        
-        const total = parseInt(statsResult.rows[0].total);
-        inserted = Math.max(0, total - (aeds.length - total));
-        updated = aeds.length - inserted;
-        
-        await client.query('COMMIT');
-        console.log(`✅ Sync complete: ${inserted} inserted, ${updated} updated`);
-        return { success: true, inserted, updated, unchanged: 0, total: aeds.length };
-        
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('❌ Sync operation failed:', error.message);
-        throw error;
-    } finally {
-        client.release();
-    }
-}
-
-    /**
-     * Get cache file info
-     */
-    async getCacheInfo() {
-        try {
-            const fileContent = await fs.readFile(this.CACHE_FILE, 'utf8');
-            const cacheData = JSON.parse(fileContent);
-            return {
-                exists: true,
-                lastUpdated: cacheData.lastUpdated,
-                count: cacheData.count
+            console.log(`✅ Sync complete:`);
+            console.log(`   → ${totalInserted} new AEDs inserted`);
+            console.log(`   → ${totalUpdated} existing AEDs updated`);
+            console.log(`   → ${totalInDB} total AEDs in database`);
+            
+            return { 
+                success: true, 
+                inserted: totalInserted, 
+                updated: totalUpdated, 
+                total: totalInDB 
             };
+            
         } catch (error) {
-            return { exists: false };
+            await client.query('ROLLBACK');
+            console.error('❌ Sync operation failed:', error.message);
+            throw error;
+        } finally {
+            client.release();
         }
     }
 }
