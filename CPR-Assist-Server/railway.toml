@@ -1,17 +1,6 @@
 [build]
-builder = "nixpacks"
-
-[build.nixpacksPlan]
-phases = ["setup", "install", "build", "start"]
-
-[build.nixpacksPlan.phases.setup]
-nixPkgs = ["nodejs_18", "python311", "python311Packages.pip", "python311Packages.requests"]
-
-[build.nixpacksPlan.phases.install]
-cmds = ["npm ci"]
-
-[build.nixpacksPlan.phases.build]
-cmds = ["echo 'Build phase complete'"]
+builder = "NIXPACKS"
+nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
 startCommand = "node server.js"
