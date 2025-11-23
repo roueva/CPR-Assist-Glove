@@ -18,7 +18,7 @@ class AEDService {
     async fetchFromExternalAPI() {
         try {
             console.log('🔄 Fetching AEDs from iSaveLives API...');
-            
+
             const response = await axios.get(this.API_URL, {
                 headers: {
                     'Accept': 'application/json',
@@ -33,24 +33,24 @@ class AEDService {
 
             console.log(`✅ Fetched ${response.data.length} AEDs from iSaveLives API`);
             return this.transformExternalData(response.data);
-            
+
         } catch (error) {
             console.error('❌ Error fetching from iSaveLives API:', error.message);
-            
+
             // ✅ Try database as fallback instead of file cache
             console.log('⚠️ API failed - attempting to use existing database data...');
-            
+
             const client = await this.pool.connect();
             try {
                 const result = await client.query(
                     'SELECT * FROM aed_locations ORDER BY id'
                 );
-                
+
                 if (result.rows.length > 0) {
                     console.log(`✅ Using ${result.rows.length} AEDs from database as fallback`);
                     return result.rows;
                 }
-                
+
                 throw new Error('No data available in database');
             } finally {
                 client.release();
@@ -68,7 +68,7 @@ class AEDService {
 
         for (const item of externalData) {
             const id = parseInt(item.AED_ID);
-            
+
             // ✅ Check for invalid ID
             if (isNaN(id)) {
                 skipped.invalidId++;
@@ -86,7 +86,7 @@ class AEDService {
 
             const latitude = parseFloat(item.latitude);
             const longitude = parseFloat(item.longitude);
-            
+
             // ✅ Check for invalid coordinates
             if (isNaN(latitude) || isNaN(longitude)) {
                 skipped.invalidCoords++;
@@ -122,23 +122,23 @@ class AEDService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            
+
             console.log(`📦 Syncing ${aeds.length} AEDs...`);
-            
+
             const batchSize = 500;
             let totalInserted = 0;
             let totalUpdated = 0;
-            
+
             for (let i = 0; i < aeds.length; i += batchSize) {
                 const batch = aeds.slice(i, i + batchSize);
-                
+
                 // Build VALUES for batch
                 const values = [];
                 const params = [];
                 let paramIndex = 1;
-                
+
                 for (const aed of batch) {
-                    values.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, NOW())`);
+                    values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, NOW())`);
                     params.push(
                         aed.id,
                         aed.foundation,
@@ -150,7 +150,7 @@ class AEDService {
                     );
                     paramIndex += 7;
                 }
-                
+
                 // ✅ Use xmax to accurately track inserts vs updates
                 const query = `
                     WITH upsert_result AS (
@@ -182,38 +182,45 @@ class AEDService {
                         COUNT(*) FILTER (WHERE NOT inserted) as updated
                     FROM upsert_result
                 `;
-                
+
                 const result = await client.query(query, params);
-                
+
                 if (result.rows[0]) {
                     totalInserted += parseInt(result.rows[0].inserted || 0);
                     totalUpdated += parseInt(result.rows[0].updated || 0);
                 }
-                
+
                 const progress = Math.min(i + batchSize, aeds.length);
                 if (progress % 1000 === 0 || progress === aeds.length) {
                     console.log(`📦 Processed ${progress}/${aeds.length} AEDs`);
                 }
             }
-            
+
             // ✅ Get final count
             const countResult = await client.query('SELECT COUNT(*) as total FROM aed_locations');
             const totalInDB = parseInt(countResult.rows[0].total);
-            
+
             await client.query('COMMIT');
-            
+
             console.log(`✅ Sync complete:`);
             console.log(`   → ${totalInserted} new AEDs inserted`);
             console.log(`   → ${totalUpdated} existing AEDs updated`);
             console.log(`   → ${totalInDB} total AEDs in database`);
-            
-            return { 
-                success: true, 
-                inserted: totalInserted, 
-                updated: totalUpdated, 
-                total: totalInDB 
+
+            // ✅ Parse availability after successful sync
+            try {
+                await this.parseAvailabilityAfterSync(aeds);
+            } catch (parseError) {
+                console.error('⚠️ Availability parsing failed (non-critical):', parseError.message);
+            }
+
+            return {
+                success: true,
+                inserted: totalInserted,
+                updated: totalUpdated,
+                total: totalInDB
             };
-            
+
         } catch (error) {
             await client.query('ROLLBACK');
             console.error('❌ Sync operation failed:', error.message);
@@ -226,22 +233,22 @@ class AEDService {
     /**
  * Parse availability strings after sync
  */
-async parseAvailabilityAfterSync(aeds) {
-    try {
-        console.log('\n📝 Starting availability parsing...');
-        const parser = new AvailabilityParser();
-        
-        const parsedCache = await parser.parseAvailability(aeds);
-        
-        console.log(`✅ Availability cache updated: ${Object.keys(parsedCache).length} entries`);
-        
-        return parsedCache;
-    } catch (error) {
-        console.error('❌ Availability parsing failed:', error.message);
-        // Don't fail the whole sync if parsing fails
-        return null;
+    async parseAvailabilityAfterSync(aeds) {
+        try {
+            console.log('\n📝 Starting availability parsing...');
+            const parser = new AvailabilityParser();
+
+            const parsedCache = await parser.parseAvailability(aeds);
+
+            console.log(`✅ Availability cache updated: ${Object.keys(parsedCache).length} entries`);
+
+            return parsedCache;
+        } catch (error) {
+            console.error('❌ Availability parsing failed:', error.message);
+            // Don't fail the whole sync if parsing fails
+            return null;
+        }
     }
-}
 }
 
 module.exports = AEDService;
