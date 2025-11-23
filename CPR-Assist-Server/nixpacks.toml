@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs", "python311", "python311Packages.pip"]
+nixPkgs = ["nodejs", "python311", "python311Packages.requests"]
 
 [phases.install]
-cmds = [
-  "npm ci",
-  "python3 -m pip install --user requests"
-]
+cmds = ["npm ci"]
 
 [start]
 cmd = "node server.js"
