@@ -110,7 +110,6 @@ flutter:
   assets:
     - .env
     - assets/map_style.json
-    - assets/data/parsed_availability_map.json
     - assets/icons/AEDs.png
     - assets/icons/AEDs_c.png
     - assets/icons/kids_save_lives_logo.png

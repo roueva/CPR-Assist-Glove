@@ -141,42 +141,53 @@ router.post('/bootstrap-cache', async (req, res) => {
     }
 });
 
-    // ✅ Get parsed availability map - MOVED BEFORE /:id
-    router.get('/availability', async (req, res) => {
+    // ✅ Get parsed availability map
+router.get('/availability', async (req, res) => {
+    try {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const filePath = path.join(__dirname, '../data/parsed_availability_map.json');
+        
+        // Check if file exists
         try {
-            const fs = require('fs').promises;
-            const path = require('path');
-            const filePath = path.join(__dirname, '../data/parsed_availability_map.json');
-            
-            // Check if file exists
-            try {
-                await fs.access(filePath);
-            } catch (error) {
-                console.log('⚠️ Availability cache file not found, returning empty map');
-                return res.json({});
-            }
-            
-            const data = await fs.readFile(filePath, 'utf8');
-            const parsedMap = JSON.parse(data);
-            
-            // Add metadata
-            const stats = await fs.stat(filePath);
-            
-            res.set('X-Availability-Count', Object.keys(parsedMap).length.toString());
-            res.set('X-Last-Updated', stats.mtime.toISOString());
-            res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-            
-            console.log(`📤 Served availability map: ${Object.keys(parsedMap).length} entries`);
-            return res.json(parsedMap);
-            
+            await fs.access(filePath);
         } catch (error) {
-            console.error("❌ Error fetching availability map:", error);
-            res.status(500).json({ 
-                error: "Failed to fetch availability map.",
-                ...(process.env.NODE_ENV === 'development' && { details: error.message })
-            });
+            console.log('⚠️ Availability cache file not found, returning empty map');
+            return res.json({});
         }
-    });
+        
+        const data = await fs.readFile(filePath, 'utf8');
+        const parsedMap = JSON.parse(data);
+        
+        // ✅ Get last sync time from database instead of file modification time
+        let lastSyncTime;
+        try {
+            const result = await pool.query(
+                'SELECT MAX(last_updated) as last_sync FROM aed_locations'
+            );
+            lastSyncTime = result.rows[0]?.last_sync;
+        } catch (dbError) {
+            console.warn('⚠️ Could not get last sync time from database:', dbError.message);
+            // Fallback to file modification time
+            const stats = await fs.stat(filePath);
+            lastSyncTime = stats.mtime;
+        }
+        
+        res.set('X-Availability-Count', Object.keys(parsedMap).length.toString());
+        res.set('X-Last-Updated', lastSyncTime ? new Date(lastSyncTime).toISOString() : new Date().toISOString());
+        res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+        
+        console.log(`📤 Served availability map: ${Object.keys(parsedMap).length} entries`);
+        return res.json(parsedMap);
+        
+    } catch (error) {
+        console.error("❌ Error fetching availability map:", error);
+        res.status(500).json({ 
+            error: "Failed to fetch availability map.",
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
+        });
+    }
+});
 
     // ✅ Get AEDs near a location (within radius in kilometers)
     router.get('/near/:lat/:lng/:radius', async (req, res) => {
