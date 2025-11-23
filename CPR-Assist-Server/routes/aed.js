@@ -87,6 +87,60 @@ module.exports = (pool) => {
         }
     });
 
+    // ✅ One-time bootstrap cache endpoint (protected)
+router.post('/bootstrap-cache', async (req, res) => {
+    try {
+        const BOOTSTRAP_SECRET = process.env.BOOTSTRAP_SECRET || 'change-me-in-production';
+        
+        // Simple authentication
+        const providedSecret = req.headers['x-bootstrap-secret'] || req.body.secret;
+        
+        if (providedSecret !== BOOTSTRAP_SECRET) {
+            console.warn('⚠️ Bootstrap attempt with invalid secret');
+            return res.status(401).json({ error: 'Unauthorized - Invalid secret' });
+        }
+        
+        const { cache } = req.body;
+        
+        if (!cache || typeof cache !== 'object') {
+            return res.status(400).json({ error: 'Invalid cache data - must provide "cache" object' });
+        }
+        
+        const fs = require('fs').promises;
+        const path = require('path');
+        const cacheFile = path.join(__dirname, '../data/parsed_availability_map.json');
+        
+        // Ensure directory exists
+        const dataDir = path.dirname(cacheFile);
+        await fs.mkdir(dataDir, { recursive: true });
+        
+        // Write cache file
+        await fs.writeFile(cacheFile, JSON.stringify(cache, null, 2));
+        
+        const entryCount = Object.keys(cache).length;
+        console.log(`✅ Bootstrap cache uploaded: ${entryCount} entries`);
+        
+        // Verify file was written correctly
+        const verify = await fs.readFile(cacheFile, 'utf8');
+        const verifyCache = JSON.parse(verify);
+        
+        res.json({ 
+            success: true, 
+            message: `Cache initialized successfully`,
+            entries: entryCount,
+            verified: Object.keys(verifyCache).length === entryCount,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Bootstrap cache failed:', error);
+        res.status(500).json({ 
+            error: 'Failed to bootstrap cache',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
     // ✅ Get parsed availability map - MOVED BEFORE /:id
     router.get('/availability', async (req, res) => {
         try {
