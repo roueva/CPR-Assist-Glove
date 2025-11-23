@@ -276,7 +276,6 @@ class NetworkService {
     return null;
   }
 
-// NOW REPLACE fetchAEDLocations:
   Future<List<dynamic>> fetchAEDLocations() async {
     return await _retryOperation<List<dynamic>>(() async {
       try {
@@ -284,14 +283,16 @@ class NetworkService {
         final response = await http.get(url);
 
         if (response.statusCode == 200) {
-          // ✅ Parse metadata headers
           final lastUpdated = response.headers['x-data-last-updated'];
           final totalAEDs = response.headers['x-total-aeds'];
 
           if (lastUpdated != null) {
             print("🕒 Backend data last updated: $lastUpdated");
 
-            // ✅ Update cache timestamp when fetching fresh data
+            // ✅ Save sync timestamp
+            await NetworkService.saveLastSyncTime();
+
+            // Update cache timestamp
             final prefs = await SharedPreferences.getInstance();
             await prefs.setInt(
                 'aed_cache_timestamp',
@@ -314,8 +315,60 @@ class NetworkService {
         print("❌ Error fetching AED locations: $e");
         rethrow;
       }
-    }) ?? []; // Return empty list if all retries fail
+    }) ?? [];
   }
+
+  // ✅ Track last sync time
+  static const String _lastSyncKey = 'last_sync_timestamp';
+
+  /// Get last sync time
+  static Future<DateTime?> getLastSyncTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getInt(_lastSyncKey);
+      if (timestamp != null) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp);
+      }
+    } catch (e) {
+      print("⚠️ Error getting last sync time: $e");
+    }
+    return null;
+  }
+
+  /// Save sync time (call this after every sync attempt)
+  static Future<void> saveLastSyncTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_lastSyncKey, DateTime.now().millisecondsSinceEpoch);
+      print("💾 Saved sync timestamp: ${DateTime.now()}");
+    } catch (e) {
+      print("⚠️ Error saving sync time: $e");
+    }
+  }
+
+  /// Get formatted sync time
+  static Future<String> getFormattedSyncTime() async {
+    final syncTime = await getLastSyncTime();
+
+    if (syncTime == null) return 'Never synced';
+
+    final now = DateTime.now();
+    final difference = now.difference(syncTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      final weeks = (difference.inDays / 7).floor();
+      return '${weeks}w ago';
+    }
+  }
+
   static String? get googleMapsApiKey {
     // ✅ Just read from .env directly
     final key = dotenv.env['GOOGLE_MAPS_API_KEY'];

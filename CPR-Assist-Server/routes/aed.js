@@ -45,47 +45,85 @@ module.exports = (pool) => {
     });
 
     // ✅ Manual sync from iSaveLives API
-    router.post('/sync', async (req, res) => {
-        try {
-            const aedService = new AEDService(pool);
-            
-            console.log('🔄 Starting manual AED sync...');
-            const startTime = Date.now();
-            
-            const externalAEDs = await aedService.fetchFromExternalAPI();
-            
-            if (externalAEDs.length === 0) {
-                return res.json({ 
-                    success: true, 
-                    message: 'No AEDs found to sync',
-                    inserted: 0,
-                    updated: 0,
-                    total: 0,
-                    duration: `${Date.now() - startTime}ms`
-                });
-            }
-            
-            const result = await aedService.syncAEDs(externalAEDs);
-            
-            res.json({ 
+router.post('/sync', async (req, res) => {
+    try {
+        const aedService = new AEDService(pool);
+        
+        console.log('🔄 Starting manual AED sync...');
+        const startTime = Date.now();
+        const syncTimestamp = new Date(); // ✅ Capture sync time at start
+        
+        const externalAEDs = await aedService.fetchFromExternalAPI();
+        
+        if (externalAEDs.length === 0) {
+            return res.json({ 
                 success: true, 
-                message: `Successfully synced ${result.total} AEDs`,
-                inserted: result.inserted,
-                updated: result.updated,
-                total: result.total,
+                message: 'No AEDs found to sync',
+                inserted: 0,
+                updated: 0,
+                total: 0,
                 duration: `${Date.now() - startTime}ms`,
-                timestamp: new Date().toISOString()
-            });
-            
-        } catch (error) {
-            console.error('❌ Error syncing AEDs:', error);
-            res.status(500).json({ 
-                success: false, 
-                error: 'Failed to sync AEDs',
-                ...(process.env.NODE_ENV === 'development' && { details: error.message })
+                syncTimestamp: syncTimestamp.toISOString() // ✅ Add sync time
             });
         }
-    });
+        
+        const result = await aedService.syncAEDs(externalAEDs);
+        
+        res.json({ 
+            success: true, 
+            message: `Successfully synced ${result.total} AEDs`,
+            inserted: result.inserted,
+            updated: result.updated,
+            total: result.total,
+            duration: `${Date.now() - startTime}ms`,
+            timestamp: new Date().toISOString(),
+            syncTimestamp: syncTimestamp.toISOString() // ✅ Add sync time
+        });
+        
+    } catch (error) {
+        console.error('❌ Error syncing AEDs:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to sync AEDs',
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
+        });
+    }
+});
+
+// ✅ Get last sync time
+router.get('/last-sync', async (req, res) => {
+    try {
+        // Get the most recent AED update time as proxy for last sync
+        const result = await pool.query(
+            'SELECT MAX(last_updated) as last_sync FROM aed_locations'
+        );
+        
+        const lastSync = result.rows[0]?.last_sync;
+        
+        if (lastSync) {
+            res.json({
+                success: true,
+                lastSync: new Date(lastSync).toISOString(),
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            res.json({
+                success: true,
+                lastSync: null,
+                message: 'No sync data available',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Error fetching last sync time:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to fetch last sync time',
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
+        });
+    }
+});
 
     // ✅ One-time bootstrap cache endpoint (protected)
 router.post('/bootstrap-cache', async (req, res) => {
