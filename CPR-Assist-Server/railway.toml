@@ -1,11 +1,19 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && pip3 install requests --break-system-packages"
+
+[build.nixpacksPlan]
+phases = ["setup", "install", "build", "start"]
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_18", "python311", "python311Packages.pip", "python311Packages.requests"]
+
+[build.nixpacksPlan.phases.install]
+cmds = ["npm ci"]
+
+[build.nixpacksPlan.phases.build]
+cmds = ["echo 'Build phase complete'"]
 
 [deploy]
 startCommand = "node server.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
-
-[nixpacks]
-packages = ["nodejs", "python3", "python3Packages.pip"]
