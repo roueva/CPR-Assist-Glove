@@ -6,10 +6,7 @@ node_modules/
 
 # Environment variables
 .env
-
-# Python Script Data (Dynamic Files)
-CPR-Assist-Server/data/aed_greece_current.json
-CPR-Assist-Server/data/parsed_availability_map.json
+.env.local
 
 # Keep the directory but not the contents
 !CPR-Assist-Server/data/.gitkeep
@@ -17,3 +14,14 @@ CPR-Assist-Server/data/parsed_availability_map.json
 # Python cache
 CPR-Assist-Server/scripts/__pycache__/
 *.pyc
+
+# Temporary files created during parsing
+data/aed_greece_current.json
+
+# Cache file (will be created on server via bootstrap)
+data/parsed_availability_map.json
+
+# Bootstrap request file (contains secret)
+bootstrap-request.json
+
+

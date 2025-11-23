@@ -35,8 +35,8 @@ const logger = winston.createLogger({
 const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
-app.use(express.json());
-// REPLACE lines 44-50 with:
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cors({
   origin: function (origin, callback) {
     // ✅ Allow requests with no origin (ESP32, mobile apps, curl, etc.)
