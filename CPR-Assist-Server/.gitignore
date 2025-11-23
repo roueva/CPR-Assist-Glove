@@ -6,3 +6,14 @@ node_modules/
 
 # Environment variables
 .env
+
+# Python Script Data (Dynamic Files)
+CPR-Assist-Server/data/aed_greece_current.json
+CPR-Assist-Server/data/parsed_availability_map.json
+
+# Keep the directory but not the contents
+!CPR-Assist-Server/data/.gitkeep
+
+# Python cache
+CPR-Assist-Server/scripts/__pycache__/
+*.pyc

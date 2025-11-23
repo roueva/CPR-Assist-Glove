@@ -218,34 +218,55 @@ class RoutePreloader {
   bool _isPreloading = false;
   bool get isPreloading => _isPreloading;
 
-  /// Preloads routes for the closest AEDs
+  /// Preloads routes for the closest AEDs (now supports up to 20)
   Future<void> preloadRoutesForClosestAEDs({
     required List<AED> aeds,
     required LatLng userLocation,
     required String transportMode,
     required Function(AED, RouteResult) onRouteLoaded,
-    int maxRoutes = 2,
+    int maxRoutes = 10,
   }) async {
     if (_isPreloading || aeds.isEmpty || _apiKey.isEmpty) return;
 
     _isPreloading = true;
     _onStatusUpdate("Preloading routes...");
 
-    // Get closest AEDs
+    // ✅ Get top 10 closest AEDs
     final closestAEDs = aeds.take(maxRoutes).toList();
+    print("🚀 Preloading routes for ${closestAEDs.length} closest AEDs (mode: $transportMode)...");
+    print("   → Progressive loading: 1 AED per second");
 
-    for (final aed in closestAEDs) {
+    int loadedCount = 0;
+    int cachedCount = 0;
+    int fetchedCount = 0;
+
+    // ✅ Process ONE at a time with 1-second delay
+    for (int i = 0; i < closestAEDs.length; i++) {
+      final aed = closestAEDs[i];
+
       try {
         // Check cache first
-        final cachedRoute = CacheService.getCachedRoute(userLocation, aed.location, transportMode);
-        if (cachedRoute != null) {
+        final cachedRoute = CacheService.getCachedRoute(
+          userLocation,
+          aed.location,
+          transportMode,
+        );
+
+        if (cachedRoute != null && !cachedRoute.isOffline) {
           onRouteLoaded(aed, cachedRoute);
+          cachedCount++;
+          loadedCount++;
+          print("📦 [${i + 1}/$maxRoutes] Using cached route for AED ${aed.id}");
+
+          // ✅ Small delay even for cached routes to avoid UI blocking
+          await Future.delayed(const Duration(milliseconds: 200));
           continue;
         }
 
         // Fetch new route
+        print("🌐 [${i + 1}/$maxRoutes] Fetching route for AED ${aed.id}...");
         final routeService = RouteService(_apiKey);
-        final routeResult = await routeService.fetchRouteWithOfflineFallback(
+        final routeResult = await routeService.fetchRoute(
           userLocation,
           aed.location,
           transportMode,
@@ -253,21 +274,41 @@ class RoutePreloader {
 
         if (routeResult != null) {
           // Cache the route
-          CacheService.setCachedRoute(userLocation, aed.location, transportMode, routeResult);
+          CacheService.setCachedRoute(
+            userLocation,
+            aed.location,
+            transportMode,
+            routeResult,
+          );
 
           // Cache the distance for display
           if (routeResult.actualDistance != null) {
-            CacheService.setDistance('aed_${aed.id}_actual', routeResult.actualDistance!);
+            CacheService.setDistance('aed_${aed.id}', routeResult.actualDistance!);
           }
 
           // Notify callback
           onRouteLoaded(aed, routeResult);
+          fetchedCount++;
+          loadedCount++;
 
-          // Add delay to avoid rate limiting
-          await Future.delayed(const Duration(milliseconds: 500));
+          print("✅ [${i + 1}/$maxRoutes] Cached route for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance ?? 0)} (${routeResult.duration})");
+        } else {
+          print("⚠️ [${i + 1}/$maxRoutes] Failed to get route for AED ${aed.id}");
         }
+
+        // ✅ 1-second delay between requests (rate limiting)
+        if (i < closestAEDs.length - 1) {
+          _onStatusUpdate("Preloading ${i + 1}/$maxRoutes...");
+          await Future.delayed(const Duration(seconds: 1));
+        }
+
       } catch (e) {
-        print("Error preloading route for AED ${aed.id}: $e");
+        print("❌ Error preloading route for AED ${aed.id}: $e");
+
+        // Continue with next AED even if one fails
+        if (i < closestAEDs.length - 1) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
       }
     }
 

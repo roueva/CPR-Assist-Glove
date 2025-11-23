@@ -10,6 +10,7 @@ class AED {
   final DateTime? lastUpdated;     // NEW: Last sync timestamp
   final double distanceInMeters;
   final double? distanceFromAPI;   // NEW: Distance from backend API (nearby query)
+  final double? distance;
 
   AED({
     required this.id,
@@ -21,6 +22,7 @@ class AED {
     this.lastUpdated,
     this.distanceInMeters = 0.0,
     this.distanceFromAPI,
+    this.distance,
   });
 
   // Get display name (prioritize foundation, fallback to address)

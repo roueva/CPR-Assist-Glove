@@ -1,4 +1,5 @@
 const axios = require('axios');
+const AvailabilityParser = require('./availabilityParser');
 
 class AEDService {
     constructor(pool) {
@@ -221,6 +222,26 @@ class AEDService {
             client.release();
         }
     }
+
+    /**
+ * Parse availability strings after sync
+ */
+async parseAvailabilityAfterSync(aeds) {
+    try {
+        console.log('\n📝 Starting availability parsing...');
+        const parser = new AvailabilityParser();
+        
+        const parsedCache = await parser.parseAvailability(aeds);
+        
+        console.log(`✅ Availability cache updated: ${Object.keys(parsedCache).length} entries`);
+        
+        return parsedCache;
+    } catch (error) {
+        console.error('❌ Availability parsing failed:', error.message);
+        // Don't fail the whole sync if parsing fails
+        return null;
+    }
+}
 }
 
 module.exports = AEDService;

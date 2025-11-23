@@ -316,20 +316,22 @@ class CacheService {
       await prefs.setString(_aedCacheKey, jsonString);
       await prefs.setInt(_aedTimestampKey, DateTime.now().millisecondsSinceEpoch);
 
-      // Verify it was saved
+      // ✅ FIX: Verify by actually checking the count
       final verification = prefs.getString(_aedCacheKey);
       if (verification != null && verification.isNotEmpty) {
-        print("✅ VERIFIED: Cache save successful - ${verification.length} characters stored");
+        final verifiedData = jsonDecode(verification) as List;
+        if (verifiedData.length == aeds.length) {
+          print("✅ VERIFIED: Cache save successful - ${aeds.length} AEDs stored");
+        } else {
+          print("⚠️ WARNING: Saved ${aeds.length} but verified ${verifiedData.length}");
+        }
       } else {
         print("❌ FAILED: Cache verification failed - no data found after save");
       }
-
-      print("💾 Saved ${aeds.length} AEDs to cache");
     } catch (e) {
       print("❌ ERROR saving AEDs to cache: $e");
     }
   }
-
   static Future<List<dynamic>?> getAEDs() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(_aedCacheKey);

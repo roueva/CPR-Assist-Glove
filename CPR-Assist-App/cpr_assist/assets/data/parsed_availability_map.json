@@ -184,12 +184,6 @@
         ],
         "open_time": "15:00",
         "close_time": "19:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -216,12 +210,6 @@
         ],
         "open_time": "08:00",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -338,19 +326,14 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "end_month": 6,
         "open_time": "08:00",
         "close_time": "22:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 7,
         "end_month": 8,
         "open_time": "14:00",
@@ -525,12 +508,6 @@
         ],
         "open_time": "16:00",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -538,8 +515,16 @@
     "original_text": "Ωράριο λειτουργίας σχολείου & απογεύματα που ο χώρος χρησιμοποιείται από τους αθλητικούς συλλόγους.",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "School hours and afternoons when the space is used by sports clubs",
-    "rules": []
+    "uncertain_reason": "During school hours (08:00-14:00) and afternoons depending on sports club schedules",
+    "rules": [
+      {
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "14:00"
+      }
+    ]
   },
   "Δευτέρα έως Παρασκευή (09:00-13:00) αλλά και κατόπιν τηλεφωνικής επικοινωνίας.": {
     "original_text": "Δευτέρα έως Παρασκευή (09:00-13:00) αλλά και κατόπιν τηλεφωνικής επικοινωνίας.",
@@ -619,10 +604,19 @@
   },
   "Μόνο το καλοκαίρι (τουριστική περίοδος)": {
     "original_text": "Μόνο το καλοκαίρι (τουριστική περίοδος)",
-    "status": "uncertain",
+    "status": "parsed",
     "is_24_7": false,
-    "uncertain_reason": "Only during summer (tourist season)",
-    "rules": []
+    "rules": [
+      {
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "start_month": 6,
+        "start_day": 1,
+        "end_month": 8,
+        "end_day": 31,
+        "open_time": "00:00",
+        "close_time": "24:00"
+      }
+    ]
   },
   "Καθημερινά 24ώρες εκτός (18:00-00:00)": {
     "original_text": "Καθημερινά 24ώρες εκτός (18:00-00:00)",
@@ -630,39 +624,28 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "00:00",
         "close_time": "18:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "00:00"
       }
     ]
   },
   "Κατά τις εργάσιμες ημέρες και ώρες εκπαιδευτικής λειτουργίας εκτός από (20/7 έως 31/9 έκαστου έτους), ΣΚ, επίσημων Εθνικών αργιών, σχολικών αργιών Χριστουγέννων και Πάσχα.": {
     "original_text": "Κατά τις εργάσιμες ημέρες και ώρες εκπαιδευτικής λειτουργίας εκτός από (20/7 έως 31/9 έκαστου έτους), ΣΚ, επίσημων Εθνικών αργιών, σχολικών αργιών Χριστουγέννων και Πάσχα.",
-    "status": "uncertain",
+    "status": "parsed",
     "is_24_7": false,
-    "uncertain_reason": "During school operating hours on weekdays, excluding July 20 to September 30, weekends, national holidays, Christmas and Easter school holidays.",
-    "rules": []
+    "uncertain_reason": null,
+    "rules": [
+      {
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 10,
+        "start_day": 1,
+        "end_month": 7,
+        "end_day": 19,
+        "open_time": "08:00",
+        "close_time": "14:00"
+      }
+    ]
   },
   "Ο απινιδωτής διατίθεται μόνο για τις δράσεις του Ερυθρού Σταυρού.": {
     "original_text": "Ο απινιδωτής διατίθεται μόνο για τις δράσεις του Ερυθρού Σταυρού.",
@@ -749,26 +732,30 @@
       }
     ]
   },
-  "Από 1 Οκτωβρίου έως 30 Μαρτίου, την καλοκαιρινή περίοδο τον έχουν οι ναυαγοσώστες.": {
+ "Από 1 Οκτωβρίου έως 30 Μαρτίου, την καλοκαιρινή περίοδο τον έχουν οι ναυαγοσώστες.": {
     "original_text": "Από 1 Οκτωβρίου έως 30 Μαρτίου, την καλοκαιρινή περίοδο τον έχουν οι ναυαγοσώστες.",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "Available during summer period, specific hours not mentioned",
+    "uncertain_reason": "Available at location Oct-Mar. During summer, held by lifeguards.",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
+        "start_day": 1,
         "end_month": 3,
+        "end_day": 30,
         "open_time": "00:00",
         "close_time": "24:00"
       }
     ]
   },
-  "Ιούνιος-Σεπτέμβριος: 07:00-23:00": {
+ "Ιούνιος-Σεπτέμβριος: 07:00-23:00": {
     "original_text": "Ιούνιος-Σεπτέμβριος: 07:00-23:00",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "end_month": 9,
         "open_time": "07:00",
@@ -800,6 +787,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "16:00",
         "close_time": "03:00"
       }
@@ -874,8 +862,11 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
-        "end_month": 6
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "14:00"
       }
     ]
   },
@@ -1318,32 +1309,18 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "07:30",
         "close_time": "23:00"
       },
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 8,
         "end_month": 8,
-        "open_time": "00:00",
-        "close_time": "12:00"
+        "open_time": "07:30",
+        "close_time": "14:30"
       }
     ]
   },
@@ -1353,15 +1330,7 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "09:00",
         "close_time": "03:00"
       }
@@ -1398,6 +1367,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "07:00",
         "close_time": "17:30"
       }
@@ -1419,14 +1389,6 @@
         ],
         "open_time": "15:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -1634,8 +1596,13 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 5,
-        "end_month": 10
+        "start_day": 1,
+        "end_month": 10,
+        "end_day": 31,
+        "open_time": "00:00",
+        "close_time": "24:00"
       }
     ]
   },
@@ -1837,9 +1804,10 @@
   "Από 1Ιουλίου έως 31Αυγούστου: 24/7": {
     "original_text": "Από 1Ιουλίου έως 31Αυγούστου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 7,
         "start_day": 1,
         "end_month": 8,
@@ -2113,9 +2081,7 @@
           2,
           3,
           4,
-          5,
-          6,
-          7
+          5
         ],
         "open_time": "06:00",
         "close_time": "22:00"
@@ -2151,11 +2117,14 @@
   "Από 1 Ιουνίου έως 30 Σεπτεμβρίου, όλο το 24ωρο.": {
     "original_text": "Από 1 Ιουνίου έως 30 Σεπτεμβρίου, όλο το 24ωρο.",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
+        "start_day": 1,
         "end_month": 9,
+        "end_day": 30,
         "open_time": "00:00",
         "close_time": "24:00"
       }
@@ -2177,14 +2146,6 @@
         ],
         "open_time": "07:30",
         "close_time": "22:30"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -2246,23 +2207,20 @@
       }
     ]
   },
-  "Δευτέρα-Παρασκευή (7:00-21:00), το καλοκαίρι είναι διαθέσιμος (8:00-16:00)": {
+ "Δευτέρα-Παρασκευή (7:00-21:00), το καλοκαίρι είναι διαθέσιμος (8:00-16:00)": {
     "original_text": "Δευτέρα-Παρασκευή (7:00-21:00), το καλοκαίρι είναι διαθέσιμος (8:00-16:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 5,
         "open_time": "07:00",
         "close_time": "21:00"
       },
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 6,
         "end_month": 8,
         "open_time": "08:00",
@@ -2479,6 +2437,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "03:00",
         "close_time": "00:00"
       }
@@ -2702,17 +2661,14 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
         "open_time": "07:00",
         "close_time": "22:00"
       },
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 7,
         "end_month": 8,
         "open_time": "07:00",
@@ -2736,12 +2692,6 @@
         ],
         "open_time": "08:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -2846,12 +2796,13 @@
       }
     ]
   },
-  "Από 1 Ιουλίου έως 15 Αυγούστου: 24/7": {
+ "Από 1 Ιουλίου έως 15 Αυγούστου: 24/7": {
     "original_text": "Από 1 Ιουλίου έως 15 Αυγούστου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 7,
         "start_day": 1,
         "end_month": 8,
@@ -2909,20 +2860,14 @@
     "original_text": "Ωράριο λειτουργίας Σχολείων, Ιούλιο-Αύγουστο μετά από κλήση στο 15303 (τοπικός αριθμός έκτακτης ανάγκης).",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "Requires a phone call to 15303",
+    "uncertain_reason": "School hours (08:00-14:00). July-August requires call to 15303.",
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "start_month": 7,
-        "end_month": 8
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "14:00"
       }
     ]
   },
@@ -2932,6 +2877,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "20:00",
         "close_time": "08:00"
       }
@@ -2951,6 +2897,7 @@
     "uncertain_reason": "During soccer team practices",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "open_time": "16:00",
         "close_time": "20:00"
       }
@@ -3129,12 +3076,6 @@
         ],
         "open_time": "08:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -3198,26 +3139,14 @@
     "original_text": "Ωράριο λειτουργίας Σχολείων & καθημερινά όταν γίνονται προπονήσεις - αγώνες αθλητικών ομάδων.",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "During school hours and when sports teams have practices/games",
+    "uncertain_reason": "During school hours (08:00-14:00) and daily during variable training/match times",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "end_month": 6,
         "open_time": "08:00",
         "close_time": "14:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "open_time": "17:00",
-        "close_time": "21:00"
       }
     ]
   },
@@ -3254,27 +3183,22 @@
     "uncertain_reason": "Operating hours of the archaeological site",
     "rules": []
   },
-  "Δευτέρα έως Σάββατο (08:00-22:00), Κυριακή (08:00-16:30), όλους τους μήνες εκτός του Αυγούστου.": {
+ "Δευτέρα έως Σάββατο (08:00-22:00), Κυριακή (08:00-16:30), όλους τους μήνες εκτός του Αυγούστου.": {
     "original_text": "Δευτέρα έως Σάββατο (08:00-22:00), Κυριακή (08:00-16:30), όλους τους μήνες εκτός του Αυγούστου.",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6
-        ],
+        "days": [1, 2, 3, 4, 5, 6],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "08:00",
         "close_time": "22:00"
       },
       {
-        "days": [
-          7
-        ],
+        "days": [7],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "08:00",
         "close_time": "16:30"
       }
@@ -3289,7 +3213,7 @@
   },
   "ΚΤΙΡΙΟ ΔΗΜΟΤΙΚΟΥ ΣΥΜΒΟΥΛΙΟΥ ΔΗΜΟΥ ΔΥΤΙΚΗΣ ΛΕΣΒΟΥ": {
     "original_text": "ΚΤΙΡΙΟ ΔΗΜΟΤΙΚΟΥ ΣΥΜΒΟΥΛΙΟΥ ΔΗΜΟΥ ΔΥΤΙΚΗΣ ΛΕΣΒΟΥ",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -3331,21 +3255,23 @@
       }
     ]
   },
-  "7.00 π.μ.- 21.00 μ.μ. κατά την περίοδο λειτουργίας του σχολείου και 8.00 π.μ.- 15.00 σε περιόδους διακοπών καθώς λειτουργεί ΚΔΑΠ στον ίδιο χώρο. Δεν είναι προσβάσιμος στις αργίες και τις περιόδους που δεν λειτουργεί το ΚΔΑΠ.": {
+ "7.00 π.μ.- 21.00 μ.μ. κατά την περίοδο λειτουργίας του σχολείου και 8.00 π.μ.- 15.00 σε περιόδους διακοπών καθώς λειτουργεί ΚΔΑΠ στον ίδιο χώρο. Δεν είναι προσβάσιμος στις αργίες και τις περιόδους που δεν λειτουργεί το ΚΔΑΠ.": {
     "original_text": "7.00 π.μ.- 21.00 μ.μ. κατά την περίοδο λειτουργίας του σχολείου και 8.00 π.μ.- 15.00 σε περιόδους διακοπών καθώς λειτουργεί ΚΔΑΠ στον ίδιο χώρο. Δεν είναι προσβάσιμος στις αργίες και τις περιόδους που δεν λειτουργεί το ΚΔΑΠ.",
     "status": "uncertain",
     "is_24_7": false,
     "uncertain_reason": "Availability depends on school/KIDAP operation and holidays.",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "end_month": 6,
         "open_time": "07:00",
         "close_time": "21:00"
       },
       {
-        "start_month": 6,
-        "end_month": 9,
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 7,
+        "end_month": 8,
         "open_time": "08:00",
         "close_time": "15:00"
       }
@@ -3382,27 +3308,24 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "14:00"
+      },
+      {
+        "days": [1, 2, 3, 4, 5],
         "open_time": "16:00",
         "close_time": "23:00"
       },
       {
-        "days": [
-          6
-        ],
+        "days": [6],
         "open_time": "10:00",
         "close_time": "15:00"
       },
       {
-        "days": [
-          6
-        ],
+        "days": [6],
         "open_time": "17:00",
         "close_time": "22:00"
       }
@@ -3434,8 +3357,8 @@
         "days": [
           3
         ],
-        "open_time": "12:00",
-        "close_time": "24:00"
+        "open_time": "16:00",
+        "close_time": "20:00"
       }
     ]
   },
@@ -3611,12 +3534,6 @@
         ],
         "open_time": "08:00",
         "close_time": "24:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -3663,12 +3580,6 @@
         ],
         "open_time": "08:00",
         "close_time": "22:30"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -3878,9 +3789,10 @@
   "Από 15 Απριλίου έως 30 Σεπτεμβρίου: 24/7": {
     "original_text": "Από 15 Απριλίου έως 30 Σεπτεμβρίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 4,
         "start_day": 15,
         "end_month": 9,
@@ -3968,7 +3880,7 @@
   },
   "Δημοτικό γήπεδο Αγ.Δημητρίου Λήμνου.": {
     "original_text": "Δημοτικό γήπεδο Αγ.Δημητρίου Λήμνου.",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -4003,20 +3915,16 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "17:00",
         "close_time": "22:30"
       },
       {
-        "days": [
-          6
-        ],
+        "days": [6],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "09:00",
         "close_time": "15:00"
       }
@@ -4298,12 +4206,13 @@
       }
     ]
   },
-  "06:30 - 17:00": {
+ "06:30 - 17:00": {
     "original_text": "06:30 - 17:00",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "06:30",
         "close_time": "17:00"
       }
@@ -4524,9 +4433,7 @@
           2,
           3,
           4,
-          5,
-          6,
-          7
+          5
         ],
         "open_time": "06:00",
         "close_time": "22:00"
@@ -4822,7 +4729,7 @@
   },
   "Γήπεδο Κοντοπουλίου": {
     "original_text": "Γήπεδο Κοντοπουλίου",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -4923,14 +4830,6 @@
         ],
         "open_time": "07:30",
         "close_time": "22:30"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -4967,14 +4866,17 @@
       }
     ]
   },
-  "Από 1Μαίου έως 30 Σεπτεμβρίου: 24/7": {
+ "Από 1Μαίου έως 30 Σεπτεμβρίου: 24/7": {
     "original_text": "Από 1Μαίου έως 30 Σεπτεμβρίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 5,
+        "start_day": 1,
         "end_month": 9,
+        "end_day": 30,
         "open_time": "00:00",
         "close_time": "24:00"
       }
@@ -4983,11 +4885,14 @@
   "Από 1Μάρτιου έως 30 Νοεμβρίου: 24/7 ΄": {
     "original_text": "Από 1Μάρτιου έως 30 Νοεμβρίου: 24/7 ΄",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 3,
+        "start_day": 1,
         "end_month": 11,
+        "end_day": 30,
         "open_time": "00:00",
         "close_time": "24:00"
       }
@@ -5009,53 +4914,30 @@
         ],
         "open_time": "15:30",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
-  "Χειμερινή Ώρα: Τετάρτη: (17:00-20:00) - Κυριακή: (10:00-12:00) , Θερινή Ώρα: Τετάρτη: (18:00-20:30) - Κυριακή: (10:00-12:00)": {
+ "Χειμερινή Ώρα: Τετάρτη: (17:00-20:00) - Κυριακή: (10:00-12:00) , Θερινή Ώρα: Τετάρτη: (18:00-20:30) - Κυριακή: (10:00-12:00)": {
     "original_text": "Χειμερινή Ώρα: Τετάρτη: (17:00-20:00) - Κυριακή: (10:00-12:00) , Θερινή Ώρα: Τετάρτη: (18:00-20:30) - Κυριακή: (10:00-12:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          3
-        ],
+        "days": [3],
         "start_month": 10,
         "end_month": 3,
         "open_time": "17:00",
         "close_time": "20:00"
       },
       {
-        "days": [
-          7
-        ],
-        "start_month": 10,
-        "end_month": 3,
-        "open_time": "10:00",
-        "close_time": "12:00"
-      },
-      {
-        "days": [
-          3
-        ],
+        "days": [3],
         "start_month": 4,
         "end_month": 9,
         "open_time": "18:00",
         "close_time": "20:30"
       },
       {
-        "days": [
-          7
-        ],
-        "start_month": 4,
-        "end_month": 9,
+        "days": [7],
         "open_time": "10:00",
         "close_time": "12:00"
       }
@@ -5063,7 +4945,7 @@
   },
   "Γήπεδο Πέτρας Λέσβου": {
     "original_text": "Γήπεδο Πέτρας Λέσβου",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -5106,7 +4988,7 @@
   },
   "Ο απινιδωτής διατίθεται μόνο για τις δράσεις της ΕΟΔ Ροδόπης.": {
     "original_text": "Ο απινιδωτής διατίθεται μόνο για τις δράσεις της ΕΟΔ Ροδόπης.",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -5117,24 +4999,18 @@
     "uncertain_reason": "Weekend during games",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 7,
         "end_month": 9,
         "open_time": "18:00",
         "close_time": "21:00"
       },
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 10,
         "end_month": 5,
         "open_time": "16:00",
         "close_time": "19:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -5210,12 +5086,6 @@
         ],
         "open_time": "16:00",
         "close_time": "20:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -5242,9 +5112,10 @@
   "Μόνο το καλοκαίρι (τουριστική περίοδος) - 24/7": {
     "original_text": "Μόνο το καλοκαίρι (τουριστική περίοδος) - 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "end_month": 8,
         "open_time": "00:00",
@@ -5274,14 +5145,6 @@
         ],
         "open_time": "16:00",
         "close_time": "20:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -5404,63 +5267,32 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "start_month": 6,
         "end_month": 9,
         "open_time": "09:30",
         "close_time": "14:00"
       },
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "start_month": 6,
         "end_month": 9,
         "open_time": "18:30",
         "close_time": "22:00"
       },
       {
-        "days": [
-          1,
-          2,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "start_month": 10,
         "end_month": 5,
         "open_time": "09:30",
         "close_time": "14:00"
       },
       {
-        "days": [
-          1,
-          2,
-          4,
-          5
-        ],
+        "days": [1, 2, 4, 5],
         "start_month": 10,
         "end_month": 5,
         "open_time": "18:00",
         "close_time": "20:00"
-      },
-      {
-        "days": [
-          3
-        ],
-        "start_month": 10,
-        "end_month": 5,
-        "open_time": "09:30",
-        "close_time": "14:00"
       }
     ]
   },
@@ -5561,24 +5393,21 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 5,
         "open_time": "08:00",
         "close_time": "21:00"
       },
       {
-        "days": [
-          6
-        ],
+        "days": [6],
+        "start_month": 9,
+        "end_month": 5,
         "open_time": "08:00",
         "close_time": "12:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6],
         "start_month": 6,
         "end_month": 8,
         "open_time": "08:00",
@@ -5888,34 +5717,9 @@
     "uncertain_reason": "During training sessions and games/matches",
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "open_time": "16:00",
         "close_time": "22:30"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -5958,17 +5762,11 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
+        "start_day": 1,
         "end_month": 9,
+        "end_day": 30,
         "open_time": "10:00",
         "close_time": "24:00"
       }
@@ -6092,13 +5890,8 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "open_time": "08:00",
         "close_time": "22:00"
       }
     ]
@@ -6256,8 +6049,11 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
+        "start_day": 1,
         "end_month": 9,
+        "end_day": 30,
         "open_time": "10:00",
         "close_time": "18:00"
       }
@@ -6307,12 +6103,14 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 7,
         "end_month": 9,
         "open_time": "18:00",
         "close_time": "21:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
         "end_month": 5,
         "open_time": "15:30",
@@ -6502,14 +6300,6 @@
         ],
         "open_time": "09:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -6539,18 +6329,22 @@
       }
     ]
   },
-  "Περίοδος Λειτουργίας ΕΩΣ 15 ΙΟΥΝΙΟΥ 10:00 - 18:00, 16 ΙΟΥΝΙΟΥ - 31 ΑΥΓΟΥΣΤΟΥ 10:00 - 19:00. ΑΠΟ 1η ΣΕΠΤΕΜΒΡΙΟΥ 10:00 - 18:00.": {
+ "Περίοδος Λειτουργίας ΕΩΣ 15 ΙΟΥΝΙΟΥ 10:00 - 18:00, 16 ΙΟΥΝΙΟΥ - 31 ΑΥΓΟΥΣΤΟΥ 10:00 - 19:00. ΑΠΟ 1η ΣΕΠΤΕΜΒΡΙΟΥ 10:00 - 18:00.": {
     "original_text": "Περίοδος Λειτουργίας ΕΩΣ 15 ΙΟΥΝΙΟΥ 10:00 - 18:00, 16 ΙΟΥΝΙΟΥ - 31 ΑΥΓΟΥΣΤΟΥ 10:00 - 19:00. ΑΠΟ 1η ΣΕΠΤΕΜΒΡΙΟΥ 10:00 - 18:00.",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "start_month": 1,
+        "start_day": 1,
         "end_month": 6,
         "end_day": 15,
         "open_time": "10:00",
         "close_time": "18:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "start_day": 16,
         "end_month": 8,
@@ -6559,8 +6353,11 @@
         "close_time": "19:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 9,
         "start_day": 1,
+        "end_month": 12,
+        "end_day": 31,
         "open_time": "10:00",
         "close_time": "18:00"
       }
@@ -6617,12 +6414,13 @@
       }
     ]
   },
-  "06:00-00:00": {
+"06:00-00:00": {
     "original_text": "06:00-00:00",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "06:00",
         "close_time": "00:00"
       }
@@ -6707,12 +6505,13 @@
       }
     ]
   },
-  "Από 07.00 ως 17.30   12/9 - 15/6": {
+ "Από 07.00 ως 17.30   12/9 - 15/6": {
     "original_text": "Από 07.00 ως 17.30   12/9 - 15/6",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "start_day": 12,
         "end_month": 6,
@@ -6818,12 +6617,6 @@
         ],
         "open_time": "07:00",
         "close_time": "23:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -6850,12 +6643,6 @@
         ],
         "open_time": "14:30",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -7020,13 +6807,6 @@
         ],
         "open_time": "11:00",
         "close_time": "24:00"
-      },
-      {
-        "days": [
-          2
-        ],
-        "open_time": "00:00",
-        "close_time": "00:00"
       }
     ]
   },
@@ -7075,12 +6855,13 @@
       }
     ]
   },
-  "Από 1 Απριλίου έως 1 Νοεμβρίου: 24/7": {
+ "Από 1 Απριλίου έως 1 Νοεμβρίου: 24/7": {
     "original_text": "Από 1 Απριλίου έως 1 Νοεμβρίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 4,
         "start_day": 1,
         "end_month": 11,
@@ -7090,16 +6871,19 @@
       }
     ]
   },
-  "Από 1/9 έως 30/6, ωράριο λειτουργίας σχολείων.": {
+ "Από 1/9 έως 30/6, ωράριο λειτουργίας σχολείων.": {
     "original_text": "Από 1/9 έως 30/6, ωράριο λειτουργίας σχολείων.",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
+        "start_day": 1,
         "end_month": 6,
-        "open_time": "00:00",
-        "close_time": "24:00"
+        "end_day": 30,
+        "open_time": "08:00",
+        "close_time": "14:00"
       }
     ]
   },
@@ -7165,18 +6949,21 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "end_month": 6,
         "open_time": "17:00",
         "close_time": "23:00"
       },
       {
+        "days": [6, 7],
         "start_month": 9,
         "end_month": 6,
         "open_time": "10:00",
         "close_time": "22:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 7,
         "end_month": 8,
         "open_time": "17:00",
@@ -7246,7 +7033,7 @@
   },
   "Δημοτικό γήπεδο Κοντιά Λήμνου": {
     "original_text": "Δημοτικό γήπεδο Κοντιά Λήμνου",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -7376,7 +7163,7 @@
   },
   "Είναι διαθέσιμος για αποστολές διάσωσης.": {
     "original_text": "Είναι διαθέσιμος για αποστολές διάσωσης.",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -7432,14 +7219,6 @@
         ],
         "open_time": "17:00",
         "close_time": "07:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -7696,21 +7475,6 @@
         "end_month": 12,
         "open_time": "08:00",
         "close_time": "15:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "start_month": 10,
-        "end_month": 3,
-        "open_time": "08:00",
-        "close_time": "17:00"
       }
     ]
   },
@@ -7736,7 +7500,7 @@
   },
   "Δημοτικό γήπεδο Ατσικής Λήμνου.": {
     "original_text": "Δημοτικό γήπεδο Ατσικής Λήμνου.",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -8026,10 +7790,13 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "start_day": 1,
         "end_month": 9,
-        "end_day": 30
+        "end_day": 30,
+        "open_time": "00:00",
+        "close_time": "24:00"
       }
     ]
   },
@@ -8085,7 +7852,7 @@
   },
   "EINAI SΤΟ ΧΩΡΟ ΤΟΥ ΣΧΟΛΕΙΟΥ": {
     "original_text": "EINAI SΤΟ ΧΩΡΟ ΤΟΥ ΣΧΟΛΕΙΟΥ",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -8133,6 +7900,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "07:30",
         "close_time": "21:30"
       }
@@ -8202,12 +7970,13 @@
       }
     ]
   },
-  "Από 1 Οκτωβρίου έως 14 Απριλίου: 24/7": {
+ "Από 1 Οκτωβρίου έως 14 Απριλίου: 24/7": {
     "original_text": "Από 1 Οκτωβρίου έως 14 Απριλίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
         "start_day": 1,
         "end_month": 4,
@@ -8371,12 +8140,13 @@
       }
     ]
   },
-  "Από 1 Οκτωβρίου έως 30 Απριλίου, όλο το 24ωρο.": {
+ "Από 1 Οκτωβρίου έως 30 Απριλίου, όλο το 24ωρο.": {
     "original_text": "Από 1 Οκτωβρίου έως 30 Απριλίου, όλο το 24ωρο.",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
         "start_day": 1,
         "end_month": 4,
@@ -8431,7 +8201,7 @@
   },
   "Γραφεία Ένωσης Ποδοσφαιρικών Σωματείων Λέσβου": {
     "original_text": "Γραφεία Ένωσης Ποδοσφαιρικών Σωματείων Λέσβου",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -8454,21 +8224,6 @@
         "end_month": 9,
         "open_time": "11:00",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "start_month": 10,
-        "end_month": 5,
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -8498,25 +8253,19 @@
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "07:00",
         "close_time": "12:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 4,
         "end_month": 10,
         "open_time": "18:00",
         "close_time": "21:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 11,
         "end_month": 3,
         "open_time": "17:30",
@@ -8702,10 +8451,16 @@
   },
   "Ωράριο λειτουργίας Σχολείων - Υπηρεσιών": {
     "original_text": "Ωράριο λειτουργίας Σχολείων - Υπηρεσιών",
-    "status": "uncertain",
+    "status": "parsed",
     "is_24_7": false,
-    "uncertain_reason": "School/Service hours",
-    "rules": []
+    "uncertain_reason": null,
+    "rules": [
+      {
+        "days": [1, 2, 3, 4, 5],
+        "open_time": "08:00",
+        "close_time": "14:00"
+      }
+    ]
   },
   "Τετάρτη (17:00-21:00) & κατόπιν τηλεφωνικής επικοινωνίας": {
     "original_text": "Τετάρτη (17:00-21:00) & κατόπιν τηλεφωνικής επικοινωνίας",
@@ -8816,12 +8571,13 @@
       }
     ]
   },
-  "Από 1 Μάρτιου έως 31 Οκτωβρίου: 24/7": {
+ "Από 1 Μάρτιου έως 31 Οκτωβρίου: 24/7": {
     "original_text": "Από 1 Μάρτιου έως 31 Οκτωβρίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 3,
         "start_day": 1,
         "end_month": 10,
@@ -8879,7 +8635,7 @@
           7
         ],
         "open_time": "07:00",
-        "close_time": "18:00"
+        "close_time": "15:00"
       }
     ]
   },
@@ -9092,14 +8848,6 @@
         ],
         "open_time": "16:00",
         "close_time": "19:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -9189,20 +8937,6 @@
         ],
         "open_time": "09:00",
         "close_time": "12:00"
-      },
-      {
-        "days": [
-          6
-        ],
-        "open_time": "12:00",
-        "close_time": "24:00"
-      },
-      {
-        "days": [
-          7
-        ],
-        "open_time": "12:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -9268,7 +9002,7 @@
   },
   "Βρίσκεται σε χώρο πολιτιστικού κέντρου": {
     "original_text": "Βρίσκεται σε χώρο πολιτιστικού κέντρου",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -9306,14 +9040,6 @@
         ],
         "open_time": "08:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -9731,24 +9457,44 @@
     "uncertain_reason": "Operating hours of the stadium",
     "rules": []
   },
-  "Από 1Σεπτεμβρίου έως 30Ιουνίου, Δευτέρα με Παρασκευή:(08:00-22:00), Σαββατοκύριακα & αργίες:(10:00-22:00). Ιούλιο & Αύγουστο: καθημερινά:(10:00-22:00)": {
+ "Από 1Σεπτεμβρίου έως 30Ιουνίου, Δευτέρα με Παρασκευή:(08:00-22:00), Σαββατοκύριακα & αργίες:(10:00-22:00). Ιούλιο & Αύγουστο: καθημερινά:(10:00-22:00)": {
     "original_text": "Από 1Σεπτεμβρίου έως 30Ιουνίου, Δευτέρα με Παρασκευή:(08:00-22:00), Σαββατοκύριακα & αργίες:(10:00-22:00). Ιούλιο & Αύγουστο: καθημερινά:(10:00-22:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
         "start_month": 9,
         "end_month": 6,
         "open_time": "08:00",
         "close_time": "22:00"
       },
       {
+        "days": [
+          6,
+          7
+        ],
         "start_month": 9,
         "end_month": 6,
         "open_time": "10:00",
         "close_time": "22:00"
       },
       {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
         "start_month": 7,
         "end_month": 8,
         "open_time": "10:00",
@@ -9774,21 +9520,6 @@
         "end_month": 6,
         "open_time": "07:00",
         "close_time": "20:30"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "start_month": 7,
-        "end_month": 8,
-        "open_time": "09:00",
-        "close_time": "17:00"
       }
     ]
   },
@@ -10316,6 +10047,8 @@
           6,
           7
         ],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "07:30",
         "close_time": "23:00"
       }
@@ -10515,15 +10248,18 @@
       }
     ]
   },
-  "Από 1 Οκτωβρίου έως 30 Μαρτίου, τις ώρες των αγώνων - προπονήσεων.": {
+"Από 1 Οκτωβρίου έως 30 Μαρτίου, τις ώρες των αγώνων - προπονήσεων.": {
     "original_text": "Από 1 Οκτωβρίου έως 30 Μαρτίου, τις ώρες των αγώνων - προπονήσεων.",
     "status": "uncertain",
     "is_24_7": false,
     "uncertain_reason": "During games/training sessions",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
-        "end_month": 3
+        "start_day": 1,
+        "end_month": 3,
+        "end_day": 30
       }
     ]
   },
@@ -10615,9 +10351,10 @@
   "Από 16 Αυγούστου έως 30 Ιουνίου: 24/7": {
     "original_text": "Από 16 Αυγούστου έως 30 Ιουνίου: 24/7",
     "status": "parsed",
-    "is_24_7": true,
+    "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 8,
         "start_day": 16,
         "end_month": 6,
@@ -10670,12 +10407,6 @@
         ],
         "open_time": "15:00",
         "close_time": "18:30"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -10715,12 +10446,6 @@
         ],
         "open_time": "13:00",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -10806,31 +10531,25 @@
       }
     ]
   },
-  "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:30) - Νοέμβριο έως Μάρτιο (17:30-20:00)": {
+ "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:30) - Νοέμβριο έως Μάρτιο (17:30-20:00)": {
     "original_text": "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:30) - Νοέμβριο έως Μάρτιο (17:30-20:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "07:00",
         "close_time": "12:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 4,
         "end_month": 10,
         "open_time": "18:00",
         "close_time": "20:30"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 11,
         "end_month": 3,
         "open_time": "17:30",
@@ -10893,14 +10612,6 @@
         "end_month": 5,
         "open_time": "17:00",
         "close_time": "19:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -11027,25 +10738,20 @@
       }
     ]
   },
-  "Καλοκαιρινή περίοδο: 24/7, Χειμερινή περίοδο: Δευτέρα έως Παρασκευή (07:00-16:00)": {
+ "Καλοκαιρινή περίοδο: 24/7, Χειμερινή περίοδο: Δευτέρα έως Παρασκευή (07:00-16:00)": {
     "original_text": "Καλοκαιρινη περιοδο: 24/7, Χειμερινή περίοδο: Δευτέρα έως Παρασκευή (07:00-16:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "end_month": 9,
         "open_time": "00:00",
         "close_time": "24:00"
       },
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
+        "days": [1, 2, 3, 4, 5],
         "start_month": 10,
         "end_month": 5,
         "open_time": "07:00",
@@ -11165,10 +10871,13 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 10,
         "start_day": 1,
         "end_month": 5,
-        "end_day": 25
+        "end_day": 25,
+        "open_time": "00:00",
+        "close_time": "24:00"
       }
     ]
   },
@@ -11302,12 +11011,6 @@
         ],
         "open_time": "09:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -11516,7 +11219,7 @@
   },
   "Είσοδος Κοινοτικού Καταστήματος": {
     "original_text": "Είσοδος Κοινοτικού Καταστήματος",
-    "status": "closed_for_use",
+    "status": "uncertain",
     "is_24_7": false,
     "rules": []
   },
@@ -11752,6 +11455,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "08:00",
         "close_time": "21:00"
       }
@@ -11911,58 +11615,47 @@
     "uncertain_reason": "Football field, availability not specified",
     "rules": []
   },
-  "Δευτέρα έως Παρασκευή (08:00 – 22:00) και Σαββατοκύριακο κατά τις αγωνιστικές υποχρεώσεις των συλλόγων.  Ιούλιο και Αύγουστο, το αθλητικό κέντρο συνήθως λειτουργεί (08:00 – 15:00)": {
+ "Δευτέρα έως Παρασκευή (08:00 – 22:00) και Σαββατοκύριακο κατά τις αγωνιστικές υποχρεώσεις των συλλόγων.  Ιούλιο και Αύγουστο, το αθλητικό κέντρο συνήθως λειτουργεί (08:00 – 15:00)": {
     "original_text": "Δευτέρα έως Παρασκευή (08:00 – 22:00) και Σαββατοκύριακο κατά τις αγωνιστικές υποχρεώσεις των συλλόγων.  Ιούλιο και Αύγουστο, το αθλητικό κέντρο συνήθως λειτουργεί (08:00 – 15:00)",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "Weekend availability depends on club matches. July and August have different hours.",
+    "uncertain_reason": "Weekend availability depends on club matches.",
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "open_time": "08:00",
-        "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 7,
+        "end_month": 8,
         "open_time": "08:00",
         "close_time": "15:00"
+      },
+      {
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "22:00"
       }
     ]
   },
-  "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:00) - Νοέμβριο έως Μάρτιο (17:00-19:00)": {
+ "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:00) - Νοέμβριο έως Μάρτιο (17:00-19:00)": {
     "original_text": "Καθημερινά (07:00-12:00) & Απρίλιο έως Οκτώβριο (18:00-20:00) - Νοέμβριο έως Μάρτιο (17:00-19:00)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "07:00",
         "close_time": "12:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 4,
         "end_month": 10,
         "open_time": "18:00",
         "close_time": "20:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 11,
         "end_month": 3,
         "open_time": "17:00",
@@ -12024,14 +11717,6 @@
         ],
         "open_time": "08:00",
         "close_time": "13:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -12100,12 +11785,21 @@
       }
     ]
   },
-  "17:00-22:00": {
+ "17:00-22:00": {
     "original_text": "17:00-22:00",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
         "open_time": "17:00",
         "close_time": "22:00"
       }
@@ -12142,8 +11836,13 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 5,
-        "end_month": 10
+        "start_day": 1,
+        "end_month": 10,
+        "end_day": 1,
+        "open_time": "00:00",
+        "close_time": "24:00"
       }
     ]
   },
@@ -12177,14 +11876,6 @@
         ],
         "open_time": "09:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "unknown",
-        "close_time": "unknown"
       }
     ]
   },
@@ -12201,21 +11892,8 @@
           4,
           5
         ],
-        "start_month": 1,
+        "start_month": 9,
         "end_month": 6,
-        "open_time": "00:00",
-        "close_time": "24:00"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5
-        ],
-        "start_month": 7,
-        "end_month": 8,
         "open_time": "00:00",
         "close_time": "24:00"
       }
@@ -12287,25 +11965,10 @@
           6,
           7
         ],
-        "start_month": 1,
+        "start_month": 9,
         "end_month": 7,
         "open_time": "08:30",
         "close_time": "23:30"
-      },
-      {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "start_month": 8,
-        "end_month": 8,
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -12406,14 +12069,6 @@
         "end_month": 5,
         "open_time": "17:00",
         "close_time": "19:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "During games",
-        "close_time": "During games"
       }
     ]
   },
@@ -12615,14 +12270,6 @@
         ],
         "open_time": "16:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ],
-        "open_time": "00:00",
-        "close_time": "24:00"
       }
     ]
   },
@@ -12659,35 +12306,31 @@
       }
     ]
   },
-  "Καθημερινά 13:30 - 21:30 Καλοκαίρι και Χριστούγεννα - Πάσχα 08:00 - 16:00": {
+ "Καθημερινά 13:30 - 21:30 Καλοκαίρι και Χριστούγεννα - Πάσχα 08:00 - 16:00": {
     "original_text": "Καθημερινά 13:30 - 21:30 Καλοκαίρι και Χριστούγεννα - Πάσχα 08:00 - 16:00",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
-        "days": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7
-        ],
-        "open_time": "13:30",
-        "close_time": "21:30"
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "start_month": 12,
+        "start_day": 23,
+        "end_month": 1,
+        "end_day": 6,
+        "open_time": "08:00",
+        "close_time": "16:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 6,
         "end_month": 8,
         "open_time": "08:00",
         "close_time": "16:00"
       },
       {
-        "start_month": 12,
-        "end_month": 2,
-        "open_time": "08:00",
-        "close_time": "16:00"
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "open_time": "13:30",
+        "close_time": "21:30"
       }
     ]
   },
@@ -12695,8 +12338,16 @@
     "original_text": "Ωράριο λειτουργίας Σχολείων & απογεύματα λόγω χρήσης του γυμναστηρίου από συλλόγους.",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "School hours & afternoons due to gym use by clubs",
-    "rules": []
+    "uncertain_reason": "During school hours (08:00-14:00) and afternoons depending on club schedules",
+    "rules": [
+      {
+        "days": [1, 2, 3, 4, 5],
+        "start_month": 9,
+        "end_month": 6,
+        "open_time": "08:00",
+        "close_time": "14:00"
+      }
+    ]
   },
   "Δευτέρα έως Παρασκευή (07:00-23:00)": {
     "original_text": "Δευτέρα έως Παρασκευή (07:00-23:00)",
@@ -12738,33 +12389,30 @@
     "rules": [
       {
         "start_month": 10,
-        "end_month": 3,
+        "end_month": 4,
         "open_time": "09:00",
         "close_time": "21:00"
       },
       {
-        "start_month": 4,
+        "start_month": 5,
         "end_month": 9,
         "open_time": "00:00",
         "close_time": "24:00"
       }
     ]
   },
-  "ΠΡΟΣΒΑΣΙΜΟΣ ΣΕ ΩΡΑΡΙΟ ΛΕΙΤΟΥΡΓΙΑΣ ΣΧΟΛΕΙΩΝ ΚΑΙ ΑΠΟΓΕΥΜΑΤΑ ΣΕ ΩΡΑΡΙΑ ΠΡΟΠΟΝΗΣΕΩΝ ΚΑΙ ΑΓΩΝΩΝ": {
+ "ΠΡΟΣΒΑΣΙΜΟΣ ΣΕ ΩΡΑΡΙΟ ΛΕΙΤΟΥΡΓΙΑΣ ΣΧΟΛΕΙΩΝ ΚΑΙ ΑΠΟΓΕΥΜΑΤΑ ΣΕ ΩΡΑΡΙΑ ΠΡΟΠΟΝΗΣΕΩΝ ΚΑΙ ΑΓΩΝΩΝ": {
     "original_text": "ΠΡΟΣΒΑΣΙΜΟΣ ΣΕ ΩΡΑΡΙΟ ΛΕΙΤΟΥΡΓΙΑΣ ΣΧΟΛΕΙΩΝ ΚΑΙ ΑΠΟΓΕΥΜΑΤΑ ΣΕ ΩΡΑΡΙΑ ΠΡΟΠΟΝΗΣΕΩΝ ΚΑΙ ΑΓΩΝΩΝ",
     "status": "uncertain",
     "is_24_7": false,
-    "uncertain_reason": "During school hours and afternoons during training and match hours",
+    "uncertain_reason": "During school hours (08:00-14:00) and afternoons during training/matches",
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
         "end_month": 6,
         "open_time": "08:00",
-        "close_time": "17:00"
-      },
-      {
-        "open_time": "17:00",
-        "close_time": "20:00"
+        "close_time": "14:00"
       }
     ]
   },
@@ -12813,18 +12461,20 @@
       }
     ]
   },
-  "Μάιος-Οκτώβριος: 24 ώρες, Νοέμβριος-Απρίλιος: 09:00-17:00 (Δευτέρα-Σάββατο)": {
+ "Μάιος-Οκτώβριος: 24 ώρες, Νοέμβριος-Απρίλιος: 09:00-17:00 (Δευτέρα-Σάββατο)": {
     "original_text": "Μάιος-Οκτώβριος: 24 ώρες, Νοέμβριος-Απρίλιος: 09:00-17:00 (Δευτέρα-Σάββατο)",
     "status": "parsed",
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "start_month": 5,
         "end_month": 10,
         "open_time": "00:00",
         "close_time": "24:00"
       },
       {
+        "days": [1, 2, 3, 4, 5, 6],
         "start_month": 11,
         "end_month": 4,
         "open_time": "09:00",
@@ -12838,6 +12488,7 @@
     "is_24_7": false,
     "rules": [
       {
+        "days": [1, 2, 3, 4, 5, 6, 7],
         "open_time": "17:00",
         "close_time": "21:00"
       }
@@ -12856,6 +12507,8 @@
           4,
           5
         ],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "09:00",
         "close_time": "22:30"
       },
@@ -12863,6 +12516,8 @@
         "days": [
           6
         ],
+        "start_month": 9,
+        "end_month": 7,
         "open_time": "09:00",
         "close_time": "16:00"
       }
@@ -13004,8 +12659,16 @@
   },
   "Καθημερινά 09:00πμ μέχρι την δύση του ηλίου.": {
     "original_text": "Καθημερινά 09:00πμ μέχρι την δύση του ηλίου.",
+    "status": "uncertain",
+    "is_24_7": false,
+    "uncertain_reason": "Depends on sunset time",
+    "rules": []
+  },
+ "Από 22 Ιουνίου έως 1 Σεπτεμβρίου που τα σχολεία είναι κλειστά, δεν υπάρχει πρόσβαση στον απινιδωτή καθώς το σχολείο είναι κλειδωμένο και κλειστό": {
+    "original_text": "Από 22 Ιουνίου έως 1 Σεπτεμβρίου που τα σχολεία είναι κλειστά, δεν υπάρχει πρόσβαση στον απινιδωτή καθώς το σχολείο είναι κλειδωμένο και κλειστό",
     "status": "parsed",
     "is_24_7": false,
+    "uncertain_reason": null,
     "rules": [
       {
         "days": [
@@ -13013,25 +12676,12 @@
           2,
           3,
           4,
-          5,
-          6,
-          7
+          5
         ],
-        "open_time": "09:00",
-        "close_time": "17:00"
-      }
-    ]
-  },
-  "Από 22 Ιουνίου έως 1 Σεπτεμβρίου που τα σχολεία είναι κλειστά, δεν υπάρχει πρόσβαση στον απινιδωτή καθώς το σχολείο είναι κλειδωμένο και κλειστό": {
-    "original_text": "Από 22 Ιουνίου έως 1 Σεπτεμβρίου που τα σχολεία είναι κλειστά, δεν υπάρχει πρόσβαση στον απινιδωτή καθώς το σχολείο είναι κλειδωμένο και κλειστό",
-    "status": "parsed",
-    "is_24_7": false,
-    "uncertain_reason": null,
-    "rules": [
-      {
-        "days": [1, 2, 3, 4, 5],
         "start_month": 9,
+        "start_day": 2,
         "end_month": 6,
+        "end_day": 21,
         "open_time": "08:00",
         "close_time": "14:00"
       }
@@ -13155,12 +12805,6 @@
         ],
         "open_time": "15:00",
         "close_time": "22:00"
-      },
-      {
-        "days": [
-          6,
-          7
-        ]
       }
     ]
   },
@@ -13209,11 +12853,6 @@
         ],
         "open_time": "08:00",
         "close_time": "21:00"
-      },
-      {
-        "days": [
-          6
-        ]
       }
     ]
   },

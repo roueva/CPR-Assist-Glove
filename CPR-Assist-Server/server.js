@@ -36,22 +36,37 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(express.json());
+// REPLACE lines 44-50 with:
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*') 
-    : '*',
+  origin: function (origin, callback) {
+    // ✅ Allow requests with no origin (ESP32, mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : ['*'];
+    
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
-// ✅ Rate Limiting Configuration
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per 15 minutes per IP
+    max: 300, // ✅ Increased from 100 to 300 for route preloading
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    // ✅ Skip rate limit for health/status checks
+    skip: (req) => {
+        return req.path === '/health' || req.path === '/' || req.path === '/api/maps-key';
+    }
 });
 
 const bulkUpdateLimiter = rateLimit({
@@ -252,28 +267,46 @@ const startServer = async () => {
 const cron = require('node-cron');
 const AEDService = require('./services/aedService');
 
-// Weekly sync - Every Sunday at 3 AM
-cron.schedule('0 3 * * 0', async () => {
-    console.log('🕐 Running scheduled weekly AED sync...');
+// ✅ Run sync TWICE per week: Wednesday 3 AM and Sunday 3 AM
+cron.schedule('0 3 * * 0,3', async () => {
+    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🕐 Starting scheduled ${dayName} AED sync...`);
+    console.log(`${'='.repeat(60)}\n`);
+    
     try {
         const aedService = new AEDService(pool);
+        
+        // STEP 1: Fetch from external API
         const externalAEDs = await aedService.fetchFromExternalAPI();
         
-        if (externalAEDs.length > 0) {
-            const result = await aedService.syncAEDs(externalAEDs);
-            console.log(`✅ Weekly sync complete: ${result.inserted} inserted, ${result.updated} updated, ${result.unchanged} unchanged`);
-        } else {
-            console.log('⚠️ No AEDs fetched during weekly sync');
+        if (externalAEDs.length === 0) {
+            console.log(`⚠️ No AEDs fetched during ${dayName} sync`);
+            return;
         }
+        
+        // STEP 2: Sync to database
+        const result = await aedService.syncAEDs(externalAEDs);
+        console.log(`✅ Database sync complete: ${result.inserted} inserted, ${result.updated} updated`);
+        
+        // STEP 3: Parse availability strings (NEW!)
+        await aedService.parseAvailabilityAfterSync(externalAEDs);
+        
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`✅ ${dayName} sync fully complete!`);
+        console.log(`${'='.repeat(60)}\n`);
+        
     } catch (error) {
-        console.error('❌ Scheduled sync failed:', error.message);
+        console.error(`\n${'='.repeat(60)}`);
+        console.error(`❌ Scheduled ${dayName} sync failed:`, error.message);
+        console.error(`${'='.repeat(60)}\n`);
     }
 }, {
     scheduled: true,
     timezone: process.env.TZ || "Europe/Athens"
 });
 
-console.log('⏰ Weekly AED sync scheduled for Sundays at 3:00 AM (Athens time)');
+console.log('⏰ AED sync scheduled for Sundays and Wednesdays at 3:00 AM (Athens time)');
 
 // ✅ Run sync on startup if database is empty
 (async () => {

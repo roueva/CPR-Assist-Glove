@@ -258,37 +258,64 @@ class NetworkService {
     throw Exception('HTTP Error ${response.statusCode}: $errorMessage');
   }
 
-  // 🔹 FETCH AED LOCATIONS 🔹
-  Future<List<dynamic>> fetchAEDLocations() async {
-    try {
-      final url = Uri.parse('$baseUrl/aed');
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        // ✅ Parse metadata headers
-        final lastUpdated = response.headers['x-data-last-updated'];
-        final totalAEDs = response.headers['x-total-aeds'];
-
-        if (lastUpdated != null) {
-          print("🕒 Backend data last updated: $lastUpdated");
-        }
-        if (totalAEDs != null) {
-          print("📊 Total AEDs from backend: $totalAEDs");
-        }
-
-        // ✅ Backend now returns array directly
-        final List<dynamic> data = jsonDecode(response.body);
-        print("✅ Fetched ${data.length} AEDs from backend");
-        return data;
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+// Add this helper method BEFORE fetchAEDLocations (around line 165):
+  Future<T?> _retryOperation<T>(
+      Future<T> Function() operation, {
+        int maxRetries = 3,
+        Duration delay = const Duration(seconds: 2),
+      }) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if (i == maxRetries - 1) rethrow;
+        print("⚠️ Retry ${i + 1}/$maxRetries after error: $e");
+        await Future.delayed(delay * (i + 1)); // Exponential backoff
       }
-    } catch (e) {
-      print("❌ Error fetching AED locations: $e");
-      rethrow;  // ✅ Rethrow so AEDService can handle it
     }
+    return null;
   }
 
+// NOW REPLACE fetchAEDLocations:
+  Future<List<dynamic>> fetchAEDLocations() async {
+    return await _retryOperation<List<dynamic>>(() async {
+      try {
+        final url = Uri.parse('$baseUrl/aed');
+        final response = await http.get(url);
+
+        if (response.statusCode == 200) {
+          // ✅ Parse metadata headers
+          final lastUpdated = response.headers['x-data-last-updated'];
+          final totalAEDs = response.headers['x-total-aeds'];
+
+          if (lastUpdated != null) {
+            print("🕒 Backend data last updated: $lastUpdated");
+
+            // ✅ Update cache timestamp when fetching fresh data
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setInt(
+                'aed_cache_timestamp',
+                DateTime.now().millisecondsSinceEpoch
+            );
+            print("✅ Updated cache timestamp after successful fetch");
+          }
+
+          if (totalAEDs != null) {
+            print("📊 Total AEDs from backend: $totalAEDs");
+          }
+
+          final List<dynamic> data = jsonDecode(response.body);
+          print("✅ Fetched ${data.length} AEDs from backend");
+          return data;
+        } else {
+          throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        print("❌ Error fetching AED locations: $e");
+        rethrow;
+      }
+    }) ?? []; // Return empty list if all retries fail
+  }
   static String? get googleMapsApiKey {
     // ✅ Just read from .env directly
     final key = dotenv.env['GOOGLE_MAPS_API_KEY'];

@@ -112,25 +112,28 @@ class AEDService {
 
     final sorted = List<AED>.from(aeds);
 
-    // Calculate and cache distances
+    // ✅ FIX: Calculate ALL distances synchronously FIRST
+    final Map<int, double> distances = {};
     for (final aed in sorted) {
       final straightDist = LocationService.distanceBetween(referenceLocation, aed.location);
       final multiplier = getTransportModeMultiplier(transportMode);
       final estimatedDist = straightDist * multiplier;
 
-      // Cache the estimated distance for this AED
+      // Store in memory map first
+      distances[aed.id] = estimatedDist;
+
+      // Cache asynchronously (don't await - it's just storage)
       CacheService.setDistance('aed_${aed.id}', estimatedDist);
     }
 
-    // Sort by adjusted distance
+    // ✅ FIX: Sort using the freshly calculated distances
     sorted.sort((a, b) {
-      final distA = CacheService.getDistance('aed_${a.id}') ??
-          LocationService.distanceBetween(referenceLocation, a.location);
-      final distB = CacheService.getDistance('aed_${b.id}') ??
-          LocationService.distanceBetween(referenceLocation, b.location);
+      final distA = distances[a.id] ?? double.infinity;
+      final distB = distances[b.id] ?? double.infinity;
       return distA.compareTo(distB);
     });
 
+    print("📏 Sorted ${sorted.length} AEDs by distance (mode: $transportMode)");
     return sorted;
   }
 

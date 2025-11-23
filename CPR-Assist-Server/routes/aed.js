@@ -167,5 +167,39 @@ return res.json(result.rows);
         }
     });
 
+    // ✅ Get parsed availability map
+router.get('/availability', async (req, res) => {
+    try {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const filePath = path.join(__dirname, '../data/parsed_availability_map.json');
+        
+        const data = await fs.readFile(filePath, 'utf8');
+        const parsedMap = JSON.parse(data);
+        
+        // Add metadata
+        const stats = await fs.stat(filePath);
+        
+        res.set('X-Availability-Count', Object.keys(parsedMap).length.toString());
+        res.set('X-Last-Updated', stats.mtime.toISOString());
+        res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+        
+        return res.json(parsedMap);
+        
+    } catch (error) {
+        console.error("❌ Error fetching availability map:", error);
+        
+        // Fallback to empty map if file doesn't exist
+        if (error.code === 'ENOENT') {
+            return res.json({});
+        }
+        
+        res.status(500).json({ 
+            error: "Failed to fetch availability map.",
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
+        });
+    }
+});
+
     return router;
 };
