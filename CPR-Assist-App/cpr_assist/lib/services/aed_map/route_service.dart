@@ -14,6 +14,7 @@ class RouteResult {
   final bool isOffline;
   final double? actualDistance;
   final String? distanceText;
+  final String? transportMode;
 
   RouteResult({
     required this.polyline,
@@ -22,6 +23,7 @@ class RouteResult {
     this.isOffline = false,
     this.actualDistance,
     this.distanceText,
+    this.transportMode,
   });
 }
 
@@ -68,6 +70,7 @@ class RouteService {
           points: routePoints,
           actualDistance: distanceMeters.toDouble(),
           distanceText: distanceText,
+          transportMode: mode,
         );
       }
     } catch (e) {
@@ -281,9 +284,10 @@ class RoutePreloader {
             routeResult,
           );
 
-          // Cache the distance for display
+          // ✅ Cache with transport mode so it doesn't get overwritten
           if (routeResult.actualDistance != null) {
-            CacheService.setDistance('aed_${aed.id}', routeResult.actualDistance!);
+            CacheService.setDistance('aed_${aed.id}_$transportMode', routeResult.actualDistance!);
+            print("✅ Cached REAL distance for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance!)}");
           }
 
           // Notify callback

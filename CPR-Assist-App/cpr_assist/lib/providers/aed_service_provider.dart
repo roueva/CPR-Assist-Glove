@@ -66,12 +66,25 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
     );
   }
 
-  void updateRoute(Polyline? route, String time, double? distance) {
+  void updateRoute(Polyline? route, String estimatedTime, double distance) {
     state = state.copyWith(
       navigation: state.navigation.copyWith(
         route: route,
-        estimatedTime: time,
+        estimatedTime: estimatedTime,
         distance: distance,
+      ),
+    );
+  }
+
+  // ✅ NEW METHOD: Store original route metrics for proportional ETA calculation
+  void setOriginalRouteMetrics({
+    required double originalDistance,
+    required int originalDurationMinutes,
+  }) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(
+        originalDistance: originalDistance,
+        originalDurationMinutes: originalDurationMinutes,
       ),
     );
   }

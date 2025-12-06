@@ -112,21 +112,29 @@ class AEDService {
 
     final sorted = List<AED>.from(aeds);
 
-    // ✅ FIX: Calculate ALL distances synchronously FIRST
+    // ✅ FIX: Check cache FIRST before calculating estimates
     final Map<int, double> distances = {};
+
     for (final aed in sorted) {
-      final straightDist = LocationService.distanceBetween(referenceLocation, aed.location);
-      final multiplier = getTransportModeMultiplier(transportMode);
-      final estimatedDist = straightDist * multiplier;
+      // ✅ PRIORITY 1: Check if we have a cached REAL route distance
+      final cachedDistance = CacheService.getDistance('aed_${aed.id}_$transportMode')
+          ?? CacheService.getDistance('aed_${aed.id}_${transportMode}_est');
+      if (cachedDistance != null) {
+        // Use the cached real distance (from route preloading)
+        distances[aed.id] = cachedDistance;
+      } else {
+        // ✅ PRIORITY 2: Calculate estimate only if no cache
+        final straightDist = LocationService.distanceBetween(referenceLocation, aed.location);
+        final multiplier = getTransportModeMultiplier(transportMode);
+        final estimatedDist = straightDist * multiplier;
 
-      // Store in memory map first
-      distances[aed.id] = estimatedDist;
+        distances[aed.id] = estimatedDist;
 
-      // Cache asynchronously (don't await - it's just storage)
-      CacheService.setDistance('aed_${aed.id}', estimatedDist);
+        // ✅ Use mode-specific key for estimates so they don't overwrite real routes
+        CacheService.setDistance('aed_${aed.id}_${transportMode}_est', estimatedDist);      }
     }
 
-    // ✅ FIX: Sort using the freshly calculated distances
+    // ✅ Sort using the distances (real or estimated)
     sorted.sort((a, b) {
       final distA = distances[a.id] ?? double.infinity;
       final distB = distances[b.id] ?? double.infinity;
@@ -168,9 +176,10 @@ class AEDService {
           // Cache the complete route (including polyline)
           CacheService.setCachedRoute(userLocation, aed.location, transportMode, routeResult);
 
-          // Cache the distance for display
+          // ✅ Cache with transport mode to prevent overwriting
           if (routeResult.actualDistance != null) {
-            CacheService.setDistance('aed_${aed.id}', routeResult.actualDistance!);
+            CacheService.setDistance('aed_${aed.id}_$transportMode', routeResult.actualDistance!);
+            print("✅ Cached REAL distance for AED ${aed.id} ($transportMode): ${LocationService.formatDistance(routeResult.actualDistance!)}");
           }
 
           print("✅ Cached route for AED ${aed.id}: ${routeResult.duration}, ${routeResult.distanceText}");
@@ -234,9 +243,8 @@ class AEDService {
             // Cache the complete route (including polyline)
             CacheService.setCachedRoute(userLocation, aed.location, transportMode, routeResult!);
 
-            // Cache the distance
-            CacheService.setDistance(cacheKey, routeResult.actualDistance!);
-            CacheService.setDistance('aed_${aed.id}', routeResult.actualDistance!);
+            // ✅ Cache with transport mode
+            CacheService.setDistance('aed_${aed.id}_$transportMode', routeResult.actualDistance!);
 
             aedsWithRoadDistance[aed] = routeResult.actualDistance!;
             anyUpdated = true;

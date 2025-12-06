@@ -286,19 +286,18 @@ class NetworkService {
           final lastUpdated = response.headers['x-data-last-updated'];
           final totalAEDs = response.headers['x-total-aeds'];
 
+          // ✅ Save the BACKEND'S sync time (not our fetch time)
           if (lastUpdated != null) {
-            print("🕒 Backend data last updated: $lastUpdated");
+            print("🕒 Backend last synced from iSaveLives: $lastUpdated");
 
-            // ✅ Save sync timestamp
-            await NetworkService.saveLastSyncTime();
-
-            // Update cache timestamp
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt(
-                'aed_cache_timestamp',
-                DateTime.now().millisecondsSinceEpoch
-            );
-            print("✅ Updated cache timestamp after successful fetch");
+            try {
+              final backendSyncTime = DateTime.parse(lastUpdated);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt(_lastSyncKey, backendSyncTime.millisecondsSinceEpoch);
+              print("💾 Saved backend sync timestamp: $backendSyncTime");
+            } catch (e) {
+              print("⚠️ Error parsing backend sync time: $e");
+            }
           }
 
           if (totalAEDs != null) {

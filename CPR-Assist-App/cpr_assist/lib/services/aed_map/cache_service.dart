@@ -25,7 +25,7 @@ class CacheService {
   static final Map<String, DateTime> _routeCacheTimestamps = {};
   static bool _isLoadingDistanceCache = false;
   static bool _isSavingDistanceCache = false;
-  static const int _maxRouteCache = 100;
+  static const int _maxRouteCache = 200;
   static const int _maxDistanceCache = 500;
   static Timer? _saveTimer;
   static Duration getCacheTTL() => _cacheTtl;
@@ -244,7 +244,10 @@ class CacheService {
         _memoryRouteCache.remove(key);
         _routeCacheTimestamps.remove(key);
       }
-      print("🗑️ Evicted $toRemove old route cache entries");
+      // ✅ Only log significant evictions
+      if (toRemove > 10) {
+        print("🗑️ Evicted $toRemove old route cache entries");
+      }
     }
 
     if (_distanceCache.length > _maxDistanceCache) {
@@ -698,6 +701,7 @@ class CacheService {
       'isOffline': route.isOffline,
       'actualDistance': route.actualDistance,
       'distanceText': route.distanceText,
+      'transportMode': route.transportMode,
     };
   }
 
@@ -705,12 +709,16 @@ class CacheService {
     final points = (data['points'] as List)
         .map((p) => LatLng(p['lat'], p['lng']))
         .toList();
+    final transportMode = data['transportMode'] ?? 'walking';  // ✅ READ THIS
 
     return RouteResult(
       polyline: Polyline(
         polylineId: const PolylineId('cached_route'),
         points: points,
-        color: Colors.blue,
+        color: transportMode == 'walking' ? Colors.green : Colors.blue,  // ✅ USE IT
+        patterns: transportMode == 'walking'
+            ? [PatternItem.dash(15), PatternItem.gap(8)]
+            : [],
         width: 4,
       ),
       duration: data['duration'],
@@ -718,10 +726,13 @@ class CacheService {
       isOffline: data['isOffline'] ?? false,
       actualDistance: data['actualDistance']?.toDouble(),
       distanceText: data['distanceText'],
+      transportMode: transportMode,  // ✅ INCLUDE IT
     );
   }
 
   static void dispose() {
+    _saveTimer?.cancel();
+    _saveTimer = null;
     _distanceCache.clear();
     _memoryRouteCache.clear();
     _routeCacheTimestamps.clear();

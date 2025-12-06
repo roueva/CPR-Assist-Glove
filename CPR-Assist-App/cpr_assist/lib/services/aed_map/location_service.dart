@@ -233,107 +233,151 @@ class LocationService {
       ),
     );
   }
-
-  // Add this method to the LocationService class
-  void startLocationTracking({
+  /// Progressive location tracking with accuracy that adapts to usage
+  void startProgressiveLocationTracking({
     required Function(LatLng) onLocationUpdate,
+    required bool isNavigating,
     int distanceFilter = 10,
   }) {
-    // Start with LOW accuracy (fast initialization, ~100-300ms blocking)
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,  // Low accuracy = fast init
-          distanceFilter: 50,
-        ),
-      ).listen((position) {
-        onLocationUpdate(LatLng(position.latitude, position.longitude));
+    _positionSubscription?.cancel();
 
-        // After first fix, upgrade to better accuracy
-        Future.delayed(const Duration(seconds: 2), () {
-          _positionSubscription?.cancel();
-          _positionSubscription = Geolocator.getPositionStream(
-            locationSettings: LocationSettings(
-              accuracy: LocationAccuracy.medium,
-              distanceFilter: distanceFilter,
-            ),
-          ).listen((position) {
-            onLocationUpdate(LatLng(position.latitude, position.longitude));
-          });
-        });
+    // PHASE 1: Quick start with LOW accuracy (instant ~200ms)
+    print("🔍 GPS Phase 1: Low accuracy (quick start)");
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.low,
+        distanceFilter: 50, // Relaxed for quick fix
+      ),
+    ).listen((position) {
+      onLocationUpdate(LatLng(position.latitude, position.longitude));
+
+      // PHASE 2: Upgrade after first fix (based on mode)
+      Future.delayed(const Duration(seconds: 1), () {
+        _upgradeToTargetAccuracy(
+          onLocationUpdate: onLocationUpdate,
+          isNavigating: isNavigating,
+          distanceFilter: distanceFilter,
+        );
       });
     });
+  }
+
+  /// Upgrade to target accuracy based on usage mode
+  void _upgradeToTargetAccuracy({
+    required Function(LatLng) onLocationUpdate,
+    required bool isNavigating,
+    required int distanceFilter,
+  }) {
+    _positionSubscription?.cancel();
+
+    final accuracy = isNavigating ? LocationAccuracy.high : LocationAccuracy.medium;
+    final filter = distanceFilter;  // ✅ ALWAYS use the passed parameter
+
+    print("📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy, ${filter}m filter");
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: accuracy,
+        distanceFilter: filter,  // ✅ Use actual parameter
+      ),
+    ).listen((position) {
+      onLocationUpdate(LatLng(position.latitude, position.longitude));
+    });
+  }
+
+  /// Update accuracy when navigation mode changes
+  void updateAccuracyForNavigation(bool isNavigating, Function(LatLng) onLocationUpdate) {
+    if (_positionSubscription == null) return;
+
+    print("🔄 Updating GPS accuracy for ${isNavigating ? 'NAVIGATION' : 'NORMAL'} mode");
+
+    _upgradeToTargetAccuracy(
+      onLocationUpdate: onLocationUpdate,
+      isNavigating: isNavigating,
+      distanceFilter: isNavigating ? 5 : 10,
+    );
   }
 
   void startBackgroundLocationImprovement({
     required LatLng currentLocation,
     required Function(LatLng) onImprovedLocation,
-  }) {
+    required bool isNavigating, // ✅ NEW: Know if we should stop
+    }) {
     _improvementTimer?.cancel();
+
+    // Don't run improvements during navigation (already at HIGH accuracy)
+    if (isNavigating) {
+      print("⏸️ Skipping background improvement (already HIGH accuracy)");
+      return;
+    }
 
     int improvementAttempts = 0;
     _improvementTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       improvementAttempts++;
 
+      // ✅ ADD THIS: Check if location services still enabled
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        print("🔴 Location services disabled - stopping background improvement");
+        timer.cancel();
+        _improvementTimer = null;
+        return;
+      }
+
+      // Stop after 5 attempts OR if services disabled
       if (improvementAttempts > 5) {
+        print("✅ Background improvement complete (max attempts)");
+        timer.cancel();
+        _improvementTimer = null;
+        return;
+      }
+
+      // ✅ CRITICAL: Check if location services still enabled
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        print("🔴 Location services disabled - stopping background improvement");
         timer.cancel();
         return;
       }
 
       try {
-        // 🔥 CRITICAL FIX: Check if location services are still enabled
-        if (!await Geolocator.isLocationServiceEnabled()) {
-          print("⚠️ Location services disabled - stopping background improvement");
-          timer.cancel();
-          return;
-        }
-
         final betterPosition = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 10),
+          ),
         ).timeout(const Duration(seconds: 10));
 
         final betterLocation = LatLng(betterPosition.latitude, betterPosition.longitude);
         final improvement = distanceBetween(currentLocation, betterLocation);
 
+        // Only notify if significantly better
         if (improvement > 50 || (betterPosition.accuracy < 15 && improvement > 20)) {
-          print("✅ Significant improvement: ${improvement.round()}m, accuracy: ${betterPosition.accuracy}m");
+          print("✅ Improvement: ${improvement.round()}m, accuracy: ${betterPosition.accuracy}m");
           onImprovedLocation(betterLocation);
-
-          _startPositionTracking(
-            distanceFilter: 10,
-            onLocationUpdate: onImprovedLocation,
-          );
         }
 
+        // Stop if excellent accuracy achieved
         if (betterPosition.accuracy < 15) {
-          print("✅ Excellent accuracy achieved (${betterPosition.accuracy}m) - stopping improvements");
+          print("✅ Excellent accuracy (${betterPosition.accuracy}m) - stopping");
           timer.cancel();
         }
       } catch (e) {
-        print("⚠️ Background improvement attempt $improvementAttempts failed: $e");
+        print("⚠️ Improvement attempt $improvementAttempts failed: $e");
 
-        // If location services are disabled, stop trying
-        if (e.toString().contains("location service") ||
-            e.toString().contains("disabled")) {
-          print("🔴 Location services disabled - stopping background improvement");
+        // Stop if location services issue detected
+        if (e.toString().toLowerCase().contains('location')) {
           timer.cancel();
         }
       }
     });
   }
 
-
-  void _startPositionTracking({int distanceFilter = 10, Function(LatLng)? onLocationUpdate}) {
-    _positionSubscription?.cancel();
-    _positionSubscription = getPositionStream(distanceFilter: distanceFilter).listen(
-          (position) {
-        if (onLocationUpdate != null) {
-          onLocationUpdate(LatLng(position.latitude, position.longitude));
-        }
-      },
-    );
+  /// ✅ ADD: Method to stop background improvements
+  void stopBackgroundImprovement() {
+    _improvementTimer?.cancel();
+    _improvementTimer = null;
+    print("🛑 Stopped background location improvement");
   }
-
 
   void stopLocationMonitoring() {
     _positionSubscription?.cancel();
@@ -344,6 +388,7 @@ class LocationService {
 
   void dispose() {
     stopLocationMonitoring();
+    stopBackgroundImprovement();
   }
 
 
@@ -389,11 +434,11 @@ class LocationService {
     final timeInMinutes = (timeInHours * 60).round();
 
     if (timeInMinutes < 60) {
-      return "${timeInMinutes}min~";
+      return "${timeInMinutes}min";
     } else {
       final hours = timeInMinutes ~/ 60;
       final minutes = timeInMinutes % 60;
-      return "${hours}h ${minutes}min~";
+      return "${hours}h ${minutes}min";
     }
   }
 

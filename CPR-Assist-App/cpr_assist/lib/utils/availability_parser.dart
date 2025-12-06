@@ -34,17 +34,6 @@ class AvailabilityParser {
 
   static Future<void> loadRules() async {
     try {
-      // ✅ Try to restore last sync time from cache
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final syncTimestamp = prefs.getInt('availability_last_sync');
-        if (syncTimestamp != null) {
-          _lastSyncTime = DateTime.fromMillisecondsSinceEpoch(syncTimestamp);
-        }
-      } catch (e) {
-        // Ignore errors
-      }
-
       // ✅ Try to load from backend first
       final backendMap = await _fetchFromBackend();
 
@@ -77,32 +66,6 @@ class AvailabilityParser {
     }
   }
 
-// ✅ Store last sync time
-  static DateTime? _lastSyncTime;
-
-  /// Get the last time availability was synced
-  static DateTime? get lastSyncTime => _lastSyncTime;
-
-  /// Get formatted sync time
-  static String get formattedSyncTime {
-    if (_lastSyncTime == null) return 'Never synced';
-
-    final now = DateTime.now();
-    final difference = now.difference(_lastSyncTime!);
-
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
-    } else {
-      return '${(difference.inDays / 7).floor()} week${(difference.inDays / 7).floor() == 1 ? '' : 's'} ago';
-    }
-  }
-
   /// Fetch availability map from backend
   static Future<Map<String, dynamic>?> _fetchFromBackend() async {
     try {
@@ -116,39 +79,6 @@ class AvailabilityParser {
 
         print("🌐 Fetched availability rules from backend:");
         print("   → Count: $count");
-
-        // ✅ Parse and store the sync time
-        if (lastUpdatedStr != null) {
-          try {
-            _lastSyncTime = DateTime.parse(lastUpdatedStr);
-
-            // Calculate age
-            final age = DateTime.now().difference(_lastSyncTime!);
-
-            String ageText;
-            if (age.inMinutes < 1) {
-              ageText = 'Just now';
-            } else if (age.inHours < 1) {
-              ageText = '${age.inMinutes} minute${age.inMinutes == 1 ? '' : 's'} ago';
-            } else if (age.inDays < 1) {
-              ageText = '${age.inHours} hour${age.inHours == 1 ? '' : 's'} ago';
-            } else if (age.inDays < 7) {
-              ageText = '${age.inDays} day${age.inDays == 1 ? '' : 's'} ago';
-            } else {
-              ageText = '${(age.inDays / 7).floor()} week${(age.inDays / 7).floor() == 1 ? '' : 's'} ago';
-            }
-
-            print("   → Last synced: $ageText");
-            print("   → Exact time: ${_lastSyncTime!.toLocal()}");
-
-            // ✅ Save to cache for next time
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt('availability_last_sync', _lastSyncTime!.millisecondsSinceEpoch);
-
-          } catch (e) {
-            print("   → Last synced: $lastUpdatedStr (parse error: $e)");
-          }
-        }
 
         return json.decode(response.body);
       }

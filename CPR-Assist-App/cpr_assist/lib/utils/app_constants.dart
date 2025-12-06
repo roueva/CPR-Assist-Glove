@@ -30,7 +30,7 @@ class AppConstants {
 
   // Map settings
   static const double defaultZoom = 16.0;
-  static const double navigationZoom = 18.5;
+  static const double navigationZoom = 20;
   static const double navigationTilt = 45.0;
   static const double greeceZoom = 6.0;
   static const LatLng greeceCenter = LatLng(39.0742, 21.8243);

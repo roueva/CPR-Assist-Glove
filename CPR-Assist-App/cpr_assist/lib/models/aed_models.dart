@@ -150,6 +150,8 @@ class NavigationState {
   final String estimatedTime;
   final double? distance;
   final bool hasStarted;
+  final double? originalDistance;           // ✅ ADD THIS
+  final int? originalDurationMinutes;       // ✅ ADD THIS
 
   const NavigationState({
     this.isActive = false,
@@ -159,6 +161,8 @@ class NavigationState {
     this.estimatedTime = '',
     this.distance,
     this.hasStarted = false,
+    this.originalDistance,                  // ✅ ADD THIS
+    this.originalDurationMinutes,           // ✅ ADD THIS
   });
 
   NavigationState copyWith({
@@ -172,6 +176,8 @@ class NavigationState {
     double? currentSpeed,
     DateTime? lastUpdated,
     bool? hasStarted,
+    double? originalDistance,               // ✅ ADD THIS
+    int? originalDurationMinutes,           // ✅ ADD THIS
   }) {
     return NavigationState(
       isActive: isActive ?? this.isActive,
@@ -181,6 +187,8 @@ class NavigationState {
       estimatedTime: estimatedTime ?? this.estimatedTime,
       distance: distance ?? this.distance,
       hasStarted: hasStarted ?? this.hasStarted,
+      originalDistance: originalDistance ?? this.originalDistance,           // ✅ ADD THIS
+      originalDurationMinutes: originalDurationMinutes ?? this.originalDurationMinutes,  // ✅ ADD THIS
     );
   }
 }
