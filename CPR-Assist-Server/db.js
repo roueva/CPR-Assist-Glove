@@ -15,12 +15,9 @@ const pool = new Pool({
   allowExitOnIdle: true,
 });
 
-console.log(`✅ Connected to database`);
-
-
 // Pool Error Handling
 pool.on('connect', () => {
-   // console.log('✅ PostgreSQL connected successfully');
+   console.log('✅ PostgreSQL connected successfully');
 });
 
 pool.on('error', (err) => {

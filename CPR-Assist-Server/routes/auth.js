@@ -8,18 +8,8 @@ const {
     authenticate,
 } = require('../middleware/validation');
 
-// Create a pool reference outside the route handlers
-let poolInstance;
-
-// Middleware to attach database connection to all routes
-router.use((req, res, next) => {
-    req.db = poolInstance;
-    next();
-});
-
 // Factory function to create routes with a specific pool
 function initializeAuthRoutes(pool) {
-    poolInstance = pool;
     const authController = createAuthController(pool);
 
     // ✅ Test Route for "/auth"
@@ -28,15 +18,9 @@ function initializeAuthRoutes(pool) {
     });
 
 
-    // Add this in auth.js:
-    router.get('/', (req, res) => {
-    res.json({ message: 'Auth endpoint is working' });
-    });
-
-
     // ✅ Log Incoming Requests to Auth.js
     router.use((req, res, next) => {
-  console.log(`📥 Received ${req.method} request on ${req.url}`);
+        console.log(`Received ${req.method} request on ${req.url}`);
   next();
     });
 

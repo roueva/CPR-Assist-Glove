@@ -25,8 +25,10 @@ class NavigationController {
   double? _currentBearing; // direction of travel (different from compass heading)
   Timer? _predictionTimer;
   bool _usePrediction = true; // Can be toggled
+  DateTime? _lastCameraUpdateTime;
+  bool _isRecenterInProgress = false;
 
-  static const int _programmaticMoveDurationMs = 250;
+  static const int _programmaticMoveDurationMs = 500;
 
   // Callbacks
   final VoidCallback? _onStateChanged;
@@ -51,38 +53,63 @@ class NavigationController {
   }
 
   /// Update the current user location
-  /// Update the current user location
   void updateUserLocation(LatLng location) {
-    // ✅ Use prediction during navigation
+    _currentUserLocation = location;
+
+    // ✅ During navigation, ALWAYS update camera (no throttling)
     if (_navigationState == NavigationState.compassTracking) {
-      updateUserLocationWithPrediction(location);
-    } else {
-      // Original simple update for non-navigation
-      _currentUserLocation = location;
-
-      if (_navigationState != NavigationState.inactive && _mapController != null) {
-        if (_wasRecentUserTouch()) {
-          if (!_showRecenterButton) {
-            _showRecenterButton = true;
-            _onRecenterButtonVisibilityChanged?.call(true);
-          }
-          return;
+      if (_wasRecentUserTouch()) {
+        if (!_showRecenterButton) {
+          _showRecenterButton = true;
+          _onRecenterButtonVisibilityChanged?.call(true);
         }
+        return;
+      }
 
-        _lastProgrammaticMoveTime = DateTime.now();
-        _mapController!.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: location,
-              zoom: AppConstants.navigationZoom,
-              tilt: AppConstants.navigationTilt,
-              bearing: _currentHeading ?? 0.0,
-            ),
+      // Calculate speed and bearing for smooth interpolation
+      _updateSpeedAndBearing(location);
+
+      // Update camera smoothly
+      _updateCameraToLocation(location, isPrediction: false);
+    } else if (_navigationState != NavigationState.inactive && _mapController != null) {
+      if (_wasRecentUserTouch()) {
+        if (!_showRecenterButton) {
+          _showRecenterButton = true;
+          _onRecenterButtonVisibilityChanged?.call(true);
+        }
+        return;
+      }
+
+      _lastProgrammaticMoveTime = DateTime.now();
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: location,
+            zoom: AppConstants.navigationZoom,
+            tilt: AppConstants.navigationTilt,
+            bearing: _currentHeading ?? 0.0,
           ),
-          duration: const Duration(milliseconds: 200),
-        );
+        ),
+        duration: const Duration(milliseconds: 400),
+      );
+    }
+  }
+
+  void _updateSpeedAndBearing(LatLng location) {
+    final now = DateTime.now();
+
+    if (_previousUserLocation != null && _lastLocationUpdateTime != null) {
+      final timeDelta = now.difference(_lastLocationUpdateTime!).inMilliseconds / 1000.0;
+
+      if (timeDelta > 0 && timeDelta < 5) {
+        final distance = _calculateDistance(_previousUserLocation!, location);
+        _currentSpeed = distance / timeDelta;
+        _currentBearing = _calculateBearingBetweenPoints(_previousUserLocation!, location);
       }
     }
+
+    _previousUserLocation = location;
+    _lastLocationUpdateTime = now;
   }
 
   /// Update location with prediction enabled
@@ -123,6 +150,7 @@ class NavigationController {
 
   /// Start periodic prediction updates (runs between GPS updates)
   void _startPredictionUpdates() {
+    return;
     _predictionTimer?.cancel();
 
     // Update prediction every 100ms for smooth movement
@@ -210,14 +238,12 @@ class NavigationController {
 
     _lastProgrammaticMoveTime = DateTime.now();
 
-    final cameraHeading = _currentHeading ?? _currentBearing ?? 0.0;
+    // ✅ Use movement bearing if available, otherwise compass heading
+    final cameraHeading = _currentBearing ?? _currentHeading ?? 0.0;
 
-    // ✅ REDUCED: 50ms for predictions, 100ms for actual GPS
-    final duration = isPrediction
-        ? const Duration(milliseconds: 50)   // ✅ Faster prediction
-        : const Duration(milliseconds: 100); // ✅ Faster GPS update
-
-    _mapController!.animateCamera(
+    // ✅ CRITICAL: Use moveCamera for instant updates, NOT animateCamera
+    // This prevents the "jumping every 5 meters" issue
+    _mapController!.moveCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: location,
@@ -226,7 +252,6 @@ class NavigationController {
           bearing: cameraHeading,
         ),
       ),
-      duration: duration,
     );
   }
 
@@ -427,7 +452,6 @@ class NavigationController {
     }
 
     _lastProgrammaticMoveTime = DateTime.now();
-    print("🧭 COMPASS MOVE: Bearing ${heading.toStringAsFixed(1)}°");
 
     _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -438,14 +462,19 @@ class NavigationController {
           bearing: heading,
         ),
       ),
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 300),  // ✅ Smooth compass
     );
   }
 
   /// Handle camera move started events
   void onCameraMoveStarted() {
+    // ✅ CRITICAL: Ignore if recenter is in progress
+    if (_isRecenterInProgress) {
+      print("📷 Camera move STARTED (recenter in progress - ignoring)");
+      return;
+    }
+
     if (_navigationState == NavigationState.inactive || _isRecentProgrammaticMove) {
-      // Check if this is a genuine user interaction
       final isCompassMove = _navigationState == NavigationState.compassTracking && _isRecentProgrammaticMove;
 
       if (!isCompassMove && _wasRecentUserTouch()) {
@@ -463,8 +492,12 @@ class NavigationController {
 
   /// Handle camera moved events
   void onCameraMoved() {
+    // ✅ CRITICAL: Ignore if recenter is in progress
+    if (_isRecenterInProgress) {
+      return;
+    }
+
     if (_navigationState != NavigationState.compassTracking || _isRecentProgrammaticMove) {
-      // Check if this is a genuine user interaction
       final isCompassMove = _navigationState == NavigationState.compassTracking && _isRecentProgrammaticMove;
 
       if (!isCompassMove && _wasRecentUserTouch()) {
@@ -502,15 +535,18 @@ class NavigationController {
     HapticFeedback.lightImpact();
     print("🎯 Recentering and resuming compass tracking");
 
+    _isRecenterInProgress = true;  // ✅ ADD THIS
     _currentUserLocation = userLocation;
     _navigationState = NavigationState.compassTracking;
     _showRecenterButton = false;
     _onRecenterButtonVisibilityChanged?.call(false);
 
+    _lastProgrammaticMoveTime = DateTime.now();
+    _lastUserTouchTime = null;
+
     if (_mapController != null) {
       double targetBearing = _currentHeading ?? 0.0;
 
-      // Try to get current compass reading for more accurate recentering
       FlutterCompass.events?.take(1).timeout(
         const Duration(milliseconds: 100),
         onTimeout: (sink) => sink.close(),
@@ -524,7 +560,6 @@ class NavigationController {
         onError: (_) => _performRecenterAnimation(userLocation, targetBearing),
       );
 
-      // Fallback if compass stream is not available
       if (FlutterCompass.events == null) {
         _performRecenterAnimation(userLocation, targetBearing);
       }
@@ -534,6 +569,7 @@ class NavigationController {
   /// Perform the recenter animation
   void _performRecenterAnimation(LatLng userLocation, double bearing) {
     _lastProgrammaticMoveTime = DateTime.now();
+    _lastUserTouchTime = null;
 
     _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -544,11 +580,23 @@ class NavigationController {
           bearing: bearing,
         ),
       ),
+      duration: const Duration(milliseconds: 600),
     ).then((_) {
       print("🎯 Recenter animation completed - resuming compass tracking");
+
+      _lastProgrammaticMoveTime = DateTime.now();
+      _lastUserTouchTime = null;
+      _isRecenterInProgress = false;  // ✅ ADD THIS
+
+      // ✅ Wait a bit longer before accepting user input
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _lastProgrammaticMoveTime = DateTime.now();
+      });
+
       _notifyStateChanged();
     }).catchError((error) {
       print("⚠️ Recenter animation failed: $error");
+      _isRecenterInProgress = false;  // ✅ ADD THIS
     });
   }
 
@@ -585,8 +633,8 @@ class NavigationController {
     final now = DateTime.now();
     final timeSinceTouch = now.difference(_lastUserTouchTime!).inMilliseconds;
 
-    // If user touched screen within last 500ms, consider it user interaction
-    return timeSinceTouch < 500;
+    // ✅ INCREASED: 2 seconds to match Google Maps behavior
+    return timeSinceTouch < 2000;
   }
 
   /// Check if this is a recent programmatic camera move

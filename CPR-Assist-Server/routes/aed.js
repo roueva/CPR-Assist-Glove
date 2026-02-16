@@ -69,15 +69,13 @@ router.post('/sync', async (req, res) => {
         
         const result = await aedService.syncAEDs(externalAEDs);
         
-        res.json({ 
-            success: true, 
-            message: `Successfully synced ${result.total} AEDs`,
+        res.json({
             inserted: result.inserted,
             updated: result.updated,
             total: result.total,
             duration: `${Date.now() - startTime}ms`,
             timestamp: new Date().toISOString(),
-            syncTimestamp: syncTimestamp.toISOString() // ✅ Add sync time
+            syncTimestamp: syncTimestamp.toISOString()
         });
         
     } catch (error) {

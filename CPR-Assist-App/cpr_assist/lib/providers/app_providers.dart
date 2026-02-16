@@ -1,0 +1,326 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/decrypted_data.dart';
+import '../services/ble_connection.dart';
+import '../services/network_service.dart';
+import '../services/aed_map/aed_service.dart';
+import '../models/aed_models.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+// ============================================================================
+// INFRASTRUCTURE PROVIDERS (Foundation layer)
+// ============================================================================
+
+/// SharedPreferences - Must be overridden in main()
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('SharedPreferences must be overridden in main()');
+});
+
+/// Navigator Key for global navigation
+final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
+  return GlobalKey<NavigatorState>();
+});
+
+// ============================================================================
+// SERVICE PROVIDERS (Business logic layer)
+// ============================================================================
+
+/// Network Service
+final networkServiceProvider = Provider<NetworkService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return NetworkService(prefs);
+});
+
+/// Decrypted Data Handler (BLE data processing)
+final decryptedDataProvider = Provider<DecryptedData>((ref) {
+  return DecryptedData();
+});
+
+/// BLE Connection Service
+final bleConnectionProvider = Provider<BLEConnection>((ref) {
+  final decryptedDataHandler = ref.watch(decryptedDataProvider);
+  final prefs = ref.watch(sharedPreferencesProvider);
+
+  return BLEConnection(
+    decryptedDataHandler: decryptedDataHandler,
+    prefs: prefs,
+    onStatusUpdate: (status) {},
+  );
+});
+
+/// AED Service
+final aedServiceProvider = Provider<AEDService>((ref) {
+  final networkService = ref.watch(networkServiceProvider);
+  return AEDService(networkService);
+});
+
+// ============================================================================
+// STATE PROVIDERS (Application state layer)
+// ============================================================================
+
+/// Authentication State
+final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+  final networkService = ref.watch(networkServiceProvider);
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return AuthNotifier(networkService, prefs);
+});
+
+/// AED Map State
+final mapStateProvider = StateNotifierProvider<MapStateNotifier, AEDMapState>((ref) {
+  return MapStateNotifier(ref);
+});
+
+// ============================================================================
+// STATE CLASSES
+// ============================================================================
+
+class AuthState {
+  final bool isLoggedIn;
+  final int? userId;
+  final String? username;
+  final bool isLoading;
+
+  AuthState({
+    required this.isLoggedIn,
+    this.userId,
+    this.username,
+    this.isLoading = false,
+  });
+
+  AuthState copyWith({
+    bool? isLoggedIn,
+    int? userId,
+    String? username,
+    bool? isLoading,
+  }) {
+    return AuthState(
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      userId: userId ?? this.userId,
+      username: username ?? this.username,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+class AuthNotifier extends StateNotifier<AuthState> {
+  final NetworkService _networkService;
+  final SharedPreferences _prefs;
+
+  AuthNotifier(this._networkService, this._prefs)
+      : super(AuthState(isLoggedIn: false));
+
+  Future<void> checkAuthStatus() async {
+    state = state.copyWith(isLoading: true);
+
+    final isAuthenticated = await _networkService.ensureAuthenticated();
+    final userId = await _networkService.getUserId();
+    final username = _prefs.getString('username');
+
+    state = state.copyWith(
+      isLoggedIn: isAuthenticated,
+      userId: userId,
+      username: username,
+      isLoading: false,
+    );
+  }
+
+  Future<void> logout() async {
+    await _networkService.removeToken();
+    await _prefs.remove('isLoggedIn');
+    await _prefs.remove('username');
+    await _prefs.remove('user_id');
+
+    state = AuthState(isLoggedIn: false);
+  }
+
+  Future<void> login(String token, int userId, String username) async {
+    state = state.copyWith(isLoading: true);
+
+    await _networkService.saveToken(token);
+    await _networkService.saveUserId(userId);
+    await _prefs.setBool('isLoggedIn', true);
+    await _prefs.setString('username', username);
+
+    state = state.copyWith(
+      isLoggedIn: true,
+      userId: userId,
+      username: username,
+      isLoading: false,
+    );
+  }
+}
+
+// AED Map State
+class AEDMapState {
+  final List<AED> aedList;
+  final LatLng? userLocation;
+  final bool isLoading;
+  final bool isRefreshing;
+  final bool isOffline;
+  final NavigationState navigation;
+
+  const AEDMapState({
+    this.aedList = const [],
+    this.userLocation,
+    this.isLoading = false,
+    this.isRefreshing = false,
+    this.isOffline = false,
+    this.navigation = const NavigationState(),
+  });
+
+  AEDMapState copyWith({
+    List<AED>? aedList,
+    LatLng? userLocation,
+    bool? isLoading,
+    bool? isRefreshing,
+    bool? isOffline,
+    NavigationState? navigation,
+  }) {
+    return AEDMapState(
+      aedList: aedList ?? this.aedList,
+      userLocation: userLocation ?? this.userLocation,
+      isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isOffline: isOffline ?? this.isOffline,
+      navigation: navigation ?? this.navigation,
+    );
+  }
+}
+
+class NavigationState {
+  final bool isActive;
+  final bool hasStarted;
+  final LatLng? destination;
+  final Polyline? route;
+  final String estimatedTime;
+  final double distance;
+  final String transportMode;
+  final double? originalDistance;
+  final int? originalDurationMinutes;
+
+  const NavigationState({
+    this.isActive = false,
+    this.hasStarted = false,
+    this.destination,
+    this.route,
+    this.estimatedTime = '',
+    this.distance = 0,
+    this.transportMode = 'walking',
+    this.originalDistance,
+    this.originalDurationMinutes,
+  });
+
+  NavigationState copyWith({
+    bool? isActive,
+    bool? hasStarted,
+    LatLng? destination,
+    Polyline? route,
+    String? estimatedTime,
+    double? distance,
+    String? transportMode,
+    double? originalDistance,
+    int? originalDurationMinutes,
+  }) {
+    return NavigationState(
+      isActive: isActive ?? this.isActive,
+      hasStarted: hasStarted ?? this.hasStarted,
+      destination: destination ?? this.destination,
+      route: route ?? this.route,
+      estimatedTime: estimatedTime ?? this.estimatedTime,
+      distance: distance ?? this.distance,
+      transportMode: transportMode ?? this.transportMode,
+      originalDistance: originalDistance ?? this.originalDistance,
+      originalDurationMinutes: originalDurationMinutes ?? this.originalDurationMinutes,
+    );
+  }
+}
+
+class MapStateNotifier extends StateNotifier<AEDMapState> {
+  final Ref ref;
+
+  MapStateNotifier(this.ref) : super(const AEDMapState(isLoading: true));
+
+  bool get isInNavigationMode => state.navigation.hasStarted;
+  bool get isInPreviewMode => state.navigation.isActive && !state.navigation.hasStarted;
+
+  void updateUserLocation(LatLng location) {
+    state = state.copyWith(userLocation: location);
+  }
+
+  void setAEDs(List<AED> aeds) {
+    state = state.copyWith(
+      aedList: aeds,
+      isLoading: false,
+      isRefreshing: false,
+    );
+  }
+
+  void setLoading(bool loading) {
+    state = state.copyWith(isLoading: loading);
+  }
+
+  void setRefreshing(bool refreshing) {
+    state = state.copyWith(isRefreshing: refreshing);
+  }
+
+  void setOffline(bool offline) {
+    state = state.copyWith(isOffline: offline);
+  }
+
+  void showNavigationPreview(LatLng destination) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(
+        isActive: true,
+        destination: destination,
+        hasStarted: false,
+      ),
+    );
+  }
+
+  void startNavigation(LatLng destination) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(
+        isActive: true,
+        destination: destination,
+        hasStarted: true,
+      ),
+    );
+  }
+
+  void updateRoute(Polyline? route, String estimatedTime, double distance) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(
+        route: route,
+        estimatedTime: estimatedTime,
+        distance: distance,
+      ),
+    );
+  }
+
+  void setOriginalRouteMetrics({
+    required double originalDistance,
+    required int originalDurationMinutes,
+  }) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(
+        originalDistance: originalDistance,
+        originalDurationMinutes: originalDurationMinutes,
+      ),
+    );
+  }
+
+  void updateTransportMode(String mode) {
+    state = state.copyWith(
+      navigation: state.navigation.copyWith(transportMode: mode),
+    );
+  }
+
+  void cancelNavigation() {
+    state = state.copyWith(navigation: const NavigationState());
+  }
+
+  void updateAEDsAndMarkers(List<AED> aeds) {
+    state = state.copyWith(aedList: aeds);
+  }
+}

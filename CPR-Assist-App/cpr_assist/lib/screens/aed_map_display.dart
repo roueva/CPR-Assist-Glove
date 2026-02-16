@@ -1194,8 +1194,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
               const SizedBox(height: 12),
 
-              // Availability Status (Expandable)
-              if (selectedAedInfo.availability != null &&
+// ✅ CHANGED: Only show if availability parsing is available AND has data
+              if (AvailabilityParser.isAvailable() &&
+                  selectedAedInfo.availability != null &&
                   selectedAedInfo.availability!.isNotEmpty)
                 _ExpandableAvailability(
                   parsedStatus: AvailabilityParser.parseAvailability(
@@ -1525,7 +1526,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                       ),
 
                     // ✅ Availability Status (INSIDE ListView children)
-                    if (selectedAedInfo.availability != null &&
+                    if (AvailabilityParser.isAvailable() &&
+                        selectedAedInfo.availability != null &&
                         selectedAedInfo.availability!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
@@ -1918,11 +1920,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         );
       }
     }
-    final availabilityStatus = AvailabilityParser.parseAvailability(
-        aed.availability);
+    final availabilityStatus = AvailabilityParser.parseAvailability(aed.availability);
 
-    // Determine border style based on availability
-    final bool isOpenNow = !availabilityStatus.isUncertain && availabilityStatus.isOpen;
+// ✅ CHANGED: Only show green border if we have valid availability data
+    final bool isOpenNow = AvailabilityParser.isAvailable() &&
+        !availabilityStatus.isUncertain &&
+        availabilityStatus.isOpen;
 
     // Use isRealData (from our new logic) instead of the old check
     final Color distanceColor =

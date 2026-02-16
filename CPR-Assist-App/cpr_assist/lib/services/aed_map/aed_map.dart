@@ -65,6 +65,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   String _lastFetchReason = '';
   bool _isCurrentlyNavigating = false;
   bool _isClusteringInProgress = false;
+  DateTime? _lastProgrammaticCameraMove;
 
   static const bool _enableDebugLogs = false; // ✅ Set to false for production
 
@@ -1554,14 +1555,27 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   // ==================== MAP CAMERA CONTROLS ====================
 
   void _onCameraMoveStarted() {
-    // Only notify navigation controller if navigating
+    // ✅ CRITICAL: Ignore if this was a programmatic move (we just moved camera)
+    if (_lastProgrammaticCameraMove != null &&
+        DateTime.now().difference(_lastProgrammaticCameraMove!) < const Duration(milliseconds: 500)) {
+      print("📷 Camera move STARTED (programmatic - ignoring)");
+      return;
+    }
+
+    // Only notify navigation controller if navigating AND user actually touched
     if (ref.read(mapStateProvider).navigation.hasStarted) {
       _navigationController?.onCameraMoveStarted();
     }
-    print("📷 Camera move STARTED");
+    print("📷 Camera move STARTED (user interaction)");
   }
 
   void _onCameraMoved() async {
+    // ✅ CRITICAL: Ignore if this was a programmatic move
+    if (_lastProgrammaticCameraMove != null &&
+        DateTime.now().difference(_lastProgrammaticCameraMove!) < const Duration(milliseconds: 500)) {
+      return;
+    }
+
     // Only notify navigation controller if navigating
     if (ref.read(mapStateProvider).navigation.hasStarted) {
       _navigationController?.onCameraMoved();
@@ -2089,6 +2103,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 // ==================== NAVIGATION & ROUTING ====================
 
   Future<void> _showNavigationPreviewForAED(LatLng aedLocation) async {
+    _lastProgrammaticCameraMove = DateTime.now();  // ✅ ADD THIS LINE
+
     final currentState = ref.read(mapStateProvider);
     final mapNotifier = ref.read(mapStateProvider.notifier);
 
@@ -2243,6 +2259,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       );
 
       if (_mapViewController != null) {
+        _lastProgrammaticCameraMove = DateTime.now();  // ✅ ADD THIS
         await _mapViewController!.zoomToUserAndAED(
           userLocation: currentLocation,
           aedLocation: aedLocation,
@@ -2280,6 +2297,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       );
 
       if (_mapViewController != null) {
+        _lastProgrammaticCameraMove = DateTime.now();  // ✅ ADD THIS
         await _mapViewController!.zoomToUserAndAED(
           userLocation: currentLocation,
           aedLocation: aedLocation,

@@ -39,17 +39,14 @@ class AvailabilityParser {
 
       if (backendMap != null && backendMap.isNotEmpty) {
         _availabilityMap = backendMap;
-
-        // Cache it locally
         await _cacheAvailabilityMap(backendMap);
-
         print("✅ Availability rules loaded from backend: ${_availabilityMap!.length} entries");
         return;
       }
 
       // ✅ Fallback to cached version
       final cachedMap = await _loadFromCache();
-      if (cachedMap != null) {
+      if (cachedMap != null && cachedMap.isNotEmpty) {  // ← ADDED: Check not empty
         _availabilityMap = cachedMap;
         print("📦 Availability rules loaded from cache: ${_availabilityMap!.length} entries");
         return;
@@ -57,14 +54,29 @@ class AvailabilityParser {
 
       // ✅ Last resort: Load from bundled asset
       final jsonString = await rootBundle.loadString('assets/data/parsed_availability_map.json');
-      _availabilityMap = json.decode(jsonString);
-      print("📂 Availability rules loaded from asset: ${_availabilityMap!.length} entries");
+      final assetMap = json.decode(jsonString);
+
+      // ✅ NEW: Only use asset if it's not empty
+      if (assetMap != null && assetMap.isNotEmpty) {
+        _availabilityMap = assetMap;
+        print("📂 Availability rules loaded from asset: ${_availabilityMap!.length} entries");
+      } else {
+        // ✅ NEW: Set to null to indicate "no availability data available"
+        _availabilityMap = null;
+        print("⚠️ No availability data available - feature disabled");
+      }
 
     } catch (e) {
       print("❌ Error loading availability rules: $e");
-      _availabilityMap = {};
+      _availabilityMap = null;  // ← CHANGED: Set to null instead of {}
     }
   }
+
+  /// Returns true if availability parsing is available
+  static bool isAvailable() {
+    return _availabilityMap != null && _availabilityMap!.isNotEmpty;
+  }
+
 
   /// Fetch availability map from backend
   static Future<Map<String, dynamic>?> _fetchFromBackend() async {
@@ -123,21 +135,31 @@ class AvailabilityParser {
   }
 
   static AvailabilityStatus parseAvailability(String? availability, {int? aedId}) {
+    // ✅ NEW: If no availability map loaded, return null status
+    if (_availabilityMap == null) {
+      return AvailabilityStatus(
+        isOpen: false,
+        isUncertain: true,
+        displayText: '',  // ← Empty string signals "don't show UI"
+        originalText: '',
+      );
+    }
+
     // 1. Handle Null/Empty/Unknown specifically at the entry point
     if (availability == null ||
         availability.trim().isEmpty ||
         availability.trim().toLowerCase() == 'unknown') {
       return AvailabilityStatus(
-        isOpen: true,
+        isOpen: false,  // ← CHANGED: false instead of true
         isUncertain: true,
-        displayText: 'Unknown Hours',
+        displayText: '',  // ← CHANGED: Empty instead of "Unknown Hours"
         originalText: availability ?? '',
       );
     }
 
     final cleanText = availability.trim();
 
-    if (_availabilityMap == null || !_availabilityMap!.containsKey(cleanText)) {
+    if (!_availabilityMap!.containsKey(cleanText)) {
       return AvailabilityStatus(
         isOpen: true,
         isUncertain: true,

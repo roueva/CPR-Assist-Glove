@@ -272,18 +272,31 @@ class LocationService {
     _positionSubscription?.cancel();
 
     final accuracy = isNavigating ? LocationAccuracy.high : LocationAccuracy.medium;
-    final filter = distanceFilter;  // ✅ ALWAYS use the passed parameter
 
-    print("📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy, ${filter}m filter");
+    print("📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy, ${isNavigating ? 'NO filter (time-based)' : '${distanceFilter}m filter'}");
 
-    _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: LocationSettings(
-        accuracy: accuracy,
-        distanceFilter: filter,  // ✅ Use actual parameter
-      ),
-    ).listen((position) {
-      onLocationUpdate(LatLng(position.latitude, position.longitude));
-    });
+    if (isNavigating) {
+      // ✅ NAVIGATION MODE: Use BEST accuracy with TIME-based updates
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,  // ✅ Best possible
+          distanceFilter: 0,  // ✅ Android interprets this as "use time intervals"
+          timeLimit: Duration(seconds: 60),
+        ),
+      ).listen((position) {
+        onLocationUpdate(LatLng(position.latitude, position.longitude));
+      });
+    } else {
+      // ✅ NORMAL MODE: Use distance filter to save battery
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: LocationSettings(
+          accuracy: accuracy,
+          distanceFilter: distanceFilter,
+        ),
+      ).listen((position) {
+        onLocationUpdate(LatLng(position.latitude, position.longitude));
+      });
+    }
   }
 
   /// Update accuracy when navigation mode changes

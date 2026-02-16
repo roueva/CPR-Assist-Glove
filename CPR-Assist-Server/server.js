@@ -75,9 +75,6 @@ const bulkUpdateLimiter = rateLimit({
     message: { error: 'Too many bulk updates, please try again later.' },
 });
 
-// Apply rate limiting
-app.use('/aed', generalLimiter);
-app.use('/aed/bulk-update', bulkUpdateLimiter);
 app.use('/auth', generalLimiter);
 
 
@@ -187,18 +184,22 @@ app.get('/health', async (req, res) => {
     }
 });
 
-app.get('/api/maps-key', (req, res) => {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
-  if (!apiKey) {
-    logger.error('🚨 Missing environment variable: GOOGLE_MAPS_API_KEY');
-    return res.status(500).json({ error: 'Server configuration error' });
-  }
-
-  // Send the key in the exact format your app expects
-  res.json({ apiKey: apiKey });
+const mapsKeyLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 100, // 100 requests per hour per IP
+    message: { error: 'Too many API key requests' }
 });
 
+app.get('/api/maps-key', mapsKeyLimiter, (req, res) => {
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey) {
+        logger.error('🚨 Missing environment variable: GOOGLE_MAPS_API_KEY');
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    res.json({ apiKey: apiKey });
+});
 
 // ✅ Initialize Routes
 const initializeRoutes = () => {
@@ -254,6 +255,63 @@ const startServer = async () => {
         await checkDatabase();
         await ensureAedTable();
 
+        const cron = require('node-cron');
+        const AEDService = require('./services/aedService');
+
+        // ✅ Run sync TWICE per week: Wednesday 3 AM and Sunday 3 AM
+        cron.schedule('0 3 * * 0,3', async () => {
+            const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`🕐 Starting scheduled ${dayName} AED sync...`);
+            console.log(`${'='.repeat(60)}\n`);
+
+            try {
+                const aedService = new AEDService(pool);
+
+                // STEP 1: Fetch from external API
+                const externalAEDs = await aedService.fetchFromExternalAPI();
+
+                if (externalAEDs.length === 0) {
+                    console.log(`⚠️ No AEDs fetched during ${dayName} sync`);
+                    return;
+                }
+
+                // STEP 2: Sync to database
+                const result = await aedService.syncAEDs(externalAEDs);
+                console.log(`✅ Database sync complete: ${result.inserted} inserted, ${result.updated} updated`);
+
+            } catch (error) {
+                console.error(`\n${'='.repeat(60)}`);
+                console.error(`❌ Scheduled ${dayName} sync failed:`, error.message);
+                console.error(`${'='.repeat(60)}\n`);
+            }
+        }, {
+            scheduled: true,
+            timezone: process.env.TZ || "Europe/Athens"
+        });
+
+        console.log('⏰ AED sync scheduled for Sundays and Wednesdays at 3:00 AM (Athens time)');
+
+        try {
+            const result = await pool.query('SELECT COUNT(*) as count FROM aed_locations');
+            const count = parseInt(result.rows[0].count);
+
+            if (count === 0) {
+                console.log('📦 Database empty - running initial AED sync...');
+                const aedService = new AEDService(pool);
+                const externalAEDs = await aedService.fetchFromExternalAPI();
+
+                if (externalAEDs.length > 0) {
+                    const syncResult = await aedService.syncAEDs(externalAEDs);
+                    console.log(`✅ Initial sync complete: ${syncResult.inserted} inserted`);
+                }
+            } else {
+                console.log(`✅ Database has ${count} AEDs - skipping initial sync`);
+            }
+        } catch (error) {
+            console.error('⚠️ Initial sync check failed:', error.message);
+        }
+
         server = app.listen(PORT, '0.0.0.0', () => {
             logger.info(`🌐 Server running on http://0.0.0.0:${PORT} | Environment: ${process.env.NODE_ENV || 'development'}`);
         });
@@ -262,74 +320,6 @@ const startServer = async () => {
         process.exit(1);
     }
 };
-
-
-const cron = require('node-cron');
-const AEDService = require('./services/aedService');
-
-// ✅ Run sync TWICE per week: Wednesday 3 AM and Sunday 3 AM
-cron.schedule('0 3 * * 0,3', async () => {
-    const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🕐 Starting scheduled ${dayName} AED sync...`);
-    console.log(`${'='.repeat(60)}\n`);
-    
-    try {
-        const aedService = new AEDService(pool);
-        
-        // STEP 1: Fetch from external API
-        const externalAEDs = await aedService.fetchFromExternalAPI();
-        
-        if (externalAEDs.length === 0) {
-            console.log(`⚠️ No AEDs fetched during ${dayName} sync`);
-            return;
-        }
-        
-        // STEP 2: Sync to database
-        const result = await aedService.syncAEDs(externalAEDs);
-        console.log(`✅ Database sync complete: ${result.inserted} inserted, ${result.updated} updated`);
-        
-        // STEP 3: Parse availability strings (NEW!)
-        await aedService.parseAvailabilityAfterSync(externalAEDs);
-        
-        console.log(`\n${'='.repeat(60)}`);
-        console.log(`✅ ${dayName} sync fully complete!`);
-        console.log(`${'='.repeat(60)}\n`);
-        
-    } catch (error) {
-        console.error(`\n${'='.repeat(60)}`);
-        console.error(`❌ Scheduled ${dayName} sync failed:`, error.message);
-        console.error(`${'='.repeat(60)}\n`);
-    }
-}, {
-    scheduled: true,
-    timezone: process.env.TZ || "Europe/Athens"
-});
-
-console.log('⏰ AED sync scheduled for Sundays and Wednesdays at 3:00 AM (Athens time)');
-
-// ✅ Run sync on startup if database is empty
-(async () => {
-    try {
-        const result = await pool.query('SELECT COUNT(*) as count FROM aed_locations');
-        const count = parseInt(result.rows[0].count);
-        
-        if (count === 0) {
-            console.log('📦 Database empty - running initial AED sync...');
-            const aedService = new AEDService(pool);
-            const externalAEDs = await aedService.fetchFromExternalAPI();
-            
-            if (externalAEDs.length > 0) {
-                const syncResult = await aedService.syncAEDs(externalAEDs);
-                console.log(`✅ Initial sync complete: ${syncResult.inserted} inserted`);
-            }
-        } else {
-            console.log(`✅ Database has ${count} AEDs - skipping initial sync`);
-        }
-    } catch (error) {
-        console.error('⚠️ Initial sync check failed:', error.message);
-    }
-})();
 
 // ✅ Graceful Shutdown
 const shutdown = async (signal) => {
