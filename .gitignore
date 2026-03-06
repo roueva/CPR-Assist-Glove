@@ -9,3 +9,4 @@ build/
 *.map.json
 *.symbols
 flutter_assets/
+*.hprof
