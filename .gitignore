@@ -7,6 +7,11 @@
 .DS_Store
 Thumbs.db
 
+
+CPR-Assist-App/cpr_assist/android/app/.cxx/
+CPR-Assist-App/cpr_assist/.flutter-plugins
+CPR-Assist-App/cpr_assist/.flutter-plugins-dependencies
+
 # Unused Flutter platform targets
 CPR-Assist-App/cpr_assist/linux/
 CPR-Assist-App/cpr_assist/macos/
@@ -51,4 +56,3 @@ CPR-Assist-Server/data/
 CPR-Assist-Server/local_db_backup.sql
 CPR-Assist-Server/aed_locations.xlsx
 CPR-Assist-Server/aed_locations_python.txt
-CPR-Assist-Server/package-lock.json

@@ -13,6 +13,7 @@ data/aed_greece_current.json
 data/parsed_availability_map.json
 data/
 
+
 # Python cache
 scripts/__pycache__/
 *.pyc
