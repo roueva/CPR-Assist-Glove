@@ -1,12 +1,54 @@
+# IDE
+.idea/
+*.iml
+.vscode/
 
-# Ignore build files
+# OS
+.DS_Store
+Thumbs.db
 
-.dart_tool/
-build/
+# Unused Flutter platform targets
+CPR-Assist-App/cpr_assist/linux/
+CPR-Assist-App/cpr_assist/macos/
+CPR-Assist-App/cpr_assist/windows/
+CPR-Assist-App/cpr_assist/web/
+
+# Unused font files
+CPR-Assist-App/cpr_assist/assets/fonts/Inter/static/
+CPR-Assist-App/cpr_assist/assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Inter/OFL.txt
+CPR-Assist-App/cpr_assist/assets/fonts/Inter/README.txt
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Black.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-BlackItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Bold.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-BoldItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-ExtraBold.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-ExtraBoldItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-ExtraLight.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-ExtraLightItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Italic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Light.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-LightItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Medium.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-MediumItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-SemiBoldItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-Thin.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/Poppins-ThinItalic.ttf
+CPR-Assist-App/cpr_assist/assets/fonts/Poppins/OFL.txt
+CPR-Assist-App/cpr_assist/assets/icons/AEDs_previous.png
+
+# Build artifacts
 *.bin
 *.apk
-*.dill
-*.map.json
-*.symbols
-flutter_assets/
 *.hprof
+*.log
+build/
+.dart_tool/
+
+# Sensitive / generated data
+CPR-Assist-Server/data/
+CPR-Assist-Server/local_db_backup.sql
+CPR-Assist-Server/aed_locations.xlsx
+CPR-Assist-Server/aed_locations_python.txt
+CPR-Assist-Server/package-lock.json

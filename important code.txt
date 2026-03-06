@@ -1,2 +1,0 @@
-#Sync aeds with API
-curl.exe -X POST https://cpr-assist-app.up.railway.app/aed/sync
