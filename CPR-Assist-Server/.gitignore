@@ -20,4 +20,3 @@ scripts/__pycache__/
 # Sensitive
 bootstrap-request.json
 local_db_backup.sql
-package-lock.json
