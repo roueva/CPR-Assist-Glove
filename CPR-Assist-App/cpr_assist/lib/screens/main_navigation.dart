@@ -1,49 +1,40 @@
-import 'package:cpr_assist/screens/universal_header.dart';
+import 'package:cpr_assist/widgets/universal_header.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/app_providers.dart';
 import '../utils/safe_fonts.dart';
+import 'guide_screen.dart';
 import 'home_screen.dart';
 import 'live_cpr_screen.dart';
 import 'login_screen.dart';
-import 'training_screen.dart';
 import '../services/decrypted_data.dart';
 
-class MainNavigationScreen extends StatefulWidget {
-  final DecryptedData decryptedDataHandler;
-  final bool isLoggedIn;
-
-  const MainNavigationScreen({
-    super.key,
-    required this.decryptedDataHandler,
-    required this.isLoggedIn,
-  });
+class MainNavigationScreen extends ConsumerStatefulWidget {
+  const MainNavigationScreen({super.key});
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  ConsumerState<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   late PageController _pageController;
   int _currentIndex = 0;
 
   // Screens (lazy init for Training)
   late final HomeScreen _homeScreen;
   late final LiveCPRScreen _liveScreen;
-  TrainingScreen? _trainingScreen;
+  late final DecryptedData _decryptedDataHandler;
 
-  //Battery status
-  int get gloveBatteryPercentage => widget.decryptedDataHandler.batteryPercentageNotifier.value;
-  bool get isGloveCharging => widget.decryptedDataHandler.isChargingNotifier.value;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _currentIndex);
+    _decryptedDataHandler = ref.read(decryptedDataProvider);
 
     _homeScreen = HomeScreen(
-      decryptedDataHandler: widget.decryptedDataHandler,
-      isLoggedIn: widget.isLoggedIn,
+      decryptedDataHandler: _decryptedDataHandler,
       onTabTapped: _onTabTapped,
     );
 
@@ -52,18 +43,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void _onTabTapped(int index) async {
     if (index == 2) {
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+      // ✅ Read current auth state from provider
+      final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
 
       if (!isLoggedIn) {
         final loggedIn = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => LoginScreen(
-              dataStream: widget.decryptedDataHandler.dataStream,
-              decryptedDataHandler: widget.decryptedDataHandler,
+              dataStream: _decryptedDataHandler.dataStream,
+              decryptedDataHandler: _decryptedDataHandler,
               onLoginSuccess: () {
-                _onTabTapped(2); // 👈 Automatically switch to Training after login
+                _onTabTapped(2); // 👈 Automatically switch to Guide after login
               },
             ),
           ),
@@ -71,12 +62,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
         if (loggedIn != true) return; // ⛔️ Stop here if user canceled login
       }
-      // Lazy load TrainingScreen
-      _trainingScreen ??= TrainingScreen(
-        dataStream: widget.decryptedDataHandler.dataStream,
-        decryptedDataHandler: widget.decryptedDataHandler,
-        onTabTapped: _onTabTapped,
-      );
     }
     setState(() => _currentIndex = index);
     _pageController.jumpToPage(index);
@@ -91,19 +76,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ✅ Replace the entire AppBar with the new UniversalHeader
       appBar: UniversalHeader.forMainScreens(
-        decryptedDataHandler: widget.decryptedDataHandler,
+        decryptedDataHandler: _decryptedDataHandler,
         currentIndex: _currentIndex,
       ),
       body: PageView(
         controller: _pageController,
         physics: const NeverScrollableScrollPhysics(),
-        children: [
-          _homeScreen,
-          _liveScreen,
-          _trainingScreen ?? const SizedBox(), // Lazy-loaded, safe fallback
-        ],
+// AFTER line 75 (in the PageView children), REPLACE with:
+
+          children: [
+            _homeScreen,
+            _liveScreen,
+            const GuideScreen(),
+          ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -116,7 +102,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           fontSize: 14,
         ),
         unselectedLabelStyle: SafeFonts.poppins(
-          fontWeight: FontWeight.w500, // Medium weight
+          fontWeight: FontWeight.w500,
           fontSize: 14,
         ),
         items: [
@@ -130,7 +116,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 BlendMode.srcIn,
               ),
             ),
-            label: 'Locations',
+            label: 'AED Map', // ✅ Changed to match thesis
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
@@ -142,7 +128,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 BlendMode.srcIn,
               ),
             ),
-            label: 'Live',
+            label: 'Live CPR', // ✅ Changed to match thesis
           ),
           BottomNavigationBarItem(
             icon: SvgPicture.asset(
@@ -154,7 +140,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 BlendMode.srcIn,
               ),
             ),
-            label: 'Training',
+            label: 'Guide', // ✅ Changed to match thesis
           ),
         ],
       ),

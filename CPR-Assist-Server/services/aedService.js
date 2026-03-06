@@ -202,6 +202,12 @@ class AEDService {
 
             await client.query('COMMIT');
 
+            await client.query(
+                `INSERT INTO aed_sync_log (synced_at, aeds_checked, aeds_inserted, aeds_updated)
+     VALUES (NOW(), $1, $2, $3)`,
+                [aeds.length, totalInserted, totalUpdated]
+            );
+
             console.log(`✅ Sync complete:`);
             console.log(`   → ${totalInserted} new AEDs inserted`);
             console.log(`   → ${totalUpdated} existing AEDs updated`);

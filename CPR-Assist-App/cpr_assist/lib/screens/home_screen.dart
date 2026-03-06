@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../main.dart';
+import '../providers/app_providers.dart';
 import '../services/decrypted_data.dart';
 import '../services/aed_map/aed_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../utils/safe_fonts.dart';
+import '../widgets/simulation_112_dialog.dart';
 
 
 class HomeScreen extends ConsumerStatefulWidget {
   final DecryptedData decryptedDataHandler;
-  final bool isLoggedIn;
   final Function(int) onTabTapped;
 
   const HomeScreen({
     super.key,
     required this.decryptedDataHandler,
-    required this.isLoggedIn,
     required this.onTabTapped,
   });
 
@@ -53,7 +52,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutomaticKeepAlive
     return Column(
       children: [
         _buildEmergencyHeader(),     // 🔴 Call 112 on top
-        Expanded(child: AEDMapWidget()), // 🗺 Map fills remaining space
+        const Expanded(child: AEDMapWidget()), // 🗺 Map fills remaining space
       ],
     );
   }
@@ -62,21 +61,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutomaticKeepAlive
     return Column(
       children: [
         _buildEmergencyHeader(isLandscape: true),
-        Expanded(child: AEDMapWidget()),  // 🗺 Fill remaining space
+        const Expanded(child: AEDMapWidget()),  // 🗺 Fill remaining space
       ],
     );
   }
 
-  Widget _buildEmergencyHeader({bool isVertical = false, bool isLandscape = false}) {
+  Widget _buildEmergencyHeader({bool isLandscape = false}) {
+    final currentMode = ref.watch(appModeProvider);  // ✅ ADD
+    final isTrainingMode = currentMode == AppMode.training;
+
     return Container(
-      padding: isVertical
-          ? const EdgeInsets.symmetric(horizontal: 10)
-          : isLandscape
-          ? const EdgeInsets.symmetric(vertical: 10)
-          : const EdgeInsets.symmetric(vertical: 22),
+      height: isLandscape ? 50 : 60,
       color: const Color(0xFFB53B3B),
-      child: GestureDetector(
-        onTap: _makeEmergencyCall,
+      child: InkWell(
+        onTap: isTrainingMode ? _showSimulation112Dialog : _makeEmergencyCall,  // ✅ CHANGED
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -88,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutomaticKeepAlive
             ),
             const SizedBox(width: 8),
             Text(
-              "Call 112",
+              isTrainingMode ? "Simulation 112 Call" : "Call 112",  // ✅ CHANGED
               style: SafeFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -98,6 +96,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with AutomaticKeepAlive
           ],
         ),
       ),
+    );
+  }
+
+// ✅ ADD NEW METHOD
+  void _showSimulation112Dialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const Simulation112Dialog(),
     );
   }
 }

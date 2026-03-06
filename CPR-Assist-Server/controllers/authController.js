@@ -67,7 +67,7 @@ class AuthController {
             const token = jwt.sign(
                 { id: user.id, username: user.username }, // Include user ID
                 process.env.JWT_SECRET,
-                { expiresIn: '5y' }
+                { expiresIn: '2y' }
             );
 
             // Send back the token and user ID
@@ -83,33 +83,50 @@ class AuthController {
     }
 
     // Refresh token
-    async refreshToken(req, res, next) {
+    async refreshToken(req, res) {
         try {
-            const { token } = req.body;
+            // Accept token from body OR Authorization header
+            const authHeader = req.header('Authorization');
+            const bearerToken =
+                authHeader && authHeader.startsWith('Bearer ')
+                    ? authHeader.split(' ')[1]
+                    : null;
 
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const token = req.body?.token || bearerToken;
+
+            if (!token) {
+                return res.status(400).json({ error: 'Token is required' });
+            }
+
+            // Allow refreshing even if the access token is expired
+            const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+                ignoreExpiration: true,
+            });
 
             const userResult = await this.pool.query(
-                'SELECT * FROM users WHERE username = $1 AND is_active = true',
-                [decoded.username]
+                'SELECT id, username FROM users WHERE id = $1 AND is_active = true',
+                [decoded.id]
             );
 
             if (userResult.rows.length === 0) {
                 return res.status(401).json({ error: 'User not found or inactive' });
             }
 
-            const newToken = jwt.sign(
-                { id: decoded.id, username: decoded.username }, // Include user ID
-                process.env.JWT_SECRET,
-                { expiresIn: '5y' }
-            );
-            res.json({ token: newToken, user_id: decoded.id }); // Return both
+            const user = userResult.rows[0];
 
+            const newToken = jwt.sign(
+                { id: user.id, username: user.username },
+                process.env.JWT_SECRET,
+                { expiresIn: '2y' }
+            );
+
+            return res.json({ token: newToken, user_id: user.id });
         } catch (error) {
             console.error('Token refresh error:', error.message);
-            res.status(401).json({ error: 'Invalid token' });
+            return res.status(401).json({ error: 'Invalid token' });
         }
     }
+
 
     // Request password reset
     async requestPasswordReset(req, res, next) {

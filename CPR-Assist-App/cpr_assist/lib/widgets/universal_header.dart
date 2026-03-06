@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
+import '../providers/app_providers.dart';
 import '../services/decrypted_data.dart';
 import '../utils/safe_fonts.dart';
-import '../widgets/account_menu.dart';
-import '../widgets/battery_widget.dart';
-import '../widgets/ble_status_indicator.dart';
-import '../main.dart';
+import 'account_menu.dart';
+import 'battery_widget.dart';
+import 'ble_status_indicator.dart';
 
 class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
   final DecryptedData? decryptedDataHandler;

@@ -23,11 +23,11 @@ module.exports = (pool) => {
             // ✅ Add metadata headers
             if (result.rows.length > 0) {
                 // Find most recent update
-                const mostRecentUpdate = new Date(
-                    Math.max(...result.rows.map(row => new Date(row.last_updated)))
+                const syncResult = await pool.query(
+                    'SELECT synced_at FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
                 );
-                
-                res.set('X-Data-Last-Updated', mostRecentUpdate.toISOString());
+                const lastSync = syncResult.rows[0]?.synced_at ?? new Date();
+                res.set('X-Data-Last-Updated', new Date(lastSync).toISOString());
                 res.set('X-Total-AEDs', result.rows.length.toString());
                 res.set('X-Data-Source', 'database');
             }
@@ -70,6 +70,7 @@ router.post('/sync', async (req, res) => {
         const result = await aedService.syncAEDs(externalAEDs);
         
         res.json({
+            success: true,
             inserted: result.inserted,
             updated: result.updated,
             total: result.total,
@@ -126,11 +127,15 @@ router.get('/last-sync', async (req, res) => {
     // ✅ One-time bootstrap cache endpoint (protected)
 router.post('/bootstrap-cache', async (req, res) => {
     try {
-        const BOOTSTRAP_SECRET = process.env.BOOTSTRAP_SECRET || 'change-me-in-production';
-        
-        // Simple authentication
+        const BOOTSTRAP_SECRET = process.env.BOOTSTRAP_SECRET;
+
+        if (!BOOTSTRAP_SECRET) {
+            console.error('🚨 BOOTSTRAP_SECRET not configured');
+            return res.status(500).json({ error: 'Bootstrap endpoint not configured on server' });
+        }
+
         const providedSecret = req.headers['x-bootstrap-secret'] || req.body.secret;
-        
+
         if (providedSecret !== BOOTSTRAP_SECRET) {
             console.warn('⚠️ Bootstrap attempt with invalid secret');
             return res.status(401).json({ error: 'Unauthorized - Invalid secret' });
@@ -199,7 +204,7 @@ router.get('/availability', async (req, res) => {
         let lastSyncTime;
         try {
             const result = await pool.query(
-                'SELECT MAX(last_updated) as last_sync FROM aed_locations'
+                'SELECT synced_at as last_sync FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
             );
             lastSyncTime = result.rows[0]?.last_sync;
         } catch (dbError) {

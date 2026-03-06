@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/network_service_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/app_providers.dart';
 import 'registration_screen.dart';
 import '../services/decrypted_data.dart';
 import '../widgets/account_menu.dart';
@@ -50,21 +49,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
 
       if (response['token'] != null && response['user_id'] != null) {
-        await networkService.saveToken(response['token']);
-        await networkService.saveUserId(response['user_id']);
+        final username = _usernameController.text.trim();
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('isLoggedIn', true);
-        await prefs.setString('username', _usernameController.text.trim());
+        // ✅ Use auth provider as single source of truth
+        final authNotifier = ref.read(authStateProvider.notifier);
+        await authNotifier.login(
+          response['token'],
+          response['user_id'],
+          username, // ✅ Pass username here
+        );
 
         print('✅ User logged in successfully.');
 
-        // ✅ Return to previous screen or redirect to HomeScreen
+        // ✅ Call success callback if provided
         if (widget.onLoginSuccess != null) {
           widget.onLoginSuccess!();
         }
 
-        Navigator.pop(context, true);
+        // ✅ Return to previous screen
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
         return;
       } else {
         setState(() {

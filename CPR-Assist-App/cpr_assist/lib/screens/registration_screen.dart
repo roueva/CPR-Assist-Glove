@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/network_service_provider.dart';
+import '../providers/app_providers.dart';
 import '../services/decrypted_data.dart';
 import 'login_screen.dart';
 

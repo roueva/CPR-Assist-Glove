@@ -21,11 +21,8 @@ class NavigationController {
   LatLng? _currentUserLocation;
   LatLng? _previousUserLocation;
   DateTime? _lastLocationUpdateTime;
-  double? _currentSpeed; // meters per second
   double? _currentBearing; // direction of travel (different from compass heading)
   Timer? _predictionTimer;
-  bool _usePrediction = true; // Can be toggled
-  DateTime? _lastCameraUpdateTime;
   bool _isRecenterInProgress = false;
 
   static const int _programmaticMoveDurationMs = 500;
@@ -102,126 +99,19 @@ class NavigationController {
       final timeDelta = now.difference(_lastLocationUpdateTime!).inMilliseconds / 1000.0;
 
       if (timeDelta > 0 && timeDelta < 5) {
-        final distance = _calculateDistance(_previousUserLocation!, location);
-        _currentSpeed = distance / timeDelta;
+        _calculateDistance(_previousUserLocation!, location);
         _currentBearing = _calculateBearingBetweenPoints(_previousUserLocation!, location);
       }
     }
 
     _previousUserLocation = location;
     _lastLocationUpdateTime = now;
-  }
-
-  /// Update location with prediction enabled
-  void updateUserLocationWithPrediction(LatLng location) {
-    final now = DateTime.now();
-
-    // Calculate speed and bearing from previous location
-    if (_previousUserLocation != null && _lastLocationUpdateTime != null) {
-      final timeDelta = now.difference(_lastLocationUpdateTime!).inMilliseconds / 1000.0; // seconds
-
-      if (timeDelta > 0 && timeDelta < 5) { // Ignore if too long (GPS was off)
-        final distance = _calculateDistance(_previousUserLocation!, location);
-        _currentSpeed = distance / timeDelta; // meters per second
-        _currentBearing = _calculateBearingBetweenPoints(_previousUserLocation!, location);
-
-        // Only use prediction if moving reasonably fast (> 0.5 m/s = 1.8 km/h)
-        _usePrediction = _currentSpeed! > 0.5;
-
-        if (_usePrediction) {
-          print("📊 Speed: ${(_currentSpeed! * 3.6).toStringAsFixed(1)} km/h, Bearing: ${_currentBearing!.toStringAsFixed(1)}°");
-        }
-      }
-    }
-
-    // Store for next calculation
-    _previousUserLocation = location;
-    _lastLocationUpdateTime = now;
-    _currentUserLocation = location;
-
-    // Update camera with actual location (prediction happens in timer)
-    _updateCameraToLocation(location);
-
-    // Start prediction timer if not already running
-    if (_usePrediction && _predictionTimer == null && _navigationState == NavigationState.compassTracking) {
-      _startPredictionUpdates();
-    }
-  }
-
-  /// Start periodic prediction updates (runs between GPS updates)
-  void _startPredictionUpdates() {
-    return;
-    _predictionTimer?.cancel();
-
-    // Update prediction every 100ms for smooth movement
-    _predictionTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (_navigationState != NavigationState.compassTracking || !_usePrediction) {
-        _stopPredictionUpdates();
-        return;
-      }
-
-      if (_currentSpeed != null &&
-          _currentSpeed! > 1.0 &&
-          _currentBearing != null &&
-          _currentUserLocation != null &&
-          _lastLocationUpdateTime != null) {
-
-        // Calculate how long since last GPS update
-        final timeSinceLastGPS = DateTime.now().difference(_lastLocationUpdateTime!).inMilliseconds / 1000.0;
-
-        // Don't predict more than 2 seconds into the future (GPS should update by then)
-        if (timeSinceLastGPS < 2.0) {
-          final predictedLocation = _predictNextPosition(
-            _currentUserLocation!,
-            _currentSpeed!,
-            _currentBearing!,
-            timeSinceLastGPS,
-          );
-
-          // Update camera to predicted position (smooth interpolation)
-          _updateCameraToLocation(predictedLocation, isPrediction: true);
-        }
-      }
-    });
   }
 
   /// Stop prediction updates
   void _stopPredictionUpdates() {
     _predictionTimer?.cancel();
     _predictionTimer = null;
-  }
-
-  /// Predict next position based on current speed and bearing
-  LatLng _predictNextPosition(LatLng currentLocation, double speedMps, double bearing, double timeDelta) {
-    // Distance to travel = speed * time
-    final distanceMeters = speedMps * timeDelta;
-
-    // Convert bearing to radians
-    final bearingRad = bearing * (3.14159265359 / 180.0);
-
-    // Earth's radius in meters
-    const earthRadius = 6371000.0;
-
-    // Current position in radians
-    final lat1 = currentLocation.latitude * (3.14159265359 / 180.0);
-    final lon1 = currentLocation.longitude * (3.14159265359 / 180.0);
-
-    // Calculate new position
-    final lat2 = asin(
-        sin(lat1) * cos(distanceMeters / earthRadius) +
-            cos(lat1) * sin(distanceMeters / earthRadius) * cos(bearingRad)
-    );
-
-    final lon2 = lon1 + atan2(
-        sin(bearingRad) * sin(distanceMeters / earthRadius) * cos(lat1),
-        cos(distanceMeters / earthRadius) - sin(lat1) * sin(lat2)
-    );
-
-    // Convert back to degrees
-    return LatLng(
-      lat2 * (180.0 / 3.14159265359),
-      lon2 * (180.0 / 3.14159265359),
-    );
   }
 
   /// Update camera to a location (actual or predicted)
@@ -403,14 +293,14 @@ class NavigationController {
 
       final now = DateTime.now();
       if (_lastCompassUpdate != null &&
-          now.difference(_lastCompassUpdate!).inMilliseconds < 100) {
+          now.difference(_lastCompassUpdate!).inMilliseconds < 150) {
         return;
       }
       _lastCompassUpdate = now;
 
       if (_currentHeading != null) {
         final bearingDiff = (event.heading! - _currentHeading!).abs();
-        if (bearingDiff < 1.0) return;
+        if (bearingDiff < 2.0) return;
 
         final interpolatedBearing = _interpolateBearing(_currentHeading!, event.heading!, 0.3);
         _currentHeading = interpolatedBearing;
@@ -444,16 +334,11 @@ class NavigationController {
   /// Update camera position with compass heading
   void _updateCameraWithCompass(double heading) {
     if (_mapController == null || _currentUserLocation == null) return;
-
-    // Don't override recent user touches
-    if (_wasRecentUserTouch()) {
-      print("🧭 Compass move skipped - user recently touched screen");
-      return;
-    }
+    if (_wasRecentUserTouch()) return;
 
     _lastProgrammaticMoveTime = DateTime.now();
 
-    _mapController!.animateCamera(
+    _mapController!.moveCamera(         // ← was animateCamera with duration 300ms
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: _currentUserLocation!,
@@ -462,7 +347,6 @@ class NavigationController {
           bearing: heading,
         ),
       ),
-      duration: const Duration(milliseconds: 300),  // ✅ Smooth compass
     );
   }
 
@@ -582,21 +466,21 @@ class NavigationController {
       ),
       duration: const Duration(milliseconds: 600),
     ).then((_) {
-      print("🎯 Recenter animation completed - resuming compass tracking");
-
+      print("🎯 Recenter completed");
       _lastProgrammaticMoveTime = DateTime.now();
       _lastUserTouchTime = null;
-      _isRecenterInProgress = false;  // ✅ ADD THIS
+      _isRecenterInProgress = false;
 
-      // ✅ Wait a bit longer before accepting user input
       Future.delayed(const Duration(milliseconds: 300), () {
         _lastProgrammaticMoveTime = DateTime.now();
       });
 
       _notifyStateChanged();
     }).catchError((error) {
-      print("⚠️ Recenter animation failed: $error");
-      _isRecenterInProgress = false;  // ✅ ADD THIS
+      print("⚠️ Recenter failed: $error");
+      _isRecenterInProgress = false; // ✅ Always reset
+      _showRecenterButton = false; // ✅ Hide button on error
+      _onRecenterButtonVisibilityChanged?.call(false);
     });
   }
 
@@ -615,7 +499,6 @@ class NavigationController {
     // ✅ ADD THIS: Clear prediction state
     _previousUserLocation = null;
     _lastLocationUpdateTime = null;
-    _currentSpeed = null;
     _currentBearing = null;
   }
 
@@ -632,9 +515,7 @@ class NavigationController {
 
     final now = DateTime.now();
     final timeSinceTouch = now.difference(_lastUserTouchTime!).inMilliseconds;
-
-    // ✅ INCREASED: 2 seconds to match Google Maps behavior
-    return timeSinceTouch < 2000;
+    return timeSinceTouch < 1500;
   }
 
   /// Check if this is a recent programmatic camera move

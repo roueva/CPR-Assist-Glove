@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../main.dart';
+import '../providers/app_providers.dart';
+import '../services/network_service.dart';
+import '../services/training/training_session_service.dart';
 import '../widgets/depth_bar.dart';
+import '../widgets/grade_dialog.dart';
 import '../widgets/rotating_arrow.dart';
 
 class LiveCPRScreen extends ConsumerStatefulWidget {
@@ -28,6 +31,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKee
   double? _temperaturePatient;
   double? _heartRateUser;
   double? _temperatureUser;
+  DateTime? _sessionStartTime;  // ✅ ADD THIS
 
   @override
   bool get wantKeepAlive => true;
@@ -36,44 +40,75 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKee
   Widget build(BuildContext context) {
     super.build(context);
     final bleConnection = ref.watch(bleConnectionProvider);
+    final currentMode = ref.watch(appModeProvider);  // ✅ ADD THIS
 
     return Container(
       color: const Color(0xFFEDF4F9),
-      child: StreamBuilder<Map<String, dynamic>>(
-        stream: bleConnection.dataStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasData && snapshot.data != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _updateDisplayValues(snapshot.data!);
-              }
-            });
-          }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                PatientVitalsCard(
-              heartRate: _heartRatePatient,
-              temperature: _temperaturePatient,
+      child: Column(  // ✅ CHANGED from direct StreamBuilder
+        children: [
+          // ✅ ADD TRAINING MODE BADGE
+          if (currentMode == AppMode.training)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.green.shade100,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.school, size: 16, color: Colors.green.shade700),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Training Mode - Performance will be graded',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ],
+              ),
             ),
-                const SizedBox(height: 16),
-                CprMetricsCard(
-                  depth: _displayDepth,
-                  frequency: _displayFrequency,
-                  cprTime: _displaySessionDuration,
-                  compressionCount: _displayCompressionCount,
-                  isSessionActive: _isSessionActive,
-                ),
-                const SizedBox(height: 16),
-                 UserVitalsCard(
-                  heartRate: _heartRateUser,
-                  temperature: _temperatureUser,
-                ),
-              ],
+
+          // ✅ WRAP EXISTING StreamBuilder IN EXPANDED
+          Expanded(
+            child: StreamBuilder<Map<String, dynamic>>(
+              stream: bleConnection.dataStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      _updateDisplayValues(snapshot.data!);
+                    }
+                  });
+                }
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      PatientVitalsCard(
+                        heartRate: _heartRatePatient,
+                        temperature: _temperaturePatient,
+                      ),
+                      const SizedBox(height: 16),
+                      CprMetricsCard(
+                        depth: _displayDepth,
+                        frequency: _displayFrequency,
+                        cprTime: _displaySessionDuration,
+                        compressionCount: _displayCompressionCount,
+                        isSessionActive: _isSessionActive,
+                      ),
+                      const SizedBox(height: 16),
+                      UserVitalsCard(
+                        heartRate: _heartRateUser,
+                        temperature: _temperatureUser,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -117,8 +152,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKee
         _displayFrequency = 0.0;
         _displayCompressionCount = 0;
         _displaySessionDuration = Duration.zero;
+        _sessionStartTime = DateTime.now();  // ✅ ADD THIS
       });
-      _hasHandledEndPing = false; // Reset here
+      _hasHandledEndPing = false;
       print('🟢 UI: Session started - all displays reset');
       return;
     }
@@ -131,6 +167,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKee
       });
       print('🔴 UI: Session ended - depth/frequency reset, count/time preserved');
       _hasHandledEndPing = true;
+
+      // ✅ ADD SESSION SAVING LOGIC
+      _handleSessionEnd(data);
+
       return;
     }
 
@@ -161,7 +201,81 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen> with AutomaticKee
       });
     }
   }
+
+  Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
+    final currentMode = ref.read(appModeProvider);
+    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+
+    // Determine if we should save
+    final shouldSave = (currentMode == AppMode.training) ||
+        (currentMode == AppMode.emergency && isLoggedIn);
+
+    if (!shouldSave) {
+      print("ℹ️ Session not saved (Emergency Mode + Not Logged In)");
+      return;
+    }
+
+    // Build session data
+    final sessionData = TrainingSessionData(
+      totalCompressions: data['totalCompressions'] ?? _displayCompressionCount,
+      correctDepth: data['correctDepth'] ?? 0,
+      correctFrequency: data['correctFrequency'] ?? 0,
+      correctRecoil: data['correctRecoil'] ?? 0,
+      depthRateCombo: data['depthRateCombo'] ?? 0,
+      averageDepth: data['averageDepth'] ?? _displayDepth,
+      averageFrequency: data['averageFrequency'] ?? _displayFrequency,
+      sessionDurationSeconds: _displaySessionDuration.inSeconds,
+      sessionStart: _sessionStartTime ?? DateTime.now(),
+      patientHeartRate: _heartRatePatient?.toInt(),
+      patientTemperature: _temperaturePatient,
+      userHeartRate: _heartRateUser?.toInt(),
+      userTemperature: _temperatureUser,
+    );
+
+    // Save session
+    final trainingService = TrainingSessionService(NetworkService());
+    final saved = await trainingService.saveSession(sessionData);
+
+    if (saved) {
+      if (currentMode == AppMode.training) {
+        print("✅ Training session saved");
+      } else {
+        print("✅ Emergency session saved silently");
+      }
+
+      // ✅ Show grade dialog ONLY in Training Mode
+      if (currentMode == AppMode.training && mounted) {
+        final grade = trainingService.calculateGrade(sessionData);
+        _showGradeDialog(sessionData, grade);
+      }
+    } else {
+      print("❌ Failed to save session");
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save session. Please check your connection.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showGradeDialog(TrainingSessionData sessionData, double grade) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,  // User must tap "Done" to close
+      builder: (context) => GradeDialog(
+        sessionData: sessionData,
+        totalGrade: grade,
+      ),
+    );
+  }
 }
+
+
 
 String _formatDuration(Duration d) {
   final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -184,9 +298,9 @@ class PatientVitalsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           "Patient Vitals",
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -222,9 +336,9 @@ class PatientVitalsCard extends StatelessWidget {
                         color: Color(0xFF4D4A4A),
                       ),
                     ),
-                    Text(
+                    const Text(
                       "HEART RATE",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
@@ -248,9 +362,9 @@ class PatientVitalsCard extends StatelessWidget {
                         color: Color(0xFF4D4A4A),
                       ),
                     ),
-                    Text(
+                    const Text(
                       "TEMPERATURE",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
@@ -468,9 +582,9 @@ class UserVitalsCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Title outside the card
-        Text(
+        const Text(
           "Your Vitals",
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -508,9 +622,9 @@ class UserVitalsCard extends StatelessWidget {
                         color: Color(0xFF4D4A4A),
                       ),
                     ),
-                    Text(
+                    const Text(
                       "HEART RATE",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
@@ -534,9 +648,9 @@ class UserVitalsCard extends StatelessWidget {
                         color: Color(0xFF4D4A4A),
                       ),
                     ),
-                    Text(
+                    const Text(
                       "TEMPERATURE",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 12,

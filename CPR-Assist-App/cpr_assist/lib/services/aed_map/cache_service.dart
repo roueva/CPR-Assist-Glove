@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../../models/aed_models.dart';
 import '../../utils/app_constants.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'location_service.dart';
@@ -25,10 +24,13 @@ class CacheService {
   static final Map<String, DateTime> _routeCacheTimestamps = {};
   static bool _isLoadingDistanceCache = false;
   static bool _isSavingDistanceCache = false;
-  static const int _maxRouteCache = 200;
-  static const int _maxDistanceCache = 500;
+  static const int _maxRouteCache = 600;
+  static const int _maxDistanceCache = 8000;
   static Timer? _saveTimer;
   static Duration getCacheTTL() => _cacheTtl;
+  static final Map<String, List<String>> _routesSpatialIndex = {};
+  static const String _cacheMetadataKey = 'cache_metadata';
+  static Timer? _routeSaveTimer;
 
   /// Get the age of the AED cache
   static Future<Duration> getCacheAge() async {
@@ -48,6 +50,51 @@ class CacheService {
     }
   }
 
+  /// Get cache metadata including last update timestamps
+  static Future<Map<String, dynamic>?> getCacheMetadata() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final metadataJson = prefs.getString(_cacheMetadataKey);
+
+      if (metadataJson != null) {
+        return jsonDecode(metadataJson) as Map<String, dynamic>;
+      }
+
+      // If no metadata exists, try to infer from AED timestamp
+      final aedTimestamp = prefs.getInt(_aedTimestampKey);
+      if (aedTimestamp != null) {
+        return {
+          'aed_last_updated': aedTimestamp,
+        };
+      }
+    } catch (e) {
+      print("⚠️ Error getting cache metadata: $e");
+    }
+    return null;
+  }
+
+  /// Call this from saveAEDs() method
+  static Future<void> _updateCacheMetadata({
+    int? aedLastUpdated,
+    int? routeLastUpdated,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = await getCacheMetadata() ?? {};
+
+      if (aedLastUpdated != null) {
+        existing['aed_last_updated'] = aedLastUpdated;
+      }
+      if (routeLastUpdated != null) {
+        existing['route_last_updated'] = routeLastUpdated;
+      }
+
+      await prefs.setString(_cacheMetadataKey, jsonEncode(existing));
+    } catch (e) {
+      print("⚠️ Error updating cache metadata: $e");
+    }
+  }
+
 // Single unified distance cache
   static final Map<String, double> _distanceCache = {};
 
@@ -63,9 +110,9 @@ class CacheService {
       _evictOldDistanceEntries();
     }
 
-    // Debounced save to avoid frequent I/O
+    // ✅ SHORTER debounce for safety (500ms instead of 2s)
     _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 2), () {
+    _saveTimer = Timer(const Duration(milliseconds: 500), () {
       saveDistanceCache();
     });
   }
@@ -126,8 +173,8 @@ class CacheService {
 
   // === ROUTE MANAGEMENT (moved from RouteService) ===
   static String generateLocationKey(LatLng origin, LatLng destination, String mode) {
-    return "${origin.latitude.toStringAsFixed(4)}_${origin.longitude.toStringAsFixed(4)}_"
-        "${destination.latitude.toStringAsFixed(4)}_${destination.longitude.toStringAsFixed(4)}_$mode";
+    return "${origin.latitude.toStringAsFixed(4)}|${origin.longitude.toStringAsFixed(4)}|"
+        "${destination.latitude.toStringAsFixed(4)}|${destination.longitude.toStringAsFixed(4)}|$mode";
   }
 
   static bool isRouteCacheValid(String key) {
@@ -154,33 +201,30 @@ class CacheService {
     final exactMatch = getCachedRoute(origin, destination, mode);
     if (exactMatch != null) return exactMatch;
 
-    // Search for nearby cached routes
-    for (final entry in _memoryRouteCache.entries) {
-      final key = entry.key;
-      if (!key.endsWith('_$mode')) continue;
+    // ✅ Use spatial index for faster search
+    final gridKey = _getGridKey(origin, maxDistanceMeters);
+    final nearbyKeys = _routesSpatialIndex[gridKey] ?? [];
 
-      // Parse the key to extract origin and destination
-      final parts = key.split('_');
+    for (final key in nearbyKeys) {
+      if (!key.endsWith('|$mode')) continue;
+      if (!isRouteCacheValid(key)) continue;
+
+      final route = _memoryRouteCache[key];
+      if (route == null) continue;
+
+      // Parse origin from key to check distance
+      final parts = key.split('|');
       if (parts.length < 5) continue;
 
       try {
         final cachedOriginLat = double.parse(parts[0]);
         final cachedOriginLng = double.parse(parts[1]);
-        final cachedDestLat = double.parse(parts[2]);
-        final cachedDestLng = double.parse(parts[3]);
-
         final cachedOrigin = LatLng(cachedOriginLat, cachedOriginLng);
-        final cachedDest = LatLng(cachedDestLat, cachedDestLng);
 
-        // Check if origin and destination are within proximity
-        final originDistance = LocationService.distanceBetween(origin, cachedOrigin);
-        final destDistance = LocationService.distanceBetween(destination, cachedDest);
-
-        if (originDistance <= maxDistanceMeters && destDistance <= maxDistanceMeters) {
-          if (isRouteCacheValid(key)) {
-            print("📍 Found nearby cached route (origin: ${originDistance.round()}m, dest: ${destDistance.round()}m away)");
-            return entry.value;
-          }
+        final distance = LocationService.distanceBetween(origin, cachedOrigin);
+        if (distance <= maxDistanceMeters) {
+          print("📍 Found nearby cached route (${distance.round()}m away)");
+          return route;
         }
       } catch (e) {
         continue;
@@ -195,9 +239,45 @@ class CacheService {
     _memoryRouteCache[key] = route;
     _routeCacheTimestamps[key] = DateTime.now();
 
+    final gridKey = _getGridKey(origin, 1000);
+    _routesSpatialIndex.putIfAbsent(gridKey, () => []).add(key);
+
     _evictOldCacheEntries();
-    // Also save to persistent storage
-    saveRoute(key, route);
+
+    // ✅ Debounce route saves — don't write on every single route
+    _routeSaveTimer?.cancel();
+    _routeSaveTimer = Timer(const Duration(seconds: 5), () {
+      _persistAllRoutes();
+    });
+  }
+
+  static Future<void> _persistAllRoutes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cache = <String, dynamic>{};
+      final timestamps = <String, dynamic>{};
+
+      for (final key in _memoryRouteCache.keys) {
+        final route = _memoryRouteCache[key];
+        final ts = _routeCacheTimestamps[key];
+        if (route != null && ts != null) {
+          cache[key] = _serializeRoute(route);
+          timestamps[key] = ts.millisecondsSinceEpoch;
+        }
+      }
+
+      await prefs.setString(_routeCacheKey, jsonEncode(cache));
+      await prefs.setString(_routeTimestampKey, jsonEncode(timestamps));
+    } catch (e) {
+      print("⚠️ Error persisting routes: $e");
+    }
+  }
+
+  static String _getGridKey(LatLng location, double gridSizeMeters) {
+    // Simple grid-based spatial indexing
+    final gridLat = (location.latitude * 1000).floor(); // ~100m precision
+    final gridLng = (location.longitude * 1000).floor();
+    return '$gridLat,$gridLng';
   }
 
   static Future<void> loadRouteCacheFromPersistent() async {
@@ -210,25 +290,64 @@ class CacheService {
         final Map<String, dynamic> decoded = jsonDecode(cacheData);
         final Map<String, dynamic> timestamps = jsonDecode(timestampData);
 
-        // Rebuild memory cache from persistent storage
+        int loadedCount = 0;
+        int expiredCount = 0;
+
         for (final entry in decoded.entries) {
           final key = entry.key;
           final routeData = entry.value;
           final timestamp = timestamps[key];
 
           if (timestamp != null) {
-            _routeCacheTimestamps[key] = DateTime.fromMillisecondsSinceEpoch(timestamp);
+            final cacheTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+            _routeCacheTimestamps[key] = cacheTime;
 
             // Only load if not expired
             if (isRouteCacheValid(key)) {
               _memoryRouteCache[key] = _deserializeRoute(routeData);
+              loadedCount++;
+            } else {
+              expiredCount++;
             }
           }
         }
-        print("📦 Loaded ${_memoryRouteCache.length} routes from persistent cache");
+
+        print("📦 Loaded $loadedCount routes from cache ($expiredCount expired)");
+
+        // ✅ Clean up expired routes from persistent storage
+        if (expiredCount > 0) {
+          await _cleanExpiredRoutes();
+        }
       }
     } catch (e) {
       print("⚠️ Error loading persistent route cache: $e");
+    }
+  }
+
+  static Future<void> _cleanExpiredRoutes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Rebuild cache with only valid entries
+      final validCache = <String, dynamic>{};
+      final validTimestamps = <String, dynamic>{};
+
+      for (final key in _memoryRouteCache.keys) {
+        final route = _memoryRouteCache[key];
+        final timestamp = _routeCacheTimestamps[key];
+
+        if (route != null && timestamp != null) {
+          validCache[key] = _serializeRoute(route);
+          validTimestamps[key] = timestamp.millisecondsSinceEpoch;
+        }
+      }
+
+      await prefs.setString(_routeCacheKey, jsonEncode(validCache));
+      await prefs.setString(_routeTimestampKey, jsonEncode(validTimestamps));
+
+      print("🗑️ Cleaned expired routes from persistent storage");
+    } catch (e) {
+      print("⚠️ Error cleaning expired routes: $e");
     }
   }
 
@@ -312,14 +431,18 @@ class CacheService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonString = jsonEncode(aeds);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
 
       print("💾 Attempting to save ${aeds.length} AEDs to cache...");
 
       // Save the data
       await prefs.setString(_aedCacheKey, jsonString);
-      await prefs.setInt(_aedTimestampKey, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(_aedTimestampKey, timestamp);
 
-      // ✅ FIX: Verify by actually checking the count
+      // ✅ Update metadata
+      await _updateCacheMetadata(aedLastUpdated: timestamp);
+
+      // Verify by actually checking the count
       final verification = prefs.getString(_aedCacheKey);
       if (verification != null && verification.isNotEmpty) {
         final verifiedData = jsonDecode(verification) as List;
@@ -413,31 +536,6 @@ class CacheService {
     return null;
   }
 
-  // Cache important map data including AED positions
-  static Future<void> cacheMapData({
-    required LatLng userLocation,
-    required List<LatLng> aedLocations,
-    required double zoom,
-    String? selectedTransportMode,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final mapData = {
-      'userLocation': {
-        'latitude': userLocation.latitude,
-        'longitude': userLocation.longitude,
-      },
-      'aedLocations': aedLocations.map((loc) => {
-        'latitude': loc.latitude,
-        'longitude': loc.longitude,
-      }).toList(),
-      'zoom': zoom,
-      'transportMode': selectedTransportMode ?? 'walking',
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
-    await prefs.setString(_mapDataKey, jsonEncode(mapData));
-    print("🗺️ Cached map data with ${aedLocations.length} AED locations");
-  }
-
   // Get cached map data for offline display
   static Future<Map<String, dynamic>?> getCachedMapData() async {
     try {
@@ -505,64 +603,17 @@ class CacheService {
     };
   }
 
-  // Cache the bounds of the currently visible map area
-  static Future<void> saveVisibleMapBounds({
-    required LatLng southwest,
-    required LatLng northeast,
-    required double zoom,
-  }) async {
+  // Save last app state for restoration
+  static Future<void> saveLastAppState(LatLng userLocation, String transportMode) async {
     final prefs = await SharedPreferences.getInstance();
-    final boundsData = {
-      'southwest': {
-        'latitude': southwest.latitude,
-        'longitude': southwest.longitude,
-      },
-      'northeast': {
-        'latitude': northeast.latitude,
-        'longitude': northeast.longitude,
-      },
-      'zoom': zoom,
+
+    final appState = {
+      'latitude': userLocation.latitude,
+      'longitude': userLocation.longitude,
+      'transportMode': transportMode,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
-    await prefs.setString(_mapBoundsKey, jsonEncode(boundsData));
-  }
-
-  // Get cached visible map bounds
-  static Future<Map<String, dynamic>?> getVisibleMapBounds() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final boundsData = prefs.getString(_mapBoundsKey);
-
-      if (boundsData != null) {
-        final data = jsonDecode(boundsData);
-        final timestamp = data['timestamp'] as int;
-        final cacheAge = DateTime.now().difference(
-            DateTime.fromMillisecondsSinceEpoch(timestamp)
-        );
-
-        if (cacheAge < _cacheTtl) {
-          return data;
-        }
-      }
-    } catch (e) {
-      print("⚠️ Error loading cached map bounds: $e");
-    }
-    return null;
-  }
-
-  // Save last app state for restoration
-  static Future<void> saveLastAppState(AEDMapState state) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (state.userLocation != null) {
-      final appState = {
-        'latitude': state.userLocation!.latitude,
-        'longitude': state.userLocation!.longitude,
-        'transportMode': state.transportMode,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
-      await prefs.setString(_appStateKey, jsonEncode(appState));
-    }
+    await prefs.setString(_appStateKey, jsonEncode(appState));
   }
 
   // Get last app state
@@ -578,7 +629,12 @@ class CacheService {
         );
 
         if (cacheAge < _cacheTtl) {
-          return data;
+          return {
+            'latitude': (data['latitude'] as num).toDouble(),
+            'longitude': (data['longitude'] as num).toDouble(),
+            'transportMode': data['transportMode'] as String? ?? 'walking',
+            'timestamp': data['timestamp'] as int,
+          };
         }
       }
     } catch (e) {
@@ -626,7 +682,7 @@ class CacheService {
 
       // Check if expired
       final timestamp = timestamps[routeKey];
-      if (await _isCacheExpired(timestamp, _cacheTtl)) return null;
+      if (_isCacheExpired(timestamp, _cacheTtl)) return null;
 
       return _deserializeRoute(cache[routeKey]);
     } catch (e) {
@@ -684,7 +740,7 @@ class CacheService {
   }
 
   // === PRIVATE HELPER METHODS ===
-  static Future<bool> _isCacheExpired(dynamic timestamp, Duration ttl) async {
+  static bool _isCacheExpired(dynamic timestamp, Duration ttl) {
     if (timestamp == null) return true;
 
     final int timestampInt = timestamp is int ? timestamp : int.tryParse(timestamp.toString()) ?? 0;
@@ -696,6 +752,7 @@ class CacheService {
   // Route serialization helpers
   static Map<String, dynamic> _serializeRoute(RouteResult route) {
     return {
+      'polylineId': route.polyline.polylineId.value, // ✅ Save the ID
       'duration': route.duration,
       'points': route.points.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
       'isOffline': route.isOffline,
@@ -709,13 +766,14 @@ class CacheService {
     final points = (data['points'] as List)
         .map((p) => LatLng(p['lat'], p['lng']))
         .toList();
-    final transportMode = data['transportMode'] ?? 'walking';  // ✅ READ THIS
+    final transportMode = data['transportMode'] ?? 'walking';
+    final polylineId = data['polylineId'] ?? 'cached_route'; // ✅ Use saved ID
 
     return RouteResult(
       polyline: Polyline(
-        polylineId: const PolylineId('cached_route'),
+        polylineId: PolylineId(polylineId), // ✅ Restore original ID
         points: points,
-        color: transportMode == 'walking' ? Colors.green : Colors.blue,  // ✅ USE IT
+        color: transportMode == 'walking' ? Colors.green : Colors.blue,
         patterns: transportMode == 'walking'
             ? [PatternItem.dash(15), PatternItem.gap(8)]
             : [],
@@ -726,16 +784,12 @@ class CacheService {
       isOffline: data['isOffline'] ?? false,
       actualDistance: data['actualDistance']?.toDouble(),
       distanceText: data['distanceText'],
-      transportMode: transportMode,  // ✅ INCLUDE IT
+      transportMode: transportMode,
     );
   }
 
   static void dispose() {
     _saveTimer?.cancel();
     _saveTimer = null;
-    _distanceCache.clear();
-    _memoryRouteCache.clear();
-    _routeCacheTimestamps.clear();
-    print("🗑️ CacheService disposed");
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/decrypted_data.dart';
@@ -17,19 +16,27 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('SharedPreferences must be overridden in main()');
 });
 
-/// Navigator Key for global navigation
-final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
-  return GlobalKey<NavigatorState>();
+final cacheAvailabilityProvider = Provider<bool>((ref) {
+  throw UnimplementedError('Cache availability must be overridden in main()');
 });
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+/// App operating mode
+enum AppMode {
+  emergency,  // Real cardiac arrest - no performance tracking
+  training,   // Practice CPR with feedback and grading
+}
 
 // ============================================================================
 // SERVICE PROVIDERS (Business logic layer)
 // ============================================================================
 
-/// Network Service
+/// Network Service - Singleton instance
 final networkServiceProvider = Provider<NetworkService>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return NetworkService(prefs);
+  return NetworkService(); // ✅ Returns singleton instance
 });
 
 /// Decrypted Data Handler (BLE data processing)
@@ -45,7 +52,9 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
   return BLEConnection(
     decryptedDataHandler: decryptedDataHandler,
     prefs: prefs,
-    onStatusUpdate: (status) {},
+    onStatusUpdate: (status) {
+      print("🔵 BLE Status: $status");
+    },
   );
 });
 
@@ -66,9 +75,29 @@ final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(networkService, prefs);
 });
 
+/// App Mode Provider (Emergency vs Training)
+final appModeProvider = StateNotifierProvider<AppModeNotifier, AppMode>((ref) {
+  return AppModeNotifier();
+});
+
+class AppModeNotifier extends StateNotifier<AppMode> {
+  AppModeNotifier() : super(AppMode.emergency);
+
+  void setMode(AppMode mode) {
+    state = mode;
+  }
+
+  void toggleMode() {
+    state = state == AppMode.emergency ? AppMode.training : AppMode.emergency;
+  }
+}
+
+/// CPR Session Active Provider (to disable mode switching during CPR)
+final cprSessionActiveProvider = StateProvider<bool>((ref) => false);
+
 /// AED Map State
 final mapStateProvider = StateNotifierProvider<MapStateNotifier, AEDMapState>((ref) {
-  return MapStateNotifier(ref);
+  return MapStateNotifier(); // ✅ No ref parameter
 });
 
 // ============================================================================
@@ -237,9 +266,7 @@ class NavigationState {
 }
 
 class MapStateNotifier extends StateNotifier<AEDMapState> {
-  final Ref ref;
-
-  MapStateNotifier(this.ref) : super(const AEDMapState(isLoading: true));
+  MapStateNotifier() : super(const AEDMapState()); // ✅ No ref parameter
 
   bool get isInNavigationMode => state.navigation.hasStarted;
   bool get isInPreviewMode => state.navigation.isActive && !state.navigation.hasStarted;

@@ -110,38 +110,45 @@ class RouteService {
 
   RouteResult _createOfflineRouteWithoutLine(LatLng origin, LatLng destination, String mode) {
     final distance = LocationService.distanceBetween(origin, destination);
-    final estimatedTime = LocationService.estimateTravelTime(distance, mode);
-
-    // Apply transport mode multiplier for offline estimates
     final adjustedDistance = distance * AEDService.getTransportModeMultiplier(mode);
+
+    // use whichever ETA method you prefer
+    final estimatedTime = LocationService.calculateOfflineETA(adjustedDistance, mode);
 
     return RouteResult(
       polyline: Polyline(
         polylineId: PolylineId('${mode}_offline_empty'),
-        points: [], // Empty points - no line drawn
+        points: const [], // ✅ no line
         color: Colors.transparent,
         width: 0,
       ),
       duration: estimatedTime,
-      points: [],
+      points: const [], // ✅ no points
       isOffline: true,
-      actualDistance: adjustedDistance, // Use adjusted distance
+      actualDistance: adjustedDistance,
       distanceText: LocationService.formatDistance(adjustedDistance),
+      transportMode: mode,
     );
   }
 
   Future<void> preloadCachedRoutesForStartup(
       List<AED> aeds,
       LatLng userLocation,
-      Function(AED, String, RouteResult) onRouteLoaded // mode parameter added
+      String primaryTransportMode, // ✅ Add this parameter
+      Function(AED, String, RouteResult) onRouteLoaded,
       ) async {
-    print("🚀 Loading cached routes for startup...");
+    print("🚀 Loading cached routes for startup (mode: $primaryTransportMode)...");
 
-    final closestAEDs = aeds.take(5).toList(); // Top 5 AEDs
+    final closestAEDs = aeds.take(5).toList();
 
     for (final aed in closestAEDs) {
-      // Check for both walking and driving cached routes
-      for (final mode in ['walking', 'driving']) {
+      // ✅ Only load primary mode + one backup mode
+      final modesToCheck = [
+        primaryTransportMode,
+        primaryTransportMode == 'walking' ? 'driving' : 'walking', // Backup mode
+      ];
+
+      for (final mode in modesToCheck) {
         final cachedRoute = CacheService.getCachedRoute(userLocation, aed.location, mode);
         if (cachedRoute != null) {
           print("📦 Found cached $mode route for AED ${aed.id}");
@@ -157,7 +164,7 @@ class RouteService {
     required String transportMode,
     required String? apiKey,
     required List<AED> aedList,
-    required Map<int, RouteResult> preloadedRoutes,
+    required Map<String, RouteResult> preloadedRoutes,
   }) async {
     // Find the AED to check if we have a preloaded route
     final aed = aedList.firstWhere(
@@ -167,7 +174,7 @@ class RouteService {
     );
 
     // Check if we have a preloaded route
-    final preloadedRoute = preloadedRoutes[aed.id];
+    final preloadedRoute = preloadedRoutes['${aed.id}_$transportMode'];
     if (preloadedRoute != null) {
       return preloadedRoute;
     }
@@ -211,8 +218,123 @@ class RouteService {
   }
 }
 
+class RouteHelper {
+  final String? apiKey;
 
-class RoutePreloader {
+  RouteHelper(this.apiKey);
+
+  /// Fetches a route and caches it
+  Future<RouteResult?> fetchAndCache({
+    required LatLng origin,
+    required LatLng destination,
+    required String transportMode,
+  }) async {
+    if (apiKey == null) {
+      print("❌ No API key available");
+      return null;
+    }
+
+    try {
+      final routeService = RouteService(apiKey!);
+
+      final route = await routeService.fetchRoute(
+        origin,
+        destination,
+        transportMode,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print("⏱️ Route fetch timeout");
+          return null;
+        },
+      );
+
+      if (route != null) {
+        CacheService.setCachedRoute(origin, destination, transportMode, route);
+        print("✅ Fetched and cached route: ${route.distanceText}");
+
+        // Cache actual distance for display
+        if (route.actualDistance != null) {
+          CacheService.setDistance(
+            'route_${origin.latitude}_${destination.latitude}_$transportMode',
+            route.actualDistance!,
+          );
+        }
+      }
+
+      return route;
+    } catch (e) {
+      print("❌ Error fetching route: $e");
+      return null;
+    }
+  }
+
+  /// Gets route from cache or fetches fresh
+  Future<RouteResult?> getOrFetch({
+    required LatLng origin,
+    required LatLng destination,
+    required String transportMode,
+    bool allowNearby = true,
+  }) async {
+    // Try exact cache match
+    RouteResult? route = CacheService.getCachedRoute(origin, destination, transportMode);
+
+    if (route != null) {
+      print("📦 Using cached route");
+      return route;
+    }
+
+    // Try nearby cache
+    if (allowNearby) {
+      route = CacheService.getCachedRouteNearby(
+        origin,
+        destination,
+        transportMode,
+        maxDistanceMeters: 500,
+      );
+
+      if (route != null) {
+        print("📦 Using nearby cached route");
+        return route;
+      }
+    }
+
+    // Fetch fresh
+    print("🌐 Fetching fresh route");
+    return await fetchAndCache(
+      origin: origin,
+      destination: destination,
+      transportMode: transportMode,
+    );
+  }
+
+  /// Parses duration string like "10 mins" or "1 hour 5 mins" to minutes
+  static int parseDurationToMinutes(String duration) {
+    try {
+      int totalMinutes = 0;
+
+      // Extract hours
+      final hourMatch = RegExp(r'(\d+)\s*hour').firstMatch(duration.toLowerCase());
+      if (hourMatch != null) {
+        totalMinutes += int.parse(hourMatch.group(1)!) * 60;
+      }
+
+      // Extract minutes
+      final minMatch = RegExp(r'(\d+)\s*min').firstMatch(duration.toLowerCase());
+      if (minMatch != null) {
+        totalMinutes += int.parse(minMatch.group(1)!);
+      }
+
+      return totalMinutes;
+    } catch (e) {
+      print("⚠️ Error parsing duration '$duration': $e");
+      return 0;
+    }
+  }
+}
+
+
+class RoutePreloader{
   final String _apiKey;
   final Function(String) _onStatusUpdate;
 
@@ -229,26 +351,42 @@ class RoutePreloader {
     required Function(AED, RouteResult) onRouteLoaded,
     int maxRoutes = 10,
   }) async {
+    if (!await NetworkService.isConnected()) {
+      print("🔴 No network - skipping route preloading");
+      _isPreloading = false;
+      _onStatusUpdate("Route preloading skipped (offline)");
+      return;
+    }
+
     if (_isPreloading || aeds.isEmpty || _apiKey.isEmpty) return;
 
     _isPreloading = true;
     _onStatusUpdate("Preloading routes...");
 
-    // ✅ Get top 10 closest AEDs
     final closestAEDs = aeds.take(maxRoutes).toList();
     print("🚀 Preloading routes for ${closestAEDs.length} closest AEDs (mode: $transportMode)...");
-    print("   → Progressive loading: 1 AED per second");
 
-    int loadedCount = 0;
     int cachedCount = 0;
     int fetchedCount = 0;
+    int failureCount = 0; // ✅ ADD THIS
 
-    // ✅ Process ONE at a time with 1-second delay
     for (int i = 0; i < closestAEDs.length; i++) {
+      if (!_isPreloading) {
+        print("🛑 Preloading stopped at ${i + 1}/$maxRoutes");
+        return;
+      }
+
+      // ✅ ADD THIS CHECK
+      if (failureCount > 3) {
+        print("⚠️ Too many failures ($failureCount) - stopping preload");
+        _isPreloading = false;
+        _onStatusUpdate("Route preloading stopped (errors)");
+        return;
+      }
+
       final aed = closestAEDs[i];
 
       try {
-        // Check cache first
         final cachedRoute = CacheService.getCachedRoute(
           userLocation,
           aed.location,
@@ -258,25 +396,22 @@ class RoutePreloader {
         if (cachedRoute != null && !cachedRoute.isOffline) {
           onRouteLoaded(aed, cachedRoute);
           cachedCount++;
-          loadedCount++;
           print("📦 [${i + 1}/$maxRoutes] Using cached route for AED ${aed.id}");
-
-          // ✅ Small delay even for cached routes to avoid UI blocking
           await Future.delayed(const Duration(milliseconds: 200));
           continue;
         }
 
-        // Fetch new route
         print("🌐 [${i + 1}/$maxRoutes] Fetching route for AED ${aed.id}...");
         final routeService = RouteService(_apiKey);
+
+        // ✅ ADD TIMEOUT
         final routeResult = await routeService.fetchRoute(
           userLocation,
           aed.location,
           transportMode,
-        );
+        ).timeout(const Duration(seconds: 10));
 
         if (routeResult != null) {
-          // Cache the route
           CacheService.setCachedRoute(
             userLocation,
             aed.location,
@@ -284,40 +419,50 @@ class RoutePreloader {
             routeResult,
           );
 
-          // ✅ Cache with transport mode so it doesn't get overwritten
           if (routeResult.actualDistance != null) {
             CacheService.setDistance('aed_${aed.id}_$transportMode', routeResult.actualDistance!);
             print("✅ Cached REAL distance for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance!)}");
           }
 
-          // Notify callback
           onRouteLoaded(aed, routeResult);
           fetchedCount++;
-          loadedCount++;
+          failureCount = 0; // ✅ ADD THIS - reset on success
 
           print("✅ [${i + 1}/$maxRoutes] Cached route for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance ?? 0)} (${routeResult.duration})");
         } else {
+          failureCount++; // ✅ ADD THIS - increment on null result
           print("⚠️ [${i + 1}/$maxRoutes] Failed to get route for AED ${aed.id}");
         }
 
-        // ✅ 1-second delay between requests (rate limiting)
         if (i < closestAEDs.length - 1) {
           _onStatusUpdate("Preloading ${i + 1}/$maxRoutes...");
-          await Future.delayed(const Duration(seconds: 1));
+
+          // ✅ ADD THIS - longer delay on failure
+          final delay = failureCount > 0 ? const Duration(seconds: 2) : const Duration(seconds: 1);
+          await Future.delayed(delay);
         }
 
       } catch (e) {
+        failureCount++; // ✅ ADD THIS - increment on exception
         print("❌ Error preloading route for AED ${aed.id}: $e");
 
-        // Continue with next AED even if one fails
         if (i < closestAEDs.length - 1) {
-          await Future.delayed(const Duration(seconds: 1));
+          await Future.delayed(const Duration(seconds: 2)); // ✅ Longer delay on error
         }
       }
     }
 
     _isPreloading = false;
+    print("✅ Route preloading complete: $cachedCount cached, $fetchedCount fetched, $failureCount failed"); // ✅ Updated log
     _onStatusUpdate("Route preloading complete");
+  }
+
+  void cancelPreloading() {
+    if (!_isPreloading) return;
+
+    _isPreloading = false;
+    _onStatusUpdate("Route preloading cancelled");
+    print("🛑 Route preloading cancelled");
   }
 }
 

@@ -1,103 +1,64 @@
 import 'package:cpr_assist/screens/main_navigation.dart';
+import 'package:cpr_assist/services/aed_map/aed_cluster_renderer.dart';
 import 'package:cpr_assist/services/aed_map/cache_service.dart';
 import 'package:cpr_assist/services/network_service.dart';
+// ✅ ADD
 import 'package:cpr_assist/utils/availability_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/aed_markers.dart';
-import 'screens/login_screen.dart';
-import 'screens/registration_screen.dart';
-import 'services/decrypted_data.dart';
-import 'services/ble_connection.dart';
 import 'dart:developer' as developer;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'providers/shared_preferences_provider.dart';
-import 'providers/auth_provider.dart';
+import 'providers/app_providers.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-
-
-
-// ===== PROVIDERS =====
-
-// DecryptedData Provider
-final decryptedDataProvider = Provider<DecryptedData>((ref) {
-  return DecryptedData();
-});
-
-// BLE Connection Provider
-final bleConnectionProvider = Provider<BLEConnection>((ref) {
-  final decryptedDataHandler = ref.watch(decryptedDataProvider);
-  final prefs = ref.watch(sharedPreferencesProvider);
-
-  return BLEConnection(
-    decryptedDataHandler: decryptedDataHandler,
-    prefs: prefs,
-    onStatusUpdate: (status) {},
-  );
-});
-
-// Simple auth state provider for backward compatibility
-final simpleAuthStateProvider = Provider<bool>((ref) {
-  final authState = ref.watch(authStateProvider);
-  return authState.isLoggedIn;
-});
-
-// Navigator Key Provider (if you still need global navigation)
-final navigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
-  return GlobalKey<NavigatorState>();
-});
-
-// ===== MAIN FUNCTION =====
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WakelockPlus.enable();
+
   await CustomIcons.loadIcons();
-
-  // ✅ Load .env from the correct location
+  await AEDClusterManager.prewarmIconCache();
   await dotenv.load(fileName: ".env");
-
-  // Load the map once at startup
   await AvailabilityParser.loadRules();
 
-  // ✅ Keep screen awake
-  WakelockPlus.enable();
-
-  // ✅ Initialize all caches (distance + route)
-  await CacheService.initializeAllCaches();
-  print("✅ Caches initialized");
-
-  NetworkService.startConnectivityMonitoring();
-
-  filterLogs();
-
   final prefs = await SharedPreferences.getInstance();
+  final networkService = NetworkService();
+  await networkService.initialize(prefs);
 
-  // ✅ Check if the user is logged in when the app starts
-  bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-  if (isLoggedIn) {
-    print("🔄 User is logged in. Verifying token...");
-
-    // Create NetworkService instance with SharedPreferences
-    final networkService = NetworkService(prefs);
-    bool authenticated = await networkService.ensureAuthenticated();
-
-    if (!authenticated) {
-      print("❌ Token expired. Logging user out...");
-      await prefs.setBool('isLoggedIn', false);
-      isLoggedIn = false;
-    }
-  } else {
-    print("❌ No user is logged in.");
+  bool cachesInitialized = false;
+  String? cacheError;
+  try {
+    await CacheService.initializeAllCaches();
+    cachesInitialized = true;
+    print("✅ Caches initialized");
+  } catch (e) {
+    cacheError = e.toString();
+    print("❌ Cache initialization failed: $e");
   }
 
+  NetworkService.startConnectivityMonitoring();
+  filterLogs();
+
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      cacheAvailabilityProvider.overrideWithValue(cachesInitialized),
+    ],
+  );
+
+  final authNotifier = container.read(authStateProvider.notifier);
+  await authNotifier.checkAuthStatus();
+
+  final isLoggedIn = container.read(authStateProvider).isLoggedIn;
+  print(isLoggedIn ? "✅ User is logged in" : "ℹ️ No user logged in (optional)");
+
   runApp(
-    ProviderScope(
-      overrides: [
-        // Override the SharedPreferences provider with the actual instance
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
-      child: const MyApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: MyApp(
+        cacheError: cacheError,
+      ),
     ),
   );
 }
@@ -105,7 +66,12 @@ void main() async {
 // ===== APP CLASS =====
 
 class MyApp extends ConsumerStatefulWidget {
-  const MyApp({super.key});
+  final String? cacheError;
+
+  const MyApp({
+    super.key,
+    this.cacheError,
+  });
 
   @override
   ConsumerState<MyApp> createState() => _MyAppState();
@@ -116,6 +82,20 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    if (widget.cacheError != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offline mode limited - some features may be unavailable'),
+              duration: Duration(seconds: 3),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      });
+    }
   }
 
   @override
@@ -127,49 +107,37 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Watch providers to get current values
-    final isLoggedIn = ref.watch(simpleAuthStateProvider);
-    final decryptedDataHandler = ref.watch(decryptedDataProvider);
-    final navigatorKey = ref.watch(navigatorKeyProvider);
-
-    // Initialize BLE connection (this will create it when first accessed)
     ref.watch(bleConnectionProvider);
-
     return MaterialApp(
       title: 'CPR Assist App',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      navigatorKey: navigatorKey,
-      home: MainNavigationScreen(
-        decryptedDataHandler: decryptedDataHandler,
-        isLoggedIn: isLoggedIn,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        fontFamily: 'Roboto',
       ),
-      routes: {
-        '/login': (context) => LoginScreen(
-          dataStream: decryptedDataHandler.dataStream,
-          decryptedDataHandler: decryptedDataHandler,
-        ),
-        '/register': (context) => RegistrationScreen(
-          dataStream: decryptedDataHandler.dataStream,
-          decryptedDataHandler: decryptedDataHandler,
-        ),
-      },
+      home: const MainNavigationScreen(),
+      // ✅ REMOVED routes - use Navigator.push instead
     );
   }
 }
 
 // ===== UTILITY FUNCTIONS =====
 
-/// **🔇 Filter Unwanted Logs**
 void filterLogs() {
+  if (!const bool.fromEnvironment('dart.vm.product')) {
+    return;
+  }
+
   debugPrint = (String? message, {int? wrapWidth}) {
     if (message == null) return;
+
     if (message.contains("FrameEvents") ||
         message.contains("updateAcquireFence") ||
         message.contains("ProxyAndroidLoggerBackend") ||
         message.contains("Too many Flogger logs") ||
         message.contains("Flogger")) {
-      return; // ✅ Suppress logs
+      return;
     }
+
     developer.log(message);
   };
 }

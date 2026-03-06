@@ -69,34 +69,43 @@ class _BLEStatusIndicatorState extends ConsumerState<BLEStatusIndicator> {
     final status = widget.connectionStatusNotifier.value;
     final isScanning = status == "Scanning for Arduino...";
 
-    return GestureDetector(
+    return GestureDetector(  // ✅ ADD return here
       onTap: _canRetry(status) ? _handleTap : null,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            child: SvgPicture.asset(
-              _getBluetoothIcon(status),
-              width: 22,
-              height: 22,
-            ),
-          ),
-          if (isScanning)
-            const Positioned(
-              bottom: 3,
-              right: 2,
-              child: SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF194E9D)),
-                ),
+      child: Tooltip(
+        message: status == "Connected"
+            ? "Glove Connected"
+            : status.contains("Scanning")
+            ? "Searching for glove..."
+            : status.contains("Lost")
+            ? "Connection lost - tap to retry"
+            : status,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              child: SvgPicture.asset(
+                _getBluetoothIcon(status),
+                width: 22,
+                height: 22,
               ),
             ),
-        ],
+            if (isScanning)
+              const Positioned(
+                bottom: 3,
+                right: 2,
+                child: SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF194E9D)),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
-    );
+    );  // ✅ Proper closing
   }
 }

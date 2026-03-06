@@ -15,21 +15,10 @@ import '../services/aed_map/cache_service.dart';
 import '../services/aed_map/location_service.dart';
 import '../services/aed_map/route_service.dart';
 import '../services/network_service.dart';
+import '../utils/app_constants.dart';
 import '../utils/availability_parser.dart';
 import '../utils/safe_fonts.dart';
 import 'aed_webview_screen.dart';
-
-class AppColors {
-  static const Color primary = Color(0xFF194E9D);
-  static const Color secondary = Color(0xFFEDF4F9);
-  static const Color success = Colors.green;
-  static const Color warning = Colors.orange;
-  static const Color error = Colors.red;
-  static const Color textPrimary = Color(0xFF2C2C2C);
-  static const Color textSecondary = Color(0xFF727272);
-  static const Color cardBackground = Color(0xFFEDF4F9);
-  static const Color clusterGreen = Color(0xFF2E7D32);
-}
 
 class AEDMapConfig {
   final bool isLoading;
@@ -105,7 +94,7 @@ class AEDMapDisplay extends StatefulWidget {
   final Function(LatLng)? onExternalNavigation;
   final bool userLocationAvailable;
   final Function(LatLng)? onPreviewNavigation;
-  final VoidCallback? onCameraMoved;
+  final void Function(CameraPosition position)? onCameraMoved;
   final VoidCallback? onCameraMoveStarted;
   final VoidCallback? onCameraIdle;
   final VoidCallback? onRecenterNavigation;
@@ -147,8 +136,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   String? _mapStyle;
   MapType _currentMapType = MapType.normal;
   bool _hasScrolledUnderHeader = false;
-
-
+  StreamSubscription<CompassEvent>? _compassSubscription;
+  final Map<int, Map<String, dynamic>> _cachedAEDDistances = {};
+  late Future<String> _syncTimeFuture;
   final GlobalKey _aedListKey = GlobalKey();
   final GlobalKey _navigationKey = GlobalKey();
 
@@ -156,11 +146,65 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   void initState() {
     super.initState();
     _loadMapStyle();
+    _syncTimeFuture = NetworkService.getFormattedSyncTime();
     WidgetsBinding.instance.addObserver(this);
+
+    // ✅ ADD: Start compass stream only when navigating
+    if (widget.config.hasStartedNavigation && widget.config.navigationLine == null) {
+      _startCompassStream();
+    }
+  }
+
+  @override
+  void didUpdateWidget(AEDMapDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Handle compass stream
+    if (widget.config.hasStartedNavigation &&
+        widget.config.navigationLine == null &&
+        !oldWidget.config.hasStartedNavigation) {
+      _startCompassStream();
+    } else if (!widget.config.hasStartedNavigation &&
+        oldWidget.config.hasStartedNavigation) {
+      _compassSubscription?.cancel();
+      _compassSubscription = null;
+    }
+
+    // ✅ Clear distance cache when transport mode changes
+    if (widget.config.selectedMode != oldWidget.config.selectedMode) {
+      setState(() {
+        _cachedAEDDistances.clear();
+      });
+    }
+
+    // ✅ ADD: Clear cache when user moves significantly
+    if (widget.config.userLocation != null &&
+        oldWidget.config.userLocation != null) {
+      final distance = LocationService.distanceBetween(
+        widget.config.userLocation!,
+        oldWidget.config.userLocation!,
+      );
+
+      if (distance > 100) {  // User moved more than 100m
+        setState(() {
+          _cachedAEDDistances.clear();
+        });
+      }
+    }
+  }
+
+  void _startCompassStream() {
+    _compassSubscription?.cancel();
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      if (mounted) {
+        setState(() {}); // Force rebuild
+      }
+    });
   }
 
   @override
   void dispose() {
+    _compassSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -169,15 +213,24 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   /// ✅ Load Custom Map Style
   Future<void> _loadMapStyle() async {
     try {
-      final style = await rootBundle.loadString('assets/map_style.json');
-      setState(() {
-        _mapStyle = style;
-      });
+      final style = await rootBundle.loadString('assets/map_style.json').timeout(
+        const Duration(seconds: 5),  // ✅ ADD TIMEOUT
+        onTimeout: () {
+          print("⚠️ Map style load timeout");
+          return "";  // Return empty string on timeout
+        },
+      );
+
+      if (mounted) {  // ✅ ADD MOUNTED CHECK
+        setState(() {
+          _mapStyle = style;
+        });
+      }
     } catch (e) {
       print("Error loading map style: $e");
       if (mounted && _mapStyle == null) {
         setState(() {
-          _mapStyle = ""; // Empty string to indicate load attempted
+          _mapStyle = "";
         });
       }
     }
@@ -395,8 +448,15 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    // ✅ ADD: Show minimal loading only if style hasn't loaded yet
     if (_mapStyle == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
     return OrientationBuilder(
@@ -453,8 +513,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           },
 
           onCameraMove: (CameraPosition position) {
-            widget.onCameraMoved?.call();  // NO if statement!
-          },
+            widget.onCameraMoved?.call(position);
+            },
 
           onCameraIdle: () {
             widget.onCameraIdle?.call();  // NO if statement!
@@ -464,7 +524,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           style: _mapStyle?.isNotEmpty == true ? _mapStyle : null,
           mapType: _currentMapType,
           markers: widget.config.aedMarkers,
-
           myLocationEnabled: widget.userLocationAvailable && widget.config.userLocation != null,
           myLocationButtonEnabled: false,
           polylines: widget.config.navigationLine != null
@@ -512,10 +571,71 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       iconWidget = const Icon(Icons.wifi, color: Colors.green, size: 20);
     }
 
-    return Positioned(
-      top: 4,
-      right: 10,
-      child: iconWidget,
+    return Stack(
+      children: [
+        // ✅ NEW: User location at top-center
+        if (widget.config.userLocation != null)
+          Positioned(
+            top: 4,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _buildUserLocationChip(),
+            ),
+          ),
+
+        // Existing wifi status at top-right
+        Positioned(
+          top: 4,
+          right: 10,
+          child: iconWidget,
+        ),
+      ],
+    );
+  }
+
+// ✅ ADD NEW METHOD
+  Widget _buildUserLocationChip() {
+    final userLoc = widget.config.userLocation!;
+
+    // Format coordinates (truncate to 4 decimal places)
+    final latStr = userLoc.latitude.toStringAsFixed(4);
+    final lngStr = userLoc.longitude.toStringAsFixed(4);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.my_location,
+            size: 14,
+            color: Color(0xFF194E9D),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$latStr, $lngStr',
+            style: SafeFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF194E9D),
+            ),
+          ),
+          // TODO: Future enhancement - fetch address from geocoding API
+          // and show address instead of coordinates when available
+        ],
+      ),
     );
   }
 
@@ -524,7 +644,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     final orientation = MediaQuery.of(context).orientation;
 
     final double left = orientation == Orientation.landscape ? 390 : 5;
-    final double top = 3;
+    final double top = orientation == Orientation.portrait ? 44.0 : 3.0;
 
     return Positioned(
       left: left,
@@ -561,38 +681,27 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   }
 
   Widget _buildLogo(Orientation orientation) {
-    // Define default padding
-    const double padding = 14.0;
-
-    // Get screen height for portrait calculation
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // These values are based on your DraggableScrollableSheet's minSize
-    // and the hardcoded width of the landscape panel.
-    final double portraitPanelMinHeight = screenHeight * 0.06; // Based on minSize: 0.20
-    const double landscapePanelWidth = 5.0; // Based on hardcoded width
+    // Calculate panel heights
+    final double portraitPanelMinHeight = screenHeight * AEDMapUIConstants.portraitListMin;
 
-    // Calculate position based on orientation
-    final double left = (orientation == Orientation.landscape)
-        ? (landscapePanelWidth + padding)
-        : padding;
+    final double left = orientation == Orientation.landscape
+        ? AEDMapUIConstants.landscapePanelWidth + AEDMapUIConstants.logoPadding
+        : AEDMapUIConstants.logoPadding;
 
-    final double bottom = (orientation == Orientation.portrait)
-        ? (portraitPanelMinHeight + padding)
-        : padding;
+    final double bottom = orientation == Orientation.portrait
+        ? portraitPanelMinHeight + AEDMapUIConstants.logoPadding
+        : AEDMapUIConstants.logoPadding;
 
     return Positioned(
       left: left,
       bottom: bottom,
-      // Wrap in IgnorePointer so the logo doesn't block map gestures
       child: IgnorePointer(
-        child: Opacity(
-          opacity: 1, // Adjust opacity as needed
-          child: Image.asset(
-            'assets/icons/kids_save_lives_logo.png',
-            width: 40, // Adjust size as needed
-            fit: BoxFit.contain,
-          ),
+        child: Image.asset(
+          'assets/icons/kids_save_lives_logo.png',
+          width: AEDMapUIConstants.logoSize,
+          fit: BoxFit.contain,
         ),
       ),
     );
@@ -785,33 +894,30 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     return _buildDraggableSheet(
       key: _aedListKey,
       contentBuilder: (scrollController) => _buildAEDListContent(scrollController),
-      initialSize: 0.20,
-      minSize: 0.20,
-      maxSize: 0.55,
+      initialSize: AEDMapUIConstants.portraitListInitial,
+      minSize: AEDMapUIConstants.portraitListMin,
+      maxSize: AEDMapUIConstants.portraitListMax,
       isPortrait: true,
     );
   }
 
-
   Widget _buildAEDSideListPanel() {
     return Stack(
       children: [
-        // The draggable panel
         Positioned(
           left: 0,
           top: 0,
           bottom: 0,
-          width: 380,
+          width: AEDMapUIConstants.landscapePanelWidth,
           child: DraggableScrollableSheet(
             key: _aedListKey,
-            initialChildSize: 0.3,
-            minChildSize: 0.3,
-            maxChildSize: 1.0,
+            initialChildSize: AEDMapUIConstants.landscapeListInitial,
+            minChildSize: AEDMapUIConstants.landscapeListMin,
+            maxChildSize: AEDMapUIConstants.landscapeListMax,
             builder: (context, scrollController) {
               return NotificationListener<DraggableScrollableNotification>(
                 onNotification: (notification) {
-                  setState(() {
-                  });
+                  setState(() {});
                   return true;
                 },
                 child: _buildAEDSideContent(scrollController),
@@ -820,11 +926,10 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           ),
         ),
 
-        // Static recenter button positioned beside the panel
-        if (!widget.config.hasSelectedRoute)
+        if (!widget.config.hasStartedNavigation)  // ✅ Show unless actively navigating
           Positioned(
-            left: 390,
-            bottom: 10,
+            left: AEDMapUIConstants.landscapeButtonOffset,
+            bottom: AEDMapUIConstants.recenterButtonBottom,
             child: Material(
               elevation: 8,
               shape: const CircleBorder(),
@@ -835,8 +940,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 },
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  width: 40,
-                  height: 40,
+                  width: AEDMapUIConstants.recenterButtonSize,
+                  height: AEDMapUIConstants.recenterButtonSize,
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
@@ -1336,8 +1441,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
           // Static recenter button positioned beside the panel
           Positioned(
-            left: 390,
-            bottom: 10,
+            left: AEDMapUIConstants.landscapeButtonOffset,
+            bottom: AEDMapUIConstants.recenterButtonBottom,
             child: Material(
               elevation: 8,
               shape: const CircleBorder(),
@@ -1370,9 +1475,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         children: [
           DraggableScrollableSheet(
             key: _navigationKey,
-            initialChildSize: 0.48,  // Increased to show content above padding
-            minChildSize: 0.20,    // Increased to show content above padding
-            maxChildSize: 0.6,     // Increased max size
+            initialChildSize: AEDMapUIConstants.portraitNavInitial,
+            minChildSize: AEDMapUIConstants.portraitNavMin,
+            maxChildSize: AEDMapUIConstants.portraitNavMax,   // Increased max size
             builder: (context, scrollController) {
               return NotificationListener<DraggableScrollableNotification>(
                 onNotification: (notification) {
@@ -1737,55 +1842,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
             // Show compass if navigation has started AND we have no route line to display
             if (widget.config.hasStartedNavigation && widget.config.navigationLine == null)
-              Positioned(
-                top: 2,
-                left: 8,
-                child: StreamBuilder<CompassEvent>(
-                  stream: FlutterCompass.events,
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox.shrink();
-
-                    final compassBearing = snapshot.data!.heading ?? 0.0;
-                    double bearingToDestination;
-
-                    // Calculate actual bearing if we have user location
-                    if (widget.config.userLocation != null) {
-                      bearingToDestination = _calculateBearingToDestination(
-                        widget.config.userLocation!,
-                        widget.config.selectedAED!,
-                      );
-                    } else {
-                      // No location - just show north reference
-                      bearingToDestination = 0.0;
-                    }
-
-                    double relativeAngle = bearingToDestination - compassBearing;
-                    if (relativeAngle > 180) relativeAngle -= 360;
-                    if (relativeAngle < -180) relativeAngle += 360;
-
-                    return Material(
-                      elevation: 8,
-                      shape: const CircleBorder(),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Transform.rotate(
-                          angle: relativeAngle * (3.14159 / 180),
-                          child: const Icon(
-                            Icons.navigation,
-                            color: Color(0xFF194E9D),
-                            size: 28,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              _buildCompassIndicator(),
           ],
         ),
       );
@@ -1796,11 +1853,11 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         left: 0,
         top: 0,
         bottom: 0,
-        width: 380,
+        width: AEDMapUIConstants.landscapePanelWidth,
         child: DraggableScrollableSheet(
-          initialChildSize: 0.2,
-          minChildSize: 0.2,
-          maxChildSize: 0.6,
+          initialChildSize: AEDMapUIConstants.portraitActiveNavInitial,
+          minChildSize: AEDMapUIConstants.portraitActiveNavMin,
+          maxChildSize: AEDMapUIConstants.portraitActiveNavMax,
           builder: (context, scrollController) {
             return buildActiveNavigationContent(scrollController);
           },
@@ -1808,9 +1865,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       );
     } else {
       return DraggableScrollableSheet(
-        initialChildSize: 0.25,
-        minChildSize: 0.25,
-        maxChildSize: 0.6,
+        initialChildSize: AEDMapUIConstants.portraitActiveNavInitial,
+        minChildSize: AEDMapUIConstants.portraitActiveNavMin,
+        maxChildSize: AEDMapUIConstants.portraitActiveNavMax,
         builder: (context, scrollController) {
           return buildActiveNavigationContent(scrollController);
         },
@@ -1820,17 +1877,67 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
 
   double _calculateBearingToDestination(LatLng from, LatLng to) {
-    final lat1Rad = from.latitude * (3.14159 / 180);
-    final lat2Rad = to.latitude * (3.14159 / 180);
-    final deltaLngRad = (to.longitude - from.longitude) * (3.14159 / 180);
+    final lat1Rad = from.latitude * (pi / 180);
+    final lat2Rad = to.latitude * (pi / 180);
+    final deltaLngRad = (to.longitude - from.longitude) * (pi / 180);
 
     final y = sin(deltaLngRad) * cos(lat2Rad);
     final x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(deltaLngRad);
 
     final bearingRad = atan2(y, x);
-    final bearingDeg = bearingRad * (180 / 3.14159);
+    final bearingDeg = bearingRad * (180 / pi);
 
     return (bearingDeg + 360) % 360; // Normalize to 0-360
+  }
+
+  Widget _buildCompassIndicator() {
+    return Positioned(
+      top: 2,
+      left: 8,
+      child: StreamBuilder<CompassEvent>(
+        stream: FlutterCompass.events,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const SizedBox.shrink();
+
+          final compassBearing = snapshot.data!.heading ?? 0.0;
+          double bearingToDestination;
+
+          if (widget.config.userLocation != null) {
+            bearingToDestination = _calculateBearingToDestination(
+              widget.config.userLocation!,
+              widget.config.selectedAED!,
+            );
+          } else {
+            bearingToDestination = 0.0;
+          }
+
+          double relativeAngle = bearingToDestination - compassBearing;
+          if (relativeAngle > 180) relativeAngle -= 360;
+          if (relativeAngle < -180) relativeAngle += 360;
+
+          return Material(
+            elevation: 8,
+            shape: const CircleBorder(),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Transform.rotate(
+                angle: relativeAngle * (pi / 180),
+                child: const Icon(
+                  Icons.navigation,
+                  color: Color(0xFF194E9D),
+                  size: 28,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildCompactInfoColumn(
@@ -1870,33 +1977,55 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
   Widget _buildAEDCard({
     required AED aed,
-    required int? distance, // This is now just a fallback
+    required int? distance,
     required VoidCallback onTap,
     bool showButton = false,
     bool isFirst = false,
   }) {
-    // --- START NEW LOGIC ---
     final selectedMode = widget.config.selectedMode;
     final userLocation = widget.config.userLocation;
 
+    // ✅ CHECK CACHE FIRST
+    if (_cachedAEDDistances.containsKey(aed.id)) {
+      final cached = _cachedAEDDistances[aed.id]!;
+
+      // Only recalculate if mode or location changed significantly
+      if (cached['mode'] == selectedMode &&
+          userLocation != null &&
+          cached['location'] != null) {
+        final cachedLoc = cached['location'] as LatLng;
+        if (LocationService.distanceBetween(cachedLoc, userLocation) < 50) {
+          // Use cached values
+          return _buildAEDCardInternal(
+            aed: aed,
+            displayDistance: cached['displayDistance'],
+            displayTime: cached['displayTime'],
+            isRealData: cached['isRealData'],
+            onTap: onTap,
+            showButton: showButton,
+            isFirst: isFirst,
+          );
+        }
+      }
+    }
+
+    // Calculate fresh
     String? displayDistance;
     String? displayTime;
     bool isRealData = false;
 
-    // 1. Check if we have a preloaded route for this AED
+    // 1. Check preloaded routes
     final routeKey = '${aed.id}_$selectedMode';
     final preloadedRoute = widget.config.preloadedRoutes[routeKey];
     if (preloadedRoute != null && !preloadedRoute.isOffline) {
-      // ✅ We have a REAL preloaded route!
       displayDistance = preloadedRoute.distanceText ??
           LocationService.formatDistance(preloadedRoute.actualDistance ?? 0);
       displayTime = preloadedRoute.duration;
       isRealData = true;
     }
 
-// 2. If no preloaded route, try cached route with transport mode
+    // 2. Check cached real distance
     if (!isRealData && userLocation != null) {
-      // ✅ Check for mode-specific cached distance first
       final cachedRealDistance = CacheService.getDistance('aed_${aed.id}_$selectedMode');
       if (cachedRealDistance != null) {
         displayDistance = LocationService.formatDistance(cachedRealDistance);
@@ -1905,40 +2034,64 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
       }
     }
 
-    // 2. If no real route, fall back to estimations
+    // 3. Fallback to estimation
     if (displayDistance == null || displayTime == null) {
-      final estimatedDistance =
-          CacheService.getDistance('aed_${aed.id}')?.round() ?? distance;
+      final estimatedDistance = CacheService.getDistance('aed_${aed.id}')?.round() ?? distance;
 
       if (estimatedDistance != null) {
-        displayDistance =
-            LocationService.formatDistance(estimatedDistance.toDouble());
-        // Calculate estimated time for the *correct* mode
+        displayDistance = LocationService.formatDistance(estimatedDistance.toDouble());
         displayTime = LocationService.calculateOfflineETA(
           estimatedDistance.toDouble(),
-          selectedMode, // Use the selected mode
+          selectedMode,
         );
       }
     }
-    final availabilityStatus = AvailabilityParser.parseAvailability(aed.availability);
 
-// ✅ CHANGED: Only show green border if we have valid availability data
+    // ✅ CACHE THE RESULT
+    _cachedAEDDistances[aed.id] = {
+      'mode': selectedMode,
+      'location': userLocation,
+      'displayDistance': displayDistance,
+      'displayTime': displayTime,
+      'isRealData': isRealData,
+    };
+
+    return _buildAEDCardInternal(
+      aed: aed,
+      displayDistance: displayDistance,
+      displayTime: displayTime,
+      isRealData: isRealData,
+      onTap: onTap,
+      showButton: showButton,
+      isFirst: isFirst,
+    );
+  }
+
+// ✅ ADD THIS NEW METHOD (extract the UI logic):
+  Widget _buildAEDCardInternal({
+    required AED aed,
+    required String? displayDistance,
+    required String? displayTime,
+    required bool isRealData,
+    required VoidCallback onTap,
+    bool showButton = false,
+    bool isFirst = false,
+  }) {
+    final availabilityStatus = AvailabilityParser.parseAvailability(aed.availability);
+    final selectedMode = widget.config.selectedMode;
+
+    // Only show green border if we have valid availability data
     final bool isOpenNow = AvailabilityParser.isAvailable() &&
         !availabilityStatus.isUncertain &&
         availabilityStatus.isOpen;
 
-    // Use isRealData (from our new logic) instead of the old check
-    final Color distanceColor =
-    isRealData ? const Color(0xFF444444) : const Color(0xFF727272);
+    // Colors based on data quality
+    final Color distanceColor = isRealData ? const Color(0xFF444444) : const Color(0xFF727272);
     final Color distanceIconColor = Colors.grey.shade600;
 
-    // Use the correct icon and color for the selected mode
-    final IconData timeIcon =
-    selectedMode == 'walking' ? Icons.directions_walk : Icons.directions_car;
+    final IconData timeIcon = selectedMode == 'walking' ? Icons.directions_walk : Icons.directions_car;
     final Color timeColor = isRealData
-        ? (selectedMode == 'walking'
-        ? AppColors.clusterGreen
-        : AppColors.primary) // Green for walk, Blue for drive
+        ? (selectedMode == 'walking' ? AppColors.clusterGreen : AppColors.primary)
         : const Color(0xFF727272);
     final Color timeIconColor = isRealData ? timeColor : Colors.grey.shade600;
 
@@ -1950,14 +2103,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         decoration: BoxDecoration(
           color: const Color(0xFFEDF4F9),
           borderRadius: BorderRadius.circular(8),
-          // ✅ Only show green border if open
           border: isOpenNow
-              ? Border.all(
-            color: AppColors.clusterGreen,
-            width: 1,
-          )
+              ? Border.all(color: AppColors.clusterGreen, width: 1)
               : null,
-          // ✅ Only green glow for open AEDs
           boxShadow: isOpenNow
               ? [
             BoxShadow(
@@ -1971,7 +2119,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            /// Foundation + Address + Distance + Walking Time
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -2000,7 +2147,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    // Distance + Walking Time Row
+                    // Distance + Time Row
                     if (widget.userLocationAvailable &&
                         (displayDistance != null || displayTime != null))
                       Padding(
@@ -2009,14 +2156,10 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                           children: [
                             // Distance
                             if (displayDistance != null) ...[
-                              Icon(
-                                Icons.near_me, // Better icon for distance/proximity
-                                size: 11,
-                                color: distanceIconColor,
-                              ),
+                              Icon(Icons.near_me, size: 11, color: distanceIconColor),
                               const SizedBox(width: 3),
                               Text(
-                                displayDistance, // Use new variable
+                                displayDistance,
                                 style: SafeFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
@@ -2024,7 +2167,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                 ),
                               ),
                             ],
-                            // Time (Walking or Driving)
+                            // Time
                             if (displayTime != null) ...[
                               if (displayDistance != null) ...[
                                 const SizedBox(width: 8),
@@ -2035,14 +2178,10 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                 ),
                                 const SizedBox(width: 8),
                               ],
-                              Icon(
-                                timeIcon, // Use new variable
-                                size: 11,
-                                color: timeIconColor,
-                              ),
+                              Icon(timeIcon, size: 11, color: timeIconColor),
                               const SizedBox(width: 3),
                               Text(
-                                displayTime, // Use new variable
+                                displayTime,
                                 style: SafeFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
@@ -2057,7 +2196,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 ),
               ),
             ),
-
             if (showButton)
               ElevatedButton.icon(
                 onPressed: () => widget.onStartNavigation(aed.location),
@@ -2066,16 +2204,14 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(100),
                   ),
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   elevation: 0,
                 ),
                 icon: SvgPicture.asset(
                   'assets/icons/compass.svg',
                   width: 13,
                   height: 13,
-                  colorFilter:
-                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                  colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                 ),
                 label: Text(
                   "Start",
@@ -2183,20 +2319,27 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             thumbColor: const Color(0xFF006636).withValues(alpha: 0.6),
             padding: const EdgeInsets.only(right: 4, top: 0, bottom: 16),
             child: (hasUserLocation && nearestAED != null)
-                ? NotificationListener<ScrollNotification>(  // ✅ ADD THIS WRAPPER
+                ? NotificationListener<ScrollNotification>(
               onNotification: (ScrollNotification notification) {
                 if (notification is ScrollUpdateNotification) {
-                  final bool shouldShowShadow = notification.metrics.pixels > 0;
+                  final bool shouldShowShadow = notification.metrics.pixels > 5; // ✅ Add threshold
 
                   if (shouldShowShadow != _hasScrolledUnderHeader) {
                     setState(() {
                       _hasScrolledUnderHeader = shouldShowShadow;
                     });
                   }
+                } else if (notification is ScrollEndNotification) {
+                  // ✅ Reset shadow when scroll ends at top
+                  if (notification.metrics.pixels <= 5 && _hasScrolledUnderHeader) {
+                    setState(() {
+                      _hasScrolledUnderHeader = false;
+                    });
+                  }
                 }
                 return false;
               },
-              child: CustomScrollView(  // ✅ CHANGED: Now wrapped in NotificationListener
+              child: CustomScrollView(  // ✅ ONLY ONE NotificationListener wrapping CustomScrollView
                 controller: scrollController,
                 slivers: [
                   // ⭐ PINNED TITLE WITH CONDITIONAL SHADOW
@@ -2260,7 +2403,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                             ),
                           ),
                           FutureBuilder<String>(
-                            future: NetworkService.getFormattedSyncTime(),
+                            future: _syncTimeFuture,
                             builder: (context, snapshot) {
                               if (snapshot.hasData) {
                                 return Text(
@@ -2606,7 +2749,7 @@ class _TransportModeSelector extends StatelessWidget {
           ),
           if (isSelected) ...[
             const Spacer(),
-            Icon(Icons.check, color: color, size: 16),
+            const Icon(Icons.check, color: color, size: 16),
           ]
         ],
       ),

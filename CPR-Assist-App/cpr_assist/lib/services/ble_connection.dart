@@ -5,10 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/decrypted_data.dart';
 import 'dart:math' as math;
 
+import '../utils/app_constants.dart';
+
 class BLEConnection {
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
   Timer? _stateDebounceTimer;
+  Timer? _reconnectTimer;
+
 
   Stream<Map<String, dynamic>> get dataStream => decryptedDataHandler.dataStream;
   StreamSubscription<BluetoothConnectionState>? _connectionStateSub;
@@ -20,7 +24,6 @@ class BLEConnection {
     required this.prefs,
     required this.onStatusUpdate,
   }) {
-    _disableBleLogs();
     _listenToAdapterState();
 
     // Initial connection attempt
@@ -77,7 +80,7 @@ class BLEConnection {
       if (state == BluetoothAdapterState.off) {
         _bluetoothWasOff = true;
         _updateConnectionStatus("Bluetooth OFF");
-        await _cleanupConnection();
+        _cleanupConnection();
       } else if (state == BluetoothAdapterState.on) {
         if (_bluetoothWasOff && !_userDisconnected) {
           // Auto-connect when Bluetooth turns back on (unless user manually disconnected)
@@ -120,38 +123,34 @@ class BLEConnection {
     _updateConnectionStatus("Scanning for Arduino...");
 
     try {
+      // ✅ Cancel existing subscriptions FIRST
+      _scanSubscription?.cancel();
+      _scanSubscription = null;
+      _scanTimeoutTimer?.cancel();
+
       // Stop any existing scan
       if (FlutterBluePlus.isScanningNow) {
         await FlutterBluePlus.stopScan();
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      _scanSubscription?.cancel();
-      _scanTimeoutTimer?.cancel();
-
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
       _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         for (var result in results) {
-          if (result.device.platformName.contains("Arduino Nano 33 BLE")) {
+          if (result.device.platformName.contains(AppConstants.bleDeviceName)) {
             debugPrint("✅ Found Arduino: ${result.device.platformName}");
             _stopScanAndConnect(result.device);
             return;
           }
         }
-      });
-
-      // Handle scan timeout
-      _scanTimeoutTimer = Timer(const Duration(seconds: 15), () {
+        // Will be called when scan ends with no match found
+      }, onDone: () {
         if (isScanning) {
-          debugPrint("❌ Scan timeout - Arduino not found");
-          _scanSubscription?.cancel();
-          FlutterBluePlus.stopScan();
           isScanning = false;
-          _updateConnectionStatus("Arduino Not Found - Tap to Retry");
+          _updateConnectionStatus("Glove Not Found - Tap to Retry");
         }
       });
-
     } catch (e) {
       debugPrint("❌ Scan error: $e");
       isScanning = false;
@@ -182,20 +181,13 @@ class BLEConnection {
     try {
       // Clean up existing connection
       if (connectedDevice != null && connectedDevice != device) {
-        await _cleanupConnection();
+        _cleanupConnection();
       }
 
       connectedDevice = device;
       _updateConnectionStatus("Connecting...");
 
-      await device.connect().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw TimeoutException('Connection timeout'),
-      );
-
-      await Future.delayed(const Duration(milliseconds: 2000));
-
-      // Monitor connection state
+      // ✅ Set up connection state listener BEFORE connecting
       _connectionStateSub?.cancel();
       _connectionStateSub = device.connectionState.listen((state) {
         _currentConnectionState = state;
@@ -206,6 +198,14 @@ class BLEConnection {
           _handleDisconnection();
         }
       });
+
+      // ✅ Now connect (listener is already set up)
+      await device.connect().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Connection timeout'),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 2000));
 
       await _setupNotifications(device);
 
@@ -298,39 +298,44 @@ class BLEConnection {
 
   /// **Auto-reconnect after unexpected disconnection**
   Future<void> _autoReconnect() async {
-    if (_userDisconnected) return; // Don't auto-reconnect if user disconnected
+    if (_userDisconnected) return;
 
-    debugPrint("🔄 Auto-reconnecting...");
+    // Cancel any existing reconnect timer
+    _reconnectTimer?.cancel();
 
-    // Wait a moment before trying to reconnect
-    int delaySeconds = math.min(2 * math.pow(2, _reconnectAttempts).toInt(), 30);
-    await Future.delayed(Duration(seconds: delaySeconds));
-    _reconnectAttempts++;
-
+    // Check max attempts BEFORE delay
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       debugPrint("❌ Max reconnect attempts reached");
       _updateConnectionStatus("Connection Lost - Tap to Retry");
+      _reconnectAttempts = 0; // ✅ Reset for next manual retry
       return;
     }
 
-    if (_userDisconnected) return; // Check again after delay
+    debugPrint("🔄 Auto-reconnect attempt ${_reconnectAttempts + 1}/$_maxReconnectAttempts");
 
-    // Try to reconnect
-    _performSingleScan();
+    // Calculate delay AFTER incrementing
+    _reconnectAttempts++;
+    final delaySeconds = math.min(
+      AppConstants.bleReconnectInterval.inSeconds * math.pow(2, _reconnectAttempts - 1).toInt(),
+      AppConstants.bleReconnectTimeout.inSeconds,
+    );
+
+    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
+      if (_userDisconnected) return;
+      _performSingleScan();
+    });
   }
 
-  Future<void> _cleanupConnection() async {
+  void _cleanupConnection() {
     _bleNotificationSubscription?.cancel();
     _connectionStateSub?.cancel();
     _stateDebounceTimer?.cancel();
     _receivedBuffer.clear();
 
     if (connectedDevice != null) {
-      try {
-        await connectedDevice!.disconnect();
-      } catch (e) {
+      connectedDevice!.disconnect().catchError((e) {
         debugPrint("Error disconnecting: $e");
-      }
+      });
     }
 
     connectedDevice = null;
@@ -348,7 +353,11 @@ class BLEConnection {
     debugPrint("🔄 Manual retry requested");
 
     _reconnectAttempts = 0;
-    _userDisconnected = false; // Reset manual disconnect flag
+    _userDisconnected = false;
+
+    // ✅ ADD: Cancel any pending reconnect timer
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
 
     // Stop any ongoing operations
     if (isScanning) {
@@ -359,7 +368,7 @@ class BLEConnection {
     }
 
     if (_isConnecting) {
-      await _cleanupConnection();
+      _cleanupConnection();
       _isConnecting = false;
     }
 
@@ -377,18 +386,15 @@ class BLEConnection {
   Future<void> disconnectDevice() async {
     debugPrint("🔌 Manual disconnect requested");
     _userDisconnected = true; // Set flag to prevent auto-reconnect
-    await _cleanupConnection();
+    _cleanupConnection();
     _updateConnectionStatus("Disconnected");
-  }
-
-  void _disableBleLogs() {
-    // Your existing implementation
   }
 
   void dispose() {
     _scanTimeoutTimer?.cancel();
     _stateDebounceTimer?.cancel();
     _scanSubscription?.cancel();
+    _reconnectTimer?.cancel();
     _bleNotificationSubscription?.cancel();
     _adapterStateSubscription?.cancel();
     _connectionStateSub?.cancel();

@@ -13,13 +13,18 @@ module.exports = function (pool) {
             body('compression_count').isInt().withMessage('Compression count must be an integer'),
             body('correct_depth').isInt().withMessage('Correct depth must be an integer'),
             body('correct_frequency').isInt().withMessage('Correct frequency must be an integer'),
-            body('correct_angle').isFloat({ min: 0 }).withMessage('Correct angle must be a positive number'),
             body('correct_rebound').optional().isBoolean().withMessage('Correct rebound must be a boolean'),
             body('patient_heart_rate').optional().isInt().withMessage('Patient heart rate must be an integer'),
             body('patient_temperature').optional().isFloat().withMessage('Patient temperature must be a float'),
             body('user_heart_rate').optional().isInt().withMessage('User heart rate must be an integer'),
-            body('user_temperature_rate').optional().isFloat().withMessage('User temperature rate must be a float'),
+            body('user_temperature').optional().isFloat().withMessage('User temperature must be a float'),
             body('session_duration').isInt().withMessage('Session duration must be an integer'),
+            body('correct_recoil').optional().isInt({ min: 0 }).withMessage('Correct recoil must be a non-negative integer'),
+            body('depth_rate_combo').optional().isInt({ min: 0 }).withMessage('Depth rate combo must be a non-negative integer'),
+            body('average_depth').optional().isFloat({ min: 0 }).withMessage('Average depth must be a non-negative number'),
+            body('average_frequency').optional().isFloat({ min: 0 }).withMessage('Average frequency must be a non-negative number'),
+            body('total_grade').optional().isFloat({ min: 0, max: 100 }).withMessage('Total grade must be between 0 and 100'),
+            body('session_start').optional().isISO8601().withMessage('Session start must be a valid ISO date'),
         ],
         async (req, res, next) => {
             const errors = validationResult(req);
@@ -32,38 +37,50 @@ module.exports = function (pool) {
                 compression_count,
                 correct_depth,
                 correct_frequency,
-                correct_angle,
                 correct_rebound,
                 patient_heart_rate,
                 patient_temperature,
                 user_heart_rate,
-                user_temperature_rate,
+                user_temperature,
                 session_duration,
+                correct_recoil,
+                depth_rate_combo,
+                average_depth,
+                average_frequency,
+                total_grade,
+                session_start,
             } = req.body;
 
             try {
                 await pool.query(
                     `INSERT INTO cpr_sessions 
-                    (user_id, compression_count, correct_depth, correct_frequency, correct_angle, correct_rebound, 
-                     patient_heart_rate, patient_temperature, user_heart_rate, user_temperature_rate, session_duration, 
-                     session_start, session_end)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
+    (user_id, compression_count, correct_depth, correct_frequency,
+     correct_recoil, depth_rate_combo, average_depth, average_frequency,
+     correct_rebound, patient_heart_rate, patient_temperature,
+     user_heart_rate, user_temperature, session_duration,
+     total_grade, session_start, session_end)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())`,
                     [
                         user_id,
                         compression_count,
                         correct_depth,
                         correct_frequency,
-                        correct_angle,
-                        correct_rebound,
-                        patient_heart_rate,
-                        patient_temperature,
-                        user_heart_rate,
-                        user_temperature_rate,
+                        correct_recoil ?? 0,
+                        depth_rate_combo ?? 0,
+                        average_depth ?? 0.0,
+                        average_frequency ?? 0.0,
+                        correct_rebound ?? false,
+                        patient_heart_rate ?? null,
+                        patient_temperature ?? null,
+                        user_heart_rate ?? null,
+                        user_temperature ?? null,
                         session_duration,
+                        total_grade ?? 0.0,
+                        session_start ?? new Date().toISOString(),
                     ]
                 );
 
-                res.json({ message: 'Session summary saved successfully.' });
+                res.json({ success: true, message: 'Session summary saved successfully.' });
             } catch (err) {
                 console.error('Error saving session summary:', err.message);
                 next(err);
@@ -77,12 +94,14 @@ module.exports = function (pool) {
             const user_id = req.user.id;
 
             const result = await pool.query(
-                `SELECT id, compression_count, correct_depth, correct_frequency, correct_angle, correct_rebound, 
-                        patient_heart_rate, patient_temperature, user_heart_rate, user_temperature_rate, session_duration, 
-                        session_start, session_end
-                 FROM cpr_sessions
-                 WHERE user_id = $1
-                 ORDER BY session_start DESC`,
+                `SELECT id, compression_count, correct_depth, correct_frequency,
+        correct_recoil, depth_rate_combo, average_depth, average_frequency,
+        correct_rebound, patient_heart_rate, patient_temperature,
+        user_heart_rate, user_temperature, session_duration,
+        total_grade, session_start, session_end
+ FROM cpr_sessions
+ WHERE user_id = $1
+ ORDER BY session_start DESC`,
                 [user_id]
             );
 

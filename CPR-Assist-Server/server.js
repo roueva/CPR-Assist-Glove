@@ -8,6 +8,8 @@ const initializeAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
+
 
 
 // ✅ Environment Configuration
@@ -57,6 +59,8 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(compression());
+
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 300, // ✅ Increased from 100 to 300 for route preloading
@@ -64,9 +68,7 @@ const generalLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     // ✅ Skip rate limit for health/status checks
-    skip: (req) => {
-        return req.path === '/health' || req.path === '/' || req.path === '/api/maps-key';
-    }
+    skip: (req) => req.path === '/health' || req.path === '/'
 });
 
 const bulkUpdateLimiter = rateLimit({
@@ -76,7 +78,8 @@ const bulkUpdateLimiter = rateLimit({
 });
 
 app.use('/auth', generalLimiter);
-
+app.use('/aed/sync', bulkUpdateLimiter);
+app.use('/sessions', generalLimiter);
 
 // ✅ Check Required Environment Variables
 const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY', 'ISAVELIVES_API_KEY'];
@@ -182,23 +185,6 @@ app.get('/health', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
-});
-
-const mapsKeyLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 100, // 100 requests per hour per IP
-    message: { error: 'Too many API key requests' }
-});
-
-app.get('/api/maps-key', mapsKeyLimiter, (req, res) => {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
-    if (!apiKey) {
-        logger.error('🚨 Missing environment variable: GOOGLE_MAPS_API_KEY');
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
-
-    res.json({ apiKey: apiKey });
 });
 
 // ✅ Initialize Routes

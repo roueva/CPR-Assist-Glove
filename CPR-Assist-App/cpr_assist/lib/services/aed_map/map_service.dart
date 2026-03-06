@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_compass/flutter_compass.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../utils/app_constants.dart';
 import 'location_service.dart';
@@ -33,11 +32,17 @@ class MapViewController {
       List<LatLng> aedLocations,
       {double padding = 60}
       ) async {
-    if (_isAnimating) return;
+    print("🗺️ zoomToUserAndClosestAEDs called, _isAnimating=$_isAnimating");
+
+    if (_isAnimating) {
+      print("⚠️ zoomToUserAndClosestAEDs BLOCKED by _isAnimating");
+      return;
+    }
     _isAnimating = true;
 
     try {
       if (aedLocations.isEmpty) {
+        print("🗺️ No AEDs, zooming to user only");
         await controller.animateCamera(
             CameraUpdate.newLatLngZoom(userLocation, 15)
         );
@@ -45,10 +50,15 @@ class MapViewController {
       }
 
       final closestAEDs = getClosestAEDsToPoint(userLocation, aedLocations, 2);
+      print("🎯 closestAEDs for bounds: $closestAEDs");
+
       final bounds = getBoundsFromPoints([userLocation, ...closestAEDs]);
+      print("📦 bounds: SW=${bounds.southwest}, NE=${bounds.northeast}");
+
       await controller.animateCamera(
           CameraUpdate.newLatLngBounds(bounds, padding)
       );
+      print("✅ animateCamera done");
     } finally {
       _isAnimating = false;
       await updateCameraPosition();
@@ -210,8 +220,8 @@ class MapViewController {
     required LatLng userLocation,
     required LatLng aedLocation,
     required List<LatLng> polylinePoints,
-    double padding = 30,
-    double ghostPaddingFactor = 0.50,
+    double padding = 80,
+    double ghostPaddingFactor = 0.75,
   }) async {
     if (_isAnimating) return;
     _isAnimating = true;
@@ -306,39 +316,6 @@ class MapViewController {
   void dispose() {
     _isAnimating = false;
     _lastCameraPosition = null;
-  }
-}
-
-class CompassCameraController {
-  GoogleMapController? _mapController;
-  StreamSubscription<CompassEvent>? _compassSubscription;
-  LatLng? _userLocation;
-  bool _shouldFollow = true;
-  bool _isUserControlling = false;
-  bool _hasStartedNavigation = false;
-
-  VoidCallback? _setCompassMovementFlag;
-
-  void initialize(GoogleMapController mapController, {VoidCallback? setCompassMovementFlag}) {
-    _mapController = mapController;
-    _setCompassMovementFlag = setCompassMovementFlag;
-  }
-
-
-  void updateState({
-    LatLng? userLocation,
-    bool? shouldFollow,
-    bool? isUserControlling,
-    bool? hasStartedNavigation,
-  }) {
-    if (userLocation != null) _userLocation = userLocation;
-    if (shouldFollow != null) _shouldFollow = shouldFollow;
-    if (isUserControlling != null) _isUserControlling = isUserControlling;
-    if (hasStartedNavigation != null) _hasStartedNavigation = hasStartedNavigation;
-  }
-
-  void dispose() {
-    _compassSubscription?.cancel();
   }
 }
 

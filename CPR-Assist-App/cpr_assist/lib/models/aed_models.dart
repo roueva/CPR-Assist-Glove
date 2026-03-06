@@ -46,8 +46,8 @@ class AED {
   }
 
   String get formattedDistance {
-    // Use API distance if available (from nearby query)
-    final distanceToUse = distanceFromAPI ?? distanceInMeters;
+    // Prefer freshly calculated distanceInMeters; fall back to API distance from initial fetch
+    final distanceToUse = distanceInMeters > 0 ? distanceInMeters : (distanceFromAPI ?? 0.0);
 
     // ✅ Handle zero/invalid distance
     if (distanceToUse <= 0) {
@@ -98,13 +98,13 @@ class AED {
       foundation: map['foundation'],
       address: map['address'],
       location: LatLng(
-        (map['latitude'] as num).toDouble(),
-        (map['longitude'] as num).toDouble(),
+        (map['latitude'] as num?)?.toDouble() ?? 0.0,
+        (map['longitude'] as num?)?.toDouble() ?? 0.0,
       ),
       availability: map['availability'],
       aedWebpage: map['aed_webpage'],
       lastUpdated: map['last_updated'] != null
-          ? DateTime.parse(map['last_updated'])
+          ? DateTime.parse(map['last_updated']).toLocal()
           : null,
       distanceFromAPI: map['distance'] != null
           ? (map['distance'] as num).toDouble() * 1000 // Convert km to meters
@@ -140,125 +140,4 @@ class AED {
 
   // Helper to check if AED has webpage
   bool get hasWebpage => aedWebpage != null && aedWebpage!.isNotEmpty;
-}
-
-class NavigationState {
-  final bool isActive;
-  final LatLng? destination;
-  final Polyline? route;
-  final String transportMode;
-  final String estimatedTime;
-  final double? distance;
-  final bool hasStarted;
-  final double? originalDistance;           // ✅ ADD THIS
-  final int? originalDurationMinutes;       // ✅ ADD THIS
-
-  const NavigationState({
-    this.isActive = false,
-    this.destination,
-    this.route,
-    this.transportMode = 'walking',
-    this.estimatedTime = '',
-    this.distance,
-    this.hasStarted = false,
-    this.originalDistance,                  // ✅ ADD THIS
-    this.originalDurationMinutes,           // ✅ ADD THIS
-  });
-
-  NavigationState copyWith({
-    bool? isActive,
-    LatLng? destination,
-    Polyline? route,
-    String? transportMode,
-    String? estimatedTime,
-    double? distance,
-    double? currentBearing,
-    double? currentSpeed,
-    DateTime? lastUpdated,
-    bool? hasStarted,
-    double? originalDistance,               // ✅ ADD THIS
-    int? originalDurationMinutes,           // ✅ ADD THIS
-  }) {
-    return NavigationState(
-      isActive: isActive ?? this.isActive,
-      destination: destination ?? this.destination,
-      route: route ?? this.route,
-      transportMode: transportMode ?? this.transportMode,
-      estimatedTime: estimatedTime ?? this.estimatedTime,
-      distance: distance ?? this.distance,
-      hasStarted: hasStarted ?? this.hasStarted,
-      originalDistance: originalDistance ?? this.originalDistance,           // ✅ ADD THIS
-      originalDurationMinutes: originalDurationMinutes ?? this.originalDurationMinutes,  // ✅ ADD THIS
-    );
-  }
-}
-
-class AEDMapState {
-  final List<AED> aedList;
-  final LatLng? userLocation;
-  final bool isLoading;
-  final bool isRefreshing;
-  final NavigationState navigation;
-  final int currentBatch;
-  final bool isOffline;
-  final DateTime? lastSyncTime;
-
-  const AEDMapState({
-    this.aedList = const [],
-    this.userLocation,
-    this.isLoading = true,
-    this.isRefreshing = false,
-    this.navigation = const NavigationState(),
-    this.currentBatch = 3,
-    this.isOffline = false,
-    this.lastSyncTime,
-  });
-
-  LatLng? get selectedAED => navigation.destination;
-  String get transportMode => navigation.transportMode;
-  bool get hasSelectedRoute => navigation.isActive;
-  Polyline? get navigationLine => navigation.route;
-  String get estimatedTime => navigation.estimatedTime;
-  double? get distance => navigation.distance;
-  bool get navigationMode => navigation.isActive;
-
-  // NEW: Helper to get formatted sync time
-  String get formattedSyncTime {
-    if (lastSyncTime == null) return 'Never synced';
-
-    final now = DateTime.now();
-    final difference = now.difference(lastSyncTime!);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays} ${difference.inDays == 1 ? "day" : "days"} ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} ${difference.inHours == 1 ? "hour" : "hours"} ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} ${difference.inMinutes == 1 ? "minute" : "minutes"} ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
-  AEDMapState copyWith({
-    List<AED>? aedList,
-    LatLng? userLocation,
-    bool? isLoading,
-    bool? isRefreshing,
-    NavigationState? navigation,
-    int? currentBatch,
-    bool? isOffline,
-    DateTime? lastSyncTime,
-  }) {
-    return AEDMapState(
-      aedList: aedList ?? this.aedList,
-      userLocation: userLocation ?? this.userLocation,
-      isLoading: isLoading ?? this.isLoading,
-      isRefreshing: isRefreshing ?? this.isRefreshing,
-      navigation: navigation ?? this.navigation,
-      currentBatch: currentBatch ?? this.currentBatch,
-      isOffline: isOffline ?? this.isOffline,
-      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
-    );
-  }
 }

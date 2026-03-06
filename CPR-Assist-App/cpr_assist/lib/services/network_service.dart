@@ -8,13 +8,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../utils/app_constants.dart';
+
 class NetworkService {
-  final SharedPreferences _prefs;
+  static final NetworkService _instance = NetworkService._internal();
+  factory NetworkService() => _instance;
+  NetworkService._internal();
+
+  // ✅ SINGLE declaration - late final
+  late final SharedPreferences _prefs;
+
+  // ✅ Initialize method (call from main.dart)
+  Future<void> initialize(SharedPreferences prefs) async {
+    _prefs = prefs;
+  }
+
   static StreamController<bool>? _connectivityController;
   static bool _lastConnectivityState = true;
   static Timer? _connectivityTimer;
   static final List<Function(bool)> _connectivityListeners = [];
-  NetworkService(this._prefs);
 
   static String get baseUrl {
     String? url = dotenv.env['BASE_URL'];
@@ -22,15 +34,6 @@ class NetworkService {
       throw Exception("❌ BASE_URL is missing from .env");
     }
     return url;
-  }
-
-  static Future<void> testConnection() async {
-    try {
-      final response = await http.get(Uri.parse('${NetworkService.baseUrl}/api/test'));
-      print("🚀 Server Test Response: ${response.body}");
-    } catch (e) {
-      print("❌ Failed to connect to Railway server: $e");
-    }
   }
 
   static Future<bool> isConnected() async {
@@ -41,7 +44,6 @@ class NetworkService {
         return false;
       }
 
-      // Quick DNS lookup instead of full HTTP request
       final result = await InternetAddress.lookup('google.com')
           .timeout(const Duration(seconds: 3));
 
@@ -51,11 +53,10 @@ class NetworkService {
     }
   }
 
-  // Add this for your app-specific connectivity
   static Future<bool> canReachBackend() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/health'), // ← Add a lightweight health endpoint
+        Uri.parse('$baseUrl/health'),
       ).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
@@ -74,7 +75,6 @@ class NetworkService {
         _lastConnectivityState = isConnected;
         _connectivityController?.add(isConnected);
 
-        // Notify all listeners
         for (final listener in _connectivityListeners) {
           listener(isConnected);
         }
@@ -90,14 +90,20 @@ class NetworkService {
   }
 
   static Stream<bool> get connectivityStream =>
-      _connectivityController?.stream ?? Stream.empty();
+      _connectivityController?.stream ?? const Stream.empty();
 
   static void addConnectivityListener(Function(bool) listener) {
-    _connectivityListeners.add(listener);
+    if (!_connectivityListeners.contains(listener)) {
+      _connectivityListeners.add(listener);
+    }
   }
 
   static void removeConnectivityListener(Function(bool) listener) {
     _connectivityListeners.remove(listener);
+  }
+
+  static void clearAllListeners() {
+    _connectivityListeners.clear();
   }
 
   static bool get lastKnownConnectivityState => _lastConnectivityState;
@@ -120,8 +126,8 @@ class NetworkService {
   }
 
   Future<void> removeToken() async {
-    await _prefs.remove('jwt_token'); // ✅ Only remove the JWT token
-    await _prefs.remove('user_id');   // ✅ Remove user ID as well
+    await _prefs.remove('jwt_token');
+    await _prefs.remove('user_id');
   }
 
   // 🔹 AUTHENTICATION 🔹
@@ -136,7 +142,7 @@ class NetworkService {
       Uri.parse('$baseUrl/auth/refresh-token'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'token': token}),
-    );
+    ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       final jsonResponse = jsonDecode(response.body);
@@ -157,13 +163,11 @@ class NetworkService {
     if (token == null) return false;
 
     try {
-      // ✅ Check both format AND expiration
       return !JwtDecoder.isExpired(token);
     } catch (e) {
       return false;
     }
   }
-
 
   Future<bool> ensureAuthenticated() async {
     if (await isTokenValid()) {
@@ -224,9 +228,14 @@ class NetworkService {
         throw Exception('Unsupported HTTP method: $method');
       }
 
-      return _handleResponse(response, endpoint, method, body: body, requiresAuth: requiresAuth);
+      return await _handleResponse(response, endpoint, method, body: body, requiresAuth: requiresAuth);
+    } on TimeoutException {
+      throw Exception('Request timed out — check your connection.');
+    } on SocketException {
+      throw Exception('No internet connection.');
     } catch (e) {
-      throw Exception('Network request failed.');
+      if (e is Exception) rethrow;
+      throw Exception('Network request failed: $e');
     }
   }
 
@@ -258,19 +267,22 @@ class NetworkService {
     throw Exception('HTTP Error ${response.statusCode}: $errorMessage');
   }
 
-// Add this helper method BEFORE fetchAEDLocations (around line 165):
   Future<T?> _retryOperation<T>(
       Future<T> Function() operation, {
         int maxRetries = 3,
-        Duration delay = const Duration(seconds: 2),
+        Duration initialDelay = const Duration(seconds: 2),
       }) async {
     for (int i = 0; i < maxRetries; i++) {
       try {
         return await operation();
       } catch (e) {
         if (i == maxRetries - 1) rethrow;
-        print("⚠️ Retry ${i + 1}/$maxRetries after error: $e");
-        await Future.delayed(delay * (i + 1)); // Exponential backoff
+        // Only retry on network-level errors, not HTTP errors
+        if (e is! SocketException && e is! TimeoutException) rethrow;
+
+        final backoffDelay = initialDelay * (1 << i);
+        print("⚠️ Retry ${i + 1}/$maxRetries after error: $e (waiting ${backoffDelay.inSeconds}s)");
+        await Future.delayed(backoffDelay);
       }
     }
     return null;
@@ -280,20 +292,20 @@ class NetworkService {
     return await _retryOperation<List<dynamic>>(() async {
       try {
         final url = Uri.parse('$baseUrl/aed');
-        final response = await http.get(url);
-
+        final response = await http.get(
+          url,
+          headers: {'Accept': 'application/json'},
+        ).timeout(AppConstants.networkTimeout);
         if (response.statusCode == 200) {
           final lastUpdated = response.headers['x-data-last-updated'];
           final totalAEDs = response.headers['x-total-aeds'];
 
-          // ✅ Save the BACKEND'S sync time (not our fetch time)
           if (lastUpdated != null) {
             print("🕒 Backend last synced from iSaveLives: $lastUpdated");
 
             try {
               final backendSyncTime = DateTime.parse(lastUpdated);
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setInt(_lastSyncKey, backendSyncTime.millisecondsSinceEpoch);
+              await _prefs.setInt(_lastSyncKey, backendSyncTime.millisecondsSinceEpoch);
               print("💾 Saved backend sync timestamp: $backendSyncTime");
             } catch (e) {
               print("⚠️ Error parsing backend sync time: $e");
@@ -317,10 +329,8 @@ class NetworkService {
     }) ?? [];
   }
 
-  // ✅ Track last sync time
   static const String _lastSyncKey = 'last_sync_timestamp';
 
-  /// Get last sync time
   static Future<DateTime?> getLastSyncTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -334,7 +344,6 @@ class NetworkService {
     return null;
   }
 
-  /// Save sync time (call this after every sync attempt)
   static Future<void> saveLastSyncTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -345,7 +354,6 @@ class NetworkService {
     }
   }
 
-  /// Get formatted sync time
   static Future<String> getFormattedSyncTime() async {
     final syncTime = await getLastSyncTime();
 
@@ -369,7 +377,6 @@ class NetworkService {
   }
 
   static String? get googleMapsApiKey {
-    // ✅ Just read from .env directly
     final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
     if (key == null || key.isEmpty) {
       print("❌ GOOGLE_MAPS_API_KEY is missing from .env");

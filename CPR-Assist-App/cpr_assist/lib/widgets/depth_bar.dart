@@ -105,9 +105,9 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
                 final percent = (_animation.value / _maxDepth).clamp(0.0, 1.0);
                 final positionFromBottom = (1.0 - percent) * usableHeight;
 
-                final fadeOutRange = 0.4; // cm range near top/bottom where it fades
-                final fadeOutDepthTop = 0.0 + fadeOutRange;
-                final fadeOutDepthBottom = _maxDepth - fadeOutRange;
+                const fadeOutRange = 0.4; // cm range near top/bottom where it fades
+                const fadeOutDepthTop = 0.0 + fadeOutRange;
+                const fadeOutDepthBottom = _maxDepth - fadeOutRange;
 
                 double opacity = 1.0;
 

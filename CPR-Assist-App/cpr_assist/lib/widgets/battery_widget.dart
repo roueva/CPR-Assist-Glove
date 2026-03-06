@@ -1,6 +1,8 @@
   import 'package:flutter/material.dart';
   import 'package:flutter_svg/flutter_svg.dart';
 
+import '../utils/app_constants.dart';
+
   class GloveBatteryIndicator extends StatelessWidget {
     final int batteryPercentage;
     final bool isCharging; // ⚡️ Optional future support
@@ -14,10 +16,19 @@
     String _getBatteryIcon() {
       if (isCharging) return 'assets/icons/battery_charging.svg';
 
-      if (batteryPercentage >= 80) return 'assets/icons/battery_100.svg';
-      if (batteryPercentage >= 60) return 'assets/icons/battery_70.svg';
-      if (batteryPercentage >= 40) return 'assets/icons/battery_50.svg';
-      if (batteryPercentage >= 10) return 'assets/icons/battery_30.svg';
+      // ✅ Use constants instead of hardcoded values
+      if (batteryPercentage >= AppConstants.batteryFull) {
+        return 'assets/icons/battery_100.svg';
+      }
+      if (batteryPercentage >= AppConstants.batteryHigh) {
+        return 'assets/icons/battery_70.svg';
+      }
+      if (batteryPercentage >= AppConstants.batteryMedium) {
+        return 'assets/icons/battery_50.svg';
+      }
+      if (batteryPercentage >= AppConstants.batteryLow) {
+        return 'assets/icons/battery_30.svg';
+      }
       return 'assets/icons/battery_1.svg';
     }
 

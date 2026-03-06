@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../utils/app_constants.dart';
 
@@ -13,6 +14,7 @@ class LocationService {
   Timer? _improvementTimer;
   static StreamController<bool>? _locationServiceController;
   static Timer? _locationServiceTimer;
+  static StreamSubscription<ServiceStatus>? _serviceStatusSubscription;
 
   Future<bool> get hasPermission async {
     final status = await Geolocator.checkPermission();
@@ -55,18 +57,40 @@ class LocationService {
     bool showSettingsDialog = true,
   }) async {
     try {
-      // Just request permission - this handles location services AND app permissions
-      final granted = await requestPermission();
-
-      if (!granted) {
-        // Check if it's permanently denied
-        final currentPermission = await Geolocator.checkPermission();
-        if (currentPermission == LocationPermission.deniedForever && showSettingsDialog && context.mounted) {
-          return await _showPermissionSettingsDialog(context);
-        }
+      // Step 1: Trigger the NATIVE OS dialog to enable location services
+      // This is the Google Maps-style popup, not the Settings app
+      final isEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!isEnabled) {
+        final locService = loc.Location();
+        final enabled = await locService.requestService();
+        // If user said no, bail out
+        if (!enabled) return false;
+        // Small delay for the OS to register the change
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      return granted;
+      // Step 2: Check and request app-level permission
+      final currentPermission = await Geolocator.checkPermission();
+
+      if (currentPermission == LocationPermission.whileInUse ||
+          currentPermission == LocationPermission.always) {
+        return true;
+      }
+
+      if (currentPermission == LocationPermission.deniedForever) {
+        if (showSettingsDialog && context.mounted) {
+          return await _showPermissionSettingsDialog(context);
+        }
+        return false;
+      }
+
+      if (currentPermission == LocationPermission.denied) {
+        final status = await Geolocator.requestPermission();
+        return status == LocationPermission.whileInUse ||
+            status == LocationPermission.always;
+      }
+
+      return false;
     } catch (e) {
       print("❌ Exception in permission handling: $e");
       if (context.mounted) {
@@ -75,7 +99,6 @@ class LocationService {
       return false;
     }
   }
-
 
   Future<bool> _showPermissionSettingsDialog(BuildContext context) async {
     final result = await showDialog<bool>(
@@ -118,23 +141,22 @@ class LocationService {
   }
 
   static void startLocationServiceMonitoring() {
+    if (_serviceStatusSubscription != null) return;
     _locationServiceController ??= StreamController<bool>.broadcast();
 
-    _locationServiceTimer?.cancel();
-    _locationServiceTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      try {
-        final isEnabled = await Geolocator.isLocationServiceEnabled();
-        _locationServiceController?.add(isEnabled);
-      } catch (e) {
-        print("Error checking location service: $e");
-      }
-    });
+    _serviceStatusSubscription = Geolocator.getServiceStatusStream().listen(
+          (ServiceStatus status) {
+        _locationServiceController?.add(status == ServiceStatus.enabled);
+      },
+    );
   }
 
   static Stream<bool>? get locationServiceStream => _locationServiceController?.stream;
 
 
   static void stopLocationServiceMonitoring() {
+    _serviceStatusSubscription?.cancel();
+    _serviceStatusSubscription = null;
     _locationServiceTimer?.cancel();
     _locationServiceController?.close();
     _locationServiceController = null;
@@ -144,7 +166,7 @@ class LocationService {
     required BuildContext context,
     bool showPermissionDialog = true,
     bool showErrorMessages = true,
-    bool useTimeout = false, // NEW: Allow disabling timeout
+    bool useTimeout = false,
   }) async {
     try {
       if (showPermissionDialog) {
@@ -152,13 +174,10 @@ class LocationService {
           context: context,
           showSettingsDialog: true,
         );
-
-        if (!hasPermissions) {
-          return null;
-        }
+        if (!hasPermissions) return null;
       }
 
-      // Get current position without timeout for initial acquisition
+      // No services check here — let Android show the system dialog naturally
       final position = await getCurrentPosition(
         timeLimit: useTimeout ? const Duration(seconds: 10) : null,
       );
@@ -179,10 +198,9 @@ class LocationService {
     }
   }
 
-
   Future<Position?> getCurrentPosition({
     LocationAccuracy accuracy = LocationAccuracy.medium,
-    Duration? timeLimit = const Duration(minutes: 10),
+    Duration? timeLimit = const Duration(seconds: 30),
   }) async {
     try {
       return await Geolocator.getCurrentPosition(
@@ -234,32 +252,45 @@ class LocationService {
     );
   }
   /// Progressive location tracking with accuracy that adapts to usage
-  void startProgressiveLocationTracking({
+  Future<void> startProgressiveLocationTracking({
     required Function(LatLng) onLocationUpdate,
     required bool isNavigating,
     int distanceFilter = 10,
-  }) {
+  }) async {
     _positionSubscription?.cancel();
+    _positionSubscription = null;
 
-    // PHASE 1: Quick start with LOW accuracy (instant ~200ms)
+    // Check services are actually enabled before starting stream
+    final isEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!isEnabled) {
+      print("⚠️ Location services disabled — not starting GPS stream");
+      return;
+    }
+
     print("🔍 GPS Phase 1: Low accuracy (quick start)");
 
+    // ✅ Add flag to prevent multiple upgrades
+    bool hasUpgraded = false;
+
     _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: LocationSettings(
+      locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.low,
-        distanceFilter: 50, // Relaxed for quick fix
+        distanceFilter: 0,    // ← emit first position immediately
       ),
     ).listen((position) {
       onLocationUpdate(LatLng(position.latitude, position.longitude));
+    });
 
-      // PHASE 2: Upgrade after first fix (based on mode)
-      Future.delayed(const Duration(seconds: 1), () {
+    _improvementTimer = Timer(const Duration(seconds: 30), () {
+      if (!hasUpgraded) {
+        hasUpgraded = true;
+        print("⏱️ GPS Phase 1 timeout — upgrading anyway");
         _upgradeToTargetAccuracy(
           onLocationUpdate: onLocationUpdate,
           isNavigating: isNavigating,
           distanceFilter: distanceFilter,
         );
-      });
+      }
     });
   }
 
@@ -268,34 +299,53 @@ class LocationService {
     required Function(LatLng) onLocationUpdate,
     required bool isNavigating,
     required int distanceFilter,
-  }) {
+  }) async {
     _positionSubscription?.cancel();
+
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      print("🔴 Location services disabled - cannot upgrade accuracy");
+      return;
+    }
 
     final accuracy = isNavigating ? LocationAccuracy.high : LocationAccuracy.medium;
 
-    print("📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy, ${isNavigating ? 'NO filter (time-based)' : '${distanceFilter}m filter'}");
+    print("📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy");
 
     if (isNavigating) {
-      // ✅ NAVIGATION MODE: Use BEST accuracy with TIME-based updates
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,  // ✅ Best possible
-          distanceFilter: 0,  // ✅ Android interprets this as "use time intervals"
-          timeLimit: Duration(seconds: 60),
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
         ),
-      ).listen((position) {
-        onLocationUpdate(LatLng(position.latitude, position.longitude));
-      });
+      ).listen(
+            (position) {
+          onLocationUpdate(LatLng(position.latitude, position.longitude));
+        },
+        onError: (error) {
+          print("❌ Location stream error: $error");
+          // Stop if services disabled
+          if (error.toString().contains('location')) {
+            stopLocationMonitoring();
+          }
+        },
+      );
     } else {
-      // ✅ NORMAL MODE: Use distance filter to save battery
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: LocationSettings(
           accuracy: accuracy,
           distanceFilter: distanceFilter,
         ),
-      ).listen((position) {
-        onLocationUpdate(LatLng(position.latitude, position.longitude));
-      });
+      ).listen(
+            (position) {
+          onLocationUpdate(LatLng(position.latitude, position.longitude));
+        },
+        onError: (error) {
+          print("❌ Location stream error: $error");
+          if (error.toString().contains('location')) {
+            stopLocationMonitoring();
+          }
+        },
+      );
     }
   }
 
@@ -315,40 +365,31 @@ class LocationService {
   void startBackgroundLocationImprovement({
     required LatLng currentLocation,
     required Function(LatLng) onImprovedLocation,
-    required bool isNavigating, // ✅ NEW: Know if we should stop
-    }) {
-    _improvementTimer?.cancel();
+    required bool isNavigating,
+  }) {
+    // ✅ Cancel existing timer properly
+    stopBackgroundImprovement();
 
-    // Don't run improvements during navigation (already at HIGH accuracy)
     if (isNavigating) {
       print("⏸️ Skipping background improvement (already HIGH accuracy)");
       return;
     }
 
+    print("🔍 Starting background location improvement");
     int improvementAttempts = 0;
+
     _improvementTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       improvementAttempts++;
 
-      // ✅ ADD THIS: Check if location services still enabled
       if (!await Geolocator.isLocationServiceEnabled()) {
         print("🔴 Location services disabled - stopping background improvement");
-        timer.cancel();
-        _improvementTimer = null;
+        stopBackgroundImprovement(); // ✅ Use helper method
         return;
       }
 
-      // Stop after 5 attempts OR if services disabled
       if (improvementAttempts > 5) {
         print("✅ Background improvement complete (max attempts)");
-        timer.cancel();
-        _improvementTimer = null;
-        return;
-      }
-
-      // ✅ CRITICAL: Check if location services still enabled
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        print("🔴 Location services disabled - stopping background improvement");
-        timer.cancel();
+        stopBackgroundImprovement(); // ✅ Use helper method
         return;
       }
 
@@ -363,7 +404,6 @@ class LocationService {
         final betterLocation = LatLng(betterPosition.latitude, betterPosition.longitude);
         final improvement = distanceBetween(currentLocation, betterLocation);
 
-        // Only notify if significantly better
         if (improvement > 50 || (betterPosition.accuracy < 15 && improvement > 20)) {
           print("✅ Improvement: ${improvement.round()}m, accuracy: ${betterPosition.accuracy}m");
           onImprovedLocation(betterLocation);
@@ -372,14 +412,17 @@ class LocationService {
         // Stop if excellent accuracy achieved
         if (betterPosition.accuracy < 15) {
           print("✅ Excellent accuracy (${betterPosition.accuracy}m) - stopping");
-          timer.cancel();
+          stopBackgroundImprovement(); // ✅ Use helper method
+          return;
         }
       } catch (e) {
         print("⚠️ Improvement attempt $improvementAttempts failed: $e");
 
-        // Stop if location services issue detected
-        if (e.toString().toLowerCase().contains('location')) {
-          timer.cancel();
+        if (e.toString().toLowerCase().contains('location') ||
+            e.toString().toLowerCase().contains('service')) {
+          print("🔴 Location service error detected - stopping improvements");
+          stopBackgroundImprovement(); // ✅ Use helper method
+          return;
         }
       }
     });
@@ -454,17 +497,56 @@ class LocationService {
       return "${hours}h ${minutes}min";
     }
   }
+}
 
 
-  static String estimateTravelTime(double meters, String mode) {
-    final speed = mode == 'walking' ? 1.4 : 10.0; // m/s
-    final seconds = meters / speed;
+/// Manages GPS stream lifecycle and coordinates location updates
+class GPSController {
+  final LocationService _locationService;
+  final Function(LatLng) onLocationUpdate;
 
-    if (seconds < 60) return "< 1 min";
-    if (seconds < 3600) return "${(seconds / 60).ceil()} min";
+  bool _isActive = false;
+  bool _isNavigating = false;
 
-    final hours = (seconds / 3600).floor();
-    final minutes = ((seconds % 3600) / 60).ceil();
-    return "$hours h $minutes min";
+  GPSController(this._locationService, {required this.onLocationUpdate});
+
+  /// Starts GPS stream with appropriate settings
+  Future<void> start({required bool isNavigating}) async {
+    if (_isActive) {
+      await stop();
+    }
+
+    _isNavigating = isNavigating;
+    _isActive = true;
+
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    print("🎯 Starting GPS...");
+
+    await _locationService.startProgressiveLocationTracking( // ADD await
+      onLocationUpdate: onLocationUpdate,
+      isNavigating: isNavigating,
+      distanceFilter: isNavigating ? 0 : 10,
+    );
+  }
+
+  Future<void> stop() async {
+    if (!_isActive) return;
+
+    print("🛑 Stopping GPS stream");
+    _isActive = false;
+
+    // ✅ Let LocationService handle cleanup
+    _locationService.stopLocationMonitoring();
+    print("✅ GPS stream stopped");
+  }
+
+
+  bool get isActive => _isActive;
+  bool get isNavigating => _isNavigating;
+
+  void dispose() {
+    stop(); // ✅ Use stop() instead of managing subscription
+    _isActive = false;
   }
 }
