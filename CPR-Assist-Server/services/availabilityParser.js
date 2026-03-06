@@ -159,7 +159,7 @@ class AvailabilityParser {
         return new Promise((resolve, reject) => {
             console.log('\n🐍 Starting Python availability parser...\n');
             
-            const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+            const pythonCmd = process.platform === 'win32' ? 'python' : '/root/.nix-profile/bin/python3';
             const pythonProcess = spawn(pythonCmd, [this.scriptPath]);
             
             let stdout = '';
