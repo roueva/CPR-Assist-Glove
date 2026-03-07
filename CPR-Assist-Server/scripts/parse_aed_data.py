@@ -3,6 +3,8 @@ import os
 import time
 import requests
 import random
+import psycopg2
+
 
 # --- Configuration ---
 
@@ -127,6 +129,48 @@ def save_to_cache(cache_filepath, data):
     with open(cache_filepath, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def save_to_db(text, data):
+    database_url = os.environ.get('DATABASE_URL', '')
+    if not database_url:
+        return
+    try:
+        conn = psycopg2.connect(database_url)
+        cur = conn.cursor()
+        data_json = json.dumps(data, ensure_ascii=False)
+        cur.execute(
+            """INSERT INTO availability_cache (availability_text, parsed_data)
+               VALUES (%s, %s)
+               ON CONFLICT (availability_text)
+               DO UPDATE SET parsed_data = %s, parsed_at = NOW()""",
+            [text, data_json, data_json]
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"      ...DB save error: {e}")
+
+
+def load_from_db():
+    database_url = os.environ.get('DATABASE_URL', '')
+    if not database_url:
+        return {}
+    try:
+        conn = psycopg2.connect(database_url)
+        cur = conn.cursor()
+        cur.execute('SELECT availability_text, parsed_data FROM availability_cache')
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        if rows:
+            cache = {row[0]: row[1] for row in rows}
+            print(f"📦 Loaded {len(cache)} entries from database")
+            return cache
+    except Exception as e:
+        print(f"⚠️ Could not load from database: {e}")
+    return {}
+
+
 def find_best_model():
     """Automatically queries the API to find a working model."""
     print("Contacting Google API to find available models...")
@@ -232,8 +276,10 @@ def main():
     if not unique_strings:
         return
 
-    # 3. Load Cache
-    cache = load_cache(CACHE_FILE)
+    # 3. Load Cache — database first, file as fallback
+    cache = load_from_db()
+    if not cache:
+        cache = load_cache(CACHE_FILE)
     
     # 4. Process
     for i, text in enumerate(unique_strings):
@@ -249,6 +295,7 @@ def main():
         if parsed_data:
             cache[text] = parsed_data
             save_to_cache(CACHE_FILE, cache)
+            save_to_db(text, parsed_data)
             print("  ...Success.")
         else:
             print("  ...Failed.")
