@@ -576,7 +576,8 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         // ✅ NEW: User location at top-center
         if (widget.config.userLocation != null)
           Positioned(
-            top: 4,
+            // Change top from 4 to:
+            top: MediaQuery.of(context).padding.top + 4,
             left: 0,
             right: 0,
             child: Center(
@@ -586,7 +587,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
         // Existing wifi status at top-right
         Positioned(
-          top: 4,
+          top: MediaQuery.of(context).padding.top + 4,
           right: 10,
           child: iconWidget,
         ),
@@ -643,8 +644,15 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   Widget _buildMapTypeToggle() {
     final orientation = MediaQuery.of(context).orientation;
 
-    final double left = orientation == Orientation.landscape ? 390 : 5;
-    final double top = orientation == Orientation.portrait ? 44.0 : 3.0;
+    // Replace the top calculation with:
+    final double top = orientation == Orientation.portrait
+        ? MediaQuery.of(context).padding.top + 6
+        : 3.0;
+
+// Replace the landscape left with your panel constant:
+    final double left = orientation == Orientation.landscape
+        ? AEDMapUIConstants.landscapePanelWidth + 8
+        : 8;
 
     return Positioned(
       left: left,

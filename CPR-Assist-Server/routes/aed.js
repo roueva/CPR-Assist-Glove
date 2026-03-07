@@ -193,10 +193,23 @@ router.get('/availability', async (req, res) => {
         try {
             await fs.access(filePath);
         } catch (error) {
-            console.log('⚠️ Availability cache file not found, returning empty map');
-            return res.json({});
+    console.log('⚠️ Availability cache file not found, trying database...');
+    try {
+        const result = await pool.query(
+            'SELECT availability_text, parsed_data FROM availability_cache'
+        );
+        const cacheMap = {};
+        for (const row of result.rows) {
+            cacheMap[row.availability_text] = row.parsed_data;
         }
-        
+        console.log(`📦 Served ${Object.keys(cacheMap).length} entries from database`);
+        return res.json(cacheMap);
+    } catch (dbError) {
+        console.error('❌ Database fallback also failed:', dbError.message);
+        return res.json({});
+    }
+}
+
         const data = await fs.readFile(filePath, 'utf8');
         const parsedMap = JSON.parse(data);
         

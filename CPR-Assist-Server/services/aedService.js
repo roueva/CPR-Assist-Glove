@@ -200,13 +200,13 @@ class AEDService {
             const countResult = await client.query('SELECT COUNT(*) as total FROM aed_locations');
             const totalInDB = parseInt(countResult.rows[0].total);
 
-            await client.query('COMMIT');
-
-            await client.query(
+await client.query(
                 `INSERT INTO aed_sync_log (synced_at, aeds_checked, aeds_inserted, aeds_updated)
      VALUES (NOW(), $1, $2, $3)`,
                 [aeds.length, totalInserted, totalUpdated]
             );
+
+            await client.query('COMMIT');
 
             console.log(`✅ Sync complete:`);
             console.log(`   → ${totalInserted} new AEDs inserted`);
@@ -242,7 +242,7 @@ class AEDService {
     async parseAvailabilityAfterSync(aeds) {
         try {
             console.log('\n📝 Starting availability parsing...');
-            const parser = new AvailabilityParser();
+            const parser = new AvailabilityParser(this.pool);
 
             const parsedCache = await parser.parseAvailability(aeds);
 

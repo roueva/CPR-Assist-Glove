@@ -2329,7 +2329,13 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
                   _googleMapsApiKey,
                       (improvedAEDs) {
                     if (mounted) {
-                      mapNotifier.updateAEDsAndMarkers(improvedAEDs);
+                      final currentState = ref.read(mapStateProvider);
+                      final reSorted = ref.read(aedServiceProvider).sortAEDsByDistance(
+                        improvedAEDs,
+                        currentState.userLocation,
+                        mode,
+                      );
+                      mapNotifier.updateAEDsAndMarkers(reSorted);
                       _updatePreloadedRoutesFromCache(improvedAEDs, mode);
 
                       Future.delayed(const Duration(milliseconds: 100), () {

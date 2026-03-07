@@ -275,7 +275,8 @@ class AEDService {
 
         if (cachedDistance != null) {
           aedsWithRoadDistance[aed] = cachedDistance;
-        } else {
+          anyUpdated = true;  // cached distances are still accurate — trigger re-sort
+        }else {
           // Fetch route for accurate distance
           final routeService = RouteService(apiKey);
           final routeResult = await routeService.fetchRoute(userLocation, aed.location, transportMode);

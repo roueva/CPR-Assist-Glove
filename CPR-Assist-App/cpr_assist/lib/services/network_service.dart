@@ -344,16 +344,6 @@ class NetworkService {
     return null;
   }
 
-  static Future<void> saveLastSyncTime() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_lastSyncKey, DateTime.now().millisecondsSinceEpoch);
-      print("💾 Saved sync timestamp: ${DateTime.now()}");
-    } catch (e) {
-      print("⚠️ Error saving sync time: $e");
-    }
-  }
-
   static Future<String> getFormattedSyncTime() async {
     final syncTime = await getLastSyncTime();
 

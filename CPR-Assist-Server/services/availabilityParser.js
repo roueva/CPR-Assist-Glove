@@ -3,11 +3,12 @@ const fs = require('fs').promises;
 const path = require('path');
 
 class AvailabilityParser {
-    constructor() {
-        this.scriptPath = path.join(__dirname, '../scripts/parse_aed_data.py');
-        this.cacheFile = path.join(__dirname, '../data/parsed_availability_map.json');
-        this.inputFile = path.join(__dirname, '../data/aed_greece_current.json');
-    }
+    constructor(pool) {
+    this.pool = pool;
+    this.scriptPath = path.join(__dirname, '../scripts/parse_aed_data.py');
+    this.cacheFile = path.join(__dirname, '../data/parsed_availability_map.json');
+    this.inputFile = path.join(__dirname, '../data/aed_greece_current.json');
+}
 
     /**
      * Extract unique availability strings from AED data
@@ -28,20 +29,64 @@ class AvailabilityParser {
      * Load existing parsed cache
      */
     async loadCache() {
+    // Try database first
+    if (this.pool) {
         try {
-            const data = await fs.readFile(this.cacheFile, 'utf8');
-            const cache = JSON.parse(data);
-            console.log(`📦 Loaded existing cache: ${Object.keys(cache).length} entries`);
-            return cache;
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                console.log('📦 No existing cache found - starting fresh');
-            } else {
-                console.warn('⚠️ Error loading cache:', error.message);
+            const result = await this.pool.query(
+                'SELECT availability_text, parsed_data FROM availability_cache'
+            );
+            if (result.rows.length > 0) {
+                const cache = {};
+                for (const row of result.rows) {
+                    cache[row.availability_text] = row.parsed_data;
+                }
+                console.log(`📦 Loaded existing cache: ${result.rows.length} entries (from database)`);
+                return cache;
             }
-            return {};
+        } catch (error) {
+            console.warn('⚠️ Could not load from database, falling back to file:', error.message);
         }
     }
+
+    // Fallback to file
+    try {
+        const data = await fs.readFile(this.cacheFile, 'utf8');
+        const cache = JSON.parse(data);
+        console.log(`📦 Loaded existing cache: ${Object.keys(cache).length} entries (from file)`);
+        return cache;
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            console.log('📦 No existing cache found - starting fresh');
+        } else {
+            console.warn('⚠️ Error loading cache:', error.message);
+        }
+        return {};
+    }
+}
+
+
+async saveToDatabase(cache) {
+    if (!this.pool) return;
+    
+    try {
+        const entries = Object.entries(cache);
+        let saved = 0;
+
+        for (const [text, data] of entries) {
+            await this.pool.query(
+                `INSERT INTO availability_cache (availability_text, parsed_data)
+                 VALUES ($1, $2)
+                 ON CONFLICT (availability_text) 
+                 DO UPDATE SET parsed_data = $2, parsed_at = NOW()`,
+                [text, JSON.stringify(data)]
+            );
+            saved++;
+        }
+        console.log(`💾 Saved ${saved} entries to database`);
+    } catch (error) {
+        console.error('❌ Error saving cache to database:', error.message);
+    }
+}
 
     /**
      * Compare current strings with cached strings
@@ -307,6 +352,7 @@ class AvailabilityParser {
 
             // Step 9: Load updated cache
             const newCache = await this.loadCache();
+await this.saveToDatabase(newCache);
 
             // Step 10: Print before/after comparison
             await this.printBeforeAfter(stringsToProcess, oldCache, newCache);
