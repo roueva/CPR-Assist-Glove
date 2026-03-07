@@ -132,7 +132,12 @@ def save_to_cache(cache_filepath, data):
 def save_to_db(text, data):
     database_url = os.environ.get('DATABASE_URL', '')
     if not database_url:
+print(f"      ...DB save skipped: no DATABASE_URL")
         return
+if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    try:
+        conn = psycopg2.connect(database_url, sslmode='require')
     try:
         conn = psycopg2.connect(database_url)
         cur = conn.cursor()
@@ -154,7 +159,13 @@ def save_to_db(text, data):
 def load_from_db():
     database_url = os.environ.get('DATABASE_URL', '')
     if not database_url:
-        return {}
+        print(f"      ...DB save skipped: no DATABASE_URL")
+        return
+    # Fix postgres:// -> postgresql:// for psycopg2
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    try:
+        conn = psycopg2.connect(database_url, sslmode='require')
     try:
         conn = psycopg2.connect(database_url)
         cur = conn.cursor()
