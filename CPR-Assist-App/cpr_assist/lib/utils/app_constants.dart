@@ -148,8 +148,8 @@ class AppConstants {
 
 class AEDMapUIConstants {
   // Panel sizes - Portrait orientation
-  static const double portraitListInitial = 0.20;     // 20% of screen height
-  static const double portraitListMin = 0.20;
+  static const double portraitListInitial = 0.25;     // 20% of screen height
+  static const double portraitListMin = 0.25;
   static const double portraitListMax = 0.55;         // Max expansion
 
   static const double portraitNavInitial = 0.48;      // AED preview panel
