@@ -132,7 +132,7 @@ def save_to_cache(cache_filepath, data):
 def save_to_db(text, data):
     database_url = os.environ.get('DATABASE_URL', '')
     if not database_url:
-        print(f"      ...DB save skipped: no DATABASE_URL")
+        print("      ...DB save skipped: no DATABASE_URL")
         return
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
@@ -150,22 +150,19 @@ def save_to_db(text, data):
         conn.commit()
         cur.close()
         conn.close()
-        print(f"      ...DB saved OK")
+        print("      ...DB saved OK")
     except Exception as e:
         print(f"      ...DB save FAILED: {type(e).__name__}: {e}")
+
 
 def load_from_db():
     database_url = os.environ.get('DATABASE_URL', '')
     if not database_url:
-        print(f"      ...DB save skipped: no DATABASE_URL")
-        return
-    # Fix postgres:// -> postgresql:// for psycopg2
+        return {}
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     try:
         conn = psycopg2.connect(database_url, sslmode='require')
-    try:
-        conn = psycopg2.connect(database_url)
         cur = conn.cursor()
         cur.execute('SELECT availability_text, parsed_data FROM availability_cache')
         rows = cur.fetchall()
@@ -176,7 +173,7 @@ def load_from_db():
             print(f"📦 Loaded {len(cache)} entries from database")
             return cache
     except Exception as e:
-        print(f"⚠️ Could not load from database: {e}")
+        print(f"⚠️ Could not load from database: {type(e).__name__}: {e}")
     return {}
 
 
