@@ -204,9 +204,10 @@ async saveToDatabase(cache) {
         return new Promise((resolve, reject) => {
             console.log('\n🐍 Starting Python availability parser...\n');
             
-            const pythonCmd = process.platform === 'win32' ? 'python' : '/root/.nix-profile/bin/python3';
-            const pythonProcess = spawn(pythonCmd, [this.scriptPath]);
-            
+const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
+    env: process.env
+});            
             let stdout = '';
             let stderr = '';
             
