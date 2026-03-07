@@ -132,14 +132,12 @@ def save_to_cache(cache_filepath, data):
 def save_to_db(text, data):
     database_url = os.environ.get('DATABASE_URL', '')
     if not database_url:
-print(f"      ...DB save skipped: no DATABASE_URL")
+        print(f"      ...DB save skipped: no DATABASE_URL")
         return
-if database_url.startswith('postgres://'):
+    if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     try:
         conn = psycopg2.connect(database_url, sslmode='require')
-    try:
-        conn = psycopg2.connect(database_url)
         cur = conn.cursor()
         data_json = json.dumps(data, ensure_ascii=False)
         cur.execute(
@@ -152,9 +150,9 @@ if database_url.startswith('postgres://'):
         conn.commit()
         cur.close()
         conn.close()
+        print(f"      ...DB saved OK")
     except Exception as e:
-        print(f"      ...DB save error: {e}")
-
+        print(f"      ...DB save FAILED: {type(e).__name__}: {e}")
 
 def load_from_db():
     database_url = os.environ.get('DATABASE_URL', '')
@@ -273,6 +271,22 @@ def parse_string_with_gemini(text_to_parse, model_url, max_retries=5):
     return None
 
 def main():
+    # 0. Test DB connection
+    database_url = os.environ.get('DATABASE_URL', '')
+    print(f"      ...DATABASE_URL present: {bool(database_url)}")
+    if database_url:
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        try:
+            conn = psycopg2.connect(database_url, sslmode='require')
+            cur = conn.cursor()
+            cur.execute('SELECT COUNT(*) FROM availability_cache')
+            count = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            print(f"      ...DB connection OK, availability_cache has {count} rows")
+        except Exception as e:
+            print(f"      ...DB connection FAILED: {type(e).__name__}: {e}")
     # 1. Find a working model first
     model_name = find_best_model()
     if not model_name:
