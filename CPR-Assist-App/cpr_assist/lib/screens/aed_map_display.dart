@@ -101,7 +101,6 @@ class AEDMapDisplay extends StatefulWidget {
   final VoidCallback? onManualGPSSearch;
 
 
-
   const AEDMapDisplay({
     super.key,
     required this.config,
@@ -142,7 +141,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   late Future<String> _syncTimeFuture;
   final GlobalKey _aedListKey = GlobalKey();
   final GlobalKey _navigationKey = GlobalKey();
-  final DraggableScrollableController _sheetController = DraggableScrollableController();
 
   @override
   void initState() {
@@ -206,7 +204,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
   @override
   void dispose() {
-    _sheetController.dispose();
     _compassSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -475,6 +472,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
               _buildGoogleMap(),
               _buildStatusBar(),
               _buildMapTypeToggle(),
+              _buildLogo(orientation),
 
               if (!widget.config.hasSelectedRoute)
                 orientation == Orientation.portrait ? _buildAEDListPanel() : _buildAEDSideListPanel(),
@@ -516,7 +514,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
           onCameraMove: (CameraPosition position) {
             widget.onCameraMoved?.call(position);
-            },
+          },
 
           onCameraIdle: () {
             widget.onCameraIdle?.call();  // NO if statement!
@@ -556,133 +554,50 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   Widget _buildStatusBar() {
     if (widget.config.isLoading) return const SizedBox.shrink();
 
-    final orientation = MediaQuery.of(context).orientation;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final panelBottom = orientation == Orientation.portrait
-        ? screenHeight * AEDMapUIConstants.portraitListMin + 12
-        : 12.0;
-
-    Widget wifiIcon;
-    String wifiTooltip;
+    Widget iconWidget;
 
     if (widget.config.isRefreshingAEDs) {
-      wifiIcon = const Padding(
-        padding: EdgeInsets.all(11),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.blue),
+      iconWidget = const SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
         ),
       );
-      wifiTooltip = 'Refreshing AED data...';
     } else if (widget.config.isOffline) {
-      wifiIcon = const Icon(Icons.wifi_off, color: Colors.orange, size: 22);
-      wifiTooltip = 'No internet connection — using cached data';
+      iconWidget = const Icon(Icons.wifi_off, color: Colors.orange, size: 22);
     } else {
-      wifiIcon = const Icon(Icons.wifi, color: Colors.green, size: 22);
-      wifiTooltip = 'Connected — AED data is up to date';
+      iconWidget = const Icon(Icons.wifi, color: Colors.green, size: 22);
     }
 
     return Stack(
       children: [
-        // Wifi — top right
+        // ✅ NEW: User location at top-center
+        if (widget.config.userLocation != null)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 4,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _buildUserLocationChip(),
+            ),
+          ),
+
+        // Existing wifi status at top-right
         Positioned(
-          top: MediaQuery.of(context).padding.top + 6,
+          top: MediaQuery.of(context).padding.top + 4,
           right: 10,
           child: Tooltip(
-            message: wifiTooltip,
-            triggerMode: TooltipTriggerMode.tap,
-            child: _buildOverlayButton(child: wifiIcon),
+            message: widget.config.isOffline
+                ? 'No internet connection'
+                : 'Connected to internet',
+            child: iconWidget,
           ),
         ),
-
-        // Recenter — bottom right, rises with panel
-        if (!widget.config.hasSelectedRoute)
-          Positioned(
-            bottom: panelBottom,
-            right: 10,
-            child: Tooltip(
-              message: 'Re-center map on your location',
-              triggerMode: TooltipTriggerMode.tap,
-              child: Material(
-                elevation: 4,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    widget.onRecenterPressed();
-                  },
-                  customBorder: const CircleBorder(),
-                  child: _buildOverlayButton(
-                    child: widget.config.isUsingCachedLocation && widget.userLocationAvailable
-                        ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF194E9D)),
-                      ),
-                    )
-                        : const Icon(Icons.my_location, color: Color(0xFF194E9D), size: 22),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        // Kids Save Lives logo — bottom left, same level as recenter
-        if (!widget.config.hasSelectedRoute)
-          Positioned(
-            bottom: panelBottom,
-            left: orientation == Orientation.landscape
-                ? AEDMapUIConstants.landscapePanelWidth + 10
-                : 10,
-            child: Tooltip(
-              message: 'AED data provided by Kids Save Lives Greece\nTap to learn more',
-              triggerMode: TooltipTriggerMode.tap,
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AEDWebViewScreen(
-                        url: 'https://kidssavelives.gr',
-                        title: 'Kids Save Lives',
-                      ),
-                    ),
-                  );
-                },
-                child: _buildOverlayButton(
-                  child: Image.asset(
-                    'assets/icons/kids_save_lives_logo.png',
-                    width: 26,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
-
-// Shared container for all four overlay buttons
-  Widget _buildOverlayButton({required Widget child}) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Center(child: child),
-    );
-  }
-
 
 // ✅ ADD NEW METHOD
   Widget _buildUserLocationChip() {
@@ -732,33 +647,73 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
   Widget _buildMapTypeToggle() {
     final orientation = MediaQuery.of(context).orientation;
+
+    // Replace the top calculation with:
+    final double top = orientation == Orientation.portrait
+        ? MediaQuery.of(context).padding.top + 6
+        : 3.0;
+
+// Replace the landscape left with your panel constant:
     final double left = orientation == Orientation.landscape
         ? AEDMapUIConstants.landscapePanelWidth + 8
         : 8;
-    final double top = MediaQuery.of(context).padding.top + 6;
 
     return Positioned(
       left: left,
       top: top,
       child: Tooltip(
         message: _currentMapType == MapType.normal
-            ? 'Switch to satellite view'
-            : 'Switch to standard map view',
-        triggerMode: TooltipTriggerMode.tap,
+            ? 'Switch to Satellite View'
+            : 'Switch to Map View',
         child: Material(
           elevation: 4,
           shape: const CircleBorder(),
           child: InkWell(
             onTap: _toggleMapType,
             customBorder: const CircleBorder(),
-            child: _buildOverlayButton(
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
               child: Icon(
-                _currentMapType == MapType.normal ? Icons.satellite_alt : Icons.map,
-                size: 22,
+                _currentMapType == MapType.normal
+                    ? Icons.satellite_alt
+                    : Icons.map,
+                size: 24,
                 color: const Color(0xFF194E9D),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogo(Orientation orientation) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Calculate panel heights
+    final double portraitPanelMinHeight = screenHeight * AEDMapUIConstants.portraitListMin;
+
+    final double left = orientation == Orientation.landscape
+        ? AEDMapUIConstants.landscapePanelWidth + AEDMapUIConstants.logoPadding
+        : AEDMapUIConstants.logoPadding;
+
+    final double bottom = orientation == Orientation.portrait
+        ? portraitPanelMinHeight + AEDMapUIConstants.logoPadding
+        : AEDMapUIConstants.logoPadding;
+
+    return Positioned(
+      left: left,
+      bottom: bottom,
+      child: IgnorePointer(
+        child: Image.asset(
+          'assets/icons/kids_save_lives_logo.png',
+          width: AEDMapUIConstants.logoSize,
+          fit: BoxFit.contain,
         ),
       ),
     );
@@ -795,6 +750,45 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           ),
 
           // Button positioned at the top
+          Positioned(
+            top: 8, // Position from the very top of the safe area
+            right: 8,
+            child: Material(
+              elevation: 8,
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  widget.onRecenterPressed();
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: (widget.config.isUsingCachedLocation && widget.userLocationAvailable)
+                      ? const Padding( // ✅ Show a spinner
+                    padding: EdgeInsets.all(10.0), // Give it some padding
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFF194E9D),
+                      ),
+                    ),
+                  )
+                      : const Icon( // ✅ Show the icon
+                    Icons.my_location,
+                    color: Color(0xFF194E9D),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -820,9 +814,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     return RawScrollbar(
       controller: scrollController,
       thumbVisibility: false,  // Only shows when scrolling
+      thickness: 6,
       radius: const Radius.circular(2),
-      thumbColor: const Color(0xFFEDF4F9),
-      thickness: 3,
+      thumbColor: AppColors.clusterGreen.withValues(alpha: 0.5),
       fadeDuration: const Duration(milliseconds: 300),
       timeToFade: const Duration(milliseconds: 600),
       child: ListView(
@@ -911,7 +905,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
   Widget _buildAEDListPanel() {
     return _buildDraggableSheet(
       key: _aedListKey,
-      controller: _sheetController,   // ← add this
       contentBuilder: (scrollController) => _buildAEDListContent(scrollController),
       initialSize: AEDMapUIConstants.portraitListInitial,
       minSize: AEDMapUIConstants.portraitListMin,
@@ -944,13 +937,42 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
             },
           ),
         ),
+
+        if (!widget.config.hasStartedNavigation)  // ✅ Show unless actively navigating
+          Positioned(
+            left: AEDMapUIConstants.landscapeButtonOffset,
+            bottom: AEDMapUIConstants.recenterButtonBottom,
+            child: Material(
+              elevation: 8,
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onRecenterPressed();
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: AEDMapUIConstants.recenterButtonSize,
+                  height: AEDMapUIConstants.recenterButtonSize,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.my_location,
+                    color: Color(0xFF194E9D),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
 
   Widget _buildDraggableSheet({
     Key? key,
-    DraggableScrollableController? controller,
     required Widget Function(ScrollController) contentBuilder,
     required double initialSize,
     required double minSize,
@@ -962,7 +984,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         // The draggable sheet
         DraggableScrollableSheet(
           key: key,
-          controller: controller,
           initialChildSize: initialSize,
           minChildSize: minSize,
           maxChildSize: maxSize,
@@ -2305,9 +2326,9 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           child: RawScrollbar(
             controller: scrollController,
             thumbVisibility: false,
-            thumbColor: const Color(0xFFEDF4F9),   // same blue as the cards
-            thickness: 3,
-            radius: const Radius.circular(10),
+            thickness: 8,
+            radius: const Radius.circular(8),
+            thumbColor: const Color(0xFF006636).withValues(alpha: 0.6),
             padding: const EdgeInsets.only(right: 4, top: 0, bottom: 16),
             child: (hasUserLocation && nearestAED != null)
                 ? NotificationListener<ScrollNotification>(
@@ -2344,49 +2365,23 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     surfaceTintColor: Colors.transparent,
                     // ✅ REMOVED: forceElevated (we control elevation manually now)
 
-                      flexibleSpace: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onVerticalDragUpdate: (details) {
-                          if (details.delta.dy > 0) {
-                            // User is dragging down on the title — collapse the sheet
-                            final screenHeight = MediaQuery.of(context).size.height;
-                            final currentSize = _sheetController.size;
-                            final delta = details.delta.dy / screenHeight;
-                            final newSize = (currentSize - delta).clamp(
-                              AEDMapUIConstants.portraitListMin,
-                              AEDMapUIConstants.portraitListMax,
-                            );
-                            _sheetController.jumpTo(newSize);
-                          }
-                        },
-                        onVerticalDragEnd: (details) {
-                          // Snap to min if dragging down fast enough
-                          if (details.velocity.pixelsPerSecond.dy > 400) {
-                            _sheetController.animateTo(
-                              AEDMapUIConstants.portraitListMin,
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeOut,
-                            );
-                          }
-                        },
-                        child: Container(
-                          color: Colors.white,
-                          child: Align(
-                            alignment: Alignment.bottomLeft,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: Text(
-                                "Nearest Defibrillator",
-                                style: SafeFonts.inter(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF2C2C2C),
-                                ),
-                              ),
+                    flexibleSpace: Container(
+                      color: Colors.white,
+                      child: Align(
+                        alignment: Alignment.bottomLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text(
+                            "Nearest Defibrillator",
+                            style: SafeFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF2C2C2C),
                             ),
                           ),
                         ),
                       ),
+                    ),
                   ),
 
                   // 🔹 Nearest AED card – this SCROLLS

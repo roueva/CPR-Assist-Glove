@@ -214,12 +214,19 @@ const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
             pythonProcess.stdout.on('data', (data) => {
                 const output = data.toString();
                 stdout += output;
-                // Print important lines
-                if (output.includes('>>>') || 
-                    output.includes('Process Complete') || 
+                if (output.includes('Process Complete') ||
                     output.includes('ERROR') ||
-                    output.includes('[') && output.includes(']')) {
+                    output.includes('>>>')) {
                     console.log(output.trim());
+                }
+                // Only log every 50 strings
+                const match = output.match(/\[(\d+)\/(\d+)\]/);
+                if (match) {
+                    const current = parseInt(match[1]);
+                    const total = parseInt(match[2]);
+                    if (current % 50 === 0 || current === total) {
+                        console.log(output.trim());
+                    }
                 }
             });
             
@@ -352,8 +359,7 @@ const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
             await this.runPythonParser();
 
             // Step 9: Load updated cache
-            const newCache = await this.loadCache();
-await this.saveToDatabase(newCache);
+const newCache = await this.loadCache(); // this already reads from DB first
 
             // Step 10: Print before/after comparison
             await this.printBeforeAfter(stringsToProcess, oldCache, newCache);
