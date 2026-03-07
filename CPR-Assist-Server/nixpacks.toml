@@ -2,8 +2,7 @@
 nixPkgs = ["nodejs", "python311", "python311Packages.requests", "python311Packages.psycopg2"]
 
 [phases.install]
-cmds = ["npm ci"]
-
+cmds = ["npm ci --prefer-offline=false"]
 
 [start]
 cmd = "node server.js"
