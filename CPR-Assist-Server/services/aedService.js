@@ -215,7 +215,10 @@ await client.query(
 
             // ✅ Parse availability after successful sync
             try {
-                await this.parseAvailabilityAfterSync(aeds);
+// ✅ Parse availability in background (non-blocking)
+this.parseAvailabilityAfterSync(aeds).catch(e => 
+    console.error('⚠️ Availability parsing failed (non-critical):', e.message)
+);
             } catch (parseError) {
                 console.error('⚠️ Availability parsing failed (non-critical):', parseError.message);
             }

@@ -4,5 +4,6 @@ nixPkgs = ["nodejs", "python311", "python311Packages.requests", "python311Packag
 [phases.install]
 cmds = ["npm ci"]
 
+
 [start]
 cmd = "node server.js"
