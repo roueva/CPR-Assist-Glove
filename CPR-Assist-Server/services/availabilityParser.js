@@ -208,9 +208,7 @@ async saveToDatabase(cache) {
                 ? ['python']
                 : ['python3.11', 'python3', 'python'];
 
-            let pythonProcess = null;
             let pythonCmd = null;
-
             for (const cmd of candidates) {
                 try {
                     const test = require('child_process').spawnSync(cmd, ['--version']);
@@ -226,8 +224,8 @@ async saveToDatabase(cache) {
                 return;
             }
 
-            console.log(`🐍 Using Python: ${pythonCmd}`);
-            pythonProcess = spawn(pythonCmd, [this.scriptPath], {
+            console.log(`🐍 Using Python command: ${pythonCmd}`);
+            const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
                 env: process.env
             });
             
