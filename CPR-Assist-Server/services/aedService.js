@@ -214,13 +214,12 @@ await client.query(
             console.log(`   → ${totalInDB} total AEDs in database`);
 
             // ✅ Parse availability after successful sync
-            try {
-// ✅ Parse availability in background (non-blocking)
-this.parseAvailabilityAfterSync(aeds).catch(e => 
-    console.error('⚠️ Availability parsing failed (non-critical):', e.message)
-);
-            } catch (parseError) {
-                console.error('⚠️ Availability parsing failed (non-critical):', parseError.message);
+            if (totalInserted > 0 || totalUpdated > 0) {
+                this.parseAvailabilityAfterSync(aeds).catch(e =>
+                    console.error('⚠️ Availability parsing failed (non-critical):', e.message)
+                );
+            } else {
+                console.log('⏭️ No AED changes detected - skipping availability parsing');
             }
 
             return {

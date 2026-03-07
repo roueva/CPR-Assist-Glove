@@ -204,10 +204,33 @@ async saveToDatabase(cache) {
         return new Promise((resolve, reject) => {
             console.log('\n🐍 Starting Python availability parser...\n');
             
-const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
-    env: process.env
-});            
+            const candidates = process.platform === 'win32'
+                ? ['python']
+                : ['python3.11', 'python3', 'python'];
+
+            let pythonProcess = null;
+            let pythonCmd = null;
+
+            for (const cmd of candidates) {
+                try {
+                    const test = require('child_process').spawnSync(cmd, ['--version']);
+                    if (test.status === 0) {
+                        pythonCmd = cmd;
+                        break;
+                    }
+                } catch (e) { /* try next */ }
+            }
+
+            if (!pythonCmd) {
+                reject(new Error('No Python interpreter found. Tried: python3.11, python3, python'));
+                return;
+            }
+
+            console.log(`🐍 Using Python: ${pythonCmd}`);
+            pythonProcess = spawn(pythonCmd, [this.scriptPath], {
+                env: process.env
+            });
+            
             let stdout = '';
             let stderr = '';
             
@@ -231,7 +254,10 @@ const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
             });
             
             pythonProcess.stderr.on('data', (data) => {
-                stderr += data.toString();
+                const msg = data.toString();
+                stderr += msg;
+                // Print stderr immediately so it's not lost if process is killed
+                if (msg.trim()) console.error('🐍 Python stderr:', msg.trim());
             });
             
             pythonProcess.on('close', (code) => {

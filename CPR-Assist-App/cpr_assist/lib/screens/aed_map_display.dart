@@ -472,7 +472,6 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
               _buildGoogleMap(),
               _buildStatusBar(),
               _buildMapTypeToggle(),
-              _buildLogo(orientation),
 
               if (!widget.config.hasSelectedRoute)
                 orientation == Orientation.portrait ? _buildAEDListPanel() : _buildAEDSideListPanel(),
@@ -614,7 +613,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -692,28 +691,109 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
     );
   }
 
-  Widget _buildLogo(Orientation orientation) {
-    final screenHeight = MediaQuery.of(context).size.height;
+  Widget _buildKSLButton() {
+    return Tooltip(
+      message: 'Kids Save Lives — global initiative to teach CPR to schoolchildren',
+      child: Material(
+        elevation: 6,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: () => _showKSLDialog(),
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(6),
+            child: Image.asset(
+              'assets/icons/kids_save_lives_logo.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-    // Calculate panel heights
-    final double portraitPanelMinHeight = screenHeight * AEDMapUIConstants.portraitListMin;
-
-    final double left = orientation == Orientation.landscape
-        ? AEDMapUIConstants.landscapePanelWidth + AEDMapUIConstants.logoPadding
-        : AEDMapUIConstants.logoPadding;
-
-    final double bottom = orientation == Orientation.portrait
-        ? portraitPanelMinHeight + AEDMapUIConstants.logoPadding
-        : AEDMapUIConstants.logoPadding;
-
-    return Positioned(
-      left: left,
-      bottom: bottom,
-      child: IgnorePointer(
-        child: Image.asset(
-          'assets/icons/kids_save_lives_logo.png',
-          width: AEDMapUIConstants.logoSize,
-          fit: BoxFit.contain,
+  void _showKSLDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/icons/kids_save_lives_logo.png',
+                height: 60,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Kids Save Lives',
+                style: SafeFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'A global initiative supported by the European Resuscitation Council to teach CPR to schoolchildren worldwide. AED data in this app is provided by iSaveLives.gr.',
+                textAlign: TextAlign.center,
+                style: SafeFonts.inter(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Close',
+                        style: SafeFonts.inter(color: Colors.grey.shade600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const AEDWebViewScreen(
+                              url: 'https://kidssavelives.org',
+                              title: 'Kids Save Lives',
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF194E9D),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        'Visit Website',
+                        style: SafeFonts.inter(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -747,6 +827,13 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: _buildAEDSheetContent(scrollController),
             ),
+          ),
+
+          // Kids Save Lives icon
+          Positioned(
+            top: 8,
+            left: 8,
+            child: _buildKSLButton(),
           ),
 
           // Button positioned at the top
