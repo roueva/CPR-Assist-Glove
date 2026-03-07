@@ -693,7 +693,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
   Widget _buildKSLButton() {
     return Tooltip(
-      message: 'Kids Save Lives — global initiative to teach CPR to schoolchildren',
+      message: 'Kids Save Lives',
       child: Material(
         elevation: 6,
         shape: const CircleBorder(),
@@ -743,8 +743,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'A global initiative supported by the European Resuscitation Council to teach CPR to schoolchildren worldwide. AED data in this app is provided by iSaveLives.gr.',
+              Text('AED data provided by Kids Save Lives Foundation',
                 textAlign: TextAlign.center,
                 style: SafeFonts.inter(
                   fontSize: 13,
