@@ -14,6 +14,8 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
   final bool showBackButton;
   final VoidCallback? onBackPressed;
   final String? customTitle;
+  final VoidCallback? onAccountTap;
+
 
   const UniversalHeader({
     super.key,
@@ -22,17 +24,20 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
     this.showBackButton = false,
     this.onBackPressed,
     this.customTitle,
+    this.onAccountTap,
   });
 
   // ✅ Factory constructors for different screen types
   factory UniversalHeader.forMainScreens({
     required DecryptedData decryptedDataHandler,
     required int currentIndex,
+    VoidCallback? onAccountTap,
   }) {
     final isDarkBackground = currentIndex == 1 || currentIndex == 2; // Live or Training
     return UniversalHeader(
       decryptedDataHandler: decryptedDataHandler,
       backgroundColor: isDarkBackground ? const Color(0xFFEDF4F9) : Colors.white,
+      onAccountTap: onAccountTap,
     );
   }
 
@@ -176,8 +181,8 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child: AccountMenu(
-                  decryptedDataHandler: decryptedDataHandler!,
+                child: AccountAvatarButton(
+                  onTap: onAccountTap ?? () {},
                 ),
               ),
             ),

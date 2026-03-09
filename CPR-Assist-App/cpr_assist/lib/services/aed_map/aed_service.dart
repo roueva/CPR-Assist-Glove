@@ -179,6 +179,19 @@ class AEDService {
 
     // Step 5: Return with distanceInMeters updated so formattedDistance is correct
     print("📏 Sorted ${result.length} AEDs (${top3Open.length} open first, mode: $transportMode)");
+    print("🔍 SORT DEBUG - referenceLocation: $referenceLocation");
+    print("🔍 SORT DEBUG - top 5 results:");
+    for (int i = 0; i < result.take(5).length; i++) {
+      final aed = result.elementAt(i);
+      final d = distances[aed.id];
+      final straightDist = LocationService.distanceBetween(referenceLocation, aed.location);
+      print("  [$i] AED ${aed.id} | cached dist: ${d?.toStringAsFixed(0)}m | straight: ${straightDist.toStringAsFixed(0)}m | loc: ${aed.location}");
+    }
+    print("🔍 SORT DEBUG - top3Open count: ${top3Open.length}");
+    for (final aed in top3Open) {
+      final avail = AvailabilityParser.parseAvailability(aed.availability);
+      print("  OPEN: AED ${aed.id} | isOpen=${avail.isOpen} | isUncertain=${avail.isUncertain} | availability: ${aed.availability}");
+    }
     return result.map((aed) {
       final d = distances[aed.id];
       return d != null ? aed.copyWithDistance(d) : aed;

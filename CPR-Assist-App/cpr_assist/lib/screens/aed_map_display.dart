@@ -580,7 +580,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
           right: 0,
           child: Center(
             child: AnimatedOpacity(
-              opacity: widget.config.userLocation != null ? 1.0 : 0.0,
+              opacity: (widget.config.userLocation != null && !widget.config.isUsingCachedLocation) ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 300),
               child: widget.config.userLocation != null
                   ? _buildUserLocationChip()
@@ -591,7 +591,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
 
         // Existing wifi status at top-right
         Positioned(
-          top: 4,
+          top: MediaQuery.of(context).padding.top + 4,
           right: 10,
           child: Tooltip(
             message: widget.config.isOffline
@@ -1262,7 +1262,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                       const SizedBox(width: 6),
                                       Expanded(
                                         child: Text(
-                                          "GPS unavailable - compass navigation only",
+                                          "No GPS · compass direction only",
                                           style: SafeFonts.inter(
                                             fontSize: 11,
                                             color: const Color(0xFF194E9D),
@@ -1280,7 +1280,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
-                                        "Offline - using cached data and estimates",
+                                        "No internet · distances are estimates",
                                         style: SafeFonts.inter(
                                           fontSize: 11,
                                           color: const Color(0xFF194E9D),
@@ -1696,7 +1696,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                     SliverAppBar(
                       pinned: true,
                       automaticallyImplyLeading: false,
-                      toolbarHeight: 72,
+                      toolbarHeight: 88,
                       elevation: 4,
                       shadowColor: Colors.black26,
                       backgroundColor: Colors.white,
@@ -1755,9 +1755,19 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                             fontWeight: FontWeight.bold,
                                             color: Colors.black,
                                           ),
-                                          maxLines: 1,
+                                          maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
+                                        if (selectedAedInfo.address != null && selectedAedInfo.address!.isNotEmpty)
+                                          Text(
+                                            selectedAedInfo.address!,
+                                            style: SafeFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -1803,7 +1813,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        "Offline navigation - estimated route",
+                                        "No internet · distances are estimates",
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.orange.shade700,
@@ -2492,20 +2502,19 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                   onNotification: (ScrollNotification notification) {
                     if (notification is ScrollUpdateNotification) {
                       final bool shouldShowShadow = notification.metrics.pixels > 5;
-
                       if (shouldShowShadow != _hasScrolledUnderHeader) {
                         setState(() {
                           _hasScrolledUnderHeader = shouldShowShadow;
                         });
                       }
+                      final bool shouldShowScrollToTop = notification.metrics.pixels > 200;
+                      if (shouldShowScrollToTop != _showScrollToTop) {
+                        setState(() {
+                          _showScrollToTop = shouldShowScrollToTop;
+                        });
+                      }
                     }
-                    final bool shouldShowScrollToTop = notification.metrics.pixels > 200;
-                    if (shouldShowScrollToTop != _showScrollToTop) {
-                      setState(() {
-                        _showScrollToTop = shouldShowScrollToTop;
-                      });
-                    }
-                    else if (notification is ScrollEndNotification) {
+                    if (notification is ScrollEndNotification) {
                       // ✅ Reset shadow when scroll ends at top
                       if (notification.metrics.pixels <= 5 && _hasScrolledUnderHeader) {
                         setState(() {
@@ -2536,7 +2545,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay> with WidgetsBindingObserv
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               child: Text(
-                                "Nearest Defibrillator",
+                                "Nearest AED",
                                 style: SafeFonts.inter(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,

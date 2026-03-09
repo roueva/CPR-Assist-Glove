@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import 'registration_screen.dart';
 import '../services/decrypted_data.dart';
-import '../widgets/account_menu.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final Stream<Map<String, dynamic>> dataStream;
@@ -100,9 +99,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Navigator.pop(context, false);
             },
           ),
-          actions: [
-            AccountMenu(decryptedDataHandler: widget.decryptedDataHandler),
-          ],
         ),
         body: Padding(
           padding: const EdgeInsets.all(16.0),

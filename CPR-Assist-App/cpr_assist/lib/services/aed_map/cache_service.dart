@@ -129,6 +129,12 @@ class CacheService {
     }
   }
 
+  static void clearDistanceCache() {
+    _distanceCache.clear();
+    _saveTimer?.cancel();
+    print("🗑️ Distance cache cleared (location changed)");
+  }
+
 
   static double? getDistance(String key) {
     return _distanceCache[key];

@@ -71,6 +71,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   bool _gpsSearchSuccess = false;
   bool _isSettingUpLocation = false;
   StreamSubscription<Position>? _manualGPSSubscription;
+  bool _hasRealGPSFix = false;
 
   // Flags
   bool _hasPerformedInitialZoom = false;
@@ -723,11 +724,17 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
   }
 
   Future<void> _updateUserLocation(LatLng location, {bool fromCache = false}) async {
-    final wasUsingCached = _isUsingCachedLocation;
+    // Capture whether this is the first real GPS fix BEFORE updating any flags
+    final bool isFirstRealGPSFix = !fromCache && !_hasRealGPSFix;
 
     if (!fromCache) {
       _locationLastUpdated = DateTime.now();
       _isUsingCachedLocation = false;
+      if (!_hasRealGPSFix) {
+        _hasRealGPSFix = true;
+        // Force rebuild so the spinner stops immediately
+        if (mounted) setState(() {});
+      }
     } else {
       _isUsingCachedLocation = true;
     }
@@ -737,7 +744,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     final LatLng? previousLocation = currentState.userLocation;
     final bool wasLocationNull = previousLocation == null;
 
-    // ✅ ADD: Show banner if location changed significantly
+    // Show banner if location changed significantly
     if (!wasLocationNull && !fromCache) {
       final distance = LocationService.distanceBetween(previousLocation, location);
       if (distance > 100 && _hasPerformedInitialZoom && mounted) {
@@ -747,8 +754,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
 
     if (!wasLocationNull && !fromCache && !currentState.navigation.hasStarted) {
       final distance = LocationService.distanceBetween(previousLocation, location);
-      if (distance < 5 && !_isUsingCachedLocation) {
-        // Only skip tiny movements when we already have a real GPS fix
+      if (distance < 5) {
         _locationLastUpdated = DateTime.now();
         return;
       }
@@ -757,14 +763,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
     // Update location in state first
     mapNotifier.updateUserLocation(location);
 
-    final isFirstGPSFix = _isUsingCachedLocation && !fromCache;
-    if (isFirstGPSFix) {
-      // Skip resort on the immediate cached→GPS transition,
-      // let the 10s throttle handle it after GPS stabilizes
-      _lastResortTime = DateTime.now();
-    }
-
-    // Handle first-time location
+    // Handle first-time location (previousLocation was null)
     if (wasLocationNull) {
       _cacheUserRegion(location);
       if (currentState.aedList.isNotEmpty) {
@@ -781,112 +780,98 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
           knownAEDs: sortedForZoom,
         );
       }
-      // Still handle navigation if it was started before first fix
       if (currentState.navigation.hasStarted && _navigationController?.isActive == true) {
         _navigationController!.updateUserLocation(location);
       }
       return;
     }
 
-// Handle upgrade from cached → fresh GPS (zoom to actual location)
-    if (!fromCache && wasUsingCached) {
-      final distance = LocationService.distanceBetween(previousLocation, location);
-      if (distance > 30) {
-        // Sort directly here rather than relying on _resortAEDs state propagation
-        final aedRepository = ref.read(aedServiceProvider);
-        final freshSorted = aedRepository.sortAEDsByDistance(
-          currentState.aedList,
-          location,
-          currentState.navigation.transportMode,
-        );
+    // ✅ KEY FIX: Handle first real GPS fix replacing cached location
+    // Uses _hasRealGPSFix (captured before update) instead of _isUsingCachedLocation
+    // which gets reset by the spinner logic in _initializeApp before GPS arrives.
+    if (isFirstRealGPSFix) {
+      print("🛰️ First real GPS fix received — clearing stale distances and resorting");
+      print("🧹 Previous location: $previousLocation → Real GPS: $location");
+      print("🧹 Distance: ${LocationService.distanceBetween(previousLocation, location).toStringAsFixed(0)}m");
 
-        // Update state with freshly sorted list
-        ref.read(mapStateProvider.notifier).setAEDs(freshSorted);
+      // Clear distances — they were calculated from the cached location
+      CacheService.clearDistanceCache();
 
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (!mounted) return;
+      final aedRepository = ref.read(aedServiceProvider);
+      final freshSorted = aedRepository.sortAEDsByDistance(
+        currentState.aedList,
+        location,
+        currentState.navigation.transportMode,
+      );
 
-        _hasPerformedInitialZoom = false;
-        await _zoomToUserAndAEDsIfReady(
-          force: true,
-          knownLocation: location,
-          knownAEDs: freshSorted,  // pass directly, don't read from state
-        );
-      }
+      ref.read(mapStateProvider.notifier).setAEDs(freshSorted);
+      _lastResortTime = DateTime.now();
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+
+      _hasPerformedInitialZoom = false;
+      await _zoomToUserAndAEDsIfReady(
+        force: true,
+        knownLocation: location,
+        knownAEDs: freshSorted,
+      );
+
+      if (!currentState.navigation.hasStarted) return;
     }
 
     // Handle subsequent location updates
     final distance = LocationService.distanceBetween(previousLocation, location);
 
-    // Resort if moved significantly (throttled to every 10 seconds)
     if (distance > AppConstants.locationSignificantMovement) {
       final now = DateTime.now();
       if (_lastResortTime == null || now.difference(_lastResortTime!).inSeconds >= 10) {
         _lastResortTime = now;
 
-        // ✅ Get AED list BEFORE resorting
         final previousClosest = currentState.aedList.isNotEmpty ? currentState.aedList.first.id : null;
-
         _resortAEDs();
 
-        // ✅ Only preload if closest AED actually changed AND cooldown passed
         final updatedState = ref.read(mapStateProvider);
         final newClosest = updatedState.aedList.isNotEmpty ? updatedState.aedList.first.id : null;
 
         if (newClosest != null && newClosest != previousClosest) {
-          // ✅ Check if new closest is SIGNIFICANTLY closer (hysteresis)
           if (previousClosest != null) {
             final oldAED = currentState.aedList.firstWhere((aed) => aed.id == previousClosest);
             final newAED = updatedState.aedList.first;
-
             final oldDistance = LocationService.distanceBetween(location, oldAED.location);
             final newDistance = LocationService.distanceBetween(location, newAED.location);
-
-            // ✅ Only log/process if new AED is at least 50m closer
             if ((oldDistance - newDistance) >= 50) {
-              print("📍 Closest AED changed significantly: $previousClosest → $newClosest (${(oldDistance - newDistance).toStringAsFixed(0)}m closer)");
-              // Could trigger selective route preload here if needed
-            } else {
-              print("📍 Closest AED nominally changed but difference too small (${(oldDistance - newDistance).toStringAsFixed(0)}m)");
-              // ✅ Don't do anything special, but DON'T return - let navigation updates continue
+              print("📍 Closest AED changed: $previousClosest → $newClosest (${(oldDistance - newDistance).toStringAsFixed(0)}m closer)");
             }
           } else {
-            // No previous closest (first time)
             print("📍 Closest AED set: $newClosest");
           }
         }
       }
     }
 
-    // Check if a closer AED is available during active navigation
     if (currentState.navigation.hasStarted &&
         currentState.navigation.destination != null &&
         currentState.aedList.length > 1) {
       _checkForCloserAED(location, currentState);
     }
 
-    // Arrival detection
     if (currentState.navigation.hasStarted &&
         currentState.navigation.destination != null) {
       final distToDestination = LocationService.distanceBetween(
-        location,
-        currentState.navigation.destination!,
+        location, currentState.navigation.destination!,
       );
       if (distToDestination < 30 && mounted) {
         _onArrived();
       }
     }
 
-    // Update route if actively navigating
-// ✅ ALWAYS update camera FIRST during active navigation (smooth following)
-    // Camera update is synchronous and immediate
     if (currentState.navigation.hasStarted &&
         _navigationController != null &&
         _navigationController!.isActive) {
       _navigationController!.updateUserLocation(location);
     }
 
-// Route/ETA update is deferred so it doesn't compete with camera move
     if (currentState.navigation.hasStarted &&
         currentState.navigation.destination != null) {
       final shouldUpdateETA = _lastRouteUpdateLocation == null ||
@@ -900,36 +885,27 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
           double remainingDistance;
           String estimatedTime;
 
-          if (state.navigation.route != null &&
-              state.navigation.route!.points.isNotEmpty) {
+          if (state.navigation.route != null && state.navigation.route!.points.isNotEmpty) {
             final routeCalc = _calculateRemainingRouteDistance(
-              location,
-              state.navigation.route!.points,
-              state.navigation.destination!,
+              location, state.navigation.route!.points, state.navigation.destination!,
             );
             remainingDistance = routeCalc.distance;
             estimatedTime = _calculateSmartETA(
-              remainingDistance,
-              state.navigation.route!,
-              state.navigation.transportMode,
+              remainingDistance, state.navigation.route!, state.navigation.transportMode,
             );
           } else {
-            remainingDistance = LocationService.distanceBetween(
-                location, state.navigation.destination!);
+            remainingDistance = LocationService.distanceBetween(location, state.navigation.destination!);
             estimatedTime = LocationService.calculateOfflineETA(
-              remainingDistance,
-              state.navigation.transportMode,
+              remainingDistance, state.navigation.transportMode,
             );
           }
 
-          mapNotifier.updateRoute(
-              state.navigation.route, estimatedTime, remainingDistance);
+          mapNotifier.updateRoute(state.navigation.route, estimatedTime, remainingDistance);
           await _updateNavigationRoute(location, state.navigation.destination!);
         });
       }
     }
 
-    // Cache location for next app start
     if (mounted) {
       final latestState = ref.read(mapStateProvider);
       CacheService.saveLastAppState(
@@ -938,7 +914,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
       );
     }
   }
-
 
   void _onArrived() {
     _navigationController?.cancelNavigation();
@@ -2277,7 +2252,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget> with WidgetsBinding
         isFollowingUser: _navigationController?.isActive ?? false,
         showRecenterButton: _navigationController?.showRecenterButton ?? false,
         hasStartedNavigation: mapState.navigation.hasStarted,
-        isUsingCachedLocation: _isUsingCachedLocation,
+        isUsingCachedLocation: !_hasRealGPSFix,
         isManuallySearchingGPS: _isManuallySearchingGPS,
         gpsSearchSuccess: _gpsSearchSuccess,
         isLocationStale: _isLocationStale(),

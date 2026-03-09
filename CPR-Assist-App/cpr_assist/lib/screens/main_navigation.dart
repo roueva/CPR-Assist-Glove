@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import '../providers/app_providers.dart';
 import '../utils/safe_fonts.dart';
+import '../widgets/account_menu.dart';
 import 'guide_screen.dart';
 import 'home_screen.dart';
 import 'live_cpr_screen.dart';
@@ -25,6 +26,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   late final HomeScreen _homeScreen;
   late final LiveCPRScreen _liveScreen;
   late final DecryptedData _decryptedDataHandler;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
 
   @override
@@ -76,20 +78,26 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
+      endDrawer: AccountDrawer(
+        decryptedDataHandler: _decryptedDataHandler,
+      ),
       appBar: UniversalHeader.forMainScreens(
         decryptedDataHandler: _decryptedDataHandler,
         currentIndex: _currentIndex,
+          onAccountTap: () =>
+              _scaffoldKey.currentState?.openEndDrawer(),
       ),
       body: PageView(
         controller: _pageController,
         physics: const NeverScrollableScrollPhysics(),
 // AFTER line 75 (in the PageView children), REPLACE with:
 
-          children: [
-            _homeScreen,
-            _liveScreen,
-            const GuideScreen(),
-          ],
+        children: [
+          _homeScreen,
+          _liveScreen,
+          const GuideScreen(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

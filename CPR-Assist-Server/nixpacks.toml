@@ -13,7 +13,8 @@ nixPkgs = [
 [phases.install]
 cmds = [
   "npm ci",
-  "PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages python3.11 -c \"import requests; import urllib3; import psycopg2; print('All Python deps OK')\""
+  "PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages pip install groq --break-system-packages",
+  "PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages python3.11 -c \"import psycopg2; print('All Python deps OK')\""
 ]
 
 [start]
