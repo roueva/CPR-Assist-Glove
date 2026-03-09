@@ -1,9 +1,9 @@
 import json
 import os
 import time
+import requests
 import random
 import psycopg2
-from groq import Groq
 
 # --- Configuration ---
 API_KEY = os.environ.get('GROQ_API_KEY', '')
@@ -11,8 +11,8 @@ if not API_KEY:
     print("❌ ERROR: GROQ_API_KEY environment variable not set!")
     exit(1)
 
-client = Groq(api_key=API_KEY)
 MODEL = "llama-3.3-70b-versatile"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, '../data')
@@ -49,17 +49,17 @@ Field Definitions & Logic Rules:
   - Wrap-around (e.g., "October to May"): start_month: 10, end_month: 5.
   - "School months": start_month: 9, end_month: 6.
 
-Respond ONLY with valid JSON matching this exact structure:
+Respond ONLY with valid JSON matching this exact structure, no extra text:
 {
-  "original_text": "...",
-  "status": "parsed" | "uncertain" | "closed_for_use",
-  "is_24_7": true | false,
-  "uncertain_reason": "...",
+  "original_text": "the input text here",
+  "status": "parsed",
+  "is_24_7": false,
+  "uncertain_reason": "",
   "rules": [
     {
       "days": [1,2,3,4,5],
-      "start_month": 1,
-      "end_month": 12,
+      "start_month": null,
+      "end_month": null,
       "open_time": "09:00",
       "close_time": "17:00"
     }
@@ -165,30 +165,42 @@ def save_all_to_db(cache_dict):
         print(f"❌ Bulk DB save FAILED: {e}")
 
 def parse_string_with_groq(text_to_parse, max_retries=5):
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": text_to_parse}
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.0,
+        "max_tokens": 1000
+    }
+
     for attempt in range(max_retries):
         try:
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": text_to_parse}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.0,
-                max_tokens=1000
-            )
-            result_text = response.choices[0].message.content
-            return json.loads(result_text)
+            response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=60)
 
-        except Exception as e:
-            err = str(e)
-            if '429' in err or 'rate_limit' in err.lower():
+            if response.status_code == 429:
                 wait_time = 30 * (attempt + 1) + random.uniform(1, 5)
                 print(f"      ...Rate limit hit. Retrying in {wait_time:.1f}s...")
                 time.sleep(wait_time)
-            else:
-                print(f"      ...Error: {e}")
-                time.sleep(5)
+                continue
+
+            if response.status_code != 200:
+                print(f"      ...API Error ({response.status_code}): {response.text}")
+                return None
+
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            return json.loads(content)
+
+        except Exception as e:
+            print(f"      ...Error: {e}")
+            time.sleep(5)
     return None
 
 def main():
@@ -218,8 +230,12 @@ def main():
     if not cache:
         cache = load_cache(CACHE_FILE)
 
+    total = len(unique_strings)
+    skipped = sum(1 for t in unique_strings if t in cache)
+    print(f"📊 {total} strings total, {skipped} already cached, {total - skipped} to parse")
+
     for i, text in enumerate(unique_strings):
-        print(f"\n[{i+1}/{len(unique_strings)}] Processing:")
+        print(f"\n[{i+1}/{total}] Processing:")
         print(f"  > {text}")
 
         if text in cache:
