@@ -7,6 +7,9 @@ nixPkgs = [
   "python311Packages.psycopg2"
 ]
 
+[phases.setup.environment]
+PYTHONPATH = "/root/.nix-profile/lib/python3.11/site-packages"
+
 [phases.install]
 cmds = [
   "npm ci",
