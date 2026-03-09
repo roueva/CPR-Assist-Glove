@@ -125,48 +125,17 @@ async saveToDatabase(cache) {
     /**
      * Print detailed change analysis
      */
-    printAnalysis(analysis, cache) {
-        console.log('\n' + '='.repeat(70));
-        console.log('📊 AVAILABILITY STRINGS ANALYSIS');
-        console.log('='.repeat(70));
-        
+    printAnalysis(analysis, oldCache) {
         const totalStrings = analysis.new.length + analysis.changed.length + analysis.unchanged.length;
         const needsParsing = analysis.new.length + analysis.changed.length;
-        
-        console.log(`📈 Total unique strings: ${totalStrings}`);
-        console.log(`✅ Already parsed: ${analysis.unchanged.length}`);
-        console.log(`🆕 New strings: ${analysis.new.length}`);
-        console.log(`🔄 Changed/retry: ${analysis.changed.length}`);
-        console.log(`🐍 Need parsing: ${needsParsing}`);
-        
-        if (analysis.new.length > 0) {
-            console.log('\n' + '─'.repeat(70));
-            console.log('🆕 NEW AVAILABILITY STRINGS:');
-            console.log('─'.repeat(70));
-            analysis.new.forEach((str, idx) => {
-                console.log(`[${idx + 1}/${analysis.new.length}] "${str}"`);
-            });
-        }
 
-        if (analysis.changed.length > 0) {
-            console.log('\n' + '─'.repeat(70));
-            console.log('🔄 STRINGS TO RETRY:');
-            console.log('─'.repeat(70));
-            analysis.changed.forEach((item, idx) => {
-                console.log(`[${idx + 1}/${analysis.changed.length}] "${item.string}"`);
-                console.log(`   └─ Previous status: ${item.oldStatus}`);
-                console.log(`   └─ Reason: ${item.reason}`);
-            });
-        }
+        console.log(`📊 Availability: ${totalStrings} unique strings, ${analysis.unchanged.length} cached, ${needsParsing} need parsing`);
 
         if (needsParsing === 0) {
-            console.log('\n✅ All availability strings are already parsed!');
-            console.log('   No API calls needed.');
+            console.log('✅ All availability strings already parsed - no API calls needed');
         } else {
-            console.log(`\n🐍 Will parse ${needsParsing} strings (estimated time: ~${Math.ceil(needsParsing * 10 / 60)} minutes)`);
+            console.log(`🐍 Will parse ${needsParsing} strings (~${Math.ceil(needsParsing * 10 / 60)} min estimated)`);
         }
-        
-        console.log('='.repeat(70) + '\n');
     }
 
     /**
@@ -235,18 +204,22 @@ async saveToDatabase(cache) {
             pythonProcess.stdout.on('data', (data) => {
                 const output = data.toString();
                 stdout += output;
+
+                // Only log milestones and errors, nothing else
                 if (output.includes('Process Complete') ||
                     output.includes('ERROR') ||
-                    output.includes('>>>')) {
+                    output.includes('>>>') ||
+                    output.includes('DB connection') ||
+                    output.includes('FAILED')) {
                     console.log(output.trim());
                 }
-                // Only log every 50 strings
+
                 const match = output.match(/\[(\d+)\/(\d+)\]/);
                 if (match) {
                     const current = parseInt(match[1]);
                     const total = parseInt(match[2]);
-                    if (current % 50 === 0 || current === total) {
-                        console.log(output.trim());
+                    if (current % 100 === 0 || current === total) {
+                        console.log(`🐍 Python progress: [${current}/${total}]`);
                     }
                 }
             });
@@ -279,68 +252,19 @@ async saveToDatabase(cache) {
      * Print before/after comparison for newly parsed strings
      */
     async printBeforeAfter(stringsToProcess, oldCache, newCache) {
-        console.log('\n' + '='.repeat(70));
-        console.log('📝 PARSING RESULTS');
-        console.log('='.repeat(70));
-
         let successCount = 0;
         let errorCount = 0;
 
         for (const str of stringsToProcess) {
-            const before = oldCache[str];
             const after = newCache[str];
-
-            console.log(`\n${'─'.repeat(70)}`);
-            console.log(`📄 Original Text: "${str}"`);
-            console.log(`${'─'.repeat(70)}`);
-
-            // Before state
-            if (!before) {
-                console.log('📥 BEFORE: Not in cache (NEW)');
-            } else {
-                console.log(`📥 BEFORE: Status = ${before.status}`);
-                if (before.status === 'error' && before.error) {
-                    console.log(`   └─ Error: ${before.error}`);
-                }
-            }
-
-            // After state
-            if (after && after.status === 'parsed') {
-                successCount++;
-                console.log('📤 AFTER: Successfully parsed ✅');
-                console.log(`   ├─ 24/7: ${after.is_24_7 ? 'Yes' : 'No'}`);
-                
-                if (after.rules && after.rules.length > 0) {
-                    console.log(`   └─ Rules (${after.rules.length}):`);
-                    after.rules.forEach((rule, idx) => {
-                        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                        const days = rule.days.map(d => dayNames[d - 1]).join(', ');
-                        console.log(`      [${idx + 1}] Days: ${days}`);
-                        console.log(`          Time: ${rule.open_time} - ${rule.close_time}`);
-                    });
-                } else if (after.is_24_7) {
-                    console.log('   └─ Rules: Open 24/7');
-                } else {
-                    console.log('   └─ Rules: None (closed or unavailable)');
-                }
-            } else if (after && after.status === 'error') {
-                errorCount++;
-                console.log('📤 AFTER: Parsing failed ❌');
-                console.log(`   └─ Error: ${after.error || 'Unknown error'}`);
-            } else {
-                errorCount++;
-                console.log('📤 AFTER: Not found in updated cache ❌');
-            }
+            if (after && after.status === 'parsed') successCount++;
+            else errorCount++;
         }
 
-        console.log('\n' + '='.repeat(70));
-        console.log('📊 SUMMARY');
-        console.log('='.repeat(70));
-        console.log(`✅ Successfully parsed: ${successCount}/${stringsToProcess.length}`);
-        console.log(`❌ Failed to parse: ${errorCount}/${stringsToProcess.length}`);
+        console.log(`📝 Parsing results: ${successCount}/${stringsToProcess.length} successful, ${errorCount} failed`);
         console.log(`📦 Total cache entries: ${Object.keys(newCache).length}`);
-        console.log('='.repeat(70) + '\n');
     }
+
 
     /**
      * Main parsing method with change detection
