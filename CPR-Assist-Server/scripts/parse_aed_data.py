@@ -243,7 +243,7 @@ def parse_string_with_gemini(text_to_parse, model_url, max_retries=5):
             if response.status_code in (429, 500, 503):
                 # Base wait of 15 seconds 
                 base_wait = 15
-                wait_time = (base_wait ** (1)) + random.uniform(1, 5)
+wait_time = base_wait * (attempt + 1) + random.uniform(1, 5)
                 
                 if response.status_code == 429:
                      print(f"\n      [429 ERROR DETAILS]: {response.text[:200]}...") 

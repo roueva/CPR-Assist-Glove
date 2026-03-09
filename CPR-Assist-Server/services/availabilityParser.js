@@ -8,6 +8,8 @@ class AvailabilityParser {
     this.scriptPath = path.join(__dirname, '../scripts/parse_aed_data.py');
     this.cacheFile = path.join(__dirname, '../data/parsed_availability_map.json');
     this.inputFile = path.join(__dirname, '../data/aed_greece_current.json');
+    this.isRunning = false;
+
 }
 
     /**
@@ -18,7 +20,11 @@ class AvailabilityParser {
         
         for (const aed of aeds) {
             if (aed.availability && aed.availability.trim()) {
-                uniqueStrings.add(aed.availability.trim());
+                const decoded = aed.availability.trim()
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>');
+                uniqueStrings.add(decoded);
             }
         }
         
@@ -270,6 +276,11 @@ async saveToDatabase(cache) {
      * Main parsing method with change detection
      */
     async parseAvailability(aeds) {
+        if (this.isRunning) {
+            console.log('⚠️ Parser already running - skipping this invocation');
+            return await this.loadCache();
+        }
+        this.isRunning = true;
         try {
             // Step 1: Extract current availability strings
             const currentStrings = await this.extractAvailabilityStrings(aeds);
@@ -316,8 +327,9 @@ const newCache = await this.loadCache(); // this already reads from DB first
 
         } catch (error) {
             console.error('❌ Error in availability parsing:', error);
-            // Return existing cache as fallback
             return await this.loadCache();
+        } finally {
+            this.isRunning = false;
         }
     }
 
