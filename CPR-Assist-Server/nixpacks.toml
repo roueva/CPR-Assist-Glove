@@ -4,7 +4,10 @@ nixPkgs = [
   "python311",
   "python311Packages.requests",
   "python311Packages.urllib3",
-  "python311Packages.psycopg2"
+  "python311Packages.psycopg2",
+  "python311Packages.idna",
+  "python311Packages.certifi",
+  "python311Packages.charset-normalizer"
 ]
 
 [phases.install]
