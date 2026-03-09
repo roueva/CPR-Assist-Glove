@@ -2,14 +2,16 @@
 nixPkgs = [
   "nodejs",
   "python311",
-  "python311Packages.pip"
+  "python311Packages.requests",
+  "python311Packages.psycopg2"
 ]
 
 [phases.install]
 cmds = [
   "npm ci",
-  "python3.11 -m pip install requests psycopg2-binary"
+  "python3.11 --version",
+  "python3.11 -c \"import sys; print(sys.path)\""
 ]
 
 [start]
-cmd = "node server.js"
+cmd = "export PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages:$PYTHONPATH && node server.js"

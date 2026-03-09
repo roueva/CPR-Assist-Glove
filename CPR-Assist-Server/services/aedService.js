@@ -214,9 +214,11 @@ await client.query(
             console.log(`   → ${totalInDB} total AEDs in database`);
 
             // ✅ Parse availability after successful sync
-            this.parseAvailabilityAfterSync(aeds).catch(e =>
-                console.error('⚠️ Availability parsing failed (non-critical):', e.message)
-            );
+            try {
+                await this.parseAvailabilityAfterSync(aeds);
+            } catch (e) {
+                console.error('⚠️ Availability parsing failed:', e.message);
+            }
 
             return {
                 success: true,

@@ -201,7 +201,10 @@ async saveToDatabase(cache) {
 
             console.log(`🐍 Using Python command: ${pythonCmd}`);
             const pythonProcess = spawn(pythonCmd, [this.scriptPath], {
-                env: process.env
+                env: {
+                    ...process.env,
+                    PYTHONPATH: `/root/.nix-profile/lib/python3.11/site-packages${process.env.PYTHONPATH ? `:${process.env.PYTHONPATH}` : ''}`
+                }
             });
             
             let stdout = '';

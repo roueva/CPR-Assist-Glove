@@ -154,6 +154,32 @@ def save_to_db(text, data):
     except Exception as e:
         print(f"      ...DB save FAILED: {type(e).__name__}: {e}")
 
+def save_all_to_db(cache_dict):
+    """Bulk save entire cache to DB in one connection."""
+    database_url = os.environ.get('DATABASE_URL', '')
+    if not database_url:
+        return
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    try:
+        conn = psycopg2.connect(database_url, sslmode='require')
+        cur = conn.cursor()
+        for text, data in cache_dict.items():
+            data_json = json.dumps(data, ensure_ascii=False)
+            cur.execute(
+                """INSERT INTO availability_cache (availability_text, parsed_data)
+                   VALUES (%s, %s)
+                   ON CONFLICT (availability_text)
+                   DO UPDATE SET parsed_data = %s, parsed_at = NOW()""",
+                [text, data_json, data_json]
+            )
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"✅ Saved {len(cache_dict)} entries to DB")
+    except Exception as e:
+        print(f"❌ Bulk DB save FAILED: {e}")
+
 
 def load_from_db():
     database_url = os.environ.get('DATABASE_URL', '')
@@ -324,7 +350,7 @@ def main():
         # 10 seconds delay to be safe
         print("  ...Waiting 10s...")
         time.sleep(10.0)
-            
+    save_all_to_db(cache)        
     print(f"\n--- Process Complete ---")
 
 if __name__ == "__main__":
