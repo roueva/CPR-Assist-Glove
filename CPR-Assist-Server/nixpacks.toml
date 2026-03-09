@@ -7,13 +7,10 @@ nixPkgs = [
   "python311Packages.psycopg2"
 ]
 
-[phases.setup.environment]
-PYTHONPATH = "/root/.nix-profile/lib/python3.11/site-packages"
-
 [phases.install]
 cmds = [
   "npm ci",
-  "python3.11 -c \"import requests; import urllib3; import psycopg2; print('All Python deps OK')\""
+  "PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages python3.11 -c \"import requests; import urllib3; import psycopg2; print('All Python deps OK')\""
 ]
 
 [start]
