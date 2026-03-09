@@ -3,5 +3,6 @@ builder = "NIXPACKS"
 nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
+startCommand = "export PYTHONPATH=/root/.nix-profile/lib/python3.11/site-packages:$PYTHONPATH && node server.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
