@@ -234,29 +234,28 @@ def parse_string_with_gemini(text_to_parse, model_url, max_retries=5):
             "temperature": 0.0
         }
     }
-    
+
     for attempt in range(max_retries):
         try:
             response = requests.post(model_url, json=payload, timeout=60)
-            
-            # Rate limit handling
+
+            # Rate limit / transient error handling
             if response.status_code in (429, 500, 503):
-                # Base wait of 15 seconds 
                 base_wait = 15
-wait_time = base_wait * (attempt + 1) + random.uniform(1, 5)
-                
+                wait_time = base_wait * (attempt + 1) + random.uniform(1, 5)
+
                 if response.status_code == 429:
-                     print(f"\n      [429 ERROR DETAILS]: {response.text[:200]}...") 
-                     wait_time = wait_time * (attempt + 1)
+                    print(f"\n      [429 ERROR DETAILS]: {response.text[:200]}...")
+                    wait_time = wait_time * (attempt + 1)
 
                 print(f"      ...API Error ({response.status_code}). Retrying in {wait_time:.1f}s...")
                 time.sleep(wait_time)
                 continue
-                
+
             if response.status_code != 200:
                 print(f"      ...API Error ({response.status_code}): {response.text}")
                 return None
-            
+
             result = response.json()
             json_string = result['candidates'][0]['content']['parts'][0]['text']
             return json.loads(json_string)
@@ -264,7 +263,7 @@ wait_time = base_wait * (attempt + 1) + random.uniform(1, 5)
         except Exception as e:
             print(f"      ...Error: {e}")
             time.sleep(5)
-            
+
     return None
 
 def main():
