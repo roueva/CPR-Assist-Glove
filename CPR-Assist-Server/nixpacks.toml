@@ -3,14 +3,14 @@ nixPkgs = [
   "nodejs",
   "python311",
   "python311Packages.requests",
+  "python311Packages.urllib3",
   "python311Packages.psycopg2"
 ]
 
 [phases.install]
 cmds = [
   "npm ci",
-  "python3.11 --version",
-  "python3.11 -c \"import sys; print(sys.path)\""
+  "python3.11 -c \"import requests; import urllib3; import psycopg2; print('All Python deps OK')\""
 ]
 
 [start]
