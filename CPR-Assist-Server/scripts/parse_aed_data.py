@@ -182,7 +182,7 @@ def parse_string_with_groq(text_to_parse, max_retries=5):
 
     for attempt in range(max_retries):
         try:
-            response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=60)
+response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=(10, 30))
 
             if response.status_code == 429:
                 wait_time = 30 * (attempt + 1) + random.uniform(1, 5)

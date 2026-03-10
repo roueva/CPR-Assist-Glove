@@ -9,6 +9,7 @@ const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const leaderboardRoutes = require('./routes/leaderboard');
 
 
 
@@ -80,6 +81,7 @@ const bulkUpdateLimiter = rateLimit({
 app.use('/auth', generalLimiter);
 app.use('/aed/sync', bulkUpdateLimiter);
 app.use('/sessions', generalLimiter);
+app.use('/leaderboard', generalLimiter);
 
 // ✅ Check Required Environment Variables
 const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY', 'ISAVELIVES_API_KEY'];
@@ -191,12 +193,12 @@ app.get('/health', async (req, res) => {
 const initializeRoutes = () => {
     app.use('/auth', initializeAuthRoutes(pool));
     app.use('/sessions', createSessionRoutes(pool));
-    app.use('/aed', createAedRoutes(pool)); 
+    app.use('/aed', createAedRoutes(pool));
+    app.use('/leaderboard', require('./routes/leaderboard')(pool));
 };
 
 
 initializeRoutes();
-
 
 // ✅ Error Handlers
 app.use('*', (req, res) => {

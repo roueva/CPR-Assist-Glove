@@ -251,9 +251,10 @@ class AvailabilityParser {
       if (!days.contains(currentDay)) continue;
 
       // Check Season
-      if (rule.containsKey('start_month') && rule.containsKey('end_month')) {
-        int start = rule['start_month'];
-        int end = rule['end_month'];
+      if (rule.containsKey('start_month') && rule.containsKey('end_month') &&
+          rule['start_month'] != null && rule['end_month'] != null) {
+        int start = rule['start_month'] as int;
+        int end = rule['end_month'] as int;
         int? startDay = rule['start_day'];
         int? endDay = rule['end_day'];
 

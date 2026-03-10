@@ -109,12 +109,14 @@ class AuthState {
   final int? userId;
   final String? username;
   final bool isLoading;
+  final String? email;
 
   AuthState({
     required this.isLoggedIn,
     this.userId,
     this.username,
     this.isLoading = false,
+    this.email,
   });
 
   AuthState copyWith({
@@ -122,12 +124,14 @@ class AuthState {
     int? userId,
     String? username,
     bool? isLoading,
+    String? email,
   }) {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       userId: userId ?? this.userId,
       username: username ?? this.username,
       isLoading: isLoading ?? this.isLoading,
+      email: email ?? this.email,
     );
   }
 }
@@ -177,6 +181,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       username: username,
       isLoading: false,
     );
+  }
+
+  // Update username locally and in SharedPreferences.
+  // Call this AFTER your backend PUT /auth/profile succeeds.
+  Future<void> updateUsername(String newUsername) async {
+    await _prefs.setString('username', newUsername);
+    state = state.copyWith(username: newUsername);
+  }
+
+  // Update email locally and in SharedPreferences.
+  Future<void> updateEmail(String newEmail) async {
+    await _prefs.setString('email', newEmail);
+    state = state.copyWith(email: newEmail);
   }
 }
 

@@ -4,10 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../widgets/app_theme.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PROFILE EDITOR SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-
 class ProfileEditorScreen extends ConsumerStatefulWidget {
   const ProfileEditorScreen({super.key});
 
@@ -60,44 +56,44 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-      _errorMessage = null;
-    });
+    setState(() { _isSaving = true; _errorMessage = null; });
 
     try {
-      // TODO: call networkService to persist to backend
-      // final networkService = ref.read(networkServiceProvider);
-      // await networkService.post('/auth/update-profile', {'username': newName});
-      // await ref.read(authStateProvider.notifier).updateUsername(newName);
+      final networkService = ref.read(networkServiceProvider);
 
-      await Future.delayed(const Duration(milliseconds: 600)); // placeholder
+      // Calls PUT /auth/profile  — add this route in Node (see backend_additions.js)
+      await networkService.put(
+        '/auth/profile',
+        {'username': newName},
+        requiresAuth: true,
+      );
+
+      // Update local state so avatar initials refresh immediately everywhere
+      await ref.read(authStateProvider.notifier).updateUsername(newName);
 
       if (mounted) {
         HapticFeedback.lightImpact();
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                SizedBox(width: 10),
-                Text('Profile updated'),
-              ],
-            ),
-            backgroundColor: kSuccess,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Row(children: [
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Text('Profile updated'),
+          ]),
+          backgroundColor: kSuccess,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
+        ));
       }
-    } catch (e) {
+    } on Exception catch (e) {
       setState(() {
         _isSaving = false;
-        _errorMessage = 'Could not save. Check your connection.';
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        _errorMessage = msg.contains('409')
+            ? 'That username is already taken.'
+            : 'Could not save. Check your connection.';
       });
     }
   }
@@ -111,45 +107,40 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 32),
         child: Container(
           decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20)),
+              color: Colors.white, borderRadius: BorderRadius.circular(20)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-                child: Column(
-                  children: [
-                    Text('Discard changes?', style: kHeading(size: 16)),
-                    const SizedBox(height: 8),
-                    Text('Your unsaved changes will be lost.',
-                        style: kBody(size: 13), textAlign: TextAlign.center),
-                  ],
-                ),
+                child: Column(children: [
+                  Text('Discard changes?', style: kHeading(size: 16)),
+                  const SizedBox(height: 8),
+                  Text('Your unsaved changes will be lost.',
+                      style: kBody(size: 13), textAlign: TextAlign.center),
+                ]),
               ),
               const Divider(height: 1, color: kDivider),
               IntrinsicHeight(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text('Keep editing',
-                            style: kBody(size: 14, color: kPrimary)
-                                .copyWith(fontWeight: FontWeight.w700)),
-                      ),
+                child: Row(children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text('Keep editing',
+                          style: kBody(size: 14, color: kPrimary)
+                              .copyWith(fontWeight: FontWeight.w700)),
                     ),
-                    const VerticalDivider(width: 1, color: kDivider),
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text('Discard',
-                            style: kBody(size: 14, color: kEmergency)
-                                .copyWith(fontWeight: FontWeight.w600)),
-                      ),
+                  ),
+                  const VerticalDivider(width: 1, color: kDivider),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: Text('Discard',
+                          style: kBody(size: 14, color: kEmergency)
+                              .copyWith(fontWeight: FontWeight.w600)),
                     ),
-                  ],
-                ),
+                  ),
+                ]),
               ),
             ],
           ),
@@ -177,6 +168,21 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
             },
           ),
           title: Text('Edit Profile', style: kHeading(size: 18)),
+          actions: [
+            if (_hasChanges)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: TextButton(
+                  onPressed: _isSaving ? null : _save,
+                  child: Text('Save',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: _isSaving ? kTextLight : kPrimary,
+                      )),
+                ),
+              ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Container(height: 1, color: kDivider),
@@ -187,69 +193,50 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-
-              // ── Avatar section ───────────────────────────────────────────
               Center(
-                child: Column(
-                  children: [
-                    Stack(
-                      children: [
-                        Container(
-                          width: 90,
-                          height: 90,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: kPrimaryLight,
-                            border: Border.all(color: kPrimaryMid, width: 2.5),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _initials,
-                              style: const TextStyle(
+                child: Column(children: [
+                  Stack(children: [
+                    Container(
+                      width: 90, height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: kPrimaryLight,
+                        border: Border.all(color: kPrimaryMid, width: 2.5),
+                      ),
+                      child: Center(
+                        child: Text(_initials,
+                            style: const TextStyle(
                                 color: kPrimary,
                                 fontWeight: FontWeight.w800,
-                                fontSize: 28,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 2,
-                          right: 2,
-                          child: GestureDetector(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Photo upload coming in a future update')),
-                              );
-                            },
-                            child: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: kPrimary,
-                                shape: BoxShape.circle,
-                                border:
-                                Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: const Icon(Icons.camera_alt_outlined,
-                                  color: Colors.white, size: 14),
-                            ),
-                          ),
-                        ),
-                      ],
+                                fontSize: 28)),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text('Tap camera to change photo',
-                        style: kLabel(size: 11, color: kTextLight)),
-                  ],
-                ),
+                    Positioned(
+                      bottom: 2, right: 2,
+                      child: GestureDetector(
+                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Photo upload coming soon')),
+                        ),
+                        child: Container(
+                          width: 30, height: 30,
+                          decoration: BoxDecoration(
+                            color: kPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt_outlined,
+                              color: Colors.white, size: 14),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text('Tap camera to change photo',
+                      style: kLabel(size: 11, color: kTextLight)),
+                ]),
               ),
-
               const SizedBox(height: 28),
-
-              // ── Form ────────────────────────────────────────────────────────
               Text('DISPLAY NAME', style: kLabel(size: 11)),
               const SizedBox(height: 6),
               TextField(
@@ -264,32 +251,26 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kDivider),
-                  ),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: kDivider)),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: kDivider),
-                  ),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: kDivider)),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                    const BorderSide(color: kPrimary, width: 1.5),
-                  ),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                      const BorderSide(color: kPrimary, width: 1.5)),
                   errorText: _errorMessage,
-                  errorStyle: const TextStyle(color: kEmergency, fontSize: 12),
+                  errorStyle:
+                  const TextStyle(color: kEmergency, fontSize: 12),
                 ),
               ),
-
               const SizedBox(height: 6),
               Text(
                 'This name appears on the leaderboard and in session reports.',
                 style: kLabel(size: 11, color: kTextLight),
               ),
-
               const SizedBox(height: 32),
-
-              // ── Save button ─────────────────────────────────────────────────
               AnimatedOpacity(
                 opacity: _hasChanges ? 1.0 : 0.4,
                 duration: const Duration(milliseconds: 200),
@@ -309,14 +290,12 @@ class _ProfileEditorScreenState extends ConsumerState<ProfileEditorScreen> {
                     ),
                     child: _isSaving
                         ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
+                        height: 18, width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white),
+                        ))
                         : const Text('Save Changes',
                         style: TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 15)),

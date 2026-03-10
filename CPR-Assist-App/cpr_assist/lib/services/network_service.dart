@@ -204,6 +204,16 @@ class NetworkService {
     }
   }
 
+  Future<dynamic> put(String endpoint, Map<String, dynamic> body,
+      {bool requiresAuth = false}) async {
+    try {
+      return await _makeRequest('PUT', endpoint,
+          body: body, requiresAuth: requiresAuth);
+    } catch (e) {
+      throw Exception('Error during PUT request: $e');
+    }
+  }
+
   Future<dynamic> _makeRequest(String method, String endpoint, {Map<String, dynamic>? body, bool requiresAuth = false}) async {
     final url = Uri.parse('$baseUrl$endpoint');
     final token = await getToken();
@@ -224,6 +234,8 @@ class NetworkService {
         response = await http.post(url, headers: headers, body: jsonEncode(body));
       } else if (method == 'GET') {
         response = await http.get(url, headers: headers);
+      } else if (method == 'PUT') {
+        response = await http.put(url, headers: headers, body: jsonEncode(body));
       } else {
         throw Exception('Unsupported HTTP method: $method');
       }

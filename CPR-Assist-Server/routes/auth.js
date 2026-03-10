@@ -1,6 +1,8 @@
 ﻿const express = require('express');
 const router = express.Router();
 const createAuthController = require('../controllers/authController');
+const { body, validationResult } = require('express-validator');
+
 const {
     validateRegistrationInput,
     validateLoginInput,
@@ -80,6 +82,80 @@ function initializeAuthRoutes(pool) {
                 message: 'Failed to fetch user profile',
                 error: error.message,
             });
+        }
+    });
+
+
+    router.put(
+        '/profile',
+        authenticate,
+        [
+            body('username')
+                .trim()
+                .isLength({ min: 3, max: 30 })
+                .withMessage('Username must be between 3 and 30 characters')
+                .matches(/^[a-zA-Z0-9_. ]+$/)
+                .withMessage('Username can only contain letters, numbers, spaces, dots and underscores'),
+        ],
+        async (req, res) => {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ success: false, errors: errors.array() });
+            }
+
+            const userId = req.user.id;
+            const { username } = req.body;
+
+            try {
+                const existing = await pool.query(
+                    'SELECT id FROM users WHERE username = $1 AND id != $2',
+                    [username, userId]
+                );
+                if (existing.rows.length > 0) {
+                    return res.status(409).json({ success: false, message: 'That username is already taken.' });
+                }
+
+                await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, userId]);
+                res.json({ success: true, message: 'Profile updated.', username });
+            } catch (err) {
+                console.error('Error updating profile:', err.message);
+                res.status(500).json({ success: false, message: 'Failed to update profile.' });
+            }
+        }
+    );
+
+    // Returns session count, average grade, best grade computed in DB.
+    router.get('/stats', authenticate, async (req, res) => {
+        const userId = req.user.id;
+        try {
+            const result = await pool.query(
+                `SELECT
+         COUNT(*)::int                             AS session_count,
+         ROUND(AVG(total_grade)::numeric, 1)       AS average_grade,
+         ROUND(MAX(total_grade)::numeric, 1)        AS best_grade,
+         SUM(compression_count)::int               AS total_compressions,
+         ROUND(AVG(average_depth)::numeric, 2)     AS avg_depth,
+         ROUND(AVG(average_frequency)::numeric, 1) AS avg_frequency
+       FROM cpr_sessions
+       WHERE user_id = $1`,
+                [userId]
+            );
+
+            const row = result.rows[0];
+            res.json({
+                success: true,
+                data: {
+                    session_count: row.session_count ?? 0,
+                    average_grade: parseFloat(row.average_grade) || 0,
+                    best_grade: parseFloat(row.best_grade) || 0,
+                    total_compressions: row.total_compressions ?? 0,
+                    avg_depth: parseFloat(row.avg_depth) || 0,
+                    avg_frequency: parseFloat(row.avg_frequency) || 0,
+                },
+            });
+        } catch (err) {
+            console.error('Error fetching stats:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to fetch stats.' });
         }
     });
 

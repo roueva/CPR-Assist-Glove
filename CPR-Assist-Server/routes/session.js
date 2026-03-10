@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { body, validationResult } = require('express-validator');
 
 module.exports = function (pool) {
@@ -116,6 +116,89 @@ module.exports = function (pool) {
                 message: 'Failed to fetch session summaries.',
                 error: err.message,
             });
+        }
+    });
+
+    // The leaderboard Personal Best card calls this instead of scanning all sessions
+    // client-side. Faster on large session counts.
+
+    router.get('/best', authenticate, async (req, res) => {
+        const userId = req.user.id;
+        try {
+            const result = await pool.query(
+                `SELECT id, compression_count, correct_depth, correct_frequency,
+              correct_recoil, depth_rate_combo, average_depth, average_frequency,
+              correct_rebound, patient_heart_rate, patient_temperature,
+              user_heart_rate, user_temperature, session_duration,
+              total_grade, session_start, session_end
+       FROM cpr_sessions
+       WHERE user_id = $1
+       ORDER BY total_grade DESC
+       LIMIT 1`,
+                [userId]
+            );
+
+            if (result.rows.length === 0) {
+                return res.json({ success: true, data: null });
+            }
+
+            res.json({ success: true, data: result.rows[0] });
+        } catch (err) {
+            console.error('Error fetching best session:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to fetch best session.' });
+        }
+    });
+
+    // ── DELETE /sessions/:id — delete a single session ──────────────────────────
+    // For the "Delete all session data" settings option and future per-session delete.
+
+    router.delete('/:id', authenticate, async (req, res) => {
+        const userId = req.user.id;
+        const sessionId = parseInt(req.params.id);
+
+        if (isNaN(sessionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid session ID.' });
+        }
+
+        try {
+            // Verify ownership before deleting
+            const result = await pool.query(
+                'DELETE FROM cpr_sessions WHERE id = $1 AND user_id = $2 RETURNING id',
+                [sessionId, userId]
+            );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Session not found or not owned by you.',
+                });
+            }
+
+            res.json({ success: true, message: 'Session deleted.' });
+        } catch (err) {
+            console.error('Error deleting session:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to delete session.' });
+        }
+    });
+
+    // ── DELETE /sessions/all — delete ALL sessions for current user ─────────────
+    // Called from Settings → Delete all session data.
+
+    router.delete('/all', authenticate, async (req, res) => {
+        const userId = req.user.id;
+        try {
+            const result = await pool.query(
+                'DELETE FROM cpr_sessions WHERE user_id = $1 RETURNING id',
+                [userId]
+            );
+            res.json({
+                success: true,
+                message: `Deleted ${result.rowCount} session(s).`,
+                deleted_count: result.rowCount,
+            });
+        } catch (err) {
+            console.error('Error deleting all sessions:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to delete sessions.' });
         }
     });
 
