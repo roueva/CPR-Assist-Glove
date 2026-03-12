@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { sendPasswordResetEmail } = require('../services/emailService');
 
 class AuthController {
     constructor(pool) {
@@ -34,7 +35,7 @@ class AuthController {
                 [username, hashedPassword, email, true]
             );
 
-            res.status(201).json({ message: 'User registered successfully' });
+            res.status(201).json({ success: true, message: 'User registered successfully' });
         } catch (error) {
             console.error('Registration error:', error.message);
             next(error);
@@ -132,6 +133,9 @@ class AuthController {
     async requestPasswordReset(req, res, next) {
         const { email } = req.body;
 
+        // Always return the same message — never confirm whether email exists
+        const safeResponse = { message: 'If an account exists with that email, a reset link has been sent.' };
+
         try {
             const userResult = await this.pool.query(
                 'SELECT * FROM users WHERE email = $1',
@@ -139,7 +143,7 @@ class AuthController {
             );
 
             if (userResult.rows.length === 0) {
-                return res.status(404).json({ error: 'No user found with this email' });
+                return res.json(safeResponse);
             }
 
             const resetToken = crypto.randomBytes(32).toString('hex');
@@ -150,7 +154,9 @@ class AuthController {
                 [resetToken, resetTokenExpiry, email]
             );
 
-            res.json({ message: 'Password reset token generated successfully' });
+            await sendPasswordResetEmail(email, resetToken);
+
+            return res.json(safeResponse);
         } catch (error) {
             console.error('Password reset request error:', error.message);
             next(error);

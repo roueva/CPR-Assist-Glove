@@ -133,7 +133,7 @@ module.exports = function (pool) {
                 success: true,
                 data: {
                     rank: parseInt(row.rank),
-                    avg_grade: parseFloat(row.avg_grade).toFixed(1),
+                    avg_grade: parseFloat(parseFloat(row.avg_grade).toFixed(1)),
                     session_count: row.session_count,
                     qualified: true,
                 },

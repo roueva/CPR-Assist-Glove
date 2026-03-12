@@ -1,105 +1,128 @@
-import 'dart:typed_data';
-import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:flutter/foundation.dart';
 
-/// Handles raw BLE data decryption and parsing
+import 'package:cpr_assist/core/core.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLEDataProcessor
+//
+// Parses raw BLE packets that arrive as plaintext directly from the glove.
+// NO decryption — the hardware sends data already readable.
+//
+// Packet layout (48 bytes, little-endian):
+//   [0..3]   float32  depth
+//   [4..7]   float32  frequency
+//   [8..11]  float32  angle
+//   [12..15] int32    compressionCount
+//   [16]     uint8    sessionActive (1 = true)
+//   [17]     uint8    (reserved)
+//   [18]     uint8    packetType  (1 = continuous, 2 = ping)
+//   [19]     uint8    (reserved)
+//   — packetType 1 (continuous) —
+//   [20..23] float32  heartRatePatient
+//   [24..27] float32  temperaturePatient
+//   [28..31] float32  heartRateUser
+//   [32..35] float32  temperatureUser
+//   — packetType 2 + !sessionActive (end ping) —
+//   [20..21] uint16   correctDepth
+//   [22..23] uint16   correctFrequency
+//   [24..25] uint16   correctRecoil
+//   [26..27] uint16   depthRateCombo
+//   [28..29] uint16   totalCompressions
+//   —
+//   [46]     uint8    batteryPercentage
+//   [47]     uint8    isCharging (1 = true)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class BLEDataProcessor {
-  final encrypt.Key _aesKey = encrypt.Key(Uint8List.fromList([
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
-  ]));
+  const BLEDataProcessor();
 
-  late final encrypt.Encrypter _aesEncrypter;
-
-  BLEDataProcessor() {
-    _aesEncrypter = encrypt.Encrypter(
-      encrypt.AES(_aesKey, mode: encrypt.AESMode.ecb, padding: null),
-    );
-  }
-
-  /// Parse raw BLE packet into structured data
+  /// Parse a raw BLE packet into structured data.
+  /// Returns null if the packet is malformed or the wrong length.
   ParsedBLEData? parsePacket(List<int> data) {
-    if (data.length != 48) {
-      print("❌ Incorrect data length: ${data.length}. Expected 48 bytes.");
+    if (data.length != AppConstants.blePacketSize) {
+      debugPrint(
+        'BLEDataProcessor: incorrect packet length ${data.length} '
+            '(expected ${AppConstants.blePacketSize})',
+      );
       return null;
     }
 
     try {
-      // Bypass decryption — treat raw BLE data as plaintext
-      final Uint8List combinedData = Uint8List.fromList(data);
-      final buffer = ByteData.sublistView(combinedData);
+      final buffer = ByteData.sublistView(Uint8List.fromList(data));
 
-      // Extract core metrics
-      final depth = buffer.getFloat32(0, Endian.little);
-      final frequency = buffer.getFloat32(4, Endian.little);
-      final angle = buffer.getFloat32(8, Endian.little);
-      final compressionCount = buffer.getInt32(12, Endian.little);
+      // ── Core fields (always present) ──────────────────────────────────────
+      final depth             = buffer.getFloat32(0,  Endian.little);
+      final frequency         = buffer.getFloat32(4,  Endian.little);
+      final angle             = buffer.getFloat32(8,  Endian.little);
+      final compressionCount  = buffer.getInt32  (12, Endian.little);
+      final sessionActive     = buffer.getUint8  (16) != 0;
+      final packetType        = buffer.getUint8  (18);
 
-      final sessionActive = buffer.getUint8(16) != 0;
-      final packetType = buffer.getUint8(18);
+      // ── Battery (always present) ──────────────────────────────────────────
+      final rawBattery   = buffer.getUint8(46);
+      final isCharging   = buffer.getUint8(47) == 1;
+      final validBattery = rawBattery > 0 && rawBattery <= 100;
 
-      final batteryPercentage = buffer.getUint8(46);
-      final isCharging = buffer.getUint8(47) == 1;
-
-      // Validate battery data
-      final validBattery = batteryPercentage > 0 && batteryPercentage <= 100;
-
-      // Parse based on packet type
-      final isStartPing = packetType == 2 && sessionActive;
-      final isEndPing = packetType == 2 && !sessionActive;
+      // ── Packet type flags ─────────────────────────────────────────────────
+      final isStartPing      = packetType == 2 && sessionActive;
+      final isEndPing        = packetType == 2 && !sessionActive;
       final isContinuousData = packetType == 1;
 
-      double heartRatePatient = 0.0;
-      double temperaturePatient = 0.0;
-      double heartRateUser = 0.0;
-      double temperatureUser = 0.0;
-
-      int correctDepth = 0;
-      int correctFrequency = 0;
-      int correctRecoil = 0;
-      int depthRateCombo = 0;
-      int totalCompressions = 0;
+      // ── Type-specific fields ──────────────────────────────────────────────
+      double heartRatePatient    = 0;
+      double temperaturePatient  = 0;
+      double heartRateUser       = 0;
+      double temperatureUser     = 0;
+      int correctDepth           = 0;
+      int correctFrequency       = 0;
+      int correctRecoil          = 0;
+      int depthRateCombo         = 0;
+      int totalCompressions      = 0;
 
       if (isContinuousData) {
-        heartRatePatient = buffer.getFloat32(20, Endian.little);
+        heartRatePatient   = buffer.getFloat32(20, Endian.little);
         temperaturePatient = buffer.getFloat32(24, Endian.little);
-        heartRateUser = buffer.getFloat32(28, Endian.little);
-        temperatureUser = buffer.getFloat32(32, Endian.little);
+        heartRateUser      = buffer.getFloat32(28, Endian.little);
+        temperatureUser    = buffer.getFloat32(32, Endian.little);
       } else if (isEndPing) {
-        correctDepth = buffer.getUint16(20, Endian.little);
-        correctFrequency = buffer.getUint16(22, Endian.little);
-        correctRecoil = buffer.getUint16(24, Endian.little);
-        depthRateCombo = buffer.getUint16(26, Endian.little);
+        correctDepth      = buffer.getUint16(20, Endian.little);
+        correctFrequency  = buffer.getUint16(22, Endian.little);
+        correctRecoil     = buffer.getUint16(24, Endian.little);
+        depthRateCombo    = buffer.getUint16(26, Endian.little);
         totalCompressions = buffer.getUint16(28, Endian.little);
       }
 
       return ParsedBLEData(
-        depth: depth,
-        frequency: frequency,
-        angle: angle,
-        compressionCount: compressionCount,
-        isStartPing: isStartPing,
-        isEndPing: isEndPing,
-        isContinuousData: isContinuousData,
-        batteryPercentage: validBattery ? batteryPercentage : null,
-        isCharging: validBattery ? isCharging : null,
-        heartRatePatient: heartRatePatient,
+        depth:             depth,
+        frequency:         frequency,
+        angle:             angle,
+        compressionCount:  compressionCount,
+        isStartPing:       isStartPing,
+        isEndPing:         isEndPing,
+        isContinuousData:  isContinuousData,
+        batteryPercentage: validBattery ? rawBattery : null,
+        isCharging:        validBattery ? isCharging : null,
+        heartRatePatient:  heartRatePatient,
         temperaturePatient: temperaturePatient,
-        heartRateUser: heartRateUser,
-        temperatureUser: temperatureUser,
-        correctDepth: correctDepth,
-        correctFrequency: correctFrequency,
-        correctRecoil: correctRecoil,
-        depthRateCombo: depthRateCombo,
+        heartRateUser:     heartRateUser,
+        temperatureUser:   temperatureUser,
+        correctDepth:      correctDepth,
+        correctFrequency:  correctFrequency,
+        correctRecoil:     correctRecoil,
+        depthRateCombo:    depthRateCombo,
         totalCompressions: totalCompressions,
       );
     } catch (e) {
-      print("❌ Failed to parse BLE data: $e");
+      debugPrint('BLEDataProcessor: parse error — $e');
       return null;
     }
   }
 }
 
-/// Structured BLE packet data
+// ─────────────────────────────────────────────────────────────────────────────
+// ParsedBLEData — immutable value object
+// ─────────────────────────────────────────────────────────────────────────────
+
 class ParsedBLEData {
   final double depth;
   final double frequency;
@@ -120,7 +143,7 @@ class ParsedBLEData {
   final int depthRateCombo;
   final int totalCompressions;
 
-  ParsedBLEData({
+  const ParsedBLEData({
     required this.depth,
     required this.frequency,
     required this.angle,

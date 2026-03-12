@@ -2,6 +2,7 @@
 const router = express.Router();
 const createAuthController = require('../controllers/authController');
 const { body, validationResult } = require('express-validator');
+const bcrypt = require('bcrypt');
 
 const {
     validateRegistrationInput,
@@ -54,9 +55,39 @@ function initializeAuthRoutes(pool) {
     );
 
     // Password reset route
-    router.post('/password-reset/:token', (req, res, next) =>
-        authController.resetPassword(req, res, next)
+    router.post(
+        '/password-reset/:token',
+        [
+            body('newPassword')
+                .isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+                .matches(/\d/).withMessage('Must contain a number')
+                .matches(/[A-Z]/).withMessage('Must contain an uppercase letter'),
+        ],
+        handleValidationErrors,
+        (req, res, next) => authController.resetPassword(req, res, next)
     );
+
+    router.post('/forgot-username', async (req, res) => {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+        try {
+            const result = await pool.query(
+                'SELECT username FROM users WHERE email = $1',
+                [email]
+            );
+            // Always return 200 — don't confirm whether email is registered
+            if (result.rows.length > 0) {
+                const { sendUsernameReminderEmail } = require('../services/emailService');
+                await sendUsernameReminderEmail(email, result.rows[0].username);
+            }
+            res.json({ message: 'If an account exists with that email, your username has been sent.' });
+        } catch (err) {
+            console.error('Forgot username error:', err.message);
+            res.status(500).json({ error: 'Failed to process request.' });
+        }
+    });
 
     // User profile route
     router.get('/profile', authenticate, async (req, res) => {
@@ -158,6 +189,42 @@ function initializeAuthRoutes(pool) {
             res.status(500).json({ success: false, message: 'Failed to fetch stats.' });
         }
     });
+
+    router.put(
+        '/change-password',
+        authenticate,
+        [
+            body('currentPassword').notEmpty().withMessage('Current password is required'),
+            body('newPassword')
+                .isLength({ min: 6 }).withMessage('At least 6 characters')
+                .matches(/\d/).withMessage('Must contain a number')
+                .matches(/[A-Z]/).withMessage('Must contain an uppercase letter'),
+        ],
+        handleValidationErrors,
+        async (req, res) => {
+            const { currentPassword, newPassword } = req.body;
+            const userId = req.user.id;
+            try {
+                const result = await pool.query(
+                    'SELECT password FROM users WHERE id = $1',
+                    [userId]
+                );
+                if (result.rows.length === 0) {
+                    return res.status(404).json({ success: false, message: 'User not found.' });
+                }
+                const isMatch = await bcrypt.compare(currentPassword, result.rows[0].password);
+                if (!isMatch) {
+                    return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+                }
+                const hashed = await bcrypt.hash(newPassword, 12);
+                await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashed, userId]);
+                res.json({ success: true, message: 'Password changed successfully.' });
+            } catch (err) {
+                console.error('Change password error:', err.message);
+                res.status(500).json({ success: false, message: 'Failed to change password.' });
+            }
+        }
+    );
 
     return router;
 }

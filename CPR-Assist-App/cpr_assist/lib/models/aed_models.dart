@@ -1,18 +1,25 @@
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AED model
+//
+// Pure data class — no colors, no spacing, no UI.
+// Display helpers use only Dart string formatting; callers apply AppTypography.
+// ─────────────────────────────────────────────────────────────────────────────
+
 class AED {
   final int id;
-  final String? foundation;        // NEW: Organization/foundation name
+  final String? foundation;
   final String? address;
   final LatLng location;
-  final String? availability;      // NEW: Availability hours
-  final String? aedWebpage;        // NEW: Info webpage URL
-  final DateTime? lastUpdated;     // NEW: Last sync timestamp
+  final String? availability;
+  final String? aedWebpage;
+  final DateTime? lastUpdated;
   final double distanceInMeters;
-  final double? distanceFromAPI;   // NEW: Distance from backend API (nearby query)
+  final double? distanceFromAPI; // metres (converted from km on parse)
   final double? distance;
 
-  AED({
+  const AED({
     required this.id,
     this.foundation,
     this.address,
@@ -25,119 +32,101 @@ class AED {
     this.distance,
   });
 
-  // Get display name (prioritize foundation, fallback to address)
+  // ── Display helpers ───────────────────────────────────────────────────────
+
+  /// Best available display name.
   String get name => foundation ?? address ?? 'AED Location';
 
-  // Get info URL
+  /// Info webpage URL.
   String? get infoUrl => aedWebpage;
 
-  AED copyWithDistance(double distance) {
-    return AED(
-      id: id,
-      foundation: foundation,
-      address: address,
-      location: location,
-      availability: availability,
-      aedWebpage: aedWebpage,
-      lastUpdated: lastUpdated,
-      distanceInMeters: distance,
-      distanceFromAPI: distanceFromAPI,
-    );
-  }
-
+  /// Human-readable distance string.
+  /// Prefers freshly-calculated [distanceInMeters]; falls back to API distance.
   String get formattedDistance {
-    // Prefer freshly calculated distanceInMeters; fall back to API distance from initial fetch
-    final distanceToUse = distanceInMeters > 0 ? distanceInMeters : (distanceFromAPI ?? 0.0);
-
-    // ✅ Handle zero/invalid distance
-    if (distanceToUse <= 0) {
-      return '--';  // Show placeholder instead of "0 m"
-    }
-
-    if (distanceToUse < 1000) {
-      return '${distanceToUse.toStringAsFixed(0)} m';
-    } else {
-      return '${(distanceToUse / 1000).toStringAsFixed(1)} km';
-    }
+    final d = distanceInMeters > 0 ? distanceInMeters : (distanceFromAPI ?? 0.0);
+    if (d <= 0) return '--';
+    if (d < 1000) return '${d.toStringAsFixed(0)} m';
+    return '${(d / 1000).toStringAsFixed(1)} km';
   }
 
-  // Format availability text
-  String get formattedAvailability {
-    if (availability == null || availability!.isEmpty) {
-      return 'Unknown availability';
-    }
-    return availability!;
-  }
+  /// Human-readable availability text.
+  String get formattedAvailability =>
+      (availability?.isNotEmpty ?? false) ? availability! : 'Unknown availability';
 
-  // Format last updated time
+  /// Human-readable age of the last data sync.
   String get formattedLastUpdated {
-    if (lastUpdated == null) return '';  // ✅ Return empty for display logic
-
-    final now = DateTime.now();
-    final difference = now.difference(lastUpdated!);
-
-    if (difference.inDays == 0) {
-      return 'today';
-    } else if (difference.inDays == 1) {
-      return 'yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
-      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
-    } else {
-      final months = (difference.inDays / 30).floor();
-      return '$months ${months == 1 ? 'month' : 'months'} ago';
+    if (lastUpdated == null) return '';
+    final diff = DateTime.now().difference(lastUpdated!);
+    if (diff.inDays == 0)  return 'today';
+    if (diff.inDays == 1)  return 'yesterday';
+    if (diff.inDays < 7)   return '${diff.inDays} days ago';
+    if (diff.inDays < 30) {
+      final w = (diff.inDays / 7).floor();
+      return '$w ${w == 1 ? 'week' : 'weeks'} ago';
     }
+    final m = (diff.inDays / 30).floor();
+    return '$m ${m == 1 ? 'month' : 'months'} ago';
   }
 
-  // Factory method to create AED from backend API response
-  factory AED.fromMap(Map<String, dynamic> map) {
-    return AED(
-      id: map['id'] is int ? map['id'] : int.parse(map['id'].toString()),
-      foundation: map['foundation'],
-      address: map['address'],
-      location: LatLng(
-        (map['latitude'] as num?)?.toDouble() ?? 0.0,
-        (map['longitude'] as num?)?.toDouble() ?? 0.0,
-      ),
-      availability: map['availability'],
-      aedWebpage: map['aed_webpage'],
-      lastUpdated: map['last_updated'] != null
-          ? DateTime.parse(map['last_updated']).toLocal()
-          : null,
-      distanceFromAPI: map['distance'] != null
-          ? (map['distance'] as num).toDouble() * 1000 // Convert km to meters
-          : null,
-    );
-  }
+  // ── Convenience flags ─────────────────────────────────────────────────────
 
-  factory AED.empty() => AED(
-    id: -1,
-    foundation: null,
-    address: '',
-    location: const LatLng(0, 0),
-  );
-
-  // Convert to map for storage/caching
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'foundation': foundation,
-      'address': address,
-      'latitude': location.latitude,
-      'longitude': location.longitude,
-      'availability': availability,
-      'aed_webpage': aedWebpage,
-      'last_updated': lastUpdated?.toIso8601String(),
-      if (distanceFromAPI != null) 'distance': distanceFromAPI! / 1000, // Store as km
-    };
-  }
-
-  // Helper to check if AED has valid location
   bool get hasValidLocation =>
       location.latitude != 0.0 && location.longitude != 0.0;
 
-  // Helper to check if AED has webpage
-  bool get hasWebpage => aedWebpage != null && aedWebpage!.isNotEmpty;
+  bool get hasWebpage => aedWebpage?.isNotEmpty ?? false;
+
+  // ── Copy helpers ──────────────────────────────────────────────────────────
+
+  AED copyWithDistance(double newDistance) => AED(
+    id:               id,
+    foundation:       foundation,
+    address:          address,
+    location:         location,
+    availability:     availability,
+    aedWebpage:       aedWebpage,
+    lastUpdated:      lastUpdated,
+    distanceInMeters: newDistance,
+    distanceFromAPI:  distanceFromAPI,
+  );
+
+  // ── Serialisation ─────────────────────────────────────────────────────────
+
+  factory AED.fromMap(Map<String, dynamic> map) {
+    return AED(
+      id:         map['id'] is int ? map['id'] as int : int.parse(map['id'].toString()),
+      foundation: map['foundation'] as String?,
+      address:    map['address'] as String?,
+      location: LatLng(
+        (map['latitude']  as num?)?.toDouble() ?? 0.0,
+        (map['longitude'] as num?)?.toDouble() ?? 0.0,
+      ),
+      availability: map['availability'] as String?,
+      aedWebpage:   map['aed_webpage']  as String?,
+      lastUpdated: map['last_updated'] != null
+          ? DateTime.parse(map['last_updated'] as String).toLocal()
+          : null,
+      // Backend returns km — convert to metres for internal consistency
+      distanceFromAPI: map['distance'] != null
+          ? (map['distance'] as num).toDouble() * 1000
+          : null,
+    );
+  }
+
+  factory AED.empty() => const AED(
+    id:       -1,
+    address:  '',
+    location: LatLng(0, 0),
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id':           id,
+    'foundation':   foundation,
+    'address':      address,
+    'latitude':     location.latitude,
+    'longitude':    location.longitude,
+    'availability': availability,
+    'aed_webpage':  aedWebpage,
+    'last_updated': lastUpdated?.toIso8601String(),
+    if (distanceFromAPI != null) 'distance': distanceFromAPI! / 1000, // store as km
+  };
 }

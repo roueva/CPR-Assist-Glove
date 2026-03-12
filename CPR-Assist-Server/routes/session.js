@@ -149,6 +149,27 @@ module.exports = function (pool) {
         }
     });
 
+    // ── DELETE /sessions/all — delete ALL sessions for current user ─────────────
+    // Called from Settings → Delete all session data.
+
+    router.delete('/all', authenticate, async (req, res) => {
+        const userId = req.user.id;
+        try {
+            const result = await pool.query(
+                'DELETE FROM cpr_sessions WHERE user_id = $1 RETURNING id',
+                [userId]
+            );
+            res.json({
+                success: true,
+                message: `Deleted ${result.rowCount} session(s).`,
+                deleted_count: result.rowCount,
+            });
+        } catch (err) {
+            console.error('Error deleting all sessions:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to delete sessions.' });
+        }
+    });
+
     // ── DELETE /sessions/:id — delete a single session ──────────────────────────
     // For the "Delete all session data" settings option and future per-session delete.
 
@@ -178,27 +199,6 @@ module.exports = function (pool) {
         } catch (err) {
             console.error('Error deleting session:', err.message);
             res.status(500).json({ success: false, message: 'Failed to delete session.' });
-        }
-    });
-
-    // ── DELETE /sessions/all — delete ALL sessions for current user ─────────────
-    // Called from Settings → Delete all session data.
-
-    router.delete('/all', authenticate, async (req, res) => {
-        const userId = req.user.id;
-        try {
-            const result = await pool.query(
-                'DELETE FROM cpr_sessions WHERE user_id = $1 RETURNING id',
-                [userId]
-            );
-            res.json({
-                success: true,
-                message: `Deleted ${result.rowCount} session(s).`,
-                deleted_count: result.rowCount,
-            });
-        } catch (err) {
-            console.error('Error deleting all sessions:', err.message);
-            res.status(500).json({ success: false, message: 'Failed to delete sessions.' });
         }
     });
 
