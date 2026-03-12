@@ -147,7 +147,7 @@ class AuthController {
             }
 
             const resetToken = crypto.randomBytes(32).toString('hex');
-            const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+            const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
 
             await this.pool.query(
                 'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE email = $3',
@@ -171,7 +171,7 @@ class AuthController {
         try {
             const userResult = await this.pool.query(
                 'SELECT * FROM users WHERE reset_token = $1 AND reset_token_expiry > $2',
-                [token, Date.now()]
+                [token, new Date()]
             );
 
             if (userResult.rows.length === 0) {

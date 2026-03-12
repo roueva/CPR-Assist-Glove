@@ -166,10 +166,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen>
                             validator: (v) {
                               if (v == null || v.isEmpty) return 'Please enter a password';
                               if (v.length < 6) return 'At least 6 characters';
-                              if (!v.contains(RegExp(r'[0-9]')))
+                              if (!v.contains(RegExp(r'[0-9]'))) {
                                 return 'Must contain at least one number';
-                              if (!v.contains(RegExp(r'[A-Z]')))
+                              }
+                              if (!v.contains(RegExp(r'[A-Z]'))) {
                                 return 'Must contain at least one uppercase letter';
+                              }
                               return null;
                             },
                           ),
@@ -206,10 +208,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen>
                               ),
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty)
+                              if (v == null || v.isEmpty) {
                                 return 'Please confirm your password';
-                              if (v != _passwordController.text)
+                              }
+                              if (v != _passwordController.text) {
                                 return 'Passwords do not match';
+                              }
                               return null;
                             },
                           ),

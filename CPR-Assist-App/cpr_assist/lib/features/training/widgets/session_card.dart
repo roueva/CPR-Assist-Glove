@@ -284,18 +284,18 @@ class SessionDetailsSheet extends StatelessWidget {
                   ),
 
                   // Vitals — only shown if present
-                  if (session.patientHeartRate != null ||
+                  if (
                       session.userHeartRate    != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     _DetailCard(
                       title: 'Vital Signs',
                       rows: [
-                        if (session.patientHeartRate != null)
-                          _DetailRow('Patient Heart Rate',
-                              '${session.patientHeartRate} bpm'),
-                        if (session.patientTemperature != null)
-                          _DetailRow('Patient Temperature',
-                              '${session.patientTemperature}°C'),
+                       // if (session.patientHeartRate != null)
+                         // _DetailRow('Patient Heart Rate',
+                         //     '${session.patientHeartRate} bpm'),
+                       // if (session.patientTemperature != null)
+                         // _DetailRow('Patient Temperature',
+                        //      '${session.patientTemperature}°C'),
                         if (session.userHeartRate != null)
                           _DetailRow('Your Heart Rate',
                               '${session.userHeartRate} bpm'),

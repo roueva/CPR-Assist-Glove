@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../../providers/app_providers.dart';
+import '../services/compression_event.dart';
+import '../services/session_detail.dart';
 import '../widgets/grade_card.dart';
 import 'past_sessions_screen.dart';
 
@@ -39,7 +41,7 @@ class _GradeScreenState extends ConsumerState<GradeScreen>
   @override
   bool get wantKeepAlive => true;
 
-  SessionSummary? _currentSession;
+  SessionDetail? _currentSession;
   Duration _sessionDuration = Duration.zero;
   DateTime? _sessionStartTime;
   StreamSubscription<Map<String, dynamic>>? _dataSub;
@@ -77,28 +79,23 @@ class _GradeScreenState extends ConsumerState<GradeScreen>
   }
 
   void _handleEndPing(Map<String, dynamic> data) {
-    // Build partial summary to calculate grade, then build the final one.
-    final partial = SessionSummary.fromBleData(
-      data,
-      sessionStart:    _sessionStartTime ?? DateTime.now(),
-      sessionDuration: _sessionDuration.inSeconds,
-      totalGrade:      0,
-    );
-    final grade = _service.calculateGrade(partial);
-    final session = SessionSummary.fromBleData(
-      data,
-      sessionStart:    _sessionStartTime ?? DateTime.now(),
-      sessionDuration: _sessionDuration.inSeconds,
-      totalGrade:      grade,
+    // Get the accumulated compression events from the BLE connection
+    final events = ref.read(bleConnectionProvider).compressionEvents;
+
+    final detail = _service.assembleDetail(
+      summaryPacket:       data,
+      events:              List<CompressionEvent>.from(events),
+      sessionStart:        _sessionStartTime ?? DateTime.now(),
+      sessionDurationSecs: _sessionDuration.inSeconds,
     );
 
-    setState(() => _currentSession = session);
-    _saveSession(session);
+    setState(() => _currentSession = detail);
+    _saveSession(detail);
   }
 
   // ── Session save + post-session login prompt ───────────────────────────────
 
-  Future<void> _saveSession(SessionSummary session) async {
+  Future<void> _saveSession(SessionDetail session) async {
     final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
 
     if (!isLoggedIn) {
@@ -114,7 +111,7 @@ class _GradeScreenState extends ConsumerState<GradeScreen>
       if (!nowLoggedIn) return;
     }
 
-    final success = await _service.saveSummary(session);
+    final success = await _service.saveDetail(session);
     if (!mounted) return;
 
     if (success) {

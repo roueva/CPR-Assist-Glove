@@ -8,6 +8,7 @@ import 'package:cpr_assist/core/core.dart';
 import '../../../providers/app_providers.dart';
 import '../../../features/training/widgets/grade_dialog.dart';
 import '../../training/screens/session_service.dart';
+import '../../training/services/session_detail.dart';
 import '../widgets/live_cpr_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,21 +140,14 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
     final isLoggedIn  = ref.read(authStateProvider).isLoggedIn;
+    final service     = SessionService(ref.read(networkServiceProvider));
+    final bleConn     = ref.read(bleConnectionProvider);
 
-    final service = SessionService(ref.read(networkServiceProvider));
-
-    final partial = SessionSummary.fromBleData(
-      data,
-      sessionStart:    _sessionStartTime ?? DateTime.now(),
-      sessionDuration: _displaySessionDuration.inSeconds,
-      totalGrade:      0,
-    );
-    final grade = service.calculateGrade(partial);
-    final session = SessionSummary.fromBleData(
-      data,
-      sessionStart:    _sessionStartTime ?? DateTime.now(),
-      sessionDuration: _displaySessionDuration.inSeconds,
-      totalGrade:      grade,
+    final detail = service.assembleDetail(
+      summaryPacket:       data,
+      events:              List.from(bleConn.compressionEvents),
+      sessionStart:        _sessionStartTime ?? DateTime.now(),
+      sessionDurationSecs: _displaySessionDuration.inSeconds,
     );
 
     if (currentMode == AppMode.emergency && !isLoggedIn) {
@@ -167,24 +161,21 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (!nowLoggedIn) return;
     }
 
-    final saved = await service.saveSummary(session);
+    final saved = await service.saveDetail(detail);
     if (!mounted) return;
 
     if (saved) {
       if (currentMode == AppMode.training) {
-        _showGradeDialog(session);
+        _showGradeDialog(detail);
       } else {
         UIHelper.showSuccess(context, 'Session saved');
       }
     } else {
-      UIHelper.showError(
-        context,
-        'Failed to save session. Please check your connection.',
-      );
+      UIHelper.showError(context, 'Failed to save session. Please check your connection.');
     }
   }
 
-  void _showGradeDialog(SessionSummary session) {
+  void _showGradeDialog(SessionDetail session) {
     showDialog<void>(
       context: context,
       barrierDismissible: false,

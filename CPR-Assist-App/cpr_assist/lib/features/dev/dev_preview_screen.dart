@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:cpr_assist/core/core.dart';
 import 'package:cpr_assist/features/training/screens/session_service.dart';
+import 'package:cpr_assist/features/training/services/session_detail.dart';
 import 'package:cpr_assist/features/training/screens/past_sessions_screen.dart';
 import 'package:cpr_assist/features/training/widgets/grade_card.dart';
 import 'package:cpr_assist/features/training/widgets/grade_dialog.dart';
@@ -16,9 +17,9 @@ import 'package:cpr_assist/features/account/screens/registration_screen.dart';
 // Remove the entry point in account_menu.dart before releasing.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Mock session data ──────────────────────────────────────────────────────
+// ── Mock SessionDetail — for GradeCard and GradeDialog ────────────────────
 
-SessionSummary _mockSession({
+SessionDetail _mockDetail({
   double grade = 87,
   int compressions = 142,
   int correctDepth = 118,
@@ -28,31 +29,62 @@ SessionSummary _mockSession({
   double avgDepth = 5.4,
   double avgFrequency = 112,
   int durationSecs = 183,
-  int? patientHr,
+  int? userHr,
+}) =>
+    SessionDetail(
+      sessionStart:           DateTime.now().subtract(const Duration(hours: 2)),
+      compressionCount:       compressions,
+      correctDepth:           correctDepth,
+      correctFrequency:       correctFrequency,
+      correctRecoil:          correctRecoil,
+      depthRateCombo:         depthRateCombo,
+      averageDepth:           avgDepth,
+      averageFrequency:       avgFrequency,
+      sessionDuration:        durationSecs,
+      totalGrade:             grade,
+      noFlowTime:             4.2,
+      handsOnRatio:           0.88,
+      timeToFirstCompression: 1.8,
+      depthConsistency:       83,
+      frequencyConsistency:   91,
+      userHeartRate:          userHr,
+      compressions:           [],
+    );
+
+// ── Mock SessionSummary — for SessionCard and PersonalBestCard ─────────────
+
+SessionSummary _mockSummary({
+  double grade = 87,
+  int compressions = 142,
+  int correctDepth = 118,
+  int correctFrequency = 130,
+  int correctRecoil = 105,
+  int depthRateCombo = 98,
+  double avgDepth = 5.4,
+  double avgFrequency = 112,
+  int durationSecs = 183,
   int? userHr,
 }) =>
     SessionSummary(
-      totalGrade: grade,
+      totalGrade:       grade,
       compressionCount: compressions,
-      correctDepth: correctDepth,
+      correctDepth:     correctDepth,
       correctFrequency: correctFrequency,
-      correctRecoil: correctRecoil,
-      depthRateCombo: depthRateCombo,
-      averageDepth: avgDepth,
+      correctRecoil:    correctRecoil,
+      depthRateCombo:   depthRateCombo,
+      averageDepth:     avgDepth,
       averageFrequency: avgFrequency,
-      sessionDuration: durationSecs,   // ← was durationSeconds
-      sessionStart: DateTime.now().subtract(const Duration(hours: 2)),
-      patientHeartRate: patientHr,
-      userHeartRate: userHr,
+      sessionDuration:  durationSecs,
+      sessionStart:     DateTime.now().subtract(const Duration(hours: 2)),
+      userHeartRate:    userHr,
     );
 
 final _mockSessions = [
-  _mockSession(grade: 94, compressions: 160, correctDepth: 150, durationSecs: 210),
-  _mockSession(grade: 87, compressions: 142, correctDepth: 118, durationSecs: 183),
-  _mockSession(grade: 72, compressions: 98,  correctDepth: 75,  durationSecs: 140),
-  _mockSession(grade: 55, compressions: 80,  correctDepth: 44,  durationSecs: 95),
-  _mockSession(grade: 91, compressions: 155, correctDepth: 140, durationSecs: 200,
-      patientHr: 68, userHr: 95),
+  _mockSummary(grade: 94, compressions: 160, correctDepth: 150, durationSecs: 210),
+  _mockSummary(grade: 87, compressions: 142, correctDepth: 118, durationSecs: 183),
+  _mockSummary(grade: 72, compressions: 98,  correctDepth: 75,  durationSecs: 140),
+  _mockSummary(grade: 55, compressions: 80,  correctDepth: 44,  durationSecs: 95),
+  _mockSummary(grade: 91, compressions: 155, correctDepth: 140, durationSecs: 200, userHr: 95),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,7 +187,7 @@ class DevPreviewScreen extends StatelessWidget {
               onTap: () => showDialog(
                 context: context,
                 barrierColor: AppColors.overlayDark,
-                builder: (_) => GradeDialog(session: _mockSession()),
+                builder: (_) => GradeDialog(session: _mockDetail()),
               ),
             ),
             const _Divider(),
@@ -168,7 +200,7 @@ class DevPreviewScreen extends StatelessWidget {
                 isScrollControlled: true,
                 backgroundColor: AppColors.overlayLight,
                 builder: (_) => SessionDetailsSheet(
-                  session: _mockSession(patientHr: 72, userHr: 98),
+                  session: _mockSummary(userHr: 98),
                   sessionNumber: 3,
                 ),
               ),
@@ -312,7 +344,7 @@ class DevPreviewScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Inline preview screens for widgets that aren't full screens
+// Inline preview screens
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _GradeCardPreviewScreen extends StatelessWidget {
@@ -345,17 +377,17 @@ class _GradeCardPreviewScreen extends StatelessWidget {
             Text('Grade: 94% — Excellent',
                 style: AppTypography.label(color: AppColors.textDisabled)),
             const SizedBox(height: AppSpacing.sm),
-            GradeCard(session: _mockSession(grade: 94, compressions: 160, correctDepth: 150)),
+            GradeCard(session: _mockDetail(grade: 94, compressions: 160, correctDepth: 150)),
             const SizedBox(height: AppSpacing.xl),
             Text('Grade: 72% — Good',
                 style: AppTypography.label(color: AppColors.textDisabled)),
             const SizedBox(height: AppSpacing.sm),
-            GradeCard(session: _mockSession(grade: 72, compressions: 98, correctDepth: 65, correctFrequency: 80)),
+            GradeCard(session: _mockDetail(grade: 72, compressions: 98, correctDepth: 65, correctFrequency: 80)),
             const SizedBox(height: AppSpacing.xl),
             Text('Grade: 45% — Needs Improvement',
                 style: AppTypography.label(color: AppColors.textDisabled)),
             const SizedBox(height: AppSpacing.sm),
-            GradeCard(session: _mockSession(grade: 45, compressions: 60, correctDepth: 22, correctFrequency: 30, correctRecoil: 15)),
+            GradeCard(session: _mockDetail(grade: 45, compressions: 60, correctDepth: 22, correctFrequency: 30, correctRecoil: 15)),
           ],
         ),
       ),
@@ -389,7 +421,10 @@ class _PersonalBestPreviewScreen extends StatelessWidget {
           AppSpacing.md + MediaQuery.paddingOf(context).bottom,
         ),
         child: PersonalBestCard(
-          session: _mockSession(grade: 94, compressions: 160, avgDepth: 5.6, avgFrequency: 114, durationSecs: 210),
+          session: _mockSummary(
+            grade: 94, compressions: 160,
+            avgDepth: 5.6, avgFrequency: 114, durationSecs: 210,
+          ),
         ),
       ),
     );
@@ -441,7 +476,7 @@ class _Divider extends StatelessWidget {
       height: AppSpacing.dividerThickness,
       thickness: AppSpacing.dividerThickness,
       color: AppColors.divider,
-      indent: AppSpacing.md + AppSpacing.touchTargetMin, // aligns past icon
+      indent: AppSpacing.md + AppSpacing.touchTargetMin,
     );
   }
 }

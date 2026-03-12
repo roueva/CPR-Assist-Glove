@@ -84,7 +84,7 @@ app.use('/sessions', generalLimiter);
 app.use('/leaderboard', generalLimiter);
 
 // ✅ Check Required Environment Variables
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY', 'ISAVELIVES_API_KEY'];
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'GOOGLE_MAPS_API_KEY', 'ISAVELIVES_API_KEY', 'EMAIL_HOST', 'EMAIL_USER', 'EMAIL_PASS'];
 requiredEnvVars.forEach(key => {
     if (!process.env[key]) {
         logger.error(`🚨 Missing environment variable: ${key}`);

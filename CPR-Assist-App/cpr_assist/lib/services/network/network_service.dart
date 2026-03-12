@@ -217,11 +217,14 @@ class NetworkService {
       final http.Response response;
       switch (method) {
         case 'POST':
-          response = await http.post(url, headers: headers, body: jsonEncode(body));
+          response = await http.post(url, headers: headers, body: jsonEncode(body))
+              .timeout(AppConstants.apiTimeout);
         case 'PUT':
-          response = await http.put(url, headers: headers, body: jsonEncode(body));
+          response = await http.put(url, headers: headers, body: jsonEncode(body))
+              .timeout(AppConstants.apiTimeout);
         default:
-          response = await http.get(url, headers: headers);
+          response = await http.get(url, headers: headers)
+              .timeout(AppConstants.apiTimeout);
       }
       return _handleResponse(response, endpoint, method,
           body: body, requiresAuth: requiresAuth);

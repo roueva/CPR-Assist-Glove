@@ -17,7 +17,7 @@ function initializeAuthRoutes(pool) {
 
     // ✅ Test Route for "/auth"
     router.get('/test', (req, res) => {
-     res.json({ message: '✅ Auth routes are working' });
+     res.json({ message: 'Auth routes are working' });
     });
 
 

@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:cpr_assist/core/core.dart';
-import 'package:cpr_assist/features/training/screens/session_service.dart';
+import '../services/session_detail.dart';
+import 'session_graphs.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GradeCard
+//
+// Full training session results card. Shown inside GradeDialog after a session
+// ends. Scrollable internally since it may exceed screen height on small phones.
+//
+// Layout (top → bottom):
+//   ① Gradient header — grade circle, motivational label, 3-col summary row
+//   ② Quality breakdown — 4 stat tiles showing % of compressions on target
+//   ③ White body — graphs, flow metrics, rescuer biometrics, session date
+//
+// File location: features/training/widgets/grade_card.dart
+// ─────────────────────────────────────────────────────────────────────────────
 
 class GradeCard extends StatelessWidget {
-  final SessionSummary session;
+  final SessionDetail session;
 
   const GradeCard({super.key, required this.session});
 
-  // ── Derived helpers ────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   String get _motivationalLabel {
     final g = session.totalGrade;
@@ -17,6 +32,7 @@ class GradeCard extends StatelessWidget {
     return 'Keep practicing!';
   }
 
+  /// Compressions on target as a percentage string, e.g. "83%"
   String _pct(int value) {
     if (session.compressionCount == 0) return '—';
     return '${(value / session.compressionCount * 100).round()}%';
@@ -24,22 +40,24 @@ class GradeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasHeartRate = session.patientHeartRate != null ||
-        session.userHeartRate != null;
-    final hasTemp = session.patientTemperature != null ||
+    final hasGraphs     = session.compressions.isNotEmpty;
+    final hasBiometrics = session.userHeartRate != null ||
         session.userTemperature != null;
-    final hasBiometrics = hasHeartRate || hasTemp;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Gradient top ────────────────────────────────────────────────
+          // ── ① Gradient header ──────────────────────────────────────────────
           Container(
             width: double.infinity,
-            decoration: AppDecorations.primaryGradientCard(
-              radius: 0, // clipped by ClipRRect above
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryAlt],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
@@ -49,22 +67,22 @@ class GradeCard extends StatelessWidget {
             ),
             child: Column(
               children: [
-                // ── Grade circle ─────────────────────────────────────────
+                // ── Grade circle ─────────────────────────────────────────────
                 Stack(
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 140,
-                      height: 140,
+                      width: 148,
+                      height: 148,
                       child: CircularProgressIndicator(
                         value: session.totalGrade / 100,
                         strokeWidth: 10,
+                        strokeCap: StrokeCap.round,
                         backgroundColor:
                         AppColors.textOnDark.withValues(alpha: 0.2),
                         valueColor: const AlwaysStoppedAnimation<Color>(
                           AppColors.textOnDark,
                         ),
-                        strokeCap: StrokeCap.round,
                       ),
                     ),
                     Column(
@@ -73,7 +91,7 @@ class GradeCard extends StatelessWidget {
                         Text(
                           '${session.totalGrade.toStringAsFixed(0)}%',
                           style: AppTypography.numericDisplay(
-                            size: 36,
+                            size: 38,
                             color: AppColors.textOnDark,
                           ),
                         ),
@@ -81,7 +99,7 @@ class GradeCard extends StatelessWidget {
                           _motivationalLabel,
                           style: AppTypography.label(
                             size: 11,
-                            color: AppColors.textOnDark.withValues(alpha: 0.8),
+                            color: AppColors.textOnDark.withValues(alpha: 0.85),
                           ),
                         ),
                       ],
@@ -91,15 +109,11 @@ class GradeCard extends StatelessWidget {
 
                 const SizedBox(height: AppSpacing.xl),
 
-                // ── Summary row ─────────────────────────────────────────
+                // ── Summary row ──────────────────────────────────────────────
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.md,
-                  ),
                   decoration: BoxDecoration(
-                    color: AppColors.textOnDark.withValues(alpha: 0.1),
-                    borderRadius:
-                    BorderRadius.circular(AppSpacing.cardRadiusSm),
+                    color: AppColors.textOnDark.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
                   ),
                   child: IntrinsicHeight(
                     child: Row(
@@ -108,12 +122,12 @@ class GradeCard extends StatelessWidget {
                           value: session.durationFormatted,
                           label: 'DURATION',
                         ),
-                        _VerticalDivider(),
+                        _VDivider(),
                         _SummaryCell(
                           value: '${session.compressionCount}',
                           label: 'COMPRESSIONS',
                         ),
-                        _VerticalDivider(),
+                        _VDivider(),
                         _SummaryCell(
                           value: session.averageFrequency > 0
                               ? '${session.averageFrequency.round()}'
@@ -125,9 +139,9 @@ class GradeCard extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
 
-                // ── Quality breakdown grid ───────────────────────────────
+                // ── Quality breakdown grid ───────────────────────────────────
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -145,7 +159,7 @@ class GradeCard extends StatelessWidget {
                       crossAxisSpacing: AppSpacing.sm,
                       mainAxisSpacing: AppSpacing.sm,
                       physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 2.2,
+                      childAspectRatio: 2.4,
                       children: [
                         _StatTile(
                           label: 'CORRECT DEPTH',
@@ -171,7 +185,7 @@ class GradeCard extends StatelessWidget {
             ),
           ),
 
-          // ── White bottom section ─────────────────────────────────────────
+          // ── ② White body ───────────────────────────────────────────────────
           Container(
             width: double.infinity,
             color: AppColors.surfaceWhite,
@@ -179,7 +193,31 @@ class GradeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Avg depth ──────────────────────────────────────────
+
+                // ── Graphs ──────────────────────────────────────────────────
+                if (hasGraphs) ...[
+                  Text(
+                    'PERFORMANCE OVER TIME',
+                    style: AppTypography.badge(
+                      size: 10,
+                      color: AppColors.textDisabled,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SessionGraphs(session: session),
+                  const _Divider(),
+                ],
+
+                // ── Depth & consistency details ──────────────────────────────
+                Text(
+                  'METRICS',
+                  style: AppTypography.badge(
+                    size: 10,
+                    color: AppColors.textDisabled,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+
                 _DetailRow(
                   icon: Icons.compress_rounded,
                   label: 'Average Depth',
@@ -188,39 +226,82 @@ class GradeCard extends StatelessWidget {
                       : '—',
                   note: 'Target: 5–6 cm',
                 ),
+                _DetailRow(
+                  icon: Icons.straighten_rounded,
+                  label: 'Depth Consistency',
+                  value: session.depthConsistency > 0
+                      ? '${session.depthConsistency.round()}%'
+                      : '—',
+                  note: 'Compressions within 5–6 cm',
+                ),
+                _DetailRow(
+                  icon: Icons.speed_rounded,
+                  label: 'Rate Consistency',
+                  value: session.frequencyConsistency > 0
+                      ? '${session.frequencyConsistency.round()}%'
+                      : '—',
+                  note: 'Compressions within 100–120 BPM',
+                ),
 
-                if (hasBiometrics) ...[
-                  const Divider(
-                    height: AppSpacing.lg,
-                    color: AppColors.divider,
+                const _Divider(),
+
+                // ── Flow metrics ─────────────────────────────────────────────
+                Text(
+                  'FLOW',
+                  style: AppTypography.badge(
+                    size: 10,
+                    color: AppColors.textDisabled,
                   ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+
+                _DetailRow(
+                  icon: Icons.touch_app_outlined,
+                  label: 'Hands-On Time',
+                  value: session.handsOnPct,
+                  note: 'Time actively compressing',
+                  valueColor: _flowColor(session.handsOnRatio * 100),
+                ),
+                _DetailRow(
+                  icon: Icons.pause_circle_outline_rounded,
+                  label: 'No-Flow Time',
+                  value: session.noFlowTime > 0
+                      ? '${session.noFlowTime.toStringAsFixed(1)}s'
+                      : '0s',
+                  note: 'Pauses > 2 s between compressions',
+                  valueColor: session.noFlowTime > 5
+                      ? AppColors.warning
+                      : AppColors.success,
+                ),
+                _DetailRow(
+                  icon: Icons.timer_outlined,
+                  label: 'Time to First Compression',
+                  value: session.timeToFirstCompression > 0
+                      ? '${session.timeToFirstCompression.toStringAsFixed(1)}s'
+                      : '—',
+                  note: 'From session start to first compression',
+                  valueColor: session.timeToFirstCompression > 5
+                      ? AppColors.warning
+                      : AppColors.success,
+                ),
+
+                // ── Biometrics ───────────────────────────────────────────────
+                if (hasBiometrics) ...[
+                  const _Divider(),
                   Text(
-                    'BIOMETRICS',
+                    'RESCUER BIOMETRICS',
                     style: AppTypography.badge(
                       size: 10,
                       color: AppColors.textDisabled,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  if (session.patientHeartRate != null)
-                    _DetailRow(
-                      icon: Icons.favorite_outline_rounded,
-                      label: 'Patient Heart Rate',
-                      value: '${session.patientHeartRate} bpm',
-                      iconColor: AppColors.error,
-                    ),
                   if (session.userHeartRate != null)
                     _DetailRow(
                       icon: Icons.monitor_heart_outlined,
                       label: 'Your Heart Rate',
                       value: '${session.userHeartRate} bpm',
                       iconColor: AppColors.primary,
-                    ),
-                  if (session.patientTemperature != null)
-                    _DetailRow(
-                      icon: Icons.thermostat_rounded,
-                      label: 'Patient Temperature',
-                      value: '${session.patientTemperature!.toStringAsFixed(1)}°C',
                     ),
                   if (session.userTemperature != null)
                     _DetailRow(
@@ -230,18 +311,13 @@ class GradeCard extends StatelessWidget {
                     ),
                 ],
 
-                // ── Session date ───────────────────────────────────────
-                if (session.sessionStart != null) ...[
-                  const Divider(
-                    height: AppSpacing.lg,
-                    color: AppColors.divider,
-                  ),
-                  _DetailRow(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Session Date',
-                    value: session.dateTimeFormatted,
-                  ),
-                ],
+                // ── Session date ──────────────────────────────────────────────
+                const _Divider(),
+                _DetailRow(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Session Date',
+                  value: session.dateTimeFormatted,
+                ),
               ],
             ),
           ),
@@ -249,10 +325,16 @@ class GradeCard extends StatelessWidget {
       ),
     );
   }
+
+  Color _flowColor(double pct) {
+    if (pct >= 80) return AppColors.success;
+    if (pct >= 60) return AppColors.warning;
+    return AppColors.error;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _SummaryCell
+// _SummaryCell — one column in the 3-col summary row
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SummaryCell extends StatelessWidget {
@@ -264,35 +346,38 @@ class _SummaryCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: AppTypography.numericDisplay(
-              size: 20,
-              color: AppColors.textOnDark,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              style: AppTypography.numericDisplay(
+                size: 20,
+                color: AppColors.textOnDark,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            label,
-            style: AppTypography.badge(
-              size: 9,
-              color: AppColors.textOnDark.withValues(alpha: 0.7),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              label,
+              style: AppTypography.badge(
+                size: 9,
+                color: AppColors.textOnDark.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _VerticalDivider
+// _VDivider — vertical separator inside the summary row
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _VerticalDivider extends StatelessWidget {
+class _VDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -303,7 +388,7 @@ class _VerticalDivider extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _StatTile
+// _StatTile — one cell in the quality breakdown grid
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatTile extends StatelessWidget {
@@ -320,7 +405,7 @@ class _StatTile extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.textOnDark.withValues(alpha: 0.1),
+        color: AppColors.textOnDark.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
       ),
       child: Column(
@@ -349,7 +434,7 @@ class _StatTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _DetailRow
+// _DetailRow — one labelled row in the white body section
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DetailRow extends StatelessWidget {
@@ -358,6 +443,7 @@ class _DetailRow extends StatelessWidget {
   final String value;
   final String? note;
   final Color iconColor;
+  final Color? valueColor;
 
   const _DetailRow({
     required this.icon,
@@ -365,19 +451,20 @@ class _DetailRow extends StatelessWidget {
     required this.value,
     this.note,
     this.iconColor = AppColors.primary,
+    this.valueColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs + AppSpacing.xxs),
       child: Row(
         children: [
           Container(
             width: AppSpacing.iconLg,
             height: AppSpacing.iconLg,
             decoration: AppDecorations.iconRounded(
-              bg: iconColor.withValues(alpha: 0.1),
+              bg: iconColor.withValues(alpha: 0.10),
               radius: AppSpacing.cardRadiusSm,
             ),
             child: Icon(icon, color: iconColor, size: AppSpacing.iconSm),
@@ -389,9 +476,10 @@ class _DetailRow extends StatelessWidget {
               children: [
                 Text(label, style: AppTypography.bodyMedium(size: 13)),
                 if (note != null)
-                  Text(note!,
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled)),
+                  Text(
+                    note!,
+                    style: AppTypography.caption(color: AppColors.textDisabled),
+                  ),
               ],
             ),
           ),
@@ -399,10 +487,29 @@ class _DetailRow extends StatelessWidget {
             value,
             style: AppTypography.bodyBold(
               size: 14,
-              color: AppColors.textPrimary,
+              color: valueColor ?? AppColors.textPrimary,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _Divider — standard section separator in the white body
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Divider(
+        height: AppSpacing.dividerThickness,
+        color: AppColors.divider,
       ),
     );
   }

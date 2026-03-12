@@ -24,6 +24,9 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.6
 
+  #For graphs
+  fl_chart: ^0.69.0
+
   # Logging
   logger: ^2.5.0
 
@@ -39,7 +42,8 @@ dependencies:
   webview_flutter: ^4.4.2
 
   #For open from email
-  uni_links: ^0.5.1
+  app_links: ^6.0.0
+
 
   share_plus: ^10.1.4
   qr_flutter: ^4.1.0
@@ -54,6 +58,7 @@ dependencies:
 
   # For AED clustering
   google_maps_cluster_manager_2: ^3.1.0
+
 
   # For proper connectivity checking
   connectivity_plus: ^6.1.1

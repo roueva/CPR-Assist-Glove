@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:uni_links/uni_links.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'dart:developer' as developer;
 import 'package:cpr_assist/core/core.dart';
@@ -102,23 +102,24 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  final _appLinks = AppLinks();
+
   Future<void> _handleIncomingLinks() async {
     // Cold start — app was fully closed when the link was tapped
     try {
-      final initialLink = await getInitialLink();
-      if (initialLink != null && mounted) {
-        _processLink(initialLink);
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null && mounted) {
+        _processLink(initialUri);
       }
     } catch (_) {}
 
     // Warm start — app was already running
-    _linkSub = linkStream.listen((link) {
-      if (link != null && mounted) _processLink(link);
+    _linkSub = _appLinks.uriLinkStream.listen((uri) {
+      if (mounted) _processLink(uri);
     });
   }
 
-  void _processLink(String link) {
-    final uri = Uri.parse(link);
+  void _processLink(Uri uri) {
     // Matches: cpr-assist://reset-password?token=abc123
     if (uri.host == 'reset-password') {
       final token = uri.queryParameters['token'] ?? '';

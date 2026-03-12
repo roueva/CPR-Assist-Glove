@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
-import '../screens/session_service.dart';
+import '../services/session_detail.dart';
 import 'grade_card.dart';
 
 class GradeDialog extends StatelessWidget {
-  final SessionSummary session;
+  final SessionDetail session;
 
   const GradeDialog({
     super.key,

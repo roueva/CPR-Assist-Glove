@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
+import '../../features/training/services/compression_event.dart';
 import 'ble_data_processor.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +32,8 @@ class BLEConnection {
 
   final _processor = const BLEDataProcessor();
   final _dataController = StreamController<Map<String, dynamic>>.broadcast();
+  final List<CompressionEvent> _compressionEvents = [];
+  int _sessionStartMs = 0;
 
   /// Parsed BLE data packets broadcast to all listeners.
   Stream<Map<String, dynamic>> get dataStream => _dataController.stream;
@@ -296,6 +299,22 @@ class BLEConnection {
       isChargingNotifier.value = parsed.isCharging!;
     }
 
+    // Track session start timestamp
+    if (parsed.isStartPing) {
+      _compressionEvents.clear();
+      _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
+    }
+
+// Accumulate per-compression events during session
+    if (parsed.isContinuousData && parsed.depth > 0) {
+      _compressionEvents.add(CompressionEvent(
+        timestampMs:    DateTime.now().millisecondsSinceEpoch - _sessionStartMs,
+        depth:          parsed.depth,
+        frequency:      parsed.frequency,
+        recoilAchieved: parsed.heartRatePatient > 0, // replace with actual recoil field once added to packet
+      ));
+    }
+
     // Broadcast full packet data for screens that need it
     _dataController.add({
       'depth':             parsed.depth,
@@ -435,6 +454,11 @@ class BLEConnection {
     }
     return false;
   }
+
+  /// The compression events accumulated during the current session.
+  /// Read this on end-ping to pass to SessionService.assembleDetail().
+  List<CompressionEvent> get compressionEvents =>
+      List.unmodifiable(_compressionEvents);
 
   /// Expose adapter state changes for any widget that needs it.
   Stream<BluetoothAdapterState> get adapterStateStream =>
