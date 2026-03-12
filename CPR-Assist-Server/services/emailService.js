@@ -1,13 +1,8 @@
-const Brevo = require('@getbrevo/brevo');
-
-const client = Brevo.ApiClient.instance;
-client.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
-
-const transactionalApi = new Brevo.TransactionalEmailsApi();
+const axios = require('axios');
 
 async function sendPasswordResetEmail(toEmail, resetToken) {
     const resetLink = `cpr-assist://reset-password?token=${resetToken}`;
-    await transactionalApi.sendTransacEmail({
+    await axios.post('https://api.brevo.com/v3/smtp/email', {
         sender: { name: 'CPR Assist', email: process.env.EMAIL_FROM },
         to: [{ email: toEmail }],
         subject: 'Reset your CPR Assist password',
@@ -17,15 +12,25 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
             <a href="${resetLink}">${resetLink}</a>
             <p>If you didn't request this, ignore this email.</p>
         `,
+    }, {
+        headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'Content-Type': 'application/json',
+        },
     });
 }
 
 async function sendUsernameReminderEmail(toEmail, username) {
-    await transactionalApi.sendTransacEmail({
+    await axios.post('https://api.brevo.com/v3/smtp/email', {
         sender: { name: 'CPR Assist', email: process.env.EMAIL_FROM },
         to: [{ email: toEmail }],
         subject: 'Your CPR Assist username',
         htmlContent: `<p>Your username is: <strong>${username}</strong></p>`,
+    }, {
+        headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'Content-Type': 'application/json',
+        },
     });
 }
 
