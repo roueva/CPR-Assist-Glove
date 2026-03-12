@@ -133,7 +133,7 @@ class AuthController {
     async requestPasswordReset(req, res, next) {
         const { email } = req.body;
 
-        // Always return the same message — never confirm whether email exists
+        // Always return the same message never confirm whether email exists
         const safeResponse = { message: 'If an account exists with that email, a reset link has been sent.' };
 
         try {
