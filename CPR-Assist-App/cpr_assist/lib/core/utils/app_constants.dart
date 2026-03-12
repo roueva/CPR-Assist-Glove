@@ -219,11 +219,11 @@ class AEDMapUIConstants {
   static const double portraitListMax        = 0.55;
 
   static const double portraitNavInitial     = 0.48;
-  static const double portraitNavMin         = 0.20;
+  static const double portraitNavMin         = 0.18;
   static const double portraitNavMax         = 0.60;
 
-  static const double portraitActiveNavInitial = 0.25;
-  static const double portraitActiveNavMin     = 0.25;
+  static const double portraitActiveNavInitial = 0.28;
+  static const double portraitActiveNavMin     = 0.28;
   static const double portraitActiveNavMax     = 0.60;
 
   // Panel sizes — Landscape
