@@ -105,20 +105,21 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   final _appLinks = AppLinks();
 
   Future<void> _handleIncomingLinks() async {
-    // Cold start — app was fully closed when the link was tapped
+    // Cold start — add a delay to ensure the navigator is ready
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null && mounted) {
-        _processLink(initialUri);
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) _processLink(initialUri);
       }
     } catch (_) {}
 
-    // Warm start — app was already running
+    // Warm start — app already running, no delay needed
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       if (mounted) _processLink(uri);
     });
   }
-
+  
   void _processLink(Uri uri) {
     // Matches: cpr-assist://reset-password?token=abc123
     if (uri.host == 'reset-password') {
