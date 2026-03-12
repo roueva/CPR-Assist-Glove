@@ -1,22 +1,17 @@
-const nodemailer = require('nodemailer');
+const Brevo = require('@getbrevo/brevo');
 
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: false,   // false for 587 (STARTTLS), true only for port 465
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+const client = Brevo.ApiClient.instance;
+client.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
+
+const transactionalApi = new Brevo.TransactionalEmailsApi();
 
 async function sendPasswordResetEmail(toEmail, resetToken) {
     const resetLink = `cpr-assist://reset-password?token=${resetToken}`;
-    await transporter.sendMail({
-        from: `"CPR Assist" <${process.env.EMAIL_USER}>`,
-        to: toEmail,
+    await transactionalApi.sendTransacEmail({
+        sender: { name: 'CPR Assist', email: process.env.EMAIL_FROM },
+        to: [{ email: toEmail }],
         subject: 'Reset your CPR Assist password',
-        html: `
+        htmlContent: `
             <p>You requested a password reset.</p>
             <p>Tap the link below in your phone to reset it. It expires in 1 hour.</p>
             <a href="${resetLink}">${resetLink}</a>
@@ -26,11 +21,11 @@ async function sendPasswordResetEmail(toEmail, resetToken) {
 }
 
 async function sendUsernameReminderEmail(toEmail, username) {
-    await transporter.sendMail({
-        from: `"CPR Assist" <${process.env.EMAIL_USER}>`,
-        to: toEmail,
+    await transactionalApi.sendTransacEmail({
+        sender: { name: 'CPR Assist', email: process.env.EMAIL_FROM },
+        to: [{ email: toEmail }],
         subject: 'Your CPR Assist username',
-        html: `<p>Your username is: <strong>${username}</strong></p>`,
+        htmlContent: `<p>Your username is: <strong>${username}</strong></p>`,
     });
 }
 
