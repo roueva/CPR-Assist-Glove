@@ -195,25 +195,38 @@ class _AEDListPanelState extends State<AEDListPanel> {
             }
           },
           behavior: HitTestBehavior.translucent,
-          child: Column(
-            children: [
-              const SizedBox(height: AppSpacing.sm),
-              const AEDDragHandle(wide: true),
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: AppSpacing.md,
-                  right: AppSpacing.xs,
-                  top: AppSpacing.sm,
-                  bottom: AppSpacing.sm,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceWhite,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowDefault,
+                  blurRadius: AppSpacing.sm,
+                  offset: Offset(0, AppSpacing.xs),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Nearest AED', style: AppTypography.heading()),
-                  ],
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: AppSpacing.sm),
+                const AEDDragHandle(wide: true),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.md,
+                    right: AppSpacing.xs,
+                    top: AppSpacing.sm,
+                    bottom: AppSpacing.sm,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Nearest AED', style: AppTypography.heading()),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -579,55 +592,67 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
                   );
                 }
               },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: AppSpacing.sm),
-                  const AEDDragHandle(wide: true),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppSpacing.md,
-                      right: AppSpacing.xs,
-                      top: AppSpacing.sm,
-                      bottom: AppSpacing.sm,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceWhite,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowDefault,
+                      blurRadius: AppSpacing.sm,
+                      offset: Offset(0, AppSpacing.xs),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                aed.name,
-                                textAlign: TextAlign.center,
-                                style: AppTypography.heading(size: 17),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (aed.address != null && aed.address!.isNotEmpty)
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: AppSpacing.sm),
+                    const AEDDragHandle(wide: true),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: AppSpacing.md,
+                        right: AppSpacing.xs,
+                        top: AppSpacing.sm,
+                        bottom: AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 Text(
-                                  aed.address!,
+                                  aed.name,
                                   textAlign: TextAlign.center,
-                                  style: AppTypography.caption(color: AppColors.textDisabled),
-                                  maxLines: 1,
+                                  style: AppTypography.heading(size: 17),
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                            ],
+                                if (aed.address != null && aed.address!.isNotEmpty)
+                                  Text(
+                                    aed.address!,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.caption(color: AppColors.textDisabled),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                          tooltip: 'Close',
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            widget.onCancelNavigation?.call();
-                          },
-                        ),
-                      ],
+                          IconButton(
+                            icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                            tooltip: 'Close',
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              widget.onCancelNavigation?.call();
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // ── Scrollable body ───────────────────────────────
@@ -1057,72 +1082,84 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                         );
                       }
                     },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: AppSpacing.sm),
-                        const AEDDragHandle(wide: true),
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: AppSpacing.md,
-                            right: AppSpacing.xs,
-                            top: AppSpacing.sm,
-                            bottom: AppSpacing.sm,
+                    child: DecoratedBox(
+                      decoration: const BoxDecoration(
+                        color: AppColors.surfaceWhite,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.shadowDefault,
+                            blurRadius: AppSpacing.sm,
+                            offset: Offset(0, AppSpacing.xs),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(AppSpacing.sm),
-                                decoration: AppDecorations.iconCircle(
-                                    bg: AppColors.successBg),
-                                child: const Icon(
-                                  Icons.navigation,
-                                  color: AppColors.success,
-                                  size: AppSpacing.iconSm + AppSpacing.xxs,
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: AppSpacing.sm),
+                          const AEDDragHandle(wide: true),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: AppSpacing.md,
+                              right: AppSpacing.xs,
+                              top: AppSpacing.sm,
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(AppSpacing.sm),
+                                  decoration: AppDecorations.iconCircle(
+                                      bg: AppColors.successBg),
+                                  child: const Icon(
+                                    Icons.navigation,
+                                    color: AppColors.success,
+                                    size: AppSpacing.iconSm + AppSpacing.xxs,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Navigating to AED',
-                                      style: AppTypography.caption(
-                                          color: AppColors.textSecondary),
-                                    ),
-                                    Text(
-                                      aed.name,
-                                      style: AppTypography.bodyBold(),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (aed.address != null &&
-                                        aed.address!.isNotEmpty)
+                                const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
                                       Text(
-                                        aed.address!,
+                                        'Navigating to AED',
                                         style: AppTypography.caption(
-                                            color: AppColors.textDisabled),
+                                            color: AppColors.textSecondary),
+                                      ),
+                                      Text(
+                                        aed.name,
+                                        style: AppTypography.bodyBold(),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                  ],
+                                      if (aed.address != null &&
+                                          aed.address!.isNotEmpty)
+                                        Text(
+                                          aed.address!,
+                                          style: AppTypography.caption(
+                                              color: AppColors.textDisabled),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close,
-                                    color: AppColors.textSecondary),
-                                tooltip: 'Stop Navigation',
-                                onPressed: () {
-                                  HapticFeedback.lightImpact();
-                                  widget.onCancelNavigation?.call();
-                                },
-                              ),
-                            ],
+                                IconButton(
+                                  icon: const Icon(Icons.close,
+                                      color: AppColors.textSecondary),
+                                  tooltip: 'Stop Navigation',
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    widget.onCancelNavigation?.call();
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   // ── Scrollable body ───────────────────────────────

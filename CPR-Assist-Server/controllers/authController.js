@@ -158,7 +158,7 @@ class AuthController {
 
             return res.json(safeResponse);
         } catch (error) {
-            console.error('Password reset request error:', error.message);
+            console.error('Password reset request error FULL:', error);
             next(error);
         }
     }

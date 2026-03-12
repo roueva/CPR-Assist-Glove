@@ -174,8 +174,8 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
                               if (v == null || v.trim().isEmpty) {
                                 return 'Please enter a username';
                               }
-                              if (v.trim().length < 4) {
-                                return 'At least 4 characters';
+                              if (v.trim().length < 3) {
+                                return 'At least 3 characters';
                               }
                               return null;
                             },
