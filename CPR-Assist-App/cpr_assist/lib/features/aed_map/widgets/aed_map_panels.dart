@@ -46,11 +46,19 @@ class AEDListPanel extends StatefulWidget {
 class _AEDListPanelState extends State<AEDListPanel> {
   bool _hasScrolledUnderHeader = false;
   bool _showScrollToTop = false;
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       key: const ValueKey('list_portrait'),
+      controller: _sheetController,
       initialChildSize: AEDMapUIConstants.portraitListInitial,
       minChildSize: AEDMapUIConstants.portraitListMin,
       maxChildSize: AEDMapUIConstants.portraitListMax,
@@ -157,8 +165,57 @@ class _AEDListPanelState extends State<AEDListPanel> {
     // Has location — pinned "Nearest" header + scrollable list
     return Column(
       children: [
-        const SizedBox(height: AppSpacing.sm),
-        const AEDDragHandle(wide: true),
+        GestureDetector(
+          onVerticalDragUpdate: (details) {
+            final screenHeight = MediaQuery.sizeOf(context).height;
+            final currentSize = _sheetController.size;
+            final delta = -details.delta.dy / screenHeight;
+            final newSize = (currentSize + delta).clamp(
+              AEDMapUIConstants.portraitListMin,
+              AEDMapUIConstants.portraitListMax,
+            );
+            _sheetController.jumpTo(newSize);
+          },
+          onVerticalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity > 300) {
+              // Fast swipe down → collapse
+              _sheetController.animateTo(
+                AEDMapUIConstants.portraitListMin,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            } else if (velocity < -300) {
+              // Fast swipe up → expand
+              _sheetController.animateTo(
+                AEDMapUIConstants.portraitListMax,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          },
+          behavior: HitTestBehavior.translucent,
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.sm),
+              const AEDDragHandle(wide: true),
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.md,
+                  right: AppSpacing.xs,
+                  top: AppSpacing.sm,
+                  bottom: AppSpacing.sm,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Nearest AED', style: AppTypography.heading()),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: Stack(
             children: [
@@ -196,16 +253,6 @@ class _AEDListPanelState extends State<AEDListPanel> {
                   child: CustomScrollView(
                     controller: scrollController,
                     slivers: [
-                      // Pinned "Nearest AED" header
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: AppSpacing.sm,
-                          ),
-                          child: Text('Nearest AED', style: AppTypography.heading()),
-                        ),
-                      ),
                       // Nearest card
                       SliverToBoxAdapter(
                         child: Padding(
@@ -441,7 +488,7 @@ class AEDSideListPanel extends StatelessWidget {
 // AEDNavigationPanel  (route selected, not yet started)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class AEDNavigationPanel extends StatelessWidget {
+class AEDNavigationPanel extends StatefulWidget {
   final AEDMapConfig config;
   final bool userLocationAvailable;
   final bool isSidePanel;
@@ -470,17 +517,31 @@ class AEDNavigationPanel extends StatelessWidget {
   });
 
   @override
+  State<AEDNavigationPanel> createState() => _AEDNavigationPanelState();
+}
+
+class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (config.selectedAED == null) return const SizedBox.shrink();
+    if (widget.config.selectedAED == null) return const SizedBox.shrink();
 
     final aed = _findSelectedAED();
-    final isOfflineRoute = config.navigationLine?.points.isEmpty ?? true;
+    final isOfflineRoute = widget.config.navigationLine?.points.isEmpty ?? true;
 
+// WITH:
     Widget content(ScrollController sc) => SafeArea(
       top: false,
-      left: isSidePanel ? false : true,
+      left: widget.isSidePanel ? false : true,
       child: _PanelContainer(
-        borderRadius: isSidePanel
+        borderRadius: widget.isSidePanel
             ? const BorderRadius.only(
           topRight: Radius.circular(AppSpacing.sheetRadius),
           bottomRight: Radius.circular(AppSpacing.sheetRadius),
@@ -488,32 +549,116 @@ class AEDNavigationPanel extends StatelessWidget {
         )
             : const BorderRadius.vertical(
             top: Radius.circular(AppSpacing.sheetRadius)),
-        child: CustomScrollView(
-          controller: sc,
-          slivers: [
-            _buildPinnedHeader(context, aed),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm + AppSpacing.xs),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                    _buildStatusBanners(isOfflineRoute),
-                    _buildActionRow(context, aed, isOfflineRoute),
-                    const SizedBox(height: AppSpacing.md),
-                    if (userLocationAvailable &&
-                        config.userLocation != null)
-                      _buildInfoRow(isOfflineRoute),
-                    const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                    _buildAvailability(aed),
-                    const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                    _buildWebLinks(context, aed),
-                    const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                  ],
-                ),
+        child: Column(
+          children: [
+            // ── Fixed header ──────────────────────────────────
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onVerticalDragUpdate: (details) {
+                final screenHeight = MediaQuery.sizeOf(context).height;
+                final delta = -details.delta.dy / screenHeight;
+                final newSize = (_sheetController.size + delta).clamp(
+                  AEDMapUIConstants.portraitNavMin,
+                  AEDMapUIConstants.portraitNavMax,
+                );
+                _sheetController.jumpTo(newSize);
+              },
+              onVerticalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (velocity > 300) {
+                  _sheetController.animateTo(
+                    AEDMapUIConstants.portraitNavMin,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                } else if (velocity < -300) {
+                  _sheetController.animateTo(
+                    AEDMapUIConstants.portraitNavMax,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: AppSpacing.sm),
+                  const AEDDragHandle(wide: true),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppSpacing.md,
+                      right: AppSpacing.xs,
+                      top: AppSpacing.sm,
+                      bottom: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                aed.name,
+                                textAlign: TextAlign.center,
+                                style: AppTypography.heading(size: 17),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (aed.address != null && aed.address!.isNotEmpty)
+                                Text(
+                                  aed.address!,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.caption(color: AppColors.textDisabled),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                          tooltip: 'Close',
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            widget.onCancelNavigation?.call();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── Scrollable body ───────────────────────────────
+            Expanded(
+              child: CustomScrollView(
+                controller: sc,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm + AppSpacing.xs),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildStatusBanners(isOfflineRoute),
+                          _buildActionRow(context, aed, isOfflineRoute),
+                          const SizedBox(height: AppSpacing.md),
+                          if (widget.userLocationAvailable &&
+                              widget.config.userLocation != null)
+                            _buildInfoRow(isOfflineRoute),
+                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                          _buildAvailability(aed),
+                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                          _buildWebLinks(context, aed),
+                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -521,7 +666,7 @@ class AEDNavigationPanel extends StatelessWidget {
       ),
     );
 
-    if (isSidePanel) {
+    if (widget.isSidePanel) {
       return Stack(
         children: [
           Positioned(
@@ -538,7 +683,7 @@ class AEDNavigationPanel extends StatelessWidget {
           ),
           AEDRecenterButton(
             isSearchingGPS: false,
-            onPressed: onRecenterPressed,
+            onPressed: widget.onRecenterPressed,
             left: AEDMapUIConstants.landscapeButtonOffset,
             bottom: AEDMapUIConstants.recenterButtonBottom,
           ),
@@ -547,7 +692,8 @@ class AEDNavigationPanel extends StatelessWidget {
     }
 
     return DraggableScrollableSheet(
-      key: const ValueKey('nav_landscape'),
+      key: const ValueKey('nav_portrait'),
+      controller: _sheetController,
       initialChildSize: AEDMapUIConstants.portraitNavInitial,
       minChildSize: AEDMapUIConstants.portraitNavMin,
       maxChildSize: AEDMapUIConstants.portraitNavMax,
@@ -555,61 +701,22 @@ class AEDNavigationPanel extends StatelessWidget {
     );
   }
 
-  AED _findSelectedAED() => config.aeds.firstWhere(
+  AED _findSelectedAED() => widget.config.aeds.firstWhere(
         (a) =>
-    a.location.latitude == config.selectedAED?.latitude &&
-        a.location.longitude == config.selectedAED?.longitude,
+    a.location.latitude == widget.config.selectedAED?.latitude &&
+        a.location.longitude == widget.config.selectedAED?.longitude,
     orElse: () => AED(
       id: -1,
       foundation: 'Unknown AED',
       address: 'Selected AED',
-      location: config.selectedAED!,
+      location: widget.config.selectedAED!,
     ),
   );
 
-  Widget _buildPinnedHeader(BuildContext context, AED aed) {
-    return SliverToBoxAdapter(
-      child: Container(
-        color: AppColors.surfaceWhite,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: AppSpacing.cardSpacing),
-            const AEDDragHandle(),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    aed.name,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.heading(size: 17),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                  tooltip: 'Close Navigation',
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    onCancelNavigation?.call();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatusBanners(bool isOfflineRoute) {
-    final showBanner = (isOfflineRoute && config.isOffline) || !userLocationAvailable;
+    final showBanner = (isOfflineRoute && widget.config.isOffline) || !widget.userLocationAvailable;
     final showCachedBanner =
-        config.isUsingCachedLocation && userLocationAvailable;
+        widget.config.isUsingCachedLocation && widget.userLocationAvailable;
 
     if (!showBanner && !showCachedBanner) return const SizedBox.shrink();
 
@@ -626,7 +733,7 @@ class AEDNavigationPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!userLocationAvailable)
+                if (!widget.userLocationAvailable)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.cardSpacing),
                     child: Row(
@@ -645,7 +752,7 @@ class AEDNavigationPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                if (config.isOffline)
+                if (widget.config.isOffline)
                   Row(
                     children: [
                       const Icon(Icons.wifi_off,
@@ -699,21 +806,21 @@ class AEDNavigationPanel extends StatelessWidget {
         Expanded(
           flex: 3,
           child: ElevatedButton.icon(
-            onPressed: config.selectedAED != null
+            onPressed: widget.config.selectedAED != null
                 ? () {
-              if (config.hasStartedNavigation) {
-                onCancelNavigation?.call();
+              if (widget.config.hasStartedNavigation) {
+                widget.onCancelNavigation?.call();
               } else {
-                onStartNavigation(config.selectedAED!);
+                widget.onStartNavigation(widget.config.selectedAED!);
               }
             }
                 : null,
             icon: Icon(
-              config.hasStartedNavigation ? Icons.stop : Icons.navigation,
+              widget.config.hasStartedNavigation ? Icons.stop : Icons.navigation,
               size: AppSpacing.iconSm + AppSpacing.xxs,
             ),
             label: Text(
-              config.hasStartedNavigation
+              widget.config.hasStartedNavigation
                   ? 'Stop Navigation'
                   : 'Start Navigation',
               style: AppTypography.buttonPrimary(),
@@ -726,23 +833,23 @@ class AEDNavigationPanel extends StatelessWidget {
           icon: Icons.share,
           tooltip: 'Share AED Location',
           enabled: aed.id != -1,
-          onTap: () => onShowShareDialog(aed),
+          onTap: () => widget.onShowShareDialog(aed),
         ),
         const SizedBox(width: AppSpacing.sm),
         // External maps button
         _IconActionButton(
           icon: Icons.open_in_new,
           tooltip: 'Open in External Maps',
-          enabled: config.selectedAED != null,
-          onTap: () => onExternalNavigation?.call(config.selectedAED!),
+          enabled: widget.config.selectedAED != null,
+          onTap: () => widget.onExternalNavigation?.call(widget.config.selectedAED!),
         ),
       ],
     );
   }
 
   Widget _buildInfoRow(bool isOfflineRoute) {
-    final isTooOld = config.locationAge != null &&
-        config.locationAge! >= AppConstants.locationStaleHours;
+    final isTooOld = widget.config.locationAge != null &&
+        widget.config.locationAge! >= AppConstants.locationStaleHours;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -752,9 +859,9 @@ class AEDNavigationPanel extends StatelessWidget {
           Expanded(
             child: AEDCompactInfoColumn(
               icon: Icons.access_time,
-              value: config.estimatedTime,
+              value: widget.config.estimatedTime,
               label: 'ETA',
-              isOffline: isOfflineRoute || config.isOffline,
+              isOffline: isOfflineRoute || widget.config.isOffline,
               isEmpty: isTooOld,
             ),
           ),
@@ -765,11 +872,11 @@ class AEDNavigationPanel extends StatelessWidget {
           Expanded(
             child: AEDCompactInfoColumn(
               icon: Icons.near_me,
-              value: config.distance != null
-                  ? LocationService.formatDistance(config.distance!)
+              value: widget.config.distance != null
+                  ? LocationService.formatDistance(widget.config.distance!)
                   : 'N/A',
               label: 'Distance',
-              isOffline: isOfflineRoute || config.isOffline,
+              isOffline: isOfflineRoute || widget.config.isOffline,
               isEmpty: isTooOld,
             ),
           ),
@@ -779,8 +886,8 @@ class AEDNavigationPanel extends StatelessWidget {
               color: AppColors.divider),
           Expanded(
             child: _TransportModeSelector(
-              selectedMode: config.selectedMode,
-              onModeSelected: onTransportModeSelected,
+              selectedMode: widget.config.selectedMode,
+              onModeSelected: widget.onTransportModeSelected,
             ),
           ),
         ],
@@ -807,7 +914,7 @@ class AEDNavigationPanel extends StatelessWidget {
       children: [
         Expanded(
           child: InkWell(
-            onTap: () => onOpenWebView(aed.aedWebpage!, aed.name),
+            onTap: () => widget.onOpenWebView(aed.aedWebpage!, aed.name),
             borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
             child: Container(
               padding: const EdgeInsets.symmetric(
@@ -843,7 +950,7 @@ class AEDNavigationPanel extends StatelessWidget {
           child: InkWell(
             onTap: () {
               HapticFeedback.selectionClick();
-              onOpenWebView(
+              widget.onOpenWebView(
                   'https://kidssavelives.gr/epikoinonia/', 'Report Issue');
             },
             borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
@@ -863,7 +970,7 @@ class AEDNavigationPanel extends StatelessWidget {
 // AEDActiveNavigationPanel  (navigation started)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class AEDActiveNavigationPanel extends StatelessWidget {
+class AEDActiveNavigationPanel extends StatefulWidget  {
   final AEDMapConfig config;
   final bool userLocationAvailable;
   final bool isSidePanel;
@@ -884,62 +991,173 @@ class AEDActiveNavigationPanel extends StatelessWidget {
   });
 
   @override
+  State<AEDActiveNavigationPanel> createState() => _AEDActiveNavigationPanel();
+}
+
+class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+
+  @override
   Widget build(BuildContext context) {
-    if (config.selectedAED == null) return const SizedBox.shrink();
+    if (widget.config.selectedAED == null) return const SizedBox.shrink();
     final aed = _findSelectedAED();
-    final isOfflineRoute = config.navigationLine?.points.isEmpty ?? true;
+    final isOfflineRoute = widget.config.navigationLine?.points.isEmpty ?? true;
 
     Widget content(ScrollController sc) => SafeArea(
       top: false,
-      left: isSidePanel ? false : true,
+      left: widget.isSidePanel ? false : true,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Padding(
-            padding: const EdgeInsets.only(
-                top: AppSpacing.xxl + AppSpacing.md),
+            padding: const EdgeInsets.only(top: AppSpacing.xxl + AppSpacing.md),
             child: _PanelContainer(
-              borderRadius: isSidePanel
+              borderRadius: widget.isSidePanel
                   ? const BorderRadius.only(
-                topRight:
-                Radius.circular(AppSpacing.sheetRadius),
-                bottomRight:
-                Radius.circular(AppSpacing.sheetRadius),
-                topLeft:
-                Radius.circular(AppSpacing.sheetRadius),
+                topRight: Radius.circular(AppSpacing.sheetRadius),
+                bottomRight: Radius.circular(AppSpacing.sheetRadius),
+                topLeft: Radius.circular(AppSpacing.sheetRadius),
               )
                   : const BorderRadius.vertical(
                   top: Radius.circular(AppSpacing.sheetRadius)),
-              child: CustomScrollView(
-                controller: sc,
-                slivers: [
-                  _buildPinnedHeader(context, aed),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.sm + AppSpacing.xs),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: AppSpacing.md),
-                          if (isOfflineRoute || config.isOffline)
-                            _buildOfflineBanner(),
-                          _buildAvailability(aed),
-                          _buildInfoRow(isOfflineRoute),
-                          const SizedBox(height: AppSpacing.md),
-                          _buildWebLinks(context, aed),
-                        ],
-                      ),
+              child: Column(
+                children: [
+                  // ── Fixed header ──────────────────────────────────
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onVerticalDragUpdate: (details) {
+                      final screenHeight = MediaQuery.sizeOf(context).height;
+                      final delta = -details.delta.dy / screenHeight;
+                      final newSize = (_sheetController.size + delta).clamp(
+                        AEDMapUIConstants.portraitActiveNavMin,
+                        AEDMapUIConstants.portraitActiveNavMax,
+                      );
+                      _sheetController.jumpTo(newSize);
+                    },
+                    onVerticalDragEnd: (details) {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity > 300) {
+                        _sheetController.animateTo(
+                          AEDMapUIConstants.portraitActiveNavMin,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                        );
+                      } else if (velocity < -300) {
+                        _sheetController.animateTo(
+                          AEDMapUIConstants.portraitActiveNavMax,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: AppSpacing.sm),
+                        const AEDDragHandle(wide: true),
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: AppSpacing.md,
+                            right: AppSpacing.xs,
+                            top: AppSpacing.sm,
+                            bottom: AppSpacing.sm,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(AppSpacing.sm),
+                                decoration: AppDecorations.iconCircle(
+                                    bg: AppColors.successBg),
+                                child: const Icon(
+                                  Icons.navigation,
+                                  color: AppColors.success,
+                                  size: AppSpacing.iconSm + AppSpacing.xxs,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Navigating to AED',
+                                      style: AppTypography.caption(
+                                          color: AppColors.textSecondary),
+                                    ),
+                                    Text(
+                                      aed.name,
+                                      style: AppTypography.bodyBold(),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (aed.address != null &&
+                                        aed.address!.isNotEmpty)
+                                      Text(
+                                        aed.address!,
+                                        style: AppTypography.caption(
+                                            color: AppColors.textDisabled),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close,
+                                    color: AppColors.textSecondary),
+                                tooltip: 'Stop Navigation',
+                                onPressed: () {
+                                  HapticFeedback.lightImpact();
+                                  widget.onCancelNavigation?.call();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ── Scrollable body ───────────────────────────────
+                  Expanded(
+                    child: CustomScrollView(
+                      controller: sc,
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm + AppSpacing.xs),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: AppSpacing.md),
+                                if (isOfflineRoute || widget.config.isOffline)
+                                  _buildOfflineBanner(),
+                                _buildAvailability(aed),
+                                _buildInfoRow(isOfflineRoute),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildWebLinks(context, aed),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
           ),
-
-          // Recenter chip
-          if (config.showRecenterButton)
+          // Recenter chip and Compass stay exactly as before
+          if (widget.config.showRecenterButton)
             Positioned(
               top: AppSpacing.sm,
               right: AppSpacing.sm,
@@ -950,7 +1168,7 @@ class AEDActiveNavigationPanel extends StatelessWidget {
                 child: InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    onRecenterNavigation?.call();
+                    widget.onRecenterNavigation?.call();
                   },
                   borderRadius:
                   BorderRadius.circular(AppSpacing.buttonRadiusLg),
@@ -973,17 +1191,17 @@ class AEDActiveNavigationPanel extends StatelessWidget {
             ),
 
           // Compass
-          if (config.hasStartedNavigation &&
-              config.navigationLine == null)
+          if (widget.config.hasStartedNavigation &&
+              widget.config.navigationLine == null)
             AEDCompassIndicator(
-              userLocation: config.userLocation,
-              destination: config.selectedAED,
+              userLocation: widget.config.userLocation,
+              destination: widget.config.selectedAED,
             ),
         ],
       ),
     );
 
-    if (isSidePanel) {
+    if (widget.isSidePanel) {
       return Positioned(
         left: 0,
         top: 0,
@@ -1001,6 +1219,7 @@ class AEDActiveNavigationPanel extends StatelessWidget {
 
     return DraggableScrollableSheet(
       key: const ValueKey('active_nav_portrait'),
+      controller: _sheetController,
       initialChildSize: AEDMapUIConstants.portraitActiveNavInitial,
       minChildSize: AEDMapUIConstants.portraitActiveNavMin,
       maxChildSize: AEDMapUIConstants.portraitActiveNavMax,
@@ -1008,82 +1227,18 @@ class AEDActiveNavigationPanel extends StatelessWidget {
     );
   }
 
-  AED _findSelectedAED() => config.aeds.firstWhere(
+  AED _findSelectedAED() => widget.config.aeds.firstWhere(
         (a) =>
-    a.location.latitude == config.selectedAED?.latitude &&
-        a.location.longitude == config.selectedAED?.longitude,
+    a.location.latitude == widget.config.selectedAED?.latitude &&
+        a.location.longitude == widget.config.selectedAED?.longitude,
     orElse: () => AED(
       id: -1,
       foundation: 'Unknown AED',
       address: 'Selected AED',
-      location: config.selectedAED!,
+      location: widget.config.selectedAED!,
     ),
   );
 
-  Widget _buildPinnedHeader(BuildContext context, AED aed) {
-    return SliverToBoxAdapter(
-      child: Container(
-        color: AppColors.surfaceWhite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: AppSpacing.xs),
-            const AEDDragHandle(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: AppDecorations.iconCircle(bg: AppColors.successBg),
-                    child: const Icon(
-                      Icons.navigation,
-                      color: AppColors.success,
-                      size: AppSpacing.iconSm + AppSpacing.xxs,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Navigating to AED',
-                          style: AppTypography.caption(color: AppColors.textSecondary),
-                        ),
-                        Text(
-                          aed.name,
-                          style: AppTypography.bodyBold(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (aed.address != null && aed.address!.isNotEmpty)
-                          Text(
-                            aed.address!,
-                            style: AppTypography.caption(color: AppColors.textDisabled),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                    tooltip: 'Stop Navigation',
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      onCancelNavigation?.call();
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildOfflineBanner() {
     return Container(
@@ -1131,9 +1286,9 @@ class AEDActiveNavigationPanel extends StatelessWidget {
           Expanded(
             child: AEDCompactInfoColumn(
               icon: Icons.access_time,
-              value: config.estimatedTime,
+              value: widget.config.estimatedTime,
               label: 'ETA',
-              isOffline: isOfflineRoute || config.isOffline,
+              isOffline: isOfflineRoute || widget.config.isOffline,
             ),
           ),
           Container(
@@ -1143,11 +1298,11 @@ class AEDActiveNavigationPanel extends StatelessWidget {
           Expanded(
             child: AEDCompactInfoColumn(
               icon: Icons.near_me,
-              value: config.distance != null
-                  ? LocationService.formatDistance(config.distance!)
+              value: widget.config.distance != null
+                  ? LocationService.formatDistance(widget.config.distance!)
                   : 'N/A',
               label: 'Distance',
-              isOffline: isOfflineRoute || config.isOffline,
+              isOffline: isOfflineRoute || widget.config.isOffline,
             ),
           ),
           Container(
@@ -1156,8 +1311,8 @@ class AEDActiveNavigationPanel extends StatelessWidget {
               color: AppColors.divider),
           Expanded(
             child: _TransportModeSelector(
-              selectedMode: config.selectedMode,
-              onModeSelected: onTransportModeSelected,
+              selectedMode: widget.config.selectedMode,
+              onModeSelected: widget.onTransportModeSelected,
             ),
           ),
         ],
@@ -1171,7 +1326,7 @@ class AEDActiveNavigationPanel extends StatelessWidget {
       children: [
         Expanded(
           child: InkWell(
-            onTap: () => onOpenWebView(aed.aedWebpage!, aed.name),
+            onTap: () => widget.onOpenWebView(aed.aedWebpage!, aed.name),
             borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
             child: Container(
               padding: const EdgeInsets.symmetric(
@@ -1209,7 +1364,7 @@ class AEDActiveNavigationPanel extends StatelessWidget {
           child: InkWell(
             onTap: () {
               HapticFeedback.selectionClick();
-              onOpenWebView(
+              widget.onOpenWebView(
                   'https://kidssavelives.gr/epikoinonia/', 'Report Issue');
             },
             borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),

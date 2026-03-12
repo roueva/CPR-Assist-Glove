@@ -157,8 +157,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               if (v == null || v.trim().isEmpty) {
                                 return 'Please enter your username';
                               }
-                              if (v.trim().length < 4) {
-                                return 'At least 4 characters';
+                              if (v.trim().length < 3) {
+                                return 'At least 3 characters';
                               }
                               return null;
                             },

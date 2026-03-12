@@ -49,7 +49,7 @@ class AuthController {
 
         try {
             const userResult = await this.pool.query(
-                'SELECT id, username, password FROM users WHERE username = $1 AND is_active = true',
+                'SELECT id, username, password FROM users WHERE (username = $1 OR email = $1) AND is_active = true',
                 [username]
             );
 
