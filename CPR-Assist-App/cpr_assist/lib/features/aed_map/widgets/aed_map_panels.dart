@@ -196,15 +196,17 @@ class _AEDListPanelState extends State<AEDListPanel> {
           },
           behavior: HitTestBehavior.translucent,
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surfaceWhite,
-              boxShadow: [
-                BoxShadow(
+              boxShadow: _hasScrolledUnderHeader
+                  ? [
+                const BoxShadow(
                   color: AppColors.shadowDefault,
                   blurRadius: AppSpacing.sm,
                   offset: Offset(0, AppSpacing.xs),
                 ),
-              ],
+              ]
+                  : null,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -535,6 +537,8 @@ class AEDNavigationPanel extends StatefulWidget {
 
 class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+  bool _hasScrolledUnderHeader = false;
+
 
   @override
   void dispose() {
@@ -593,15 +597,17 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
                 }
               },
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.surfaceWhite,
-                  boxShadow: [
-                    BoxShadow(
+                  boxShadow: _hasScrolledUnderHeader
+                      ? [
+                    const BoxShadow(
                       color: AppColors.shadowDefault,
                       blurRadius: AppSpacing.sm,
                       offset: Offset(0, AppSpacing.xs),
                     ),
-                  ],
+                  ]
+                      : null,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -657,33 +663,47 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
             ),
             // ── Scrollable body ───────────────────────────────
             Expanded(
-              child: CustomScrollView(
-                controller: sc,
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.sm + AppSpacing.xs),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildStatusBanners(isOfflineRoute),
-                          _buildActionRow(context, aed, isOfflineRoute),
-                          const SizedBox(height: AppSpacing.md),
-                          if (widget.userLocationAvailable &&
-                              widget.config.userLocation != null)
-                            _buildInfoRow(isOfflineRoute),
-                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                          _buildAvailability(aed),
-                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                          _buildWebLinks(context, aed),
-                          const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
-                        ],
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  if (n is ScrollUpdateNotification) {
+                    final over = n.metrics.pixels > 5;
+                    if (over != _hasScrolledUnderHeader) {
+                      setState(() => _hasScrolledUnderHeader = over);
+                    }
+                  }
+                  if (n is ScrollEndNotification && n.metrics.pixels <= 5) {
+                    setState(() => _hasScrolledUnderHeader = false);
+                  }
+                  return false;
+                },
+                child: CustomScrollView(
+                  controller: sc,
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm + AppSpacing.xs),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildStatusBanners(isOfflineRoute),
+                            _buildActionRow(context, aed, isOfflineRoute),
+                            const SizedBox(height: AppSpacing.md),
+                            if (widget.userLocationAvailable &&
+                                widget.config.userLocation != null)
+                              _buildInfoRow(isOfflineRoute),
+                            const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                            _buildAvailability(aed),
+                            const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                            _buildWebLinks(context, aed),
+                            const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -1021,6 +1041,8 @@ class AEDActiveNavigationPanel extends StatefulWidget  {
 
 class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+  bool _hasScrolledUnderHeader = false;
+
 
   @override
   void dispose() {
@@ -1083,15 +1105,17 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                       }
                     },
                     child: DecoratedBox(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.surfaceWhite,
-                        boxShadow: [
-                          BoxShadow(
+                        boxShadow: _hasScrolledUnderHeader
+                            ? [
+                          const BoxShadow(
                             color: AppColors.shadowDefault,
                             blurRadius: AppSpacing.sm,
                             offset: Offset(0, AppSpacing.xs),
                           ),
-                        ],
+                        ]
+                            : null,
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1164,29 +1188,43 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                   ),
                   // ── Scrollable body ───────────────────────────────
                   Expanded(
-                    child: CustomScrollView(
-                      controller: sc,
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                                vertical: AppSpacing.sm + AppSpacing.xs),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: AppSpacing.md),
-                                if (isOfflineRoute || widget.config.isOffline)
-                                  _buildOfflineBanner(),
-                                _buildAvailability(aed),
-                                _buildInfoRow(isOfflineRoute),
-                                const SizedBox(height: AppSpacing.md),
-                                _buildWebLinks(context, aed),
-                              ],
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (n) {
+                        if (n is ScrollUpdateNotification) {
+                          final over = n.metrics.pixels > 5;
+                          if (over != _hasScrolledUnderHeader) {
+                            setState(() => _hasScrolledUnderHeader = over);
+                          }
+                        }
+                        if (n is ScrollEndNotification && n.metrics.pixels <= 5) {
+                          setState(() => _hasScrolledUnderHeader = false);
+                        }
+                        return false;
+                      },
+                      child: CustomScrollView(
+                        controller: sc,
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
+                                  vertical: AppSpacing.sm + AppSpacing.xs),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: AppSpacing.md),
+                                  if (isOfflineRoute || widget.config.isOffline)
+                                    _buildOfflineBanner(),
+                                  _buildAvailability(aed),
+                                  _buildInfoRow(isOfflineRoute),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _buildWebLinks(context, aed),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
