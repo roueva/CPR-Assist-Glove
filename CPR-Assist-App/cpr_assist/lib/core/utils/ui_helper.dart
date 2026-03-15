@@ -82,6 +82,30 @@ class UIHelper {
     );
   }
 
+  /// Snackbar with a tappable action button.
+  static void showSnackbarWithAction(
+      BuildContext context, {
+        required String message,
+        required IconData icon,
+        required String actionLabel,
+        required VoidCallback onAction,
+        Color? backgroundColor,
+        Duration duration = const Duration(seconds: 6),
+      }) {
+    _show(
+      context,
+      message:         message,
+      icon:            icon,
+      backgroundColor: backgroundColor ?? AppColors.primary,
+      duration:        duration,
+      action: SnackBarAction(
+        label:     actionLabel,
+        textColor: AppColors.textOnDark,
+        onPressed: onAction,
+      ),
+    );
+  }
+
   /// Loading snackbar — stays until dismissed.
   /// Call UIHelper.clearSnackbars() when done.
   static void showLoading(BuildContext context, String message) {

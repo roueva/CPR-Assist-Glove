@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../features/training/widgets/simulation_112_dialog.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_decorations.dart';
-import '../theme/app_spacing.dart';
-import '../theme/app_typography.dart';
-import '../utils/ui_helper.dart';
+import 'package:cpr_assist/core/core.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP DIALOGS
@@ -209,16 +204,6 @@ class AppDialogs {
     );
   }
 
-  // ── Simulation 112 Call ───────────────────────────────────────────────────
-
-  static Future<void> showSimulation112(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      barrierColor: AppColors.overlayDark,
-      builder: (_) => const Simulation112Dialog(),
-    );
-  }
-
   // ── AED Share ─────────────────────────────────────────────────────────────
 
   static Future<void> showAEDShare(
@@ -358,7 +343,7 @@ class _ConfirmDialog extends StatelessWidget {
                   // Cancel
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
+                      onPressed: () => context.pop(false),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                           vertical: AppSpacing.md,
@@ -385,7 +370,7 @@ class _ConfirmDialog extends StatelessWidget {
                   // Confirm
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
+                      onPressed: () => context.pop(true),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                           vertical: AppSpacing.md,
@@ -480,7 +465,7 @@ class _AlertDialog extends StatelessWidget {
             ),
             const Divider(height: 1, color: AppColors.divider),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.pop(),
               style: TextButton.styleFrom(
                 minimumSize: const Size(double.infinity, AppSpacing.touchTargetLarge),
                 shape: const RoundedRectangleBorder(
@@ -638,7 +623,7 @@ class _AEDShareDialog extends StatelessWidget {
                   QrImageView(
                     data: _mapsUrl,
                     version: QrVersions.auto,
-                    size: 180,
+                    size: AppConstants.qrCodeSize,
                     backgroundColor: AppColors.surfaceWhite,
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -664,7 +649,7 @@ class _AEDShareDialog extends StatelessWidget {
                     onTap: () async {
                       await Clipboard.setData(ClipboardData(text: _mapsUrl));
                       if (context.mounted) {
-                        Navigator.of(context).pop();
+                        context.pop();
                         UIHelper.showSuccess(context, 'Link copied to clipboard');
                       }
                     },
@@ -678,7 +663,7 @@ class _AEDShareDialog extends StatelessWidget {
                     color: AppColors.success,
                     bg: AppColors.successBg,
                     onTap: () async {
-                      Navigator.of(context).pop();
+                      context.pop();
                       await Share.share(_shareText, subject: 'AED Location: $aedName');
                     },
                   ),
@@ -690,7 +675,7 @@ class _AEDShareDialog extends StatelessWidget {
 
             // ── Close ────────────────────────────────────────────────────────
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.pop(),
               style: TextButton.styleFrom(
                 minimumSize: const Size(double.infinity, AppSpacing.touchTargetMin),
               ),
@@ -771,12 +756,7 @@ class _KSLInfoDialog extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                 vertical: AppSpacing.md + AppSpacing.xs,
               ),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppSpacing.dialogRadius),
-                ),
-              ),
+              decoration: AppDecorations.dialogHeader(),
               child: Column(
                 children: [
                   Image.asset(
@@ -821,7 +801,7 @@ class _KSLInfoDialog extends StatelessWidget {
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => context.pop(),
                       child: Text(
                         'Close',
                         style: AppTypography.body(color: AppColors.textSecondary)
@@ -833,7 +813,7 @@ class _KSLInfoDialog extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.of(context).pop();
+                        context.pop();
                         onVisitWebsite();
                       },
                       child: const Text('Visit Website'),

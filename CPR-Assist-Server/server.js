@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const winston = require('winston');
-const { pool, ensureAedTable } = require('./db');
+const { pool, ensureAedTable, ensureSessionTables } = require('./db');
 const initializeAuthRoutes = require('./routes/auth');
 const createSessionRoutes = require('./routes/session');
 const createAedRoutes = require('./routes/aed');
@@ -55,7 +55,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
@@ -242,6 +242,7 @@ const startServer = async () => {
     try {
         await checkDatabase();
         await ensureAedTable();
+        await ensureSessionTables();
 
         const cron = require('node-cron');
         const AEDService = require('./services/aedService');

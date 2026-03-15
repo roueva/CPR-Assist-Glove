@@ -195,6 +195,10 @@ class NetworkService {
       {bool requiresAuth = false}) =>
       _makeRequest('PUT', endpoint, body: body, requiresAuth: requiresAuth);
 
+  Future<dynamic> patch(String endpoint, Map<String, dynamic> body,
+      {bool requiresAuth = false}) =>
+      _makeRequest('PATCH', endpoint, body: body, requiresAuth: requiresAuth);
+
   Future<dynamic> _makeRequest(
       String method,
       String endpoint, {
@@ -221,6 +225,9 @@ class NetworkService {
               .timeout(AppConstants.apiTimeout);
         case 'PUT':
           response = await http.put(url, headers: headers, body: jsonEncode(body))
+              .timeout(AppConstants.apiTimeout);
+        case 'PATCH':
+          response = await http.patch(url, headers: headers, body: jsonEncode(body))
               .timeout(AppConstants.apiTimeout);
         default:
           response = await http.get(url, headers: headers)

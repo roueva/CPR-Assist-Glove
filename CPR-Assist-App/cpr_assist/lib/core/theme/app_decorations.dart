@@ -238,4 +238,27 @@ class AppDecorations {
       ),
     ],
   );
+
+  static BoxDecoration dialogHeader() => const BoxDecoration(
+    color: AppColors.primary,
+    borderRadius: BorderRadius.vertical(
+      top: Radius.circular(AppSpacing.dialogRadius),
+    ),
+  );
+
+  /// Account panel — right-to-left slide-in panel with rounded left corners.
+  static BoxDecoration sidePanel() => const BoxDecoration(
+    color: AppColors.surfaceWhite,
+    borderRadius: BorderRadius.only(
+      topLeft:    Radius.circular(AppSpacing.cardRadiusLg),
+      bottomLeft: Radius.circular(AppSpacing.cardRadiusLg),
+    ),
+    boxShadow: [
+      BoxShadow(
+        color:      AppColors.shadowStrong,
+        blurRadius: AppSpacing.xl,
+        offset:     Offset(-AppSpacing.xs, 0),
+      ),
+    ],
+  );
 }

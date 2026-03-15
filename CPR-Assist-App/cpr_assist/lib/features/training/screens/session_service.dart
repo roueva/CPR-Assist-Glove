@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../../services/network/network_service.dart';
 import '../services/compression_event.dart';
+import '../services/rescuer_vital_snapshot.dart';
+import '../services/ventilation_event.dart';
+import '../services/pulse_check_event.dart';
 import '../services/session_detail.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,7 +33,7 @@ class SessionService {
     return raw.map((json) => SessionSummary.fromJson(json)).toList();
   }
 
-  /// Fetch a single session's full detail (with compression stream).
+  /// Fetch a single session's full detail (with all sub-lists).
   Future<SessionDetail> fetchDetail(int sessionId) async {
     final response = await _network.get(
       '/sessions/$sessionId/detail',
@@ -44,8 +47,7 @@ class SessionService {
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
-  /// Save a completed SessionDetail to the backend.
-  /// Falls back to saving a summary-only record if the detail endpoint fails.
+  /// Save a completed SessionDetail to the backend (upsert on session_start).
   Future<bool> saveDetail(SessionDetail detail) async {
     try {
       await _network.post(
@@ -56,6 +58,21 @@ class SessionService {
       return true;
     } catch (e) {
       debugPrint('saveDetail failed: $e');
+      return false;
+    }
+  }
+
+  /// Update the note on a saved session.
+  Future<bool> updateNote(int sessionId, String? note) async {
+    try {
+      await _network.patch(
+        '/sessions/$sessionId/note',
+        {'note': note},
+        requiresAuth: true,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('updateNote failed: $e');
       return false;
     }
   }
@@ -77,27 +94,55 @@ class SessionService {
 
   // ── Grade calculation ──────────────────────────────────────────────────────
 
-  /// Calculates a 0–100 grade from a [SessionDetail].
+  /// Calculates a 0–100 grade per BLE Spec v2.0 Section 9.
+  /// Training mode only. Pulse check compliance excluded (manikins have no pulse).
   ///
   /// Weights:
-  ///   Depth consistency    30%  (% of compressions within 5–6 cm)
-  ///   Frequency consistency 25%  (% within 100–120 BPM)
-  ///   Correct recoil        20%  (% with full rebound)
-  ///   Depth + rate combo    15%  (both correct simultaneously)
-  ///   Hands-on ratio        10%  (fraction of time actively compressing)
-  double calculateGradeFromDetail(SessionDetail session) {
-    if (session.compressionCount == 0) return 0;
+  ///   Depth consistency       20%
+  ///   Frequency consistency   18%
+  ///   Correct recoil          15%
+  ///   Depth + rate combo      12%
+  ///   Hands-on ratio (CCF)    10%
+  ///   Ventilation compliance  10%
+  ///   Posture consistency      5%
+  ///   Force safety             5%
+  ///   Time to first comp       5%
+  ///   Fatigue penalty         −5 pts (if fatigueOnsetIndex > 0)
+  double calculateGradeFromDetail(SessionDetail s) {
+    if (s.compressionCount == 0) return 0;
 
-    final recoilScore  = session.correctRecoil  / session.compressionCount;
-    final comboScore   = session.depthRateCombo / session.compressionCount;
-    final handsOnScore = session.handsOnRatio;
+    final n = s.compressionCount.toDouble();
 
-    return ((session.depthConsistency     * 0.30) +
-        (session.frequencyConsistency * 0.25) +
-        (recoilScore  * 100           * 0.20) +
-        (comboScore   * 100           * 0.15) +
-        (handsOnScore * 100           * 0.10))
-        .clamp(0.0, 100.0);
+    final depthScore       = s.correctDepth     / n * 100;
+    final freqScore        = s.correctFrequency / n * 100;
+    final recoilScore      = s.correctRecoil    / n * 100;
+    final comboScore       = s.depthRateCombo   / n * 100;
+    final handsOnScore     = s.handsOnRatio * 100;
+    // No ventilations in session = rescuer is not penalised
+    final ventScore        = s.ventilationCount > 0
+        ? s.ventilationCompliance
+        : 100.0;
+    final postureScore     = s.correctPosture   / n * 100;
+    final forceSafetyScore = (1 - s.overForceCount / n) * 100;
+    final double timeScore;
+    if      (s.timeToFirstCompression < 5)  { timeScore = 100; }
+    else if (s.timeToFirstCompression < 10) { timeScore = 80;  }
+    else                                     { timeScore = 50;  }
+
+    double grade =
+        (depthScore       * 0.20) +
+            (freqScore        * 0.18) +
+            (recoilScore      * 0.15) +
+            (comboScore       * 0.12) +
+            (handsOnScore     * 0.10) +
+            (ventScore        * 0.10) +
+            (postureScore     * 0.05) +
+            (forceSafetyScore * 0.05) +
+            (timeScore        * 0.05);
+
+    if (s.fatigueOnsetIndex > 0) grade -= 5;
+
+    return grade.clamp(0.0, 100.0);
   }
 
   /// Legacy grade calc from a [SessionSummary] — kept for backward compat.
@@ -112,33 +157,44 @@ class SessionService {
 
   // ── Assemble SessionDetail from BLE data ───────────────────────────────────
 
-  /// Called when the BLE end-ping arrives. Combines the accumulated
-  /// [events] stream with the [summaryPacket] and calculates the grade.
+  /// Called when the BLE end-ping arrives. Combines the accumulated event
+  /// streams with the [summaryPacket] and calculates the grade.
   SessionDetail assembleDetail({
-    required Map<String, dynamic> summaryPacket,
-    required List<CompressionEvent> events,
-    required DateTime sessionStart,
-    required int sessionDurationSecs,
+    required Map<String, dynamic>       summaryPacket,
+    required List<CompressionEvent>     events,
+    required List<VentilationEvent>     ventilationEvents,
+    required List<PulseCheckEvent>      pulseCheckEvents,
+    required List<RescuerVitalSnapshot> rescuerVitalSnapshots,
+    required DateTime                   sessionStart,
+    required int                        sessionDurationSecs,
+    String mode = 'emergency',
   }) {
-    // Build the detail first (computes consistency fields from stream)
+    // Build once to compute all app-side metrics
     final partialDetail = SessionDetail.fromBleSession(
-      summaryPacket:       summaryPacket,
-      events:              events,
-      sessionStart:        sessionStart,
-      sessionDurationSecs: sessionDurationSecs,
-      totalGrade:          0, // placeholder
+      summaryPacket:         summaryPacket,
+      events:                events,
+      ventilationEvents:     ventilationEvents,
+      pulseCheckEvents:      pulseCheckEvents,
+      rescuerVitalSnapshots: rescuerVitalSnapshots,
+      sessionStart:          sessionStart,
+      sessionDurationSecs:   sessionDurationSecs,
+      totalGrade:            0,
+      mode:                  mode,
     );
 
-    // Now grade it with the richer formula
+    // Grade with the real formula, then rebuild with the final grade
     final grade = calculateGradeFromDetail(partialDetail);
 
-    // Re-build with the real grade
     return SessionDetail.fromBleSession(
-      summaryPacket:       summaryPacket,
-      events:              events,
-      sessionStart:        sessionStart,
-      sessionDurationSecs: sessionDurationSecs,
-      totalGrade:          grade,
+      summaryPacket:         summaryPacket,
+      events:                events,
+      ventilationEvents:     ventilationEvents,
+      pulseCheckEvents:      pulseCheckEvents,
+      rescuerVitalSnapshots: rescuerVitalSnapshots,
+      sessionStart:          sessionStart,
+      sessionDurationSecs:   sessionDurationSecs,
+      totalGrade:            grade,
+      mode:                  mode,
     );
   }
 }
@@ -150,38 +206,40 @@ class SessionService {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SessionSummary {
-  final int? id;
-  final int compressionCount;
-  final int correctDepth;
-  final int correctFrequency;
-  final int correctRecoil;
-  final int depthRateCombo;
-  final double averageDepth;
-  final double averageFrequency;
-  final bool correctRebound;
-  final int? userHeartRate;
+  final int?    id;
+  final int     compressionCount;
+  final int     correctDepth;
+  final int     correctFrequency;
+  final int     correctRecoil;
+  final int     depthRateCombo;
+  final double  averageDepth;
+  final double  averageFrequency;
+  final bool    correctRebound;
+  final int?    userHeartRate;
   final double? userTemperature;
-  final int sessionDuration;     // seconds
-  final double totalGrade;       // 0–100
+  final int     sessionDuration;  // seconds
+  final double  totalGrade;       // 0–100
   final DateTime? sessionStart;
   final DateTime? sessionEnd;
+  final String?   note;
 
   const SessionSummary({
     this.id,
     required this.compressionCount,
     required this.correctDepth,
     required this.correctFrequency,
-    this.correctRecoil = 0,
+    this.correctRecoil  = 0,
     this.depthRateCombo = 0,
-    this.averageDepth = 0.0,
+    this.averageDepth   = 0.0,
     this.averageFrequency = 0.0,
     this.correctRebound = false,
     this.userHeartRate,
     this.userTemperature,
     required this.sessionDuration,
-    this.totalGrade = 0.0,
+    this.totalGrade  = 0.0,
     this.sessionStart,
     this.sessionEnd,
+    this.note,
   });
 
   // ── Derived helpers ────────────────────────────────────────────────────────
@@ -198,7 +256,8 @@ class SessionSummary {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} ${sessionStart!.year}';
+    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
+        '${sessionStart!.year}';
   }
 
   String get dateTimeFormatted {
@@ -209,7 +268,8 @@ class SessionSummary {
     ];
     final h = sessionStart!.hour.toString().padLeft(2, '0');
     final m = sessionStart!.minute.toString().padLeft(2, '0');
-    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} ${sessionStart!.year} • $h:$m';
+    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
+        '${sessionStart!.year} • $h:$m';
   }
 
   // ── Build from BLE end-ping (summary-only fallback) ────────────────────────
@@ -217,8 +277,8 @@ class SessionSummary {
   factory SessionSummary.fromBleData(
       Map<String, dynamic> data, {
         required DateTime sessionStart,
-        required int sessionDuration,
-        required double totalGrade,
+        required int      sessionDuration,
+        required double   totalGrade,
       }) {
     return SessionSummary(
       compressionCount: data['totalCompressions'] as int?    ?? 0,
@@ -240,15 +300,15 @@ class SessionSummary {
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
     return SessionSummary(
-      id:               json['id']                   as int?,
-      compressionCount: (json['compression_count']   as num).toInt(),
+      id:               json['id']                    as int?,
+      compressionCount: (json['compression_count']    as num).toInt(),
       correctDepth:     (json['correct_depth']        as num).toInt(),
       correctFrequency: (json['correct_frequency']    as num).toInt(),
       correctRecoil:    (json['correct_recoil']       as num?)?.toInt()    ?? 0,
       depthRateCombo:   (json['depth_rate_combo']     as num?)?.toInt()    ?? 0,
       averageDepth:     (json['average_depth']        as num?)?.toDouble() ?? 0.0,
       averageFrequency: (json['average_frequency']    as num?)?.toDouble() ?? 0.0,
-      correctRebound:   json['correct_rebound']       as bool? ?? false,
+      correctRebound:    json['correct_rebound']      as bool?             ?? false,
       userHeartRate:    (json['user_heart_rate']      as num?)?.toInt(),
       userTemperature:  (json['user_temperature']     as num?)?.toDouble(),
       sessionDuration:  (json['session_duration']     as num).toInt(),
@@ -259,6 +319,7 @@ class SessionSummary {
       sessionEnd: json['session_end'] != null
           ? DateTime.tryParse(json['session_end'] as String)
           : null,
+      note: json['note'] as String?,
     );
   }
 
@@ -271,12 +332,13 @@ class SessionSummary {
     'average_depth':      averageDepth,
     'average_frequency':  averageFrequency,
     'correct_rebound':    correctRebound,
-    if (userHeartRate   != null) 'user_heart_rate':   userHeartRate,
-    if (userTemperature != null) 'user_temperature':  userTemperature,
+    if (userHeartRate   != null) 'user_heart_rate':  userHeartRate,
+    if (userTemperature != null) 'user_temperature': userTemperature,
     'session_duration':   sessionDuration,
     'total_grade':        totalGrade,
     if (sessionStart != null) 'session_start': sessionStart!.toIso8601String(),
     if (sessionEnd   != null) 'session_end':   sessionEnd!.toIso8601String(),
+    if (note         != null) 'note':          note,
   };
 }
 
@@ -285,9 +347,9 @@ class SessionSummary {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UserStats {
-  final int sessionCount;
-  final double averageGrade;
-  final double bestGrade;
+  final int     sessionCount;
+  final double  averageGrade;
+  final double  bestGrade;
   final SessionSummary? bestSession;
 
   const UserStats({
@@ -315,5 +377,6 @@ class UserStats {
   String get averageGradeFormatted =>
       sessionCount == 0 ? '—' : '${averageGrade.toStringAsFixed(1)}%';
 
-  String get sessionCountFormatted => sessionCount == 0 ? '—' : '$sessionCount';
+  String get sessionCountFormatted =>
+      sessionCount == 0 ? '—' : '$sessionCount';
 }

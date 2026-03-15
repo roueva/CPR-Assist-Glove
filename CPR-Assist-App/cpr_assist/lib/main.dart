@@ -60,6 +60,8 @@ void main() async {
   );
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Root widget
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,14 +121,17 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       if (mounted) _processLink(uri);
     });
   }
-  
+
   void _processLink(Uri uri) {
-    // Matches: cpr-assist://reset-password?token=abc123
     if (uri.host == 'reset-password') {
       final token = uri.queryParameters['token'] ?? '';
-      if (token.isNotEmpty && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) context.push(ResetPasswordScreen(token: token));
+      if (token.isNotEmpty) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => ResetPasswordScreen(token: token),
+            ),
+          );
         });
       }
     }
@@ -142,6 +147,7 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
       title: 'CPR Assist',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,   // ← single token-driven theme; no inline ThemeData
+      navigatorKey: navigatorKey,
       home: const MainNavigationScreen(),
     );
   }

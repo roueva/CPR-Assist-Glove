@@ -8,37 +8,52 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../features/training/services/compression_event.dart';
+import '../../features/training/services/ventilation_event.dart';
+import '../../features/training/services/pulse_check_event.dart';
+import '../../features/training/services/rescuer_vital_snapshot.dart';
 import 'ble_data_processor.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BLEConnection
+// BLEConnection  —  BLE Spec v2.0
 //
-// Manages the full lifecycle of the BLE glove connection:
-//   scan → connect → discover services → subscribe to notifications
-//   → auto-reconnect on unexpected drop → manual retry on request.
+// Subscribes to both LIVE_STREAM (88 bytes, 10 Hz) and EVENT_CHANNEL
+// (80 bytes, on-event). Each characteristic has its own receive buffer
+// and subscription. Parsed packets from both are broadcast on [dataStream].
 //
-// Parsed packets are broadcast on [dataStream].
-// Battery & charging state are exposed as [ValueNotifier]s so UI widgets
-// can listen without coupling to any data-handler class.
-//
-// Rules:
-//   - All timing constants come from AppConstants — no magic Duration literals.
-//   - All debug output via debugPrint (stripped in release builds).
-//   - No UI code, no colors, no spacing.
+// Session event lists (cleared on SESSION_START, read on SESSION_END):
+//   compressionEvents      — per-compression from LIVE_STREAM
+//   ventilationEvents      — per 30:2 cycle from EVENT_CHANNEL 0x03
+//   pulseCheckEvents       — per check from EVENT_CHANNEL 0x05
+//   rescuerVitalSnapshots  — quality-gated rescuer vitals from LIVE_STREAM
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BLEConnection {
-  // ── BLE data ──────────────────────────────────────────────────────────────
+  // ── Processor ─────────────────────────────────────────────────────────────
 
   final _processor = const BLEDataProcessor();
   final _dataController = StreamController<Map<String, dynamic>>.broadcast();
-  final List<CompressionEvent> _compressionEvents = [];
+
+  // ── Session event accumulators ────────────────────────────────────────────
+
+  final List<CompressionEvent>     _compressionEvents     = [];
+  final List<VentilationEvent>     _ventilationEvents     = [];
+  final List<PulseCheckEvent>      _pulseCheckEvents      = [];
+  final List<RescuerVitalSnapshot> _rescuerVitalSnapshots = [];
+
   int _sessionStartMs = 0;
 
-  /// Parsed BLE data packets broadcast to all listeners.
-  Stream<Map<String, dynamic>> get dataStream => _dataController.stream;
+  // Pulse check context
+  int _currentPulseIntervalNumber = 0;
+  int _currentPulseStartMs        = 0;
+  int _lastPerfusionIndex         = 0;
 
-  // ── Public state notifiers (read by UI widgets) ───────────────────────────
+  // Ventilation window context
+  int _currentCycleNumber  = 0;
+  int _ventilationWindowMs = 0;
+
+  // ── Public notifiers ──────────────────────────────────────────────────────
+
+  Stream<Map<String, dynamic>> get dataStream => _dataController.stream;
 
   final ValueNotifier<String> connectionStatusNotifier =
   ValueNotifier('Disconnected');
@@ -47,31 +62,33 @@ class BLEConnection {
 
   // ── Internal state ────────────────────────────────────────────────────────
 
-  bool _isScanning    = false;
-  bool _isConnecting  = false;
+  bool _isScanning       = false;
+  bool _isConnecting     = false;
   bool _userDisconnected = false;
   bool _bluetoothWasOff  = false;
   int  _reconnectAttempts = 0;
 
-  BluetoothDevice?                        _connectedDevice;
-  BluetoothConnectionState                _connectionState =
+  BluetoothDevice?             _connectedDevice;
+  BluetoothConnectionState     _connectionState =
       BluetoothConnectionState.disconnected;
 
   StreamSubscription<List<ScanResult>>?         _scanSub;
-  StreamSubscription<List<int>>?                _notifySub;
+  StreamSubscription<List<int>>?                _liveStreamSub;
+  StreamSubscription<List<int>>?                _eventChannelSub;
   StreamSubscription<BluetoothConnectionState>? _connStateSub;
   StreamSubscription<BluetoothAdapterState>?    _adapterStateSub;
 
   Timer? _debounceTimer;
   Timer? _reconnectTimer;
 
-  final List<int> _buffer = [];
+  // Separate receive buffers for each characteristic
+  final List<int> _liveStreamBuffer   = [];
+  final List<int> _eventChannelBuffer = [];
 
   // ── Dependencies ──────────────────────────────────────────────────────────
 
-  final SharedPreferences prefs;
+  final SharedPreferences     prefs;
   final void Function(String) onStatusUpdate;
-
   String? _lastStatus;
 
   // ── Constructor ───────────────────────────────────────────────────────────
@@ -84,14 +101,13 @@ class BLEConnection {
     Future.delayed(AppConstants.bleInitialDelay, _performInitialConnection);
   }
 
-  // ── Connection getters ────────────────────────────────────────────────────
+  // ── Getters ───────────────────────────────────────────────────────────────
 
   bool get isConnected =>
       _connectionState == BluetoothConnectionState.connected;
-
   bool get isScanning => _isScanning;
 
-  // ── Status update ─────────────────────────────────────────────────────────
+  // ── Status ────────────────────────────────────────────────────────────────
 
   void _updateStatus(String status) {
     if (_lastStatus == status) return;
@@ -101,7 +117,7 @@ class BLEConnection {
     onStatusUpdate(status);
   }
 
-  // ── Adapter state listener ────────────────────────────────────────────────
+  // ── Adapter state ─────────────────────────────────────────────────────────
 
   void _listenToAdapterState() {
     _adapterStateSub?.cancel();
@@ -136,7 +152,7 @@ class BLEConnection {
     }
   }
 
-  // ── Scan ─────────────────────────────────────────────────────────────────
+  // ── Scan ──────────────────────────────────────────────────────────────────
 
   Future<void> _performSingleScan() async {
     if (isConnected || _isScanning || _isConnecting) return;
@@ -154,7 +170,7 @@ class BLEConnection {
 
       if (FlutterBluePlus.isScanningNow) {
         await FlutterBluePlus.stopScan();
-        await Future.delayed(AppConstants.zoomAnimationDelay); // 500 ms stabilise
+        await Future.delayed(AppConstants.zoomAnimationDelay);
       }
 
       await FlutterBluePlus.startScan(timeout: AppConstants.bleScanTimeout);
@@ -228,56 +244,75 @@ class BLEConnection {
     }
   }
 
-  // ── Service discovery & notifications ────────────────────────────────────
+  // ── Dual-characteristic subscription (v2.0) ───────────────────────────────
 
   Future<void> _setupNotifications(BluetoothDevice device) async {
-    const serviceUuid        = '19b10000-e8f2-537e-4f6c-d104768a1214';
-    const characteristicUuid = '19b10001-e8f2-537e-4f6c-d104768a1214';
-
     try {
       final services = await device
           .discoverServices()
           .timeout(AppConstants.bleServiceDiscoveryTimeout);
 
       final service = services.firstWhere(
-            (s) => s.uuid.toString() == serviceUuid,
+            (s) => s.uuid.toString().toLowerCase() ==
+            AppConstants.bleServiceUuid.toLowerCase(),
         orElse: () => throw Exception('BLE service not found'),
       );
 
-      final characteristic = service.characteristics.firstWhere(
-            (c) => c.uuid.toString() == characteristicUuid,
-        orElse: () => throw Exception('BLE characteristic not found'),
-      );
+      BluetoothCharacteristic? liveStreamChar;
+      BluetoothCharacteristic? eventChannelChar;
 
-      await characteristic.setNotifyValue(true);
+      for (final c in service.characteristics) {
+        final uuid = c.uuid.toString().toLowerCase();
+        if (uuid == AppConstants.bleLiveStreamUuid.toLowerCase()) {
+          liveStreamChar = c;
+        } else if (uuid == AppConstants.bleEventChannelUuid.toLowerCase()) {
+          eventChannelChar = c;
+        }
+      }
 
-      _notifySub?.cancel();
-      _notifySub = characteristic.lastValueStream.listen(
-            (data) {
-          _buffer.addAll(data);
+      if (liveStreamChar == null) {
+        throw Exception('LIVE_STREAM characteristic not found');
+      }
+      if (eventChannelChar == null) {
+        throw Exception('EVENT_CHANNEL characteristic not found');
+      }
 
-          while (_buffer.length >= AppConstants.blePacketSize) {
-            final packet = _buffer.sublist(0, AppConstants.blePacketSize);
-            _buffer.removeRange(0, AppConstants.blePacketSize);
-            _handlePacket(packet);
-          }
-
-          if (_buffer.length > AppConstants.bleBufferOverflowThreshold) {
-            debugPrint('BLE: buffer overflow — clearing');
-            _buffer.clear();
-          }
-        },
+      // ── LIVE_STREAM subscription ────────────────────────────────────────
+      await liveStreamChar.setNotifyValue(true);
+      _liveStreamSub?.cancel();
+      _liveStreamSub = liveStreamChar.lastValueStream.listen(
+            (data) => _handleIncoming(
+          data,
+          _liveStreamBuffer,
+          AppConstants.bleLiveStreamPacketSize,
+          isLiveStream: true,
+        ),
         onError: (Object e) {
-          debugPrint('BLE notification error: $e');
+          debugPrint('BLE LIVE_STREAM error: $e');
           _handleDisconnection();
         },
       );
 
-      _isConnecting    = false;
+      // ── EVENT_CHANNEL subscription ──────────────────────────────────────
+      await eventChannelChar.setNotifyValue(true);
+      _eventChannelSub?.cancel();
+      _eventChannelSub = eventChannelChar.lastValueStream.listen(
+            (data) => _handleIncoming(
+          data,
+          _eventChannelBuffer,
+          AppConstants.bleEventChannelPacketSize,
+          isLiveStream: false,
+        ),
+        onError: (Object e) {
+          debugPrint('BLE EVENT_CHANNEL error: $e');
+        },
+      );
+
+      _isConnecting     = false;
       _userDisconnected = false;
       _reconnectAttempts = 0;
       _updateStatus('Connected');
-      debugPrint('BLE: connected successfully');
+      debugPrint('BLE: connected — LIVE_STREAM + EVENT_CHANNEL active');
     } catch (e) {
       debugPrint('BLE notification setup failed: $e');
       _isConnecting = false;
@@ -285,13 +320,39 @@ class BLEConnection {
     }
   }
 
+  // ── Incoming data handler — buffers and slices into fixed-size packets ────
+
+  void _handleIncoming(
+      List<int> data,
+      List<int> buffer,
+      int packetSize, {
+        required bool isLiveStream,
+      }) {
+    buffer.addAll(data);
+
+    while (buffer.length >= packetSize) {
+      final packet = buffer.sublist(0, packetSize);
+      buffer.removeRange(0, packetSize);
+      _handlePacket(packet, isLiveStream: isLiveStream);
+    }
+
+    if (buffer.length > AppConstants.bleBufferOverflowThreshold) {
+      debugPrint(
+        'BLE: buffer overflow (${isLiveStream ? "LIVE_STREAM" : "EVENT_CHANNEL"}) — clearing',
+      );
+      buffer.clear();
+    }
+  }
+
   // ── Packet handling ───────────────────────────────────────────────────────
 
-  void _handlePacket(List<int> packet) {
-    final parsed = _processor.parsePacket(packet);
+  void _handlePacket(List<int> packet, {required bool isLiveStream}) {
+    final parsed = isLiveStream
+        ? _processor.parseLiveStream(packet)
+        : _processor.parseEventChannel(packet);
     if (parsed == null) return;
 
-    // Update battery notifiers for UI (header pill)
+    // Battery notifiers (LIVE_STREAM only)
     if (parsed.batteryPercentage != null) {
       batteryPercentageNotifier.value = parsed.batteryPercentage!;
     }
@@ -299,42 +360,159 @@ class BLEConnection {
       isChargingNotifier.value = parsed.isCharging!;
     }
 
-    // Track session start timestamp
+    // ── SESSION_START ────────────────────────────────────────────────────
     if (parsed.isStartPing) {
       _compressionEvents.clear();
-      _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
+      _ventilationEvents.clear();
+      _pulseCheckEvents.clear();
+      _rescuerVitalSnapshots.clear();
+      _sessionStartMs             = DateTime.now().millisecondsSinceEpoch;
+      _currentCycleNumber         = 0;
+      _currentPulseIntervalNumber = 0;
+      _lastPerfusionIndex         = 0;
     }
 
-// Accumulate per-compression events during session
-    if (parsed.isContinuousData && parsed.depth > 0) {
-      _compressionEvents.add(CompressionEvent(
-        timestampMs:    DateTime.now().millisecondsSinceEpoch - _sessionStartMs,
-        depth:          parsed.depth,
-        frequency:      parsed.frequency,
-        recoilAchieved: parsed.heartRatePatient > 0, // replace with actual recoil field once added to packet
+    // ── LIVE_STREAM continuous data ──────────────────────────────────────
+    if (parsed.isContinuousData) {
+      final nowMs = DateTime.now().millisecondsSinceEpoch - _sessionStartMs;
+
+      // Compression event — only when a compression is active
+      if (parsed.depth > 0 && parsed.frequency > 0) {
+        _compressionEvents.add(CompressionEvent(
+          timestampMs:         nowMs,
+          depth:               parsed.depth,
+          frequency:           parsed.frequency,
+          force:               parsed.force,
+          recoilAchieved:      parsed.recoilAchieved,
+          overForce:           parsed.overForceFlag,
+          postureOk:           parsed.postureOk,
+          leaningDetected:     parsed.leaningDetected,
+          wristAlignmentAngle: parsed.wristAlignmentAngle,
+          compressionAxisDev:  parsed.compressionAxisDeviation,
+          effectiveDepth:      parsed.effectiveDepth,
+        ));
+      }
+
+      if (parsed.perfusionIndex > 0) {
+        _lastPerfusionIndex = parsed.perfusionIndex;
+      }
+
+      // Quality-gated rescuer vital snapshot (only when signal is reliable)
+      if (parsed.rescuerSignalQuality >= 40 && parsed.heartRateUser > 0) {
+        _rescuerVitalSnapshots.add(RescuerVitalSnapshot(
+          timestampMs:   nowMs,
+          heartRate:     parsed.heartRateUser,
+          spO2:          parsed.spO2User,
+          temperature:   parsed.rescuerTemperature,
+          signalQuality: parsed.rescuerSignalQuality,
+          pauseType:     'active',
+        ));
+      }
+    }
+
+    // ── VENTILATION_WINDOW (0x03) ────────────────────────────────────────
+    if (parsed.isVentilationWindow) {
+      _currentCycleNumber++;
+      _ventilationWindowMs =
+          DateTime.now().millisecondsSinceEpoch - _sessionStartMs;
+      _ventilationEvents.add(VentilationEvent(
+        timestampMs:       _ventilationWindowMs,
+        cycleNumber:       parsed.cycleNumber ?? _currentCycleNumber,
+        ventilationsGiven: 0,
+        durationSec:       0.0,
+        compliant:         false,
       ));
     }
 
-    // Broadcast full packet data for screens that need it
+    // ── PULSE_CHECK_START (0x04) ─────────────────────────────────────────
+    if (parsed.isPulseCheckStart) {
+      _currentPulseIntervalNumber++;
+      _currentPulseStartMs = parsed.sessionElapsedMs ??
+          (DateTime.now().millisecondsSinceEpoch - _sessionStartMs);
+    }
+
+    // ── PULSE_CHECK_RESULT (0x05) ────────────────────────────────────────
+    if (parsed.isPulseCheckResult) {
+      _pulseCheckEvents.add(PulseCheckEvent(
+        timestampMs:    _currentPulseStartMs,
+        intervalNumber: _currentPulseIntervalNumber,
+        detected:       (parsed.pulseDetected ?? 0) == 1,
+        detectedBpm:    parsed.detectedBPM     ?? 0.0,
+        confidence:     parsed.confidencePct   ?? 0,
+        perfusionIndex: _lastPerfusionIndex,
+      ));
+    }
+
+    // ── Broadcast for UI screens ─────────────────────────────────────────
     _dataController.add({
-      'depth':             parsed.depth,
-      'frequency':         parsed.frequency,
-      'angle':             parsed.angle,
-      'compressionCount':  parsed.compressionCount,
-      'isStartPing':       parsed.isStartPing,
-      'isEndPing':         parsed.isEndPing,
-      'isContinuousData':  parsed.isContinuousData,
+      // Core live metrics
+      'depth':               parsed.depth,
+      'frequency':           parsed.frequency,
+      'force':               parsed.force,
+      'angle':               parsed.angle,
+      'compressionCount':    parsed.compressionCount,
+      'compressionInCycle':  parsed.compressionInCycle,
+      'wristAlignmentAngle': parsed.wristAlignmentAngle,
+      'wristFlexionAngle':   parsed.wristFlexionAngle,
+      'effectiveDepth':      parsed.effectiveDepth,
+      'recoilAchieved':      parsed.recoilAchieved,
+      'leaningDetected':     parsed.leaningDetected,
+      'overForceFlag':       parsed.overForceFlag,
+      'postureOk':           parsed.postureOk,
+      'fatigueFlag':         parsed.fatigueFlag,
+      // Patient vitals
+      'heartRatePatient':    parsed.heartRatePatient,
+      'spO2Patient':         parsed.spO2Patient,
+      'ppgRaw':              parsed.ppgRaw,
+      'ppgSignalQuality':    parsed.ppgSignalQuality,
+      'perfusionIndex':      parsed.perfusionIndex,
+      'patientTemperature':  parsed.patientTemperature,
+      // Rescuer vitals
+      'heartRateUser':        parsed.heartRateUser,
+      'spO2User':             parsed.spO2User,
+      'rescuerSignalQuality': parsed.rescuerSignalQuality,
+      'rescuerTemperature':   parsed.rescuerTemperature,
+      'temperatureUser':      parsed.temperatureUser,
+      'temperaturePatient':   parsed.temperaturePatient,
+      // Session state
+      'sessionActive':    parsed.sessionActive,
+      'pulseCheckActive': parsed.pulseCheckActive,
+      'currentMode':      parsed.currentMode,
+      'feedbackEnabled':  parsed.feedbackEnabled,
       'batteryPercentage': parsed.batteryPercentage,
-      'isCharging':        parsed.isCharging,
-      'heartRatePatient':  parsed.heartRatePatient,
-      'temperaturePatient': parsed.temperaturePatient,
-      'heartRateUser':     parsed.heartRateUser,
-      'temperatureUser':   parsed.temperatureUser,
-      'correctDepth':      parsed.correctDepth,
-      'correctFrequency':  parsed.correctFrequency,
-      'correctRecoil':     parsed.correctRecoil,
-      'depthRateCombo':    parsed.depthRateCombo,
-      'totalCompressions': parsed.totalCompressions,
+      'isCharging':       parsed.isCharging,
+      // Packet type flags
+      'isStartPing':         parsed.isStartPing,
+      'isEndPing':           parsed.isEndPing,
+      'isContinuousData':    parsed.isContinuousData,
+      'isVentilationWindow': parsed.isVentilationWindow,
+      'isPulseCheckStart':   parsed.isPulseCheckStart,
+      'isPulseCheckResult':  parsed.isPulseCheckResult,
+      'isTwoMinAlert':       parsed.isTwoMinAlert,
+      'isFatigueAlert':      parsed.isFatigueAlert,
+      'isPendingLocalData':  parsed.isPendingLocalData,
+      // SESSION_END summary (non-zero only on isEndPing)
+      'totalCompressions':   parsed.totalCompressions,
+      'correctDepth':        parsed.correctDepth,
+      'correctFrequency':    parsed.correctFrequency,
+      'correctRecoil':       parsed.correctRecoil,
+      'depthRateCombo':      parsed.depthRateCombo,
+      'correctPosture':      parsed.correctPosture,
+      'leaningCount':        parsed.leaningCount,
+      'overForceCount':      parsed.overForceCount,
+      'tooDeepCount':        parsed.tooDeepCount,
+      'totalVentilations':   parsed.totalVentilations,
+      'pulseChecksPrompted': parsed.pulseChecksPrompted,
+      'pulseChecksComplied': parsed.pulseChecksComplied,
+      'pulseDetected':       parsed.pulseDetected,
+      'fatigueOnsetIndex':   parsed.fatigueOnsetIndex,
+      'peakDepth':           parsed.peakDepth,
+      // Event-specific fields
+      'cycleNumber':         parsed.cycleNumber,
+      'intervalNumber':      parsed.intervalNumber,
+      'detectedBPM':         parsed.detectedBPM,
+      'confidencePct':       parsed.confidencePct,
+      'pendingSessionCount': parsed.pendingSessionCount,
     });
   }
 
@@ -343,15 +521,11 @@ class BLEConnection {
   void _handleDisconnection() {
     if (_connectionState == BluetoothConnectionState.connected) return;
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(
-      AppConstants.mapAnimationDelay, // 300 ms debounce
-      _processDisconnection,
-    );
+    _debounceTimer = Timer(AppConstants.mapAnimationDelay, _processDisconnection);
   }
 
   void _processDisconnection() {
     if (_isConnecting) _isConnecting = false;
-
     if (_userDisconnected) {
       _updateStatus('Disconnected');
     } else {
@@ -372,11 +546,6 @@ class BLEConnection {
     }
 
     _reconnectAttempts++;
-    debugPrint(
-      'BLE: auto-reconnect attempt $_reconnectAttempts'
-          '/${AppConstants.bleMaxReconnectAttempts}',
-    );
-
     final delaySeconds = math.min(
       AppConstants.bleReconnectInterval.inSeconds *
           math.pow(2, _reconnectAttempts - 1).toInt(),
@@ -391,29 +560,28 @@ class BLEConnection {
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   void _cleanupConnection() {
-    _notifySub?.cancel();
+    _liveStreamSub?.cancel();
+    _eventChannelSub?.cancel();
     _connStateSub?.cancel();
     _debounceTimer?.cancel();
-    _buffer.clear();
+    _liveStreamBuffer.clear();
+    _eventChannelBuffer.clear();
 
     _connectedDevice?.disconnect().catchError(
           (Object e) => debugPrint('BLE disconnect error: $e'),
     );
 
-    _connectedDevice    = null;
-    _connectionState    = BluetoothConnectionState.disconnected;
+    _connectedDevice = null;
+    _connectionState = BluetoothConnectionState.disconnected;
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  /// Called when the user taps the retry/reconnect button.
   Future<void> manualRetry() async {
     if (isConnected) return;
-
     debugPrint('BLE: manual retry');
     _reconnectAttempts = 0;
     _userDisconnected  = false;
-
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
 
@@ -422,21 +590,17 @@ class BLEConnection {
       _scanSub?.cancel();
       _isScanning = false;
     }
-
     if (_isConnecting) {
       _cleanupConnection();
       _isConnecting = false;
     }
-
     if (!await _isBluetoothOn()) {
       _updateStatus('Bluetooth OFF');
       return;
     }
-
     _performSingleScan();
   }
 
-  /// Manually disconnect — suppresses all auto-reconnect logic.
   Future<void> disconnectDevice() async {
     debugPrint('BLE: manual disconnect');
     _userDisconnected = true;
@@ -444,7 +608,6 @@ class BLEConnection {
     _updateStatus('Disconnected');
   }
 
-  /// Request Bluetooth to turn on (no-op if already on).
   Future<bool> enableBluetooth({bool prompt = false}) async {
     if (await _isBluetoothOn()) return true;
     if (prompt) {
@@ -455,12 +618,17 @@ class BLEConnection {
     return false;
   }
 
-  /// The compression events accumulated during the current session.
-  /// Read this on end-ping to pass to SessionService.assembleDetail().
-  List<CompressionEvent> get compressionEvents =>
-      List.unmodifiable(_compressionEvents);
+  // ── Event list getters ────────────────────────────────────────────────────
 
-  /// Expose adapter state changes for any widget that needs it.
+  List<CompressionEvent>     get compressionEvents     =>
+      List.unmodifiable(_compressionEvents);
+  List<VentilationEvent>     get ventilationEvents     =>
+      List.unmodifiable(_ventilationEvents);
+  List<PulseCheckEvent>      get pulseCheckEvents      =>
+      List.unmodifiable(_pulseCheckEvents);
+  List<RescuerVitalSnapshot> get rescuerVitalSnapshots =>
+      List.unmodifiable(_rescuerVitalSnapshots);
+
   Stream<BluetoothAdapterState> get adapterStateStream =>
       FlutterBluePlus.adapterState;
 
@@ -468,7 +636,8 @@ class BLEConnection {
     _debounceTimer?.cancel();
     _reconnectTimer?.cancel();
     _scanSub?.cancel();
-    _notifySub?.cancel();
+    _liveStreamSub?.cancel();
+    _eventChannelSub?.cancel();
     _adapterStateSub?.cancel();
     _connStateSub?.cancel();
     _cleanupConnection();

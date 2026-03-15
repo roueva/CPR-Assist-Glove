@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../../providers/app_providers.dart';
+import '../../training/widgets/simulation_112_dialog.dart';
 import '../services/aed_map_widget.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,7 +44,11 @@ class _AedMapScreenState extends ConsumerState<AedMapScreen>
   }
 
   void _showSimulation112Dialog() {
-    AppDialogs.showSimulation112(context);
+    showDialog<void>(
+      context: context,
+      barrierColor: AppColors.overlayDark,
+      builder: (_) => const Simulation112Dialog(),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────

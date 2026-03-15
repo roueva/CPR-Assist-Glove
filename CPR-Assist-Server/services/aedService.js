@@ -200,7 +200,7 @@ class AEDService {
             const countResult = await client.query('SELECT COUNT(*) as total FROM aed_locations');
             const totalInDB = parseInt(countResult.rows[0].total);
 
-await client.query(
+            await client.query(
                 `INSERT INTO aed_sync_log (synced_at, aeds_checked, aeds_inserted, aeds_updated)
      VALUES (NOW(), $1, $2, $3)`,
                 [aeds.length, totalInserted, totalUpdated]
@@ -214,11 +214,10 @@ await client.query(
             console.log(`   → ${totalInDB} total AEDs in database`);
 
             // ✅ Parse availability after successful sync
-            try {
-                await this.parseAvailabilityAfterSync(aeds);
-            } catch (e) {
-                console.error('⚠️ Availability parsing failed:', e.message);
-            }
+            // Fire-and-forget — don't block HTTP response on long-running parse
+            this.parseAvailabilityAfterSync(aeds).catch(e =>
+                console.error('⚠️ Availability parsing failed:', e.message)
+            );
 
             return {
                 success: true,

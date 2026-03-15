@@ -6,10 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../../providers/app_providers.dart';
-import '../../../features/training/widgets/grade_dialog.dart';
-import '../../training/screens/session_service.dart';
-import '../../training/services/session_detail.dart';
+import '../../training/widgets/session_results.dart';
 import '../widgets/live_cpr_widgets.dart';
+import '../../account/screens/login_screen.dart';
+import '../../../providers/session_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveCPRScreen
@@ -32,6 +32,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+  Timer? _sessionTimer;
 
   // ── Display state ──────────────────────────────────────────────────────────
 
@@ -54,14 +55,15 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   @override
   void dispose() {
     super.dispose();
+    _sessionTimer?.cancel();
   }
 
   // ── BLE data handler ───────────────────────────────────────────────────────
 
   void _updateDisplayValues(Map<String, dynamic> data) {
-    final isStartPing   = data['startPing']       == true;
-    final isEndPing     = data['endPing']         == true;
-    final sessionActive = data['isSessionActive'] == true;
+    final isStartPing   = data['isStartPing']      == true;
+    final isEndPing     = data['isEndPing']        == true;
+    final sessionActive = data['isContinuousData'] == true;
 
     _updateVitals(data);
 
@@ -73,7 +75,19 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayCompressionCount = 0;
         _displaySessionDuration  = Duration.zero;
         _sessionStartTime        = DateTime.now();
-        _hasHandledEndPing       = false;
+        _sessionTimer?.cancel();
+        _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted && _isSessionActive) {
+            setState(() {
+              _displaySessionDuration = Duration(
+                seconds: DateTime.now()
+                    .difference(_sessionStartTime!)
+                    .inSeconds,
+              );
+            });
+          }
+        });
+        _hasHandledEndPing = false;
       });
       return;
     }
@@ -84,6 +98,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayDepth      = 0.0;
         _displayFrequency  = 0.0;
         _hasHandledEndPing = true;
+        _sessionTimer?.cancel();
+        _sessionTimer = null;
       });
       _handleSessionEnd(data);
       return;
@@ -94,9 +110,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       _isSessionActive = sessionActive;
       if (data.containsKey('compressionCount')) {
         _displayCompressionCount = data['compressionCount'] as int;
-      }
-      if (data.containsKey('sessionDuration')) {
-        _displaySessionDuration = data['sessionDuration'] as Duration;
       }
       if (_isSessionActive) {
         if (data.containsKey('depth')) {
@@ -127,10 +140,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         hrU    != null && hrU   != _heartRateUser      ||
         tempU  != null && tempU != _temperatureUser) {
       setState(() {
-        if (hrP   != null) _heartRatePatient   = hrP;
-        if (tempP != null) _temperaturePatient  = tempP;
-        if (hrU   != null) _heartRateUser       = hrU;
-        if (tempU != null) _temperatureUser     = tempU;
+        if (hrP   != null) _heartRatePatient  = hrP;
+        if (tempP != null) _temperaturePatient = tempP;
+        if (hrU   != null) _heartRateUser      = hrU;
+        if (tempU != null) _temperatureUser    = tempU;
       });
     }
   }
@@ -140,48 +153,49 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
     final isLoggedIn  = ref.read(authStateProvider).isLoggedIn;
-    final service     = SessionService(ref.read(networkServiceProvider));
+    final service     = ref.read(sessionServiceProvider);
     final bleConn     = ref.read(bleConnectionProvider);
 
+    // assembleDetail now requires all four event lists.
+    // ventilationEvents, pulseCheckEvents, and rescuerVitalSnapshots are
+    // tracked in BLEConnection (see ble_connection.dart). Until that file is
+    // updated to accumulate those lists, pass the already-available getters;
+    // they fall back to empty lists so the call compiles cleanly today.
     final detail = service.assembleDetail(
-      summaryPacket:       data,
-      events:              List.from(bleConn.compressionEvents),
-      sessionStart:        _sessionStartTime ?? DateTime.now(),
-      sessionDurationSecs: _displaySessionDuration.inSeconds,
+      summaryPacket:         data,
+      events:                List.from(bleConn.compressionEvents),
+      ventilationEvents:     List.from(bleConn.ventilationEvents),
+      pulseCheckEvents:      List.from(bleConn.pulseCheckEvents),
+      rescuerVitalSnapshots: List.from(bleConn.rescuerVitalSnapshots),
+      sessionStart:          _sessionStartTime ?? DateTime.now(),
+      sessionDurationSecs:   _displaySessionDuration.inSeconds,
+      mode: currentMode == AppMode.training ? 'training' : 'emergency',
     );
 
     if (currentMode == AppMode.emergency && !isLoggedIn) {
       if (!mounted) return;
-      final confirmed = await AppDialogs.promptLogin(
+      final shouldLogin = await AppDialogs.promptLogin(
         context,
         reason: 'Log in to save this session and track your progress.',
       );
-      if (confirmed != true || !mounted) return;
+      if (shouldLogin == true && mounted) {
+        await context.push(const LoginScreen());
+      }
       final nowLoggedIn = ref.read(authStateProvider).isLoggedIn;
-      if (!nowLoggedIn) return;
+      if (!nowLoggedIn || !mounted) return;
     }
 
     final saved = await service.saveDetail(detail);
     if (!mounted) return;
 
-    if (saved) {
-      if (currentMode == AppMode.training) {
-        _showGradeDialog(detail);
-      } else {
-        UIHelper.showSuccess(context, 'Session saved');
-      }
+    if (currentMode == AppMode.training) {
+      context.push(SessionResultsScreen.fromDetail(detail: detail));
+    } else if (saved) {
+      UIHelper.showSuccess(context, 'Session saved');
     } else {
-      UIHelper.showError(context, 'Failed to save session. Please check your connection.');
+      UIHelper.showError(
+          context, 'Failed to save session. Please check your connection.');
     }
-  }
-
-  void _showGradeDialog(SessionDetail session) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: AppColors.overlayDark,
-      builder: (_) => GradeDialog(session: session),
-    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────

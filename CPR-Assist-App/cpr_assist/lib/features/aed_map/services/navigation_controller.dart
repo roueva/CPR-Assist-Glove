@@ -23,7 +23,6 @@ class NavigationController {
   LatLng?   _currentUserLocation;
   LatLng?   _previousUserLocation;
   DateTime? _lastLocationUpdateTime;
-  double?   _currentBearing; // direction of travel (different from compass heading)
   Timer?    _predictionTimer;
   bool      _isRecenterInProgress    = false;
 
@@ -68,7 +67,7 @@ class NavigationController {
       _updateSpeedAndBearing(location);
       _updateCameraToLocation(location);
     } else if (_navigationState != NavigationState.inactive && _mapController != null) {
-      if (_wasRecentUserTouch()) {
+      if (_wasRecentUserTouch() || _showRecenterButton) {
         if (!_showRecenterButton) {
           _showRecenterButton = true;
           _onRecenterButtonVisibilityChanged?.call(true);
@@ -234,7 +233,6 @@ class NavigationController {
 
     _previousUserLocation  = null;
     _lastLocationUpdateTime = null;
-    _currentBearing        = null;
   }
 
   /// Dispose of all resources.
@@ -268,7 +266,6 @@ class NavigationController {
 
       if (timeDelta > 0 && timeDelta < 5) {
         _calculateDistance(_previousUserLocation!, location);
-        _currentBearing = _calculateBearingBetweenPoints(_previousUserLocation!, location);
       }
     }
 
@@ -283,7 +280,6 @@ class NavigationController {
 
   void _updateCameraToLocation(LatLng location) {
     if (_mapController == null) return;
-
     if (_wasRecentUserTouch()) {
       if (!_showRecenterButton) {
         _showRecenterButton = true;
@@ -294,9 +290,10 @@ class NavigationController {
 
     _lastProgrammaticMoveTime = DateTime.now();
 
-    final cameraHeading = _currentBearing ?? _currentHeading ?? 0.0;
+    // Always prefer compass heading for bearing — movement bearing is unreliable
+    // at walking speeds and freezes when the user stops.
+    final cameraHeading = _currentHeading ?? 0.0;
 
-    // Use moveCamera (not animateCamera) — prevents "jumping every 5 meters"
     _mapController!.moveCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
@@ -377,9 +374,9 @@ class NavigationController {
 
       if (_currentHeading != null) {
         final bearingDiff = (event.heading! - _currentHeading!).abs();
-        if (bearingDiff < 2.0) return;
+        if (bearingDiff < 1.0) return;
 
-        final interpolated = _interpolateBearing(_currentHeading!, event.heading!, 0.3);
+        final interpolated = _interpolateBearing(_currentHeading!, event.heading!, 0.15);
         _currentHeading = interpolated;
         _updateCameraWithCompass(interpolated);
       } else {
@@ -501,19 +498,5 @@ class NavigationController {
         cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
 
     return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a));
-  }
-
-  double _calculateBearingBetweenPoints(LatLng from, LatLng to) {
-    const toRad  = 3.14159265359 / 180.0;
-    const toDeg  = 180.0 / 3.14159265359;
-
-    final lat1 = from.latitude  * toRad;
-    final lat2 = to.latitude    * toRad;
-    final dLon = (to.longitude - from.longitude) * toRad;
-
-    final y = sin(dLon) * cos(lat2);
-    final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
-
-    return (atan2(y, x) * toDeg + 360) % 360;
   }
 }

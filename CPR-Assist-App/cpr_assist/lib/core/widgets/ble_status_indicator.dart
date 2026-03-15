@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -12,7 +11,7 @@ import '../../services/ble/ble_connection.dart';
 // scanning spinner. Tapping triggers a manual reconnect when applicable.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class BLEStatusIndicator extends ConsumerStatefulWidget {
+class BLEStatusIndicator extends StatefulWidget {
   final BLEConnection bleConnection;
   final ValueNotifier<String> connectionStatusNotifier;
 
@@ -23,10 +22,10 @@ class BLEStatusIndicator extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<BLEStatusIndicator> createState() => _BLEStatusIndicatorState();
+  State<BLEStatusIndicator> createState() => _BLEStatusIndicatorState();
 }
 
-class _BLEStatusIndicatorState extends ConsumerState<BLEStatusIndicator> {
+class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   @override
   void initState() {
     super.initState();

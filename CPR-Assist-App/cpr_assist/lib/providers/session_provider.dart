@@ -29,10 +29,3 @@ final sessionSummariesProvider = FutureProvider<List<SessionSummary>>((ref) asyn
     return [];
   }
 });
-
-/// Derived provider — computes [UserStats] from the loaded session list.
-final userStatsProvider = Provider<AsyncValue<UserStats>>((ref) {
-  return ref.watch(sessionSummariesProvider).whenData(
-    UserStats.fromSessions,
-  );
-});

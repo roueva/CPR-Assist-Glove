@@ -68,15 +68,22 @@ List<AED> _parseAEDsIsolate(List<dynamic> rawData) {
 List<AED> _sortAEDsIsolate(Map<String, dynamic> params) {
   final aeds     = params['aeds'] as List<AED>;
   final location = LatLng(params['lat'] as double, params['lng'] as double);
+  final mode     = params['mode'] as String? ?? 'walking';
+  final double multiplier;
+  switch (mode) {
+    case 'driving':   multiplier = 1.4; break;
+    case 'bicycling': multiplier = 1.2; break;
+    default:          multiplier = 1.3; break;
+  }
   aeds.sort((a, b) {
     final dA = Geolocator.distanceBetween(
       location.latitude, location.longitude,
       a.location.latitude, a.location.longitude,
-    );
+    ) * multiplier;
     final dB = Geolocator.distanceBetween(
       location.latitude, location.longitude,
       b.location.latitude, b.location.longitude,
-    );
+    ) * multiplier;
     return dA.compareTo(dB);
   });
   return aeds;

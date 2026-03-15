@@ -51,7 +51,6 @@ class AEDLocationController {
   // ── GPS state ──────────────────────────────────────────────────────────────
   bool _isActive = false;
   bool _isNavigating = false;
-  StreamSubscription<Position>? _positionSubscription;
 
   // ── Manual GPS search ──────────────────────────────────────────────────────
   bool _isManuallySearchingGPS = false;
@@ -319,10 +318,10 @@ class AEDLocationController {
     }
 
     // Skip tiny moves when not navigating
-    if (!wasLocationNull && !fromCache && !currentState.navigation.hasStarted) {
-      final distance =
-      LocationService.distanceBetween(previousLocation, location);
-      if (distance < 5) {
+    if (!wasLocationNull && !fromCache) {
+      final distance = LocationService.distanceBetween(previousLocation, location);
+      final threshold = currentState.navigation.hasStarted ? 1.0 : 5.0;
+      if (distance < threshold) {
         _locationLastUpdated = DateTime.now();
         return;
       }
@@ -433,7 +432,6 @@ class AEDLocationController {
   // ══════════════════════════════════════════════════════════════════════════
 
   void dispose() {
-    _positionSubscription?.cancel();
     _manualGPSSubscription?.cancel();
     _locationService.stopLocationMonitoring();
     LocationService.stopLocationServiceMonitoring();

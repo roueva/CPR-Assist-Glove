@@ -96,6 +96,7 @@ class AEDRoutingCoordinator {
 
   // ── Location-freshness flags (supplied by location controller) ─────────────
   bool isUsingCachedLocation = false;
+  bool isLocationTooOld = false;
 
   AEDRoutingCoordinator({
     required WidgetRef ref,
@@ -1055,9 +1056,7 @@ class AEDRoutingCoordinator {
   }
 
   bool _isLocationTooOld(AEDMapState state) {
-    // Actual staleness is checked via AEDLocationController.isLocationTooOld().
-    // This coordinator receives the flag via isUsingCachedLocation.
-    return false;
+    return isLocationTooOld;
   }
 
   LatLng? _getNextWaypointAhead(

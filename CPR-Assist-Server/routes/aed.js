@@ -94,7 +94,7 @@ router.get('/last-sync', async (req, res) => {
     try {
         // Get the most recent AED update time as proxy for last sync
         const result = await pool.query(
-            'SELECT MAX(last_updated) as last_sync FROM aed_locations'
+            'SELECT synced_at as last_sync FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
         );
         
         const lastSync = result.rows[0]?.last_sync;
@@ -157,6 +157,17 @@ router.post('/bootstrap-cache', async (req, res) => {
         
         // Write cache file
         await fs.writeFile(cacheFile, JSON.stringify(cache, null, 2));
+
+        const entries = Object.entries(cache);
+        for (const [text, data] of entries) {
+            await pool.query(
+                `INSERT INTO availability_cache (availability_text, parsed_data)
+         VALUES ($1, $2)
+         ON CONFLICT (availability_text)
+         DO UPDATE SET parsed_data = $2, parsed_at = NOW()`,
+                [text, JSON.stringify(data)]
+            );
+        }
         
         const entryCount = Object.keys(cache).length;
         console.log(`✅ Bootstrap cache uploaded: ${entryCount} entries`);
@@ -183,65 +194,35 @@ router.post('/bootstrap-cache', async (req, res) => {
 });
 
     // ✅ Get parsed availability map
-router.get('/availability', async (req, res) => {
-    try {
-        const fs = require('fs').promises;
-        const path = require('path');
-        const filePath = path.join(__dirname, '../data/parsed_availability_map.json');
-        
-        // Check if file exists
-        try {
-            await fs.access(filePath);
-        } catch (error) {
-    console.log('⚠️ Availability cache file not found, trying database...');
-    try {
-        const result = await pool.query(
-            'SELECT availability_text, parsed_data FROM availability_cache'
-        );
-        const cacheMap = {};
-        for (const row of result.rows) {
-            cacheMap[row.availability_text] = row.parsed_data;
-        }
-        console.log(`📦 Served ${Object.keys(cacheMap).length} entries from database`);
-        return res.json(cacheMap);
-    } catch (dbError) {
-        console.error('❌ Database fallback also failed:', dbError.message);
-        return res.json({});
-    }
-}
-
-        const data = await fs.readFile(filePath, 'utf8');
-        const parsedMap = JSON.parse(data);
-        
-        // ✅ Get last sync time from database instead of file modification time
-        let lastSyncTime;
+    router.get('/availability', async (req, res) => {
         try {
             const result = await pool.query(
-                'SELECT synced_at as last_sync FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
+                'SELECT availability_text, parsed_data FROM availability_cache'
             );
-            lastSyncTime = result.rows[0]?.last_sync;
-        } catch (dbError) {
-            console.warn('⚠️ Could not get last sync time from database:', dbError.message);
-            // Fallback to file modification time
-            const stats = await fs.stat(filePath);
-            lastSyncTime = stats.mtime;
+            const cacheMap = {};
+            for (const row of result.rows) {
+                cacheMap[row.availability_text] = row.parsed_data;
+            }
+
+            let lastSyncTime;
+            try {
+                const syncResult = await pool.query(
+                    'SELECT synced_at FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
+                );
+                lastSyncTime = syncResult.rows[0]?.synced_at;
+            } catch (_) { }
+
+            res.set('X-Availability-Count', Object.keys(cacheMap).length.toString());
+            res.set('X-Last-Updated', lastSyncTime ? new Date(lastSyncTime).toISOString() : new Date().toISOString());
+            res.set('Cache-Control', 'public, max-age=86400');
+            console.log(`📤 Served availability map: ${Object.keys(cacheMap).length} entries`);
+            return res.json(cacheMap);
+        } catch (error) {
+            console.error("❌ Error fetching availability map:", error);
+            res.status(500).json({ error: "Failed to fetch availability map." });
         }
-        
-        res.set('X-Availability-Count', Object.keys(parsedMap).length.toString());
-        res.set('X-Last-Updated', lastSyncTime ? new Date(lastSyncTime).toISOString() : new Date().toISOString());
-        res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-        
-        console.log(`📤 Served availability map: ${Object.keys(parsedMap).length} entries`);
-        return res.json(parsedMap);
-        
-    } catch (error) {
-        console.error("❌ Error fetching availability map:", error);
-        res.status(500).json({ 
-            error: "Failed to fetch availability map.",
-            ...(process.env.NODE_ENV === 'development' && { details: error.message })
-        });
-    }
-});
+    });
+
 
     // ✅ Get AEDs near a location (within radius in kilometers)
     router.get('/near/:lat/:lng/:radius', async (req, res) => {

@@ -71,28 +71,35 @@ class AvailabilityParser {
 }
 
 
-async saveToDatabase(cache) {
-    if (!this.pool) return;
-    
-    try {
-        const entries = Object.entries(cache);
-        let saved = 0;
+    async saveToDatabase(cache) {
+        if (!this.pool) return;
+        try {
+            const entries = Object.entries(cache);
+            if (entries.length === 0) return;
 
-        for (const [text, data] of entries) {
-            await this.pool.query(
-                `INSERT INTO availability_cache (availability_text, parsed_data)
-                 VALUES ($1, $2)
-                 ON CONFLICT (availability_text) 
-                 DO UPDATE SET parsed_data = $2, parsed_at = NOW()`,
-                [text, JSON.stringify(data)]
-            );
-            saved++;
+            // Batch upsert in chunks of 100
+            const chunkSize = 100;
+            let saved = 0;
+            for (let i = 0; i < entries.length; i += chunkSize) {
+                const chunk = entries.slice(i, i + chunkSize);
+                const values = chunk.map((_, idx) =>
+                    `($${idx * 2 + 1}, $${idx * 2 + 2})`).join(', ');
+                const params = chunk.flatMap(([text, data]) =>
+                    [text, JSON.stringify(data)]);
+                await this.pool.query(
+                    `INSERT INTO availability_cache (availability_text, parsed_data)
+                 VALUES ${values}
+                 ON CONFLICT (availability_text)
+                 DO UPDATE SET parsed_data = EXCLUDED.parsed_data, parsed_at = NOW()`,
+                    params
+                );
+                saved += chunk.length;
+            }
+            console.log(`💾 Saved ${saved} entries to database`);
+        } catch (error) {
+            console.error('❌ Error saving cache to database:', error.message);
         }
-        console.log(`💾 Saved ${saved} entries to database`);
-    } catch (error) {
-        console.error('❌ Error saving cache to database:', error.message);
     }
-}
 
     /**
      * Compare current strings with cached strings
@@ -151,8 +158,13 @@ async saveToDatabase(cache) {
         const stringSet = new Set(stringsToProcess);
         
         // Only include AEDs with availability strings that need processing
-        const filteredAEDs = aeds.filter(aed => 
-            aed.availability && stringSet.has(aed.availability.trim())
+        const decode = str => str
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>');
+
+        const filteredAEDs = aeds.filter(aed =>
+            aed.availability && stringSet.has(decode(aed.availability.trim()))
         );
 
         const data = filteredAEDs.map(aed => ({
@@ -161,7 +173,7 @@ async saveToDatabase(cache) {
             address: aed.address || '',
             latitude: aed.latitude,
             longitude: aed.longitude,
-            availability: aed.availability || '',
+            availability: decode((aed.availability || '').trim()),
             aed_webpage: aed.aed_webpage || ''
         }));
         

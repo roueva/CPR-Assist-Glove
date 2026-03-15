@@ -315,6 +315,9 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     _routingCoordinator.isUsingCachedLocation =
         _locationController.isUsingCachedLocation;
 
+    _routingCoordinator.isLocationTooOld =
+        _locationController.isLocationTooOld();
+
     if (wasLocationNull) {
       _locationController.cacheUserRegion(location);
 
@@ -362,6 +365,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     );
 
     ref.read(mapStateProvider.notifier).setAEDs(freshSorted);
+    _addMarkersToMap(freshSorted);
 
     await Future.delayed(const Duration(milliseconds: 100));
     if (!mounted) return;
@@ -528,6 +532,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     if (topChanged) {
       ref.read(mapStateProvider.notifier).updateAEDs(newSorted);
+      _addMarkersToMap(newSorted);
 
       final top10Changed = newSorted.length >= 10 &&
           currentState.aedList.length >= 10 &&
@@ -688,7 +693,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         freshLocation,
         updatedState.navigation.transportMode,
       );
+
       if (freshSorted.length >= 2) {
+        ref.read(mapStateProvider.notifier).updateAEDs(freshSorted);
+        _addMarkersToMap(freshSorted);
         await _zoomToUserAndAEDsIfReady(
           force: true,
           knownLocation: freshLocation,
@@ -716,6 +724,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         updatedState.navigation.transportMode,
       );
       if (freshSorted.length >= 2) {
+        ref.read(mapStateProvider.notifier).updateAEDs(freshSorted);
+        _addMarkersToMap(freshSorted);
         await _zoomToUserAndAEDsIfReady(force: true);
       }
       return;
@@ -734,7 +744,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   void _onArrived() {
     _navigationController?.cancelNavigation();
     ref.read(mapStateProvider.notifier).cancelNavigation();
-    _locationController.startGPSTracking(isNavigating: false);
+    unawaited(_locationController.startGPSTracking(isNavigating: false));
 
     UIHelper.showSnackbar(
       context,
@@ -760,33 +770,14 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     if (!mounted) return;
     UIHelper.clearSnackbars(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline,
-                color: AppColors.textOnDark, size: AppSpacing.iconMd),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                'Closer AED found (${LocationService.formatDistance(distance)})',
-                style: AppTypography.bodyMedium(color: AppColors.textOnDark),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.primary,
-        duration:        const Duration(seconds: 6),
-        behavior:        SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label:     'Switch',
-          textColor: AppColors.textOnDark,
-          onPressed: () => _routingCoordinator.switchToCloserAED(closerAED),
-        ),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusSm)),
-        margin: const EdgeInsets.all(AppSpacing.md),
-      ),
+    UIHelper.showSnackbarWithAction(
+      context,
+      message:         'Closer AED found (${LocationService.formatDistance(distance)})',
+      icon:            Icons.info_outline,
+      actionLabel:     'Switch',
+      onAction:        () => _routingCoordinator.switchToCloserAED(closerAED),
+      backgroundColor: AppColors.primary,
+      duration:        const Duration(seconds: 6),
     );
   }
 

@@ -54,13 +54,9 @@ class AccountPanelController extends ChangeNotifier {
 class AccountPanel extends ConsumerStatefulWidget {
   final AccountPanelController controller;
 
-  /// BLE data handler — raw bytes only, no decryption.
-  final dynamic bleDataHandler;
-
   const AccountPanel({
     super.key,
     required this.controller,
-    this.bleDataHandler,
   });
 
   @override
@@ -74,7 +70,6 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
   late Animation<double>   _fadeAnim;
 
   static const Duration _duration      = Duration(milliseconds: 280);
-  static const double   _panelFraction = 0.82; // % of screen width
 
   @override
   void initState() {
@@ -126,12 +121,9 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
     if (confirmed != true || !mounted) return;
 
     await ref.read(authStateProvider.notifier).logout();
-    if (!mounted) return;
-
-    await context.pushAndRemoveAll(
-      const LoginScreen(),
-    );
+    // Panel closes itself, AuthState update rebuilds the panel to show "Log In"
   }
+
 
   // ── Mode switch ────────────────────────────────────────────────────────────
   //
@@ -201,7 +193,7 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
               top:    0,
               bottom: 0,
               right:  0,
-              width:  context.screenWidth * _panelFraction,
+              width: context.screenWidth * AppConstants.accountPanelWidthFraction,
               child: FractionalTranslation(
                 translation: Offset(_slideAnim.value, 0),
                 child: _PanelContent(
@@ -209,7 +201,6 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
                   onModeSwitch:   _handleModeSwitch,
                   onLogout:       _handleLogout,
                   onPush:         _push,
-                  bleDataHandler: widget.bleDataHandler,
                 ),
               ),
             ),
@@ -229,14 +220,13 @@ class _PanelContent extends ConsumerWidget {
   final VoidCallback                  onModeSwitch;
   final VoidCallback                  onLogout;
   final Future<void> Function(Widget) onPush;
-  final dynamic                       bleDataHandler;
 
   const _PanelContent({
     required this.onClose,
     required this.onModeSwitch,
     required this.onLogout,
     required this.onPush,
-    this.bleDataHandler,
+
   });
 
   @override
@@ -248,20 +238,7 @@ class _PanelContent extends ConsumerWidget {
     final isTraining  = currentMode == AppMode.training;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.only(
-          topLeft:    Radius.circular(AppSpacing.cardRadiusLg),
-          bottomLeft: Radius.circular(AppSpacing.cardRadiusLg),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color:      AppColors.shadowStrong,
-            blurRadius: AppSpacing.xl,
-            offset:     Offset(-AppSpacing.xs, 0),
-          ),
-        ],
-      ),
+        decoration: AppDecorations.sidePanel(),
       child: SafeArea(
         child: Column(
           children: [
@@ -481,7 +458,7 @@ class _ProfileHeader extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.chipPaddingH,
-                    vertical:   AppSpacing.xxs + AppSpacing.xxs,
+                    vertical: AppSpacing.xs,
                   ),
                   decoration: AppDecorations.chip(color: modeColor, bg: modeBg),
                   child: Row(
@@ -494,7 +471,7 @@ class _ProfileHeader extends StatelessWidget {
                         size:  AppSpacing.iconXs,
                         color: modeColor,
                       ),
-                      const SizedBox(width: AppSpacing.xxs + AppSpacing.xxs),
+                      const SizedBox(width: AppSpacing.xs),
                       Text(
                         isTraining ? 'Training Mode' : 'Emergency Mode',
                         style: AppTypography.badge(size: 10, color: modeColor),
@@ -675,7 +652,7 @@ class _PanelItem extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm,
-                    vertical:   AppSpacing.xxs + AppSpacing.xxs,
+                    vertical: AppSpacing.xs,
                   ),
                   decoration: AppDecorations.chip(
                     color: AppColors.warning,

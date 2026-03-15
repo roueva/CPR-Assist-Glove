@@ -235,7 +235,7 @@ class LocationService {
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy:       LocationAccuracy.low,
-        distanceFilter: 0,
+        distanceFilter: 5,
       ),
     ).listen((position) {
       onLocationUpdate(LatLng(position.latitude, position.longitude));

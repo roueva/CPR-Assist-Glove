@@ -130,7 +130,7 @@ class _BottomNav extends StatelessWidget {
                           BlendMode.srcIn,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xxs + AppSpacing.xxs), // 4
+                      const SizedBox(height: AppSpacing.xs),
                       Text(
                         item.label,
                         style: selected

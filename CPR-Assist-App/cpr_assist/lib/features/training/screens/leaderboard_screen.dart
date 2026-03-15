@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
 import '../../../providers/session_provider.dart';
-import '../widgets/session_card.dart';
-
+import '../widgets/session_history.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // LeaderboardScreen
 //

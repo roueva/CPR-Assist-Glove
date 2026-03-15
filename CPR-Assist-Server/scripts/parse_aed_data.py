@@ -4,6 +4,8 @@ import time
 import requests
 import random
 import psycopg2
+import json as _json
+
 
 # --- Configuration ---
 API_KEY = os.environ.get('GROQ_API_KEY', '')
@@ -109,7 +111,10 @@ def load_from_db():
         cur.close()
         conn.close()
         if rows:
-            cache = {row[0]: row[1] for row in rows}
+            cache = {
+                row[0]: row[1] if isinstance(row[1], dict) else _json.loads(row[1])
+                for row in rows
+            }
             print(f"📦 Loaded {len(cache)} entries from database")
             return cache
     except Exception as e:
@@ -255,7 +260,6 @@ def main():
         print("  ...Waiting 3s...")
         time.sleep(3.0)
 
-    save_all_to_db(cache)
     print(f"\n--- Process Complete ---")
 
 if __name__ == "__main__":
