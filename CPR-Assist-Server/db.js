@@ -99,8 +99,8 @@ async function ensureSessionTables() {
 
         // ── New columns on cpr_sessions ──────────────────────────────────────
         const newColumns = [
+            // original columns (keep all of these)
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS mode VARCHAR(25) DEFAULT 'emergency'`,
-            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS average_force FLOAT DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS peak_depth FLOAT DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS average_effective_depth FLOAT DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS over_force_count INT DEFAULT 0`,
@@ -119,6 +119,32 @@ async function ensureSessionTables() {
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS patient_temperature FLOAT`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS synced_from_local BOOLEAN DEFAULT false`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS note VARCHAR(500)`,
+            // v3.0 additions
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS scenario VARCHAR(40) DEFAULT 'standard_adult'`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS depth_sd FLOAT DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_intervals INT DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_swap_count INT DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS ambient_temp_start FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS ambient_temp_end FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_hr_last_pause FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_spo2_last_pause FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS correct_ventilations INT DEFAULT 0`,
+            // fix user_heart_rate from int to float (safe cast, no data loss)
+            `ALTER TABLE cpr_sessions ALTER COLUMN user_heart_rate TYPE FLOAT USING COALESCE(user_heart_rate::float, NULL)`,
+            // drop average_force — internal metric, never displayed or stored at session level
+            `ALTER TABLE cpr_sessions DROP COLUMN IF EXISTS average_force`,
+            // sub-table additions
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS wrist_flexion_angle FLOAT DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS instantaneous_rate FLOAT DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS compression_axis_dev FLOAT DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS peak_force FLOAT DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS downstroke_time_ms INT DEFAULT 0`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS classification INT DEFAULT 0`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS detector_a_count INT DEFAULT 0`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS detector_b_count INT DEFAULT 0`,
+            `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS rmssd FLOAT DEFAULT 0`,
+            `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS rescuer_pi INT DEFAULT 0`,
+            `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS fatigue_score INT DEFAULT 0`,
         ];
 
         for (const sql of newColumns) {

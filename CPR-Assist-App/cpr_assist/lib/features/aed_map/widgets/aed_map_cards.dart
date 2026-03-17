@@ -82,8 +82,8 @@ class AEDCard extends StatelessWidget {
       final cached = CacheService.getDistance('aed_${aed.id}_$selectedMode');
       if (cached != null) {
         displayDistance = LocationService.formatDistance(cached);
-        displayTime = LocationService.calculateOfflineETA(cached, selectedMode);
-        isRealData = true;
+        displayTime     = LocationService.calculateOfflineETA(cached, selectedMode);
+        isRealData      = false;
       }
     }
 

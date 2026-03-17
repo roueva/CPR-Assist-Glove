@@ -11,18 +11,23 @@ module.exports = function (pool) {
 
     router.get('/global', authenticate, async (req, res) => {
         try {
+            const scenario = req.query.scenario || 'standard_adult';
             const result = await pool.query(
                 `SELECT
-           u.username,
-           COUNT(s.id)::int                           AS session_count,
-           ROUND(AVG(s.total_grade)::numeric, 1)       AS avg_grade,
-           ROUND(MAX(s.total_grade)::numeric, 1)        AS best_grade
-         FROM cpr_sessions s
-         JOIN users u ON u.id = s.user_id
-         GROUP BY u.id, u.username
-         HAVING COUNT(s.id) >= 3
-         ORDER BY avg_grade DESC
-         LIMIT 50`
+       u.username,
+       COUNT(s.id)::int                           AS session_count,
+       ROUND(AVG(s.total_grade)::numeric, 1)       AS avg_grade,
+       ROUND(MAX(s.total_grade)::numeric, 1)        AS best_grade
+     FROM cpr_sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.mode IN ('training', 'training_no_feedback')
+       AND s.scenario = $1
+       AND s.total_grade > 0
+     GROUP BY u.id, u.username
+     HAVING COUNT(s.id) >= 3
+     ORDER BY avg_grade DESC
+     LIMIT 50`,
+                [scenario]
             );
 
             // Inject rank and flag current user's row
@@ -47,18 +52,24 @@ module.exports = function (pool) {
             if (!myRank) {
                 const myStatsResult = await pool.query(
                     `SELECT
-             COUNT(s.id)::int                         AS session_count,
-             ROUND(AVG(s.total_grade)::numeric, 1)     AS avg_grade,
-             (
-               SELECT COUNT(DISTINCT u2.id) + 1
-               FROM cpr_sessions s2
-               JOIN users u2 ON u2.id = s2.user_id
-               GROUP BY u2.id
-               HAVING AVG(s2.total_grade) > AVG(s.total_grade)
-             ) AS rank
-           FROM cpr_sessions s
-           WHERE s.user_id = $1`,
-                    [userId]
+       COUNT(s.id)::int                         AS session_count,
+       ROUND(AVG(s.total_grade)::numeric, 1)     AS avg_grade,
+       (
+         SELECT COUNT(DISTINCT u2.id) + 1
+         FROM cpr_sessions s2
+         JOIN users u2 ON u2.id = s2.user_id
+         WHERE s2.mode IN ('training', 'training_no_feedback')
+           AND s2.scenario = $2
+           AND s2.total_grade > 0
+         GROUP BY u2.id
+         HAVING AVG(s2.total_grade) > AVG(s.total_grade)
+       ) AS rank
+     FROM cpr_sessions s
+     WHERE s.user_id = $1
+       AND s.mode IN ('training', 'training_no_feedback')
+       AND s.scenario = $2
+       AND s.total_grade > 0`,
+                    [userId, scenario]
                 );
 
                 const myRow = myStatsResult.rows[0];
@@ -86,28 +97,34 @@ module.exports = function (pool) {
     router.get('/global/rank', authenticate, async (req, res) => {
         const userId = req.user.id;
         try {
+            const scenario = req.query.scenario || 'standard_adult';
             const result = await pool.query(
                 `WITH user_avgs AS (
-           SELECT
-             user_id,
-             AVG(total_grade) AS avg_grade,
-             COUNT(*)         AS session_count
-           FROM cpr_sessions
-           GROUP BY user_id
-           HAVING COUNT(*) >= 3
-         ),
-         ranked AS (
-           SELECT
-             user_id,
-             avg_grade,
-             session_count,
-             RANK() OVER (ORDER BY avg_grade DESC) AS rank
-           FROM user_avgs
-         )
-         SELECT rank, avg_grade, session_count
-         FROM ranked
-         WHERE user_id = $1`,
-                [userId]
+       SELECT
+         user_id,
+         AVG(total_grade)                                          AS avg_grade,
+         COUNT(*)                                                  AS session_count,
+         SUM(CASE WHEN mode IN ('training','training_no_feedback') THEN 1 ELSE 0 END) AS training_count
+       FROM cpr_sessions
+       WHERE mode IN ('training', 'training_no_feedback')
+         AND scenario = $2
+         AND total_grade > 0
+       GROUP BY user_id
+       HAVING COUNT(*) >= 3
+     ),
+     ranked AS (
+       SELECT
+         user_id,
+         avg_grade,
+         session_count,
+         training_count,
+         RANK() OVER (ORDER BY avg_grade DESC) AS rank
+       FROM user_avgs
+     )
+     SELECT rank, avg_grade, session_count, training_count
+     FROM ranked
+     WHERE user_id = $1`,
+                [userId, scenario]
             );
 
             if (result.rows.length === 0) {
@@ -122,6 +139,7 @@ module.exports = function (pool) {
                         rank: null,
                         avg_grade: null,
                         session_count: countResult.rows[0].n,
+                        training_count: countResult.rows[0].n,
                         qualified: false,
                         sessions_until_rank: Math.max(0, 3 - countResult.rows[0].n),
                     },
@@ -134,7 +152,8 @@ module.exports = function (pool) {
                 data: {
                     rank: parseInt(row.rank),
                     avg_grade: parseFloat(parseFloat(row.avg_grade).toFixed(1)),
-                    session_count: row.session_count,
+                    session_count: parseInt(row.session_count),
+                    training_count: parseInt(row.training_count),
                     qualified: true,
                 },
             });

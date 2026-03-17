@@ -161,14 +161,21 @@ function initializeAuthRoutes(pool) {
         try {
             const result = await pool.query(
                 `SELECT
-         COUNT(*)::int                             AS session_count,
-         ROUND(AVG(total_grade)::numeric, 1)       AS average_grade,
-         ROUND(MAX(total_grade)::numeric, 1)        AS best_grade,
-         SUM(compression_count)::int               AS total_compressions,
-         ROUND(AVG(average_depth)::numeric, 2)     AS avg_depth,
-         ROUND(AVG(average_frequency)::numeric, 1) AS avg_frequency
-       FROM cpr_sessions
-       WHERE user_id = $1`,
+   COUNT(*)::int                                                        AS session_count,
+   SUM(CASE WHEN mode IN ('training','training_no_feedback') THEN 1 ELSE 0 END)::int
+                                                                        AS training_count,
+   SUM(CASE WHEN mode = 'emergency' THEN 1 ELSE 0 END)::int            AS emergency_count,
+   ROUND(
+     AVG(CASE WHEN mode IN ('training','training_no_feedback') AND total_grade > 0
+              THEN total_grade END)::numeric, 1)                        AS average_grade,
+   ROUND(
+     MAX(CASE WHEN mode IN ('training','training_no_feedback') AND total_grade > 0
+              THEN total_grade END)::numeric, 1)                        AS best_grade,
+   SUM(compression_count)::int                                          AS total_compressions,
+   ROUND(AVG(average_depth)::numeric, 2)                                AS avg_depth,
+   ROUND(AVG(average_frequency)::numeric, 1)                            AS avg_frequency
+ FROM cpr_sessions
+ WHERE user_id = $1`,
                 [userId]
             );
 
@@ -177,6 +184,8 @@ function initializeAuthRoutes(pool) {
                 success: true,
                 data: {
                     session_count: row.session_count ?? 0,
+                    training_count: row.training_count ?? 0,
+                    emergency_count: row.emergency_count ?? 0,
                     average_grade: parseFloat(row.average_grade) || 0,
                     best_grade: parseFloat(row.best_grade) || 0,
                     total_compressions: row.total_compressions ?? 0,

@@ -219,7 +219,8 @@ class AEDLocationController {
       if (isServiceEnabled) {
         final location = await _locationService.getCurrentLatLng();
         if (location != null) {
-          await _callbacks.onLocationUpdate(location);
+          // Route through processLocationUpdate so _hasRealGPSFix is set correctly
+          await processLocationUpdate(location, fromCache: false);
         }
         await startGPSTracking(isNavigating: false);
       } else {

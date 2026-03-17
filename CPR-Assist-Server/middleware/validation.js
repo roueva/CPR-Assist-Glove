@@ -75,32 +75,9 @@ const authenticate = (req, res, next) => {
     }
 };
 
-// Input validation for session saving
-const validateSessionInput = [
-    body('duration_seconds')
-        .isInt({ min: 0 })
-        .withMessage('Duration must be a non-negative integer'),
-    body('total_compressions')
-        .isInt({ min: 0 })
-        .withMessage('Total compressions must be a non-negative integer'),
-    body('avg_depth_mm')
-        .isFloat({ min: 0 })
-        .withMessage('Average depth must be a non-negative number'),
-    body('avg_rate_cpm')
-        .isFloat({ min: 0 })
-        .withMessage('Average rate must be a non-negative number'),
-    body('correct_depth_percent')
-        .isFloat({ min: 0, max: 100 })
-        .withMessage('Correct depth percent must be between 0 and 100'),
-    body('correct_rate_percent')
-        .isFloat({ min: 0, max: 100 })
-        .withMessage('Correct rate percent must be between 0 and 100'),
-];
-
 module.exports = {
     validateRegistrationInput,
     validateLoginInput,
-    validateSessionInput,
     handleValidationErrors,
     authenticate,
 };

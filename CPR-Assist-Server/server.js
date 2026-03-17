@@ -101,7 +101,7 @@ app.get('/', (req, res) => {
         service: 'CPR Assist Backend',
         environment: process.env.NODE_ENV || 'development',
         database: process.env.DATABASE_URL ? 'Connected' : 'Not Set',
-        version: '1.0.0',
+        version: '3.0.0',
         uptime: `${Math.floor(uptime / 60)} minutes, ${Math.floor(uptime % 60)} seconds`,
         timestamp: new Date().toISOString()
     };

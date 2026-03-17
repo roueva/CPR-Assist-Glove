@@ -366,8 +366,9 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     ref.read(mapStateProvider.notifier).setAEDs(freshSorted);
     _addMarkersToMap(freshSorted);
+    _routingCoordinator.scheduleRoutePreloading();
 
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
 
     _hasPerformedInitialZoom = false;
@@ -406,7 +407,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     if (targets.isEmpty) {
       await _mapViewController!.zoomToAED(userLocation);
     } else {
-      await _mapViewController!.zoomToUserAndClosestAEDs(userLocation, targets);
+      await _mapViewController!.zoomToUserAndClosestAEDs(
+        userLocation,
+        targets,
+        force: force,
+      );
     }
   }
 

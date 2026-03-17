@@ -36,10 +36,11 @@ class MapViewController {
       LatLng userLocation,
       List<LatLng> aedLocations, {
         double padding = AEDMapUIConstants.mapOverviewPadding,
+        bool force = false,
       }) async {
     debugPrint('🗺️ zoomToUserAndClosestAEDs called, _isAnimating=$_isAnimating');
 
-    if (_isAnimating) {
+    if (_isAnimating && !force) {
       debugPrint('⚠️ zoomToUserAndClosestAEDs BLOCKED by _isAnimating');
       return;
     }

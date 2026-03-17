@@ -88,8 +88,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
 
               // Recenter button
               AEDRecenterButton(
-                isSearchingGPS: widget.config.isUsingCachedLocation &&
-                    widget.userLocationAvailable,
+                isSearchingGPS: widget.config.isManuallySearchingGPS,
                 onPressed: widget.onRecenterPressed,
                 top: AppSpacing.sm,
                 right: AppSpacing.sm,
@@ -131,7 +130,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
     if (hasUserLocation && sortedAEDs.isNotEmpty) {
       nearestAED = sortedAEDs.first;
       others = sortedAEDs.sublist(1).map((aed) {
-        final d = CacheService.getDistance('aed_${aed.id}')?.round() ??
+        final d = CacheService.getDistance('aed_${aed.id}_${widget.config.selectedMode}')?.round() ??
             LocationService.distanceBetween(
                 widget.config.userLocation!, aed.location)
                 .round();

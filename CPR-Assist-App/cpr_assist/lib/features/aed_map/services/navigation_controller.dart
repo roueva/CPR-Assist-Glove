@@ -294,7 +294,7 @@ class NavigationController {
     // at walking speeds and freezes when the user stops.
     final cameraHeading = _currentHeading ?? 0.0;
 
-    _mapController!.moveCamera(
+    _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target:  location,
@@ -303,6 +303,7 @@ class NavigationController {
           bearing: cameraHeading,
         ),
       ),
+      duration: const Duration(milliseconds: 800),
     );
   }
 
@@ -405,7 +406,7 @@ class NavigationController {
 
     _lastProgrammaticMoveTime = DateTime.now();
 
-    _mapController!.moveCamera(
+    _mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target:  _currentUserLocation!,
@@ -414,6 +415,7 @@ class NavigationController {
           bearing: heading,
         ),
       ),
+      duration: const Duration(milliseconds: 150),
     );
   }
 
