@@ -27,20 +27,16 @@ final cacheAvailabilityProvider = Provider<bool>((ref) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 final networkServiceProvider = Provider<NetworkService>((ref) {
-  return NetworkService(); // singleton
+  return NetworkService();
 });
 
 /// BLE connection — owns the glove link for the app lifetime.
-/// Battery & charging notifiers live on [BLEConnection] directly;
-/// no separate DecryptedData class is needed.
 final bleConnectionProvider = Provider<BLEConnection>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-
   final connection = BLEConnection(
     prefs: prefs,
     onStatusUpdate: (status) => debugPrint('BLE: $status'),
   );
-
   ref.onDispose(connection.dispose);
   return connection;
 });
@@ -52,10 +48,65 @@ final aedServiceProvider = Provider<AEDService>((ref) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP MODE
+//
+// Three glove modes, matching the BLE spec byte values exactly:
+//   emergency           (0) — no login required, no grade, full feedback
+//   training            (1) — login required, graded, full feedback
+//   trainingNoFeedback  (2) — login required, graded, all feedback suppressed
+//
+// Mode can be changed by:
+//   - App UI (mode toggle / settings)
+//   - Glove button hold 1s → MODE_CHANGE (0x06) event received by BLEConnection
+//
+// When the glove fires MODE_CHANGE, live_cpr_screen.dart calls
+// ref.read(appModeProvider.notifier).setModeFromGlove(byte) to sync app state.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Whether the app is in Emergency (no login required) or Training (login required) mode.
-enum AppMode { emergency, training }
+enum AppMode {
+  emergency,
+  training,
+  trainingNoFeedback;
+
+  /// Convert to the BLE spec integer (byte value sent in SESSION_START / MODE_CHANGE).
+  int get bleValue {
+    switch (this) {
+      case AppMode.emergency:          return 0;
+      case AppMode.training:           return 1;
+      case AppMode.trainingNoFeedback: return 2;
+    }
+  }
+
+  /// Convert to the string stored in SessionDetail.mode and sent to backend.
+  String get sessionModeString {
+    switch (this) {
+      case AppMode.emergency:          return 'emergency';
+      case AppMode.training:           return 'training';
+      case AppMode.trainingNoFeedback: return 'training_no_feedback';
+    }
+  }
+
+  /// Human-readable label for UI display.
+  String get label {
+    switch (this) {
+      case AppMode.emergency:          return 'Emergency';
+      case AppMode.training:           return 'Training';
+      case AppMode.trainingNoFeedback: return 'No-Feedback';
+    }
+  }
+
+  bool get isEmergency  => this == AppMode.emergency;
+  bool get isTraining   => this == AppMode.training || this == AppMode.trainingNoFeedback;
+  bool get isNoFeedback => this == AppMode.trainingNoFeedback;
+
+  /// Construct from glove BLE byte. Clamps unknown values to emergency.
+  static AppMode fromBleValue(int value) {
+    switch (value) {
+      case 1:  return AppMode.training;
+      case 2:  return AppMode.trainingNoFeedback;
+      default: return AppMode.emergency;
+    }
+  }
+}
 
 final appModeProvider = StateNotifierProvider<AppModeNotifier, AppMode>((ref) {
   return AppModeNotifier();
@@ -66,12 +117,106 @@ class AppModeNotifier extends StateNotifier<AppMode> {
 
   void setMode(AppMode mode) => state = mode;
 
-  void toggleMode() =>
-      state = state == AppMode.emergency ? AppMode.training : AppMode.emergency;
+  /// Called when glove fires MODE_CHANGE (0x06).
+  /// Syncs app state to what the hardware is actually running.
+  void setModeFromGlove(int bleValue) => state = AppMode.fromBleValue(bleValue);
+
+  /// Cycle forward through all three modes (for app-side mode toggle button).
+  void cycleMode() {
+    switch (state) {
+      case AppMode.emergency:          state = AppMode.training;           break;
+      case AppMode.training:           state = AppMode.trainingNoFeedback; break;
+      case AppMode.trainingNoFeedback: state = AppMode.emergency;          break;
+    }
+  }
 }
 
-/// True while a CPR session is active — disables mode switching.
+/// True while a CPR session is active — disables mode and scenario switching.
 final cprSessionActiveProvider = StateProvider<bool>((ref) => false);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CPR SCENARIO
+//
+// Scenario is an app-side concept that maps to numeric depth/rate targets
+// sent to the glove via 0xF8 SET_TARGET_DEPTH and 0xF9 SET_TARGET_RATE.
+// The glove itself only knows the numeric thresholds, not the scenario label.
+//
+// Scenario can be changed by:
+//   - App UI: Adult/Pediatric toggle on the live CPR screen (Emergency mode)
+//             or scenario selector before a Training session starts
+//   - Glove button long press (2s) → SCENARIO_CHANGE (0x0C) event
+//
+// When the glove fires SCENARIO_CHANGE, live_cpr_screen.dart calls
+// ref.read(scenarioProvider.notifier).setFromGlove(byte).
+//
+// Scenario switching is allowed during idle (no active session).
+// During an active session it is locked to protect session record integrity.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CprScenario {
+  standardAdult,
+  pediatric;
+
+  /// Byte value sent in SCENARIO_CHANGE (0x0C) and 0xFD SET_SCENARIO.
+  int get bleValue => this == CprScenario.pediatric ? 1 : 0;
+
+  /// String stored in SessionDetail.scenario and sent to backend.
+  String get sessionScenarioString {
+    switch (this) {
+      case CprScenario.standardAdult: return 'standard_adult';
+      case CprScenario.pediatric:     return 'pediatric';
+    }
+  }
+
+  /// Human-readable label for UI.
+  String get label => this == CprScenario.pediatric ? 'Pediatric' : 'Adult';
+
+  /// Short description shown on the live CPR screen toggle.
+  String get description {
+    switch (this) {
+      case CprScenario.standardAdult: return 'Adult — 5–6 cm';
+      case CprScenario.pediatric:     return 'Pediatric — 4–5 cm';
+    }
+  }
+
+  /// Depth target range in mm for this scenario.
+  int get targetDepthMinMm => this == CprScenario.pediatric ? 40 : 50;
+  int get targetDepthMaxMm => this == CprScenario.pediatric ? 50 : 60;
+
+  /// Depth target range in cm (for display and grading).
+  double get targetDepthMinCm => targetDepthMinMm / 10.0;
+  double get targetDepthMaxCm => targetDepthMaxMm / 10.0;
+
+  /// Rate targets are the same for both scenarios (100–120 BPM per AHA/ERC).
+  int get targetRateMin => 100;
+  int get targetRateMax => 120;
+
+  /// Construct from glove BLE byte. Unknown values default to standardAdult.
+  static CprScenario fromBleValue(int value) =>
+      value == 1 ? CprScenario.pediatric : CprScenario.standardAdult;
+
+  /// Construct from the scenario string stored in SessionDetail / backend.
+  static CprScenario fromString(String value) =>
+      value == 'pediatric' ? CprScenario.pediatric : CprScenario.standardAdult;
+}
+
+final scenarioProvider = StateNotifierProvider<ScenarioNotifier, CprScenario>((ref) {
+  return ScenarioNotifier();
+});
+
+class ScenarioNotifier extends StateNotifier<CprScenario> {
+  ScenarioNotifier() : super(CprScenario.standardAdult);
+
+  void setScenario(CprScenario s) => state = s;
+
+  /// Toggle between adult and pediatric.
+  void toggle() => state = state == CprScenario.standardAdult
+      ? CprScenario.pediatric
+      : CprScenario.standardAdult;
+
+  /// Called when glove fires SCENARIO_CHANGE (0x0C).
+  void setFromGlove(int bleValue) => state = CprScenario.fromBleValue(bleValue);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTHENTICATION
@@ -85,7 +230,7 @@ StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 });
 
 class AuthState {
-  final bool isLoggedIn;
+  final bool    isLoggedIn;
   final int?    userId;
   final String? username;
   final String? email;
@@ -129,7 +274,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isLoggedIn: authenticated,
       userId:     await _network.getUserId(),
       username:   _prefs.getString('username'),
-      email: _prefs.getString('email'),
+      email:      _prefs.getString('email'),
       isLoading:  false,
     );
   }
@@ -226,15 +371,15 @@ class AEDMapState {
 }
 
 class NavigationState {
-  final bool     isActive;
-  final bool     hasStarted;
-  final LatLng?  destination;
+  final bool      isActive;
+  final bool      hasStarted;
+  final LatLng?   destination;
   final Polyline? route;
-  final String   estimatedTime;
-  final double   distance;
-  final String   transportMode;
-  final double?  originalDistance;
-  final int?     originalDurationMinutes;
+  final String    estimatedTime;
+  final double    distance;
+  final String    transportMode;
+  final double?   originalDistance;
+  final int?      originalDurationMinutes;
 
   const NavigationState({
     this.isActive               = false,
@@ -275,8 +420,8 @@ class NavigationState {
 class MapStateNotifier extends StateNotifier<AEDMapState> {
   MapStateNotifier() : super(const AEDMapState());
 
-  bool get isInNavigationMode =>  state.navigation.hasStarted;
-  bool get isInPreviewMode    =>  state.navigation.isActive && !state.navigation.hasStarted;
+  bool get isInNavigationMode => state.navigation.hasStarted;
+  bool get isInPreviewMode    => state.navigation.isActive && !state.navigation.hasStarted;
 
   void updateUserLocation(LatLng location) =>
       state = state.copyWith(userLocation: location);
@@ -284,9 +429,9 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
   void setAEDs(List<AED> aeds) =>
       state = state.copyWith(aedList: aeds, isLoading: false, isRefreshing: false);
 
-  void setLoading(bool v)     => state = state.copyWith(isLoading: v);
-  void setRefreshing(bool v)  => state = state.copyWith(isRefreshing: v);
-  void setOffline(bool v)     => state = state.copyWith(isOffline: v);
+  void setLoading(bool v)    => state = state.copyWith(isLoading: v);
+  void setRefreshing(bool v) => state = state.copyWith(isRefreshing: v);
+  void setOffline(bool v)    => state = state.copyWith(isOffline: v);
   void updateAEDs(List<AED> aeds) => state = state.copyWith(aedList: aeds);
 
   void showNavigationPreview(LatLng destination) => state = state.copyWith(
@@ -314,7 +459,7 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
   }) =>
       state = state.copyWith(
         navigation: state.navigation.copyWith(
-          originalDistance: originalDistance,
+          originalDistance:       originalDistance,
           originalDurationMinutes: originalDurationMinutes,
         ),
       );

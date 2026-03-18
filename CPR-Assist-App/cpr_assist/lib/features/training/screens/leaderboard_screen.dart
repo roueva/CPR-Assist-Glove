@@ -552,7 +552,7 @@ class _PersonalTab extends ConsumerWidget {
                     style: AppTypography.subheading(
                         color: AppColors.textDisabled)),
                 const SizedBox(height: AppSpacing.xs + AppSpacing.xxs),
-                Text('Complete a training session to see it here',
+                Text('Complete a CPR session to see it here',
                     style: AppTypography.body(
                         color: AppColors.textDisabled)),
               ],
@@ -561,7 +561,8 @@ class _PersonalTab extends ConsumerWidget {
         }
 
         // Best session = highest grade
-        final best = sessions.reduce(
+        final trainingSessions = sessions.where((s) => s.isTraining).toList();
+        final best = trainingSessions.isEmpty ? null : trainingSessions.reduce(
                 (a, b) => a.totalGrade >= b.totalGrade ? a : b);
 
         return ListView.builder(
@@ -570,6 +571,7 @@ class _PersonalTab extends ConsumerWidget {
           itemCount: sessions.length + 1,
           itemBuilder: (context, i) {
             if (i == 0) {
+              if (best == null) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: PersonalBestCard(session: best),

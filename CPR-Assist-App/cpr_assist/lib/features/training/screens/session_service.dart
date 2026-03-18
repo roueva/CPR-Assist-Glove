@@ -13,6 +13,14 @@ import '../services/session_detail.dart';
 // Used by: grade_screen.dart, past_sessions_screen.dart, leaderboard_screen.dart
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SessionService  —  grade calculation + save/fetch + detail assembly
+//
+// REPLACE the entire SessionService class in session_service.dart
+// (from line 16 `class SessionService {` through line 200 closing `}`)
+// with this block. Leave SessionSummary, UserStats untouched below it.
+// ─────────────────────────────────────────────────────────────────────────────
+
 class SessionService {
   final NetworkService _network;
 
@@ -93,23 +101,40 @@ class SessionService {
   }
 
   // ── Grade calculation ──────────────────────────────────────────────────────
+  //
+  // Training mode only — Emergency sessions always return 0.0.
+  // Formula weights differ per scenario per BLE Spec v3.0 Section 7.
+  //
+  // Standard Adult weights:
+  //   Depth consistency       20%
+  //   Frequency consistency   18%
+  //   Correct recoil          15%
+  //   Depth + rate combo      12%
+  //   Hands-on ratio (CCF)    10%
+  //   Ventilation compliance  10%
+  //   Posture consistency      5%
+  //   Force safety             5%
+  //   Time to first comp       5%
+  //   Fatigue penalty         −5 pts  (if fatigueOnsetIndex > 0)
+  //
+  // Pediatric adjustments:
+  //   Depth consistency       25%  (+5 — harder to maintain narrower target)
+  //   Force safety            10%  (+5 — smaller chest, higher injury risk)
+  //   Time to first comp      10%  (+5 — pediatric urgency)
+  //   Frequency consistency   13%  (−5)
+  //   Hands-on ratio          5%   (−5)
+  //   All other weights unchanged
+  //
+  // Timed Endurance adjustments:
+  //   Depth consistency       25%
+  //   Fatigue penalty        −10 pts
+  //   Time to first comp removed (not relevant)
+  //   Remaining weights redistributed proportionally
 
-  /// Calculates a 0–100 grade per BLE Spec v2.0 Section 9.
-  /// Training mode only. Pulse check compliance excluded (manikins have no pulse).
-  ///
-  /// Weights:
-  ///   Depth consistency       20%
-  ///   Frequency consistency   18%
-  ///   Correct recoil          15%
-  ///   Depth + rate combo      12%
-  ///   Hands-on ratio (CCF)    10%
-  ///   Ventilation compliance  10%
-  ///   Posture consistency      5%
-  ///   Force safety             5%
-  ///   Time to first comp       5%
-  ///   Fatigue penalty         −5 pts (if fatigueOnsetIndex > 0)
   double calculateGradeFromDetail(SessionDetail s) {
-    if (s.compressionCount == 0) return 0;
+    // Emergency sessions never have a grade
+    if (s.isEmergency) return 0.0;
+    if (s.compressionCount == 0) return 0.0;
 
     final n = s.compressionCount.toDouble();
 
@@ -118,7 +143,7 @@ class SessionService {
     final recoilScore      = s.correctRecoil    / n * 100;
     final comboScore       = s.depthRateCombo   / n * 100;
     final handsOnScore     = s.handsOnRatio * 100;
-    // No ventilations in session = rescuer is not penalised
+    // No ventilation windows in session = not penalised
     final ventScore        = s.ventilationCount > 0
         ? s.ventilationCompliance
         : 100.0;
@@ -129,25 +154,60 @@ class SessionService {
     else if (s.timeToFirstCompression < 10) { timeScore = 80;  }
     else                                     { timeScore = 50;  }
 
-    double grade =
-        (depthScore       * 0.20) +
-            (freqScore        * 0.18) +
-            (recoilScore      * 0.15) +
-            (comboScore       * 0.12) +
-            (handsOnScore     * 0.10) +
-            (ventScore        * 0.10) +
-            (postureScore     * 0.05) +
-            (forceSafetyScore * 0.05) +
-            (timeScore        * 0.05);
+    double grade;
 
-    if (s.fatigueOnsetIndex > 0) grade -= 5;
+    switch (s.scenario) {
+      case 'pediatric':
+      // Depth and safety weighted higher; time to first comp increased;
+      // freq and CCF slightly reduced to make room.
+        grade =
+            (depthScore       * 0.25) +
+                (freqScore        * 0.13) +
+                (recoilScore      * 0.10) +
+                (comboScore       * 0.12) +
+                (handsOnScore     * 0.05) +
+                (ventScore        * 0.10) +
+                (postureScore     * 0.05) +
+                (forceSafetyScore * 0.10) +
+                (timeScore        * 0.10) -
+                (s.fatigueOnsetIndex > 0 ? 5.0 : 0.0);
+
+      case 'timed_endurance':
+      // Fatigue management is the primary goal — no time-to-first penalty,
+      // heavier fatigue penalty, higher depth weight.
+        grade =
+            (depthScore       * 0.25) +
+                (freqScore        * 0.18) +
+                (recoilScore      * 0.15) +
+                (comboScore       * 0.12) +
+                (handsOnScore     * 0.10) +
+                (ventScore        * 0.10) +
+                (postureScore     * 0.05) +
+                (forceSafetyScore * 0.05) -
+                (s.fatigueOnsetIndex > 0 ? 10.0 : 0.0);
+
+      default:
+      // standard_adult and standard_adult_nofeedback
+        grade =
+            (depthScore       * 0.20) +
+                (freqScore        * 0.18) +
+                (recoilScore      * 0.15) +
+                (comboScore       * 0.12) +
+                (handsOnScore     * 0.10) +
+                (ventScore        * 0.10) +
+                (postureScore     * 0.05) +
+                (forceSafetyScore * 0.05) +
+                (timeScore        * 0.05) -
+                (s.fatigueOnsetIndex > 0 ? 5.0 : 0.0);
+    }
 
     return grade.clamp(0.0, 100.0);
   }
 
   /// Legacy grade calc from a [SessionSummary] — kept for backward compat.
   double calculateGrade(SessionSummary session) {
-    if (session.compressionCount == 0) return 0;
+    if (session.isEmergency) return 0.0;
+    if (session.compressionCount == 0) return 0.0;
     final d = session.correctDepth     / session.compressionCount;
     final f = session.correctFrequency / session.compressionCount;
     final r = session.correctRecoil    / session.compressionCount;
@@ -156,9 +216,16 @@ class SessionService {
   }
 
   // ── Assemble SessionDetail from BLE data ───────────────────────────────────
+  //
+  // Called by live_cpr_screen.dart when SESSION_END arrives.
+  // [summaryPacket] is the Map broadcast by BLEConnection._handleEventPacket().
+  // [mode] and [scenario] come from the app's provider state — they reflect
+  // what was active at session end (including any glove-initiated changes).
+  //
+  // Two-pass approach: first build without grade to compute app-side metrics,
+  // then calculate grade from those metrics and rebuild with the final value.
+  // This avoids passing partially-computed values into the grading formula.
 
-  /// Called when the BLE end-ping arrives. Combines the accumulated event
-  /// streams with the [summaryPacket] and calculates the grade.
   SessionDetail assembleDetail({
     required Map<String, dynamic>       summaryPacket,
     required List<CompressionEvent>     events,
@@ -167,9 +234,10 @@ class SessionService {
     required List<RescuerVitalSnapshot> rescuerVitalSnapshots,
     required DateTime                   sessionStart,
     required int                        sessionDurationSecs,
-    String mode = 'emergency',
+    String mode     = 'emergency',
+    String scenario = 'standard_adult',
   }) {
-    // Build once to compute all app-side metrics
+    // Pass 1: build with grade = 0 to get all computed metrics
     final partialDetail = SessionDetail.fromBleSession(
       summaryPacket:         summaryPacket,
       events:                events,
@@ -180,9 +248,10 @@ class SessionService {
       sessionDurationSecs:   sessionDurationSecs,
       totalGrade:            0,
       mode:                  mode,
+      scenario:              scenario,
     );
 
-    // Grade with the real formula, then rebuild with the final grade
+    // Pass 2: grade from computed metrics, then rebuild
     final grade = calculateGradeFromDetail(partialDetail);
 
     return SessionDetail.fromBleSession(
@@ -195,54 +264,110 @@ class SessionService {
       sessionDurationSecs:   sessionDurationSecs,
       totalGrade:            grade,
       mode:                  mode,
+      scenario:              scenario,
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SESSION SUMMARY MODEL
-// Lightweight projection used for list views, leaderboard, and legacy compat.
+//
+// Lightweight projection used for list views, leaderboard, and history cards.
 // Full detail lives in SessionDetail.
+//
+// REPLACE the entire SessionSummary class in session_service.dart
+// (lines 208–343 in the original) with this block.
+// Leave SessionService, UserStats, and everything above/below untouched.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SessionSummary {
-  final int?    id;
-  final int     compressionCount;
-  final int     correctDepth;
-  final int     correctFrequency;
-  final int     correctRecoil;
-  final int     depthRateCombo;
-  final double  averageDepth;
-  final double  averageFrequency;
-  final bool    correctRebound;
-  final int?    userHeartRate;
-  final double? userTemperature;
-  final int     sessionDuration;  // seconds
-  final double  totalGrade;       // 0–100
+  final int?     id;
+
+  // ── Mode & scenario ────────────────────────────────────────────────────────
+  final String mode;      // "emergency" | "training" | "training_no_feedback"
+  final String scenario;  // "standard_adult" | "pediatric" | etc.
+
+  // ── Core counts ───────────────────────────────────────────────────────────
+  final int compressionCount;
+  final int correctDepth;
+  final int correctFrequency;
+  final int correctRecoil;
+  final int depthRateCombo;
+  final int correctPosture;
+  final int leaningCount;
+  final int overForceCount;
+  final int noFlowIntervals;
+  final int rescuerSwapCount;
+  final int fatigueOnsetIndex;
+
+  // ── Averages & peaks ──────────────────────────────────────────────────────
+  final double averageDepth;
+  final double averageFrequency;
+  final double averageEffectiveDepth;
+  final double peakDepth;
+  final double depthSD;
+
+  // ── Ventilation ───────────────────────────────────────────────────────────
+  final int    ventilationCount;
+  final double ventilationCompliance;
+
+  // ── Pulse check (Emergency only) ──────────────────────────────────────────
+  final bool pulseDetectedFinal;
+  final int  pulseChecksPrompted;
+  final int  pulseChecksComplied;
+
+  // ── Biometrics ────────────────────────────────────────────────────────────
+  final double? patientTemperature;
+  final double? rescuerHRLastPause;
+  final double? rescuerSpO2LastPause;
+
+  // ── Timing & grade ────────────────────────────────────────────────────────
+  final int       sessionDuration; // seconds
+  final double    totalGrade;      // 0–100; always 0.0 for Emergency
   final DateTime? sessionStart;
   final DateTime? sessionEnd;
   final String?   note;
 
   const SessionSummary({
     this.id,
+    this.mode                 = 'emergency',
+    this.scenario             = 'standard_adult',
     required this.compressionCount,
     required this.correctDepth,
     required this.correctFrequency,
-    this.correctRecoil  = 0,
-    this.depthRateCombo = 0,
-    this.averageDepth   = 0.0,
-    this.averageFrequency = 0.0,
-    this.correctRebound = false,
-    this.userHeartRate,
-    this.userTemperature,
+    this.correctRecoil        = 0,
+    this.depthRateCombo       = 0,
+    this.correctPosture       = 0,
+    this.leaningCount         = 0,
+    this.overForceCount       = 0,
+    this.noFlowIntervals      = 0,
+    this.rescuerSwapCount     = 0,
+    this.fatigueOnsetIndex    = 0,
+    this.averageDepth         = 0.0,
+    this.averageFrequency     = 0.0,
+    this.averageEffectiveDepth = 0.0,
+    this.peakDepth            = 0.0,
+    this.depthSD              = 0.0,
+    this.ventilationCount     = 0,
+    this.ventilationCompliance = 0.0,
+    this.pulseDetectedFinal   = false,
+    this.pulseChecksPrompted  = 0,
+    this.pulseChecksComplied  = 0,
+    this.patientTemperature,
+    this.rescuerHRLastPause,
+    this.rescuerSpO2LastPause,
     required this.sessionDuration,
-    this.totalGrade  = 0.0,
+    this.totalGrade           = 0.0,
     this.sessionStart,
     this.sessionEnd,
     this.note,
   });
 
-  // ── Derived helpers ────────────────────────────────────────────────────────
+  // ── Convenience getters ───────────────────────────────────────────────────
+
+  bool get isEmergency  => mode == 'emergency';
+  bool get isTraining   => mode == 'training' || mode == 'training_no_feedback';
+  bool get isNoFeedback => mode == 'training_no_feedback';
 
   String get durationFormatted {
     final m = sessionDuration ~/ 60;
@@ -252,67 +377,84 @@ class SessionSummary {
 
   String get dateFormatted {
     if (sessionStart == null) return '—';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
     return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
         '${sessionStart!.year}';
   }
 
   String get dateTimeFormatted {
     if (sessionStart == null) return '—';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
     final h = sessionStart!.hour.toString().padLeft(2, '0');
     final m = sessionStart!.minute.toString().padLeft(2, '0');
     return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
         '${sessionStart!.year} • $h:$m';
   }
 
-  // ── Build from BLE end-ping (summary-only fallback) ────────────────────────
+  // ── Build from BLE end-ping (summary-only fallback) ───────────────────────
 
   factory SessionSummary.fromBleData(
       Map<String, dynamic> data, {
         required DateTime sessionStart,
         required int      sessionDuration,
         required double   totalGrade,
+        String mode     = 'emergency',
+        String scenario = 'standard_adult',
       }) {
     return SessionSummary(
-      compressionCount: data['totalCompressions'] as int?    ?? 0,
-      correctDepth:     data['correctDepth']      as int?    ?? 0,
-      correctFrequency: data['correctFrequency']  as int?    ?? 0,
-      correctRecoil:    data['correctRecoil']     as int?    ?? 0,
-      depthRateCombo:   data['depthRateCombo']    as int?    ?? 0,
-      averageDepth:     (data['depth']            as num?)?.toDouble() ?? 0.0,
-      averageFrequency: (data['frequency']        as num?)?.toDouble() ?? 0.0,
-      userHeartRate:    data['userHeartRate']     as int?,
-      userTemperature:  (data['userTemperature']  as num?)?.toDouble(),
+      mode:             mode,
+      scenario:         scenario,
+      compressionCount: data['totalCompressions']   as int?    ?? 0,
+      correctDepth:     data['correctDepth']         as int?    ?? 0,
+      correctFrequency: data['correctFrequency']     as int?    ?? 0,
+      correctRecoil:    data['correctRecoil']        as int?    ?? 0,
+      depthRateCombo:   data['depthRateCombo']       as int?    ?? 0,
+      averageDepth:     (data['depth']               as num?)?.toDouble() ?? 0.0,
+      averageFrequency: (data['frequency']           as num?)?.toDouble() ?? 0.0,
+      peakDepth:        (data['peakDepth']           as num?)?.toDouble() ?? 0.0,
+      rescuerHRLastPause:   (data['rescuerHRLastPause']   as num?)?.toDouble(),
+      rescuerSpO2LastPause: (data['rescuerSpO2LastPause'] as num?)?.toDouble(),
       sessionDuration:  sessionDuration,
-      totalGrade:       totalGrade,
+      totalGrade:       mode == 'emergency' ? 0.0 : totalGrade,
       sessionStart:     sessionStart,
     );
   }
 
-  // ── JSON ───────────────────────────────────────────────────────────────────
+  // ── JSON factory — hydrate from backend GET /sessions/summaries ───────────
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
     return SessionSummary(
-      id:               json['id']                    as int?,
-      compressionCount: (json['compression_count']    as num).toInt(),
-      correctDepth:     (json['correct_depth']        as num).toInt(),
-      correctFrequency: (json['correct_frequency']    as num).toInt(),
-      correctRecoil:    (json['correct_recoil']       as num?)?.toInt()    ?? 0,
-      depthRateCombo:   (json['depth_rate_combo']     as num?)?.toInt()    ?? 0,
-      averageDepth:     (json['average_depth']        as num?)?.toDouble() ?? 0.0,
-      averageFrequency: (json['average_frequency']    as num?)?.toDouble() ?? 0.0,
-      correctRebound:    json['correct_rebound']      as bool?             ?? false,
-      userHeartRate:    (json['user_heart_rate']      as num?)?.toInt(),
-      userTemperature:  (json['user_temperature']     as num?)?.toDouble(),
-      sessionDuration:  (json['session_duration']     as num).toInt(),
-      totalGrade:       (json['total_grade']          as num?)?.toDouble() ?? 0.0,
+      id:                    json['id']                       as int?,
+      mode:                  json['mode']                     as String? ?? 'emergency',
+      scenario:              json['scenario']                 as String? ?? 'standard_adult',
+      compressionCount:      (json['compression_count']       as num).toInt(),
+      correctDepth:          (json['correct_depth']           as num).toInt(),
+      correctFrequency:      (json['correct_frequency']       as num).toInt(),
+      correctRecoil:         (json['correct_recoil']          as num?)?.toInt()    ?? 0,
+      depthRateCombo:        (json['depth_rate_combo']        as num?)?.toInt()    ?? 0,
+      correctPosture:        (json['correct_posture']         as num?)?.toInt()    ?? 0,
+      leaningCount:          (json['leaning_count']           as num?)?.toInt()    ?? 0,
+      overForceCount:        (json['over_force_count']        as num?)?.toInt()    ?? 0,
+      noFlowIntervals:       (json['no_flow_intervals']       as num?)?.toInt()    ?? 0,
+      rescuerSwapCount:      (json['rescuer_swap_count']      as num?)?.toInt()    ?? 0,
+      fatigueOnsetIndex:     (json['fatigue_onset_index']     as num?)?.toInt()    ?? 0,
+      averageDepth:          (json['average_depth']           as num?)?.toDouble() ?? 0.0,
+      averageFrequency:      (json['average_frequency']       as num?)?.toDouble() ?? 0.0,
+      averageEffectiveDepth: (json['average_effective_depth'] as num?)?.toDouble() ?? 0.0,
+      peakDepth:             (json['peak_depth']              as num?)?.toDouble() ?? 0.0,
+      depthSD:               (json['depth_sd']                as num?)?.toDouble() ?? 0.0,
+      ventilationCount:      (json['ventilation_count']       as num?)?.toInt()    ?? 0,
+      ventilationCompliance: (json['ventilation_compliance']  as num?)?.toDouble() ?? 0.0,
+      pulseDetectedFinal:     json['pulse_detected_final']    as bool?             ?? false,
+      pulseChecksPrompted:   (json['pulse_checks_prompted']   as num?)?.toInt()    ?? 0,
+      pulseChecksComplied:   (json['pulse_checks_complied']   as num?)?.toInt()    ?? 0,
+      patientTemperature:    (json['patient_temperature']     as num?)?.toDouble(),
+      rescuerHRLastPause:    (json['rescuer_hr_last_pause']   as num?)?.toDouble(),
+      rescuerSpO2LastPause:  (json['rescuer_spo2_last_pause'] as num?)?.toDouble(),
+      sessionDuration:       (json['session_duration']        as num).toInt(),
+      totalGrade:            (json['total_grade']             as num?)?.toDouble() ?? 0.0,
       sessionStart: json['session_start'] != null
           ? DateTime.tryParse(json['session_start'] as String)
           : null,
@@ -324,18 +466,34 @@ class SessionSummary {
   }
 
   Map<String, dynamic> toJson() => {
-    'compression_count':  compressionCount,
-    'correct_depth':      correctDepth,
-    'correct_frequency':  correctFrequency,
-    'correct_recoil':     correctRecoil,
-    'depth_rate_combo':   depthRateCombo,
-    'average_depth':      averageDepth,
-    'average_frequency':  averageFrequency,
-    'correct_rebound':    correctRebound,
-    if (userHeartRate   != null) 'user_heart_rate':  userHeartRate,
-    if (userTemperature != null) 'user_temperature': userTemperature,
-    'session_duration':   sessionDuration,
-    'total_grade':        totalGrade,
+    'mode':                   mode,
+    'scenario':               scenario,
+    'compression_count':      compressionCount,
+    'correct_depth':          correctDepth,
+    'correct_frequency':      correctFrequency,
+    'correct_recoil':         correctRecoil,
+    'depth_rate_combo':       depthRateCombo,
+    'correct_posture':        correctPosture,
+    'leaning_count':          leaningCount,
+    'over_force_count':       overForceCount,
+    'no_flow_intervals':      noFlowIntervals,
+    'rescuer_swap_count':     rescuerSwapCount,
+    'fatigue_onset_index':    fatigueOnsetIndex,
+    'average_depth':          averageDepth,
+    'average_frequency':      averageFrequency,
+    'average_effective_depth': averageEffectiveDepth,
+    'peak_depth':             peakDepth,
+    'depth_sd':               depthSD,
+    'ventilation_count':      ventilationCount,
+    'ventilation_compliance': ventilationCompliance,
+    'pulse_detected_final':   pulseDetectedFinal,
+    'pulse_checks_prompted':  pulseChecksPrompted,
+    'pulse_checks_complied':  pulseChecksComplied,
+    if (patientTemperature   != null) 'patient_temperature':    patientTemperature,
+    if (rescuerHRLastPause   != null) 'rescuer_hr_last_pause':  rescuerHRLastPause,
+    if (rescuerSpO2LastPause != null) 'rescuer_spo2_last_pause': rescuerSpO2LastPause,
+    'session_duration':       sessionDuration,
+    'total_grade':            totalGrade,
     if (sessionStart != null) 'session_start': sessionStart!.toIso8601String(),
     if (sessionEnd   != null) 'session_end':   sessionEnd!.toIso8601String(),
     if (note         != null) 'note':          note,
@@ -363,14 +521,22 @@ class UserStats {
     if (sessions.isEmpty) {
       return const UserStats(sessionCount: 0, averageGrade: 0, bestGrade: 0);
     }
-    final grades = sessions.map((s) => s.totalGrade).toList();
-    final avg    = grades.reduce((a, b) => a + b) / grades.length;
-    final best   = grades.reduce((a, b) => a > b ? a : b);
+    // Only training sessions have meaningful grades
+    final trainingSessions = sessions
+        .where((s) => s.isTraining && s.totalGrade > 0)
+        .toList();
+    final grades = trainingSessions.isEmpty
+        ? [0.0]
+        : trainingSessions.map((s) => s.totalGrade).toList();
+    final avg  = grades.reduce((a, b) => a + b) / grades.length;
+    final best = grades.reduce((a, b) => a > b ? a : b);
     return UserStats(
-      sessionCount: sessions.length,
-      averageGrade: avg,
-      bestGrade:    best,
-      bestSession:  sessions.firstWhere((s) => s.totalGrade == best),
+      sessionCount: sessions.length,           // total includes Emergency
+      averageGrade: trainingSessions.isEmpty ? 0 : avg,
+      bestGrade:    trainingSessions.isEmpty ? 0 : best,
+      bestSession:  trainingSessions.isEmpty
+          ? null
+          : trainingSessions.firstWhere((s) => s.totalGrade == best),
     );
   }
 

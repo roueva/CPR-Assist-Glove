@@ -147,11 +147,14 @@ class AppConstants {
   /// Legacy alias — kept so any remaining callers compile without change.
   /// Points to the larger of the two packet sizes.
   @Deprecated('Use bleLiveStreamPacketSize or bleEventChannelPacketSize')
-  static const int blePacketSize = 88;
+  /// Packet sizes are kLiveStreamSize (100) and kEventChannelSize (80)
+  /// defined in ble_data_processor.dart. This constant is kept as a
+  /// reference only — do not use it for packet parsing logic.
+  static const int blePacketSize = 100;
 
   /// Receive buffer overflow threshold (bytes) — clear when exceeded.
   /// Set to 3 × larger packet size to absorb one full burst without losing data.
-  static const int bleBufferOverflowThreshold = 264; // 3 × 88
+  static const int bleBufferOverflowThreshold = 500;
 
   // ═══════════════════════════════════════════════════════
   // BATTERY THRESHOLDS (percentage)

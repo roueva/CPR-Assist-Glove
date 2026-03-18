@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:cpr_assist/core/core.dart';
+import '../../../providers/app_providers.dart';
 import 'depth_bar.dart';
 import 'rotating_arrow.dart';
 
@@ -21,12 +22,16 @@ class VitalsCard extends StatelessWidget {
   final String  label;
   final double? heartRate;
   final double? temperature;
+  final double? spO2;
+  final int?    signalQuality; // 0–100; shown as signal dots on rescuer card
 
   const VitalsCard({
     super.key,
     required this.label,
     this.heartRate,
     this.temperature,
+    this.spO2,
+    this.signalQuality,
   });
 
   @override
@@ -49,32 +54,46 @@ class VitalsCard extends StatelessWidget {
             horizontal: AppSpacing.cardPadding,
           ),
           decoration: AppDecorations.card(),
-          child: Row(
-            children: [
-              Expanded(
-                child: _VitalItem(
-                  value: heartRate != null
-                      ? '${heartRate!.toStringAsFixed(0)} bpm'
-                      : '--',
-                  label: 'HEART RATE',
+            child: Row(
+              children: [
+                Expanded(
+                  child: _VitalItem(
+                    value: heartRate != null
+                        ? '${heartRate!.toStringAsFixed(0)} bpm'
+                        : '--',
+                    label: 'HEART RATE',
+                  ),
                 ),
-              ),
-              Container(
-                width:  AppSpacing.dividerThickness,
-                height: AppSpacing.iconXl,
-                color:  AppColors.divider,
-              ),
-              Expanded(
-                child: _VitalItem(
-                  value: temperature != null
-                      ? '${temperature!.toStringAsFixed(1)}°C'
-                      : '--',
-                  label:      'TEMPERATURE',
-                  alignRight: true,
+                Container(
+                  width:  AppSpacing.dividerThickness,
+                  height: AppSpacing.iconXl,
+                  color:  AppColors.divider,
                 ),
-              ),
-            ],
-          ),
+                Expanded(
+                  child: _VitalItem(
+                    value: spO2 != null
+                        ? '${spO2!.toStringAsFixed(0)}%'
+                        : '--',
+                    label: 'SpO₂',
+                    alignRight: false,
+                  ),
+                ),
+                Container(
+                  width:  AppSpacing.dividerThickness,
+                  height: AppSpacing.iconXl,
+                  color:  AppColors.divider,
+                ),
+                Expanded(
+                  child: _VitalItem(
+                    value: temperature != null
+                        ? '${temperature!.toStringAsFixed(1)}°C'
+                        : '--',
+                    label:      'TEMPERATURE',
+                    alignRight: true,
+                  ),
+                ),
+              ],
+            ),
         ),
       ],
     );
@@ -134,11 +153,15 @@ class _VitalItem extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LiveCprMetricsCard extends StatelessWidget {
-  final double   depth;
-  final double   frequency;
-  final Duration cprTime;
-  final int      compressionCount;
-  final bool     isSessionActive;
+  final double      depth;
+  final double      frequency;
+  final Duration    cprTime;
+  final int         compressionCount;
+  final bool        isSessionActive;
+  final bool        imuCalibrated;
+  final bool        showFatigueBadge;
+  final int         fatigueScore;
+  final CprScenario scenario;
 
   const LiveCprMetricsCard({
     super.key,
@@ -147,17 +170,21 @@ class LiveCprMetricsCard extends StatelessWidget {
     required this.cprTime,
     required this.compressionCount,
     required this.isSessionActive,
+    this.imuCalibrated    = true,
+    this.showFatigueBadge = false,
+    this.fatigueScore     = 0,
+    required this.scenario,
   });
 
-  // Depth feedback — AHA target: 5–6 cm
-  static _FeedbackState _depthFeedback(double d) {
-    if (d <= 0)   return _FeedbackState.idle;
-    if (d < 5.0)  return _FeedbackState.bad;
-    if (d <= 6.0) return _FeedbackState.good;
-    return         _FeedbackState.warn;
+  // Depth feedback — adult AHA target: 5–6 cm
+  _FeedbackState _depthFeedback(double d) {
+    if (d <= 0)                       return _FeedbackState.idle;
+    if (d < scenario.targetDepthMinCm) return _FeedbackState.bad;
+    if (d <= scenario.targetDepthMaxCm) return _FeedbackState.good;
+    return                              _FeedbackState.warn;
   }
 
-  // Frequency feedback — AHA guideline: 100–120 CPM
+  // Frequency feedback — adult AHA guideline: 100–120 CPM
   static _FeedbackState _freqFeedback(double f) {
     if (f <= 0)   return _FeedbackState.idle;
     if (f < 100)  return _FeedbackState.bad;
@@ -247,32 +274,51 @@ class LiveCprMetricsCard extends StatelessWidget {
               AppSpacing.cardPadding,
               AppSpacing.sm,
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(
-                  flex: 3,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: _FrequencyGauge(
-                      frequency: frequency,
-                      state:     freqState,
-                    ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Flexible(
+                        flex: 3,
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: _FrequencyGauge(frequency: frequency, state: freqState),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                      Flexible(
+                        flex: 2,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _DepthColumn(depth: depth, state: depthState),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
-                Flexible(
-                  flex: 2,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _DepthColumn(
-                      depth: depth,
-                      state: depthState,
+                  // Fatigue badge — Positioned is a Stack child, not a Row child
+                  if (showFatigueBadge)
+                    Positioned(
+                      top:   0,
+                      right: AppSpacing.xxs,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical:   AppSpacing.xxs,
+                        ),
+                        decoration: BoxDecoration(
+                          color:        AppColors.warning,
+                          borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                        ),
+                        child: Text(
+                          'FATIGUE',
+                          style: AppTypography.badge(size: 9, color: AppColors.textOnDark),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ),
 
           // ── C) Status bar — active sessions only ─────────────────────────

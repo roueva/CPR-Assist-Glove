@@ -12,20 +12,13 @@ import '../services/session_detail.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionResultsScreen
 //
-// Full-screen results view. Two named constructors for two entry points:
+// Two named constructors:
+//   fromDetail — post-session (has full compression stream → graphs enabled)
+//   fromSummary — history view (summary only → graphs hidden)
 //
-//   SessionResultsScreen.fromDetail(detail: ...)
-//     → Post-session result. Has graphs, full consistency metrics,
-//       flow data, biometrics. Shown when live CPR ends.
-//
-//   SessionResultsScreen.fromSummary(summary: ..., sessionNumber: ...)
-//     → History view. Shows what the summary model carries (grade, counts,
-//       averages, vitals). Graph section is hidden — no compression stream.
-//       Shown when the user taps a card in past sessions or the leaderboard.
-//
-// Entry points:
-//   - live_cpr_screen.dart  → context.push(SessionResultsScreen.fromDetail(...))
-//   - session_history.dart  → context.push(SessionResultsScreen.fromSummary(...))
+// Mode-aware rendering:
+//   Emergency → no grade circle, factual summary header, pulse check section
+//   Training  → grade circle + motivational label + full quality breakdown
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SessionResultsScreen extends ConsumerStatefulWidget {
@@ -53,13 +46,8 @@ class SessionResultsScreen extends ConsumerStatefulWidget {
       _SessionResultsScreenState();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _SessionResultsScreenState
     extends ConsumerState<SessionResultsScreen> {
-  // Local note state — initialised from whichever model was passed in.
   String? _note;
 
   @override
@@ -68,8 +56,25 @@ class _SessionResultsScreenState
     _note = widget._detail?.note ?? widget._summary?.note;
   }
 
-  // ── Derived helpers (moved from widget so they can access _note) ───────────
+  // ── Mode helpers ───────────────────────────────────────────────────────────
+  bool get _isEmergency =>
+      (widget._detail?.isEmergency ?? widget._summary?.isEmergency) ?? true;
 
+  String get _scenario =>
+      widget._detail?.scenario ?? widget._summary?.scenario ?? 'standard_adult';
+
+  bool get _isPediatric => _scenario == 'pediatric';
+
+  double get _targetDepthMin => _isPediatric
+      ? CprTargets.depthMinPediatric
+      : CprTargets.depthMin;
+  double get _targetDepthMax => _isPediatric
+      ? CprTargets.depthMaxPediatric
+      : CprTargets.depthMax;
+  String get _targetDepthLabel =>
+      '${_targetDepthMin.toStringAsFixed(0)}–${_targetDepthMax.toStringAsFixed(0)} cm';
+
+  // ── Derived helpers ────────────────────────────────────────────────────────
   double get _grade =>
       widget._detail?.totalGrade ?? widget._summary?.totalGrade ?? 0;
 
@@ -100,11 +105,13 @@ class _SessionResultsScreenState
   int get _depthRateCombo =>
       widget._detail?.depthRateCombo ?? widget._summary?.depthRateCombo ?? 0;
 
-  int? get _userHeartRate =>
-      widget._detail?.userHeartRate ?? widget._summary?.userHeartRate;
+  // Rescuer biometrics — use new field names only
+  double? get _rescuerHR   =>
+      widget._detail?.rescuerHRLastPause   ?? widget._summary?.rescuerHRLastPause;
+  double? get _rescuerSpO2 =>
+      widget._detail?.rescuerSpO2LastPause ?? widget._summary?.rescuerSpO2LastPause;
 
-  double? get _userTemperature =>
-      widget._detail?.userTemperature ?? widget._summary?.userTemperature;
+  bool get _hasBiometrics => _rescuerHR != null || _rescuerSpO2 != null;
 
   String get _motivationalLabel {
     if (_grade >= 90) return 'Excellent!';
@@ -125,43 +132,37 @@ class _SessionResultsScreenState
   }
 
   // ── Note editing ───────────────────────────────────────────────────────────
-
   Future<void> _editNote() async {
     final controller = TextEditingController(text: _note ?? '');
-    // Using Navigator.of directly here is intentional — showDialog needs a
-    // return value, which context.pop does not support.
     final result = await showDialog<String?>(
       context: context,
       builder: (_) => _NoteDialog(controller: controller),
     );
-    if (result == null) return; // user dismissed
+    if (result == null) return;
 
     final sessionId = widget._detail?.id ?? widget._summary?.id;
     if (sessionId != null) {
       final service = ref.read(sessionServiceProvider);
       await service.updateNote(sessionId, result.isEmpty ? null : result);
     }
-
     setState(() => _note = result.isEmpty ? null : result);
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final hasGraphs     = widget._detail != null &&
+    final hasGraphs   = widget._detail != null &&
         widget._detail!.compressions.isNotEmpty;
-    final hasBiometrics = _userHeartRate != null || _userTemperature != null;
-    final canEditNote   = (widget._detail?.id ?? widget._summary?.id) != null;
-    final title         = widget._sessionNumber != null
+    final canEditNote = (widget._detail?.id ?? widget._summary?.id) != null;
+    final title       = widget._sessionNumber != null
         ? 'Session ${widget._sessionNumber}'
-        : 'Session Results';
+        : _isEmergency ? 'Emergency Session' : 'Session Results';
 
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor: AppColors.primaryLight,
-        elevation: 0,
+        backgroundColor:        AppColors.primaryLight,
+        elevation:              0,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
@@ -172,11 +173,36 @@ class _SessionResultsScreenState
           title,
           style: AppTypography.heading(size: 20, color: AppColors.primary),
         ),
+        actions: [
+          // Mode badge in app bar
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.md),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical:   AppSpacing.xxs,
+                ),
+                decoration: AppDecorations.chip(
+                  color: _isEmergency ? AppColors.emergencyRed : AppColors.warning,
+                  bg:    _isEmergency ? AppColors.emergencyBg  : AppColors.warningBg,
+                ),
+                child: Text(
+                  _isEmergency ? 'EMERGENCY' : 'TRAINING',
+                  style: AppTypography.badge(
+                    size:  10,
+                    color: _isEmergency ? AppColors.emergencyRed : AppColors.warning,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── ① Gradient header — grade + summary row + quality grid ──────
+            // ── ① Gradient header ─────────────────────────────────────────
             Container(
               width: double.infinity,
               decoration: const BoxDecoration(
@@ -187,75 +213,108 @@ class _SessionResultsScreenState
                 ),
               ),
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.xl,
+                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl,
               ),
               child: Column(
                 children: [
-                  // ── Grade circle ────────────────────────────────────────
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 148,
-                        height: 148,
-                        child: CircularProgressIndicator(
-                          value: _grade / 100,
-                          strokeWidth: 10,
-                          strokeCap: StrokeCap.round,
-                          backgroundColor:
-                          AppColors.textOnDark.withValues(alpha: 0.2),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.textOnDark,
+                  // Grade circle — Training only
+                  if (!_isEmergency) ...[
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width:  148,
+                          height: 148,
+                          child: CircularProgressIndicator(
+                            value:           _grade / 100,
+                            strokeWidth:     10,
+                            strokeCap:       StrokeCap.round,
+                            backgroundColor: AppColors.textOnDark.withValues(alpha: 0.2),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.textOnDark,
+                            ),
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${_grade.toStringAsFixed(0)}%',
+                              style: AppTypography.numericDisplay(
+                                size: 38, color: AppColors.textOnDark,
+                              ),
+                            ),
+                            Text(
+                              _motivationalLabel,
+                              style: AppTypography.label(
+                                size:  11,
+                                color: AppColors.textOnDark.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+
+                  // Emergency header — icon instead of grade circle
+                  if (_isEmergency) ...[
+                    Container(
+                      width:  80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color:  AppColors.textOnDark.withValues(alpha: 0.15),
+                        shape:  BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.emergency_rounded,
+                        color: AppColors.textOnDark,
+                        size:  AppSpacing.iconXl,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'CPR Session Complete',
+                      style: AppTypography.poppins(
+                        size:   20,
+                        weight: FontWeight.w700,
+                        color:  AppColors.textOnDark,
+                      ),
+                    ),
+                    if (_isPediatric) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm, vertical: AppSpacing.xxs,
+                        ),
+                        decoration: AppDecorations.chip(
+                          color: AppColors.textOnDark,
+                          bg:    AppColors.textOnDark.withValues(alpha: 0.2),
+                        ),
+                        child: Text(
+                          'PEDIATRIC CPR',
+                          style: AppTypography.badge(
+                            size: 10, color: AppColors.textOnDark,
                           ),
                         ),
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${_grade.toStringAsFixed(0)}%',
-                            style: AppTypography.numericDisplay(
-                              size: 38,
-                              color: AppColors.textOnDark,
-                            ),
-                          ),
-                          Text(
-                            _motivationalLabel,
-                            style: AppTypography.label(
-                              size: 11,
-                              color: AppColors.textOnDark
-                                  .withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
-                  ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
 
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // ── Summary row ─────────────────────────────────────────
+                  // ── Summary row ──────────────────────────────────────────
                   Container(
                     decoration: BoxDecoration(
-                      color: AppColors.textOnDark.withValues(alpha: 0.12),
-                      borderRadius:
-                      BorderRadius.circular(AppSpacing.cardRadiusSm),
+                      color:        AppColors.textOnDark.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
                     ),
                     child: IntrinsicHeight(
                       child: Row(
                         children: [
-                          _SummaryCell(
-                            value: _durationFormatted,
-                            label: 'DURATION',
-                          ),
+                          _SummaryCell(value: _durationFormatted,       label: 'DURATION'),
                           _VDivider(),
-                          _SummaryCell(
-                            value: '$_compressionCount',
-                            label: 'COMPRESSIONS',
-                          ),
+                          _SummaryCell(value: '$_compressionCount',     label: 'COMPRESSIONS'),
                           _VDivider(),
                           _SummaryCell(
                             value: _averageFrequency > 0
@@ -270,54 +329,78 @@ class _SessionResultsScreenState
 
                   const SizedBox(height: AppSpacing.lg),
 
-                  // ── Quality breakdown grid ──────────────────────────────
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'QUALITY BREAKDOWN',
-                        style: AppTypography.badge(
-                          size: 10,
-                          color: AppColors.textOnDark.withValues(alpha: 0.6),
+                  // ── Quality breakdown — Training only ────────────────────
+                  if (!_isEmergency) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'QUALITY BREAKDOWN',
+                          style: AppTypography.badge(
+                            size:  10,
+                            color: AppColors.textOnDark.withValues(alpha: 0.6),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      GridView.count(
-                        shrinkWrap: true,
-                        crossAxisCount: 2,
-                        crossAxisSpacing: AppSpacing.sm,
-                        mainAxisSpacing: AppSpacing.sm,
-                        physics: const NeverScrollableScrollPhysics(),
-                        childAspectRatio: 2.4,
-                        children: [
-                          _StatTile(
-                            label: 'CORRECT DEPTH',
-                            value: _pct(_correctDepth),
+                        const SizedBox(height: AppSpacing.sm),
+                        GridView.count(
+                          shrinkWrap:   true,
+                          crossAxisCount: 2,
+                          crossAxisSpacing: AppSpacing.sm,
+                          mainAxisSpacing:  AppSpacing.sm,
+                          physics: const NeverScrollableScrollPhysics(),
+                          childAspectRatio: 2.4,
+                          children: [
+                            _StatTile(label: 'CORRECT DEPTH',     value: _pct(_correctDepth)),
+                            _StatTile(label: 'CORRECT FREQUENCY', value: _pct(_correctFrequency)),
+                            _StatTile(label: 'CORRECT RECOIL',    value: _pct(_correctRecoil)),
+                            _StatTile(label: 'DEPTH + RATE',      value: _pct(_depthRateCombo)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  // ── Factual breakdown — Emergency only ───────────────────
+                  if (_isEmergency) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SESSION OVERVIEW',
+                          style: AppTypography.badge(
+                            size:  10,
+                            color: AppColors.textOnDark.withValues(alpha: 0.6),
                           ),
-                          _StatTile(
-                            label: 'CORRECT FREQUENCY',
-                            value: _pct(_correctFrequency),
-                          ),
-                          _StatTile(
-                            label: 'CORRECT RECOIL',
-                            value: _pct(_correctRecoil),
-                          ),
-                          _StatTile(
-                            label: 'DEPTH + RATE',
-                            value: _pct(_depthRateCombo),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        GridView.count(
+                          shrinkWrap:      true,
+                          crossAxisCount:  2,
+                          crossAxisSpacing: AppSpacing.sm,
+                          mainAxisSpacing:  AppSpacing.sm,
+                          physics: const NeverScrollableScrollPhysics(),
+                          childAspectRatio: 2.4,
+                          children: [
+                            _StatTile(label: 'CORRECT DEPTH',  value: _pct(_correctDepth)),
+                            _StatTile(label: 'CORRECT RATE',   value: _pct(_correctFrequency)),
+                            _StatTile(label: 'CORRECT RECOIL', value: _pct(_correctRecoil)),
+                            _StatTile(
+                              label: 'SCENARIO',
+                              value: _isPediatric ? 'Pediatric' : 'Adult',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
 
-            // ── ② White body ────────────────────────────────────────────────
+            // ── ② White body ──────────────────────────────────────────────
             Container(
-              width: double.infinity,
-              color: AppColors.surfaceWhite,
+              width:   double.infinity,
+              color:   AppColors.surfaceWhite,
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,12 +411,15 @@ class _SessionResultsScreenState
                     Text(
                       'PERFORMANCE OVER TIME',
                       style: AppTypography.badge(
-                        size: 10,
-                        color: AppColors.textDisabled,
+                        size:  10, color: AppColors.textDisabled,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    _SessionGraphs(session: widget._detail!),
+                    _SessionGraphs(
+                      session:        widget._detail!,
+                      targetDepthMin: _targetDepthMin,
+                      targetDepthMax: _targetDepthMax,
+                    ),
                     const _HDivider(),
                   ],
 
@@ -341,120 +427,233 @@ class _SessionResultsScreenState
                   Text(
                     'METRICS',
                     style: AppTypography.badge(
-                      size: 10,
-                      color: AppColors.textDisabled,
+                      size: 10, color: AppColors.textDisabled,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
 
                   _DetailRow(
-                    icon: Icons.compress_rounded,
+                    icon:  Icons.compress_rounded,
                     label: 'Average Depth',
                     value: _averageDepth > 0
                         ? '${_averageDepth.toStringAsFixed(1)} cm'
                         : '—',
-                    note: 'Target: 5–6 cm',
+                    note: 'Target: $_targetDepthLabel',
                   ),
 
                   if (widget._detail != null) ...[
                     _DetailRow(
-                      icon: Icons.straighten_rounded,
+                      icon:  Icons.straighten_rounded,
                       label: 'Depth Consistency',
                       value: widget._detail!.depthConsistency > 0
                           ? '${widget._detail!.depthConsistency.round()}%'
                           : '—',
-                      note: 'Compressions within 5–6 cm',
+                      note: 'Compressions within $_targetDepthLabel',
                     ),
                     _DetailRow(
-                      icon: Icons.speed_rounded,
+                      icon:  Icons.speed_rounded,
                       label: 'Rate Consistency',
                       value: widget._detail!.frequencyConsistency > 0
                           ? '${widget._detail!.frequencyConsistency.round()}%'
                           : '—',
                       note: 'Compressions within 100–120 BPM',
                     ),
+                    _DetailRow(
+                      icon:  Icons.show_chart_rounded,
+                      label: 'Depth Variability (SD)',
+                      value: widget._detail!.depthSD > 0
+                          ? '${widget._detail!.depthSD.toStringAsFixed(2)} cm'
+                          : '—',
+                      note: 'Lower is more consistent',
+                    ),
 
                     const _HDivider(),
 
-                    // ── Flow metrics ─────────────────────────────────────
+                    // ── Posture ──────────────────────────────────────────
                     Text(
-                      'FLOW',
+                      'POSTURE',
                       style: AppTypography.badge(
-                        size: 10,
-                        color: AppColors.textDisabled,
+                        size: 10, color: AppColors.textDisabled,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
 
                     _DetailRow(
-                      icon: Icons.touch_app_outlined,
-                      label: 'Hands-On Time',
-                      value: widget._detail!.handsOnPct,
-                      note: 'Time actively compressing',
-                      valueColor:
-                      _flowColor(widget._detail!.handsOnRatio * 100),
+                      icon:  Icons.accessibility_new_rounded,
+                      label: 'Correct Posture',
+                      value: _compressionCount > 0
+                          ? '${(widget._detail!.correctPosture / _compressionCount * 100).round()}%'
+                          : '—',
+                      note: 'Wrist alignment within 15°',
+                    ),
+                    if (widget._detail!.leaningCount > 0)
+                      _DetailRow(
+                        icon:       Icons.warning_amber_rounded,
+                        label:      'Leaning Detected',
+                        value:      '${widget._detail!.leaningCount}×',
+                        note:       'Incomplete decompression between compressions',
+                        iconColor:  AppColors.warning,
+                        valueColor: AppColors.warning,
+                      ),
+                    if (widget._detail!.overForceCount > 0)
+                      _DetailRow(
+                        icon:       Icons.fitness_center_rounded,
+                        label:      'Over-Force Events',
+                        value:      '${widget._detail!.overForceCount}×',
+                        note:       'Force exceeded safe threshold',
+                        iconColor:  AppColors.error,
+                        valueColor: AppColors.error,
+                      ),
+
+                    const _HDivider(),
+
+                    // ── Flow ─────────────────────────────────────────────
+                    Text(
+                      'FLOW',
+                      style: AppTypography.badge(
+                        size: 10, color: AppColors.textDisabled,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+
+                    _DetailRow(
+                      icon:       Icons.touch_app_outlined,
+                      label:      'Hands-On Time',
+                      value:      widget._detail!.handsOnPct,
+                      note:       'Time actively compressing',
+                      valueColor: _flowColor(widget._detail!.handsOnRatio * 100),
                     ),
                     _DetailRow(
-                      icon: Icons.pause_circle_outline_rounded,
-                      label: 'No-Flow Time',
-                      value: widget._detail!.noFlowTime > 0
+                      icon:       Icons.pause_circle_outline_rounded,
+                      label:      'No-Flow Time',
+                      value:      widget._detail!.noFlowTime > 0
                           ? '${widget._detail!.noFlowTime.toStringAsFixed(1)}s'
                           : '0s',
-                      note: 'Pauses > 2 s between compressions',
+                      note:       '${widget._detail!.noFlowIntervals} unplanned pause(s) > 2 s',
                       valueColor: widget._detail!.noFlowTime > 5
                           ? AppColors.warning
                           : AppColors.success,
                     ),
                     _DetailRow(
-                      icon: Icons.timer_outlined,
-                      label: 'Time to First Compression',
-                      value: widget._detail!.timeToFirstCompression > 0
+                      icon:       Icons.timer_outlined,
+                      label:      'Time to First Compression',
+                      value:      widget._detail!.timeToFirstCompression > 0
                           ? '${widget._detail!.timeToFirstCompression.toStringAsFixed(1)}s'
                           : '—',
-                      note: 'From session start to first compression',
-                      valueColor:
-                      widget._detail!.timeToFirstCompression > 5
+                      note:       'From session start to first compression',
+                      valueColor: widget._detail!.timeToFirstCompression > 5
                           ? AppColors.warning
                           : AppColors.success,
                     ),
+
+                    // ── Fatigue (Training only) ───────────────────────────
+                    if (!_isEmergency &&
+                        widget._detail!.rescuerSwapCount > 0) ...[
+                      const _HDivider(),
+                      Text(
+                        'FATIGUE & ENDURANCE',
+                        style: AppTypography.badge(
+                          size: 10, color: AppColors.textDisabled,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _DetailRow(
+                        icon:  Icons.swap_horiz_rounded,
+                        label: 'Rescuer Swap Prompts',
+                        value: '${widget._detail!.rescuerSwapCount}×',
+                        note:  'Times 2-minute alert fired',
+                      ),
+                      if (widget._detail!.fatigueOnsetIndex > 0)
+                        _DetailRow(
+                          icon:       Icons.trending_down_rounded,
+                          label:      'Fatigue Onset',
+                          value:      'Compression #${widget._detail!.fatigueOnsetIndex}',
+                          note:       'When physiological fatigue was first detected',
+                          iconColor:  AppColors.warning,
+                          valueColor: AppColors.warning,
+                        ),
+                    ],
+
+                    // ── Pulse check results (Emergency only) ─────────────
+                    if (_isEmergency &&
+                        widget._detail!.pulseChecks.isNotEmpty) ...[
+                      const _HDivider(),
+                      Text(
+                        'PULSE CHECKS',
+                        style: AppTypography.badge(
+                          size: 10, color: AppColors.textDisabled,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _DetailRow(
+                        icon:  Icons.sensors_rounded,
+                        label: 'Checks Prompted',
+                        value: '${widget._detail!.pulseChecksPrompted}',
+                      ),
+                      _DetailRow(
+                        icon:  Icons.check_circle_outline_rounded,
+                        label: 'Checks Completed',
+                        value: '${widget._detail!.pulseChecksComplied}',
+                      ),
+                      ...widget._detail!.pulseChecks.map((pc) {
+                        final color = pc.detected
+                            ? AppColors.success
+                            : pc.isUncertain
+                            ? AppColors.warning
+                            : AppColors.textSecondary;
+                        final label = pc.detected
+                            ? 'Pulse Present'
+                            : pc.isUncertain
+                            ? 'Uncertain'
+                            : 'No Pulse';
+                        return _DetailRow(
+                          icon:       Icons.favorite_border_rounded,
+                          label:      'Check #${pc.intervalNumber}',
+                          value:      label,
+                          note:       pc.detectedBpm > 0
+                              ? '${pc.detectedBpm.toStringAsFixed(0)} BPM  ·  ${pc.confidence}% confidence'
+                              : null,
+                          iconColor:  color,
+                          valueColor: color,
+                        );
+                      }),
+                    ],
                   ],
 
-                  // ── Biometrics ─────────────────────────────────────────
-                  if (hasBiometrics) ...[
+                  // ── Biometrics ────────────────────────────────────────────
+                  if (_hasBiometrics) ...[
                     const _HDivider(),
                     Text(
                       'RESCUER BIOMETRICS',
                       style: AppTypography.badge(
-                        size: 10,
-                        color: AppColors.textDisabled,
+                        size: 10, color: AppColors.textDisabled,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    if (_userHeartRate != null)
+                    if (_rescuerHR != null)
                       _DetailRow(
-                        icon: Icons.monitor_heart_outlined,
-                        label: 'Your Heart Rate',
-                        value: '$_userHeartRate bpm',
+                        icon:      Icons.monitor_heart_outlined,
+                        label:     'Heart Rate (last pause)',
+                        value:     '${_rescuerHR!.toStringAsFixed(0)} bpm',
                         iconColor: AppColors.primary,
                       ),
-                    if (_userTemperature != null)
+                    if (_rescuerSpO2 != null)
                       _DetailRow(
-                        icon: Icons.thermostat_outlined,
-                        label: 'Your Temperature',
-                        value:
-                        '${_userTemperature!.toStringAsFixed(1)}°C',
+                        icon:  Icons.air_rounded,
+                        label: 'SpO₂ (last pause)',
+                        value: '${_rescuerSpO2!.toStringAsFixed(0)}%',
                       ),
                   ],
 
-                  // ── Session date ───────────────────────────────────────
+                  // ── Session date ─────────────────────────────────────────
                   const _HDivider(),
                   _DetailRow(
-                    icon: Icons.calendar_today_outlined,
+                    icon:  Icons.calendar_today_outlined,
                     label: 'Session Date',
                     value: _dateTimeFormatted,
                   ),
 
-                  // ── Note ──────────────────────────────────────────────
+                  // ── Note ─────────────────────────────────────────────────
                   const SizedBox(height: AppSpacing.sm),
                   _NoteCard(
                     note:    _note,
@@ -475,187 +674,19 @@ class _SessionResultsScreenState
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Note card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _NoteCard extends StatelessWidget {
-  final String?      note;
-  final bool         canEdit;
-  final VoidCallback onTap;
-
-  const _NoteCard({
-    required this.note,
-    required this.canEdit,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap:        canEdit ? onTap : null,
-      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-      child: Container(
-        width:      double.infinity,
-        padding:    const EdgeInsets.all(AppSpacing.md),
-        decoration: AppDecorations.card(),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(
-              Icons.notes_rounded,
-              color: AppColors.primary,
-              size:  AppSpacing.iconSm,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Note', style: AppTypography.subheading()),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    note?.isNotEmpty == true ? note! : 'Tap to add a note…',
-                    style: AppTypography.bodyMedium(
-                      color: note?.isNotEmpty == true
-                          ? AppColors.textPrimary
-                          : AppColors.textDisabled,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (canEdit)
-              const Icon(
-                Icons.edit_outlined,
-                size:  AppSpacing.iconSm,
-                color: AppColors.textSecondary,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Note dialog
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _NoteDialog extends StatelessWidget {
-  final TextEditingController controller;
-  const _NoteDialog({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.surfaceWhite,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-      ),
-      title: Text('Session Note',
-          style: AppTypography.heading(size: 18)),
-      content: TextField(
-        controller: controller,
-        maxLength:  500,
-        maxLines:   5,
-        autofocus:  true,
-        decoration: InputDecoration(
-          hintText:  'What did you notice?',
-          hintStyle: AppTypography.caption(color: AppColors.textDisabled),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-            borderSide: const BorderSide(color: AppColors.divider),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-            borderSide: const BorderSide(
-                color: AppColors.primary, width: 1.5),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: context.pop,
-          child: Text('Cancel',
-              style: AppTypography.label(
-                  color: AppColors.textSecondary)),
-        ),
-        TextButton(
-          // Navigator.of is intentional here — passes value back to showDialog.
-          onPressed: () =>
-              Navigator.of(context).pop(controller.text),
-          child: Text('Save',
-              style:
-              AppTypography.label(color: AppColors.primary)),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Past sessions button
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PastSessionsButton extends StatelessWidget {
-  const _PastSessionsButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push(const SessionHistoryScreen()),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          vertical:   AppSpacing.buttonPaddingV,
-          horizontal: AppSpacing.cardPadding,
-        ),
-        decoration: AppDecorations.card(),
-        child: Row(
-          children: [
-            Container(
-              width:      AppSpacing.iconXl,
-              height:     AppSpacing.iconXl,
-              decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
-              child: const Icon(
-                Icons.history_rounded,
-                color: AppColors.primary,
-                size:  AppSpacing.iconMd,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Past Sessions',
-                      style: AppTypography.bodyMedium(size: 15)),
-                  Text('View all your training history',
-                      style: AppTypography.caption()),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textSecondary,
-              size:  AppSpacing.iconMd,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _SessionGraphs
-// Two line charts: depth over time + rate over time.
-// Only shown when SessionDetail.compressions is non-empty (detail mode).
+// _SessionGraphs — depth + rate graphs, scenario-aware target bands
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SessionGraphs extends StatelessWidget {
   final SessionDetail session;
-  const _SessionGraphs({required this.session});
+  final double        targetDepthMin;
+  final double        targetDepthMax;
+
+  const _SessionGraphs({
+    required this.session,
+    required this.targetDepthMin,
+    required this.targetDepthMax,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -666,30 +697,35 @@ class _SessionGraphs extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _GraphCard(
-          title:           'Compression Depth',
-          unit:            'cm',
-          minY:            0,
-          maxY:            9,
-          targetMin:       CprTargets.depthMin,
-          targetMax:       CprTargets.depthMax,
+          title:      'Compression Depth',
+          unit:       'cm',
+          minY:       0,
+          maxY:       9,
+          targetMin:  targetDepthMin,
+          targetMax:  targetDepthMax,
+          // Use instantaneousRate for Y but depth for X — depth graph
           spots: events
               .map((e) => FlSpot(e.timestampSec, e.depth))
               .toList(),
           lineColor:       AppColors.primary,
           leftLabels:      const ['0', '3', '6', '9'],
           leftLabelValues: const [0, 3, 6, 9],
-          targetLabel:     '5–6 cm',
+          targetLabel:     '${targetDepthMin.toStringAsFixed(0)}–${targetDepthMax.toStringAsFixed(0)} cm',
         ),
         const SizedBox(height: AppSpacing.md),
         _GraphCard(
-          title:           'Compression Rate',
-          unit:            'BPM',
-          minY:            60,
-          maxY:            160,
-          targetMin:       CprTargets.rateMin,
-          targetMax:       CprTargets.rateMax,
+          title:     'Compression Rate',
+          unit:      'BPM',
+          minY:      60,
+          maxY:      160,
+          targetMin: CprTargets.rateMin,
+          targetMax: CprTargets.rateMax,
+          // Use instantaneousRate — per-compression accuracy per spec v3.0
           spots: events
-              .map((e) => FlSpot(e.timestampSec, e.frequency))
+              .map((e) => FlSpot(
+            e.timestampSec,
+            e.instantaneousRate > 0 ? e.instantaneousRate : e.frequency,
+          ))
               .toList(),
           lineColor:       AppColors.success,
           leftLabels:      const ['60', '100', '120', '160'],
@@ -702,7 +738,7 @@ class _SessionGraphs extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _GraphCard — single chart with target band
+// _GraphCard
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _GraphCard extends StatelessWidget {
@@ -746,14 +782,13 @@ class _GraphCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Header ─────────────────────────────────────────────────────────
         Row(
           children: [
             Container(
-              width: AppSpacing.xs + AppSpacing.xxs,
+              width:  AppSpacing.xs + AppSpacing.xxs,
               height: AppSpacing.md,
               decoration: BoxDecoration(
-                color: lineColor,
+                color:        lineColor,
                 borderRadius: BorderRadius.circular(AppSpacing.xxs),
               ),
             ),
@@ -777,8 +812,6 @@ class _GraphCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-
-        // ── Chart ───────────────────────────────────────────────────────────
         SizedBox(
           height: 140,
           child: LineChart(
@@ -797,7 +830,7 @@ class _GraphCard extends StatelessWidget {
                 ],
               ),
               gridData: FlGridData(
-                show: true,
+                show:             true,
                 drawVerticalLine: false,
                 horizontalInterval: (maxY - minY) / 3,
                 getDrawingHorizontalLine: (_) => const FlLine(
@@ -808,11 +841,9 @@ class _GraphCard extends StatelessWidget {
               borderData: FlBorderData(show: false),
               titlesData: FlTitlesData(
                 topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
+                    sideTitles: SideTitles(showTitles: false)),
                 rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
+                    sideTitles: SideTitles(showTitles: false)),
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles:   true,
@@ -827,8 +858,7 @@ class _GraphCard extends StatelessWidget {
                         child: Text(
                           '${value.toInt()}s',
                           style: AppTypography.caption(
-                            color: AppColors.textDisabled,
-                          ),
+                              color: AppColors.textDisabled),
                         ),
                       );
                     },
@@ -844,8 +874,7 @@ class _GraphCard extends StatelessWidget {
                       return Text(
                         leftLabels[idx],
                         style: AppTypography.caption(
-                          color: AppColors.textDisabled,
-                        ),
+                            color: AppColors.textDisabled),
                       );
                     },
                   ),
@@ -879,41 +908,185 @@ class _GraphCard extends StatelessWidget {
                   getTooltipColor:      (_) => AppColors.primaryDark,
                   tooltipRoundedRadius: AppSpacing.cardRadiusSm,
                   getTooltipItems: (spots) => spots
-                      .map(
-                        (s) => LineTooltipItem(
-                      '${s.y.toStringAsFixed(1)} $unit',
-                      AppTypography.badge(
-                        size:  10,
-                        color: AppColors.textOnDark,
-                      ),
+                      .map((s) => LineTooltipItem(
+                    '${s.y.toStringAsFixed(1)} $unit',
+                    AppTypography.badge(
+                      size:  10,
+                      color: AppColors.textOnDark,
                     ),
-                  )
+                  ))
                       .toList(),
                 ),
               ),
             ),
           ),
         ),
-
-        // ── Target boundary labels ──────────────────────────────────────────
         const SizedBox(height: AppSpacing.xs),
         Row(
           children: [
             _TargetLine(
-              color: lineColor,
-              label: '${targetMin.toStringAsFixed(0)} $unit',
-            ),
+                color: lineColor,
+                label: '${targetMin.toStringAsFixed(0)} $unit'),
             const Spacer(),
             _TargetLine(
-              color: lineColor,
-              label: '${targetMax.toStringAsFixed(0)} $unit',
-            ),
+                color: lineColor,
+                label: '${targetMax.toStringAsFixed(0)} $unit'),
           ],
         ),
       ],
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Note card + dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NoteCard extends StatelessWidget {
+  final String?      note;
+  final bool         canEdit;
+  final VoidCallback onTap;
+
+  const _NoteCard({
+    required this.note,
+    required this.canEdit,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap:        canEdit ? onTap : null,
+      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+      child: Container(
+        width:      double.infinity,
+        padding:    const EdgeInsets.all(AppSpacing.md),
+        decoration: AppDecorations.card(),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.notes_rounded,
+                color: AppColors.primary, size: AppSpacing.iconSm),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Note', style: AppTypography.subheading()),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    note?.isNotEmpty == true ? note! : 'Tap to add a note…',
+                    style: AppTypography.bodyMedium(
+                      color: note?.isNotEmpty == true
+                          ? AppColors.textPrimary
+                          : AppColors.textDisabled,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (canEdit)
+              const Icon(Icons.edit_outlined,
+                  size: AppSpacing.iconSm, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoteDialog extends StatelessWidget {
+  final TextEditingController controller;
+  const _NoteDialog({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Session Note', style: AppTypography.heading(size: 18)),
+      content: TextField(
+        controller:  controller,
+        maxLines:    5,
+        autofocus:   true,
+        decoration: InputDecoration(
+          hintText:  'What did you notice?',
+          hintStyle: AppTypography.caption(color: AppColors.textDisabled),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+            borderSide: const BorderSide(color: AppColors.divider),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: context.pop,
+          child: Text('Cancel',
+              style: AppTypography.label(color: AppColors.textSecondary)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(controller.text),
+          child: Text('Save',
+              style: AppTypography.label(color: AppColors.primary)),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Past sessions button
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PastSessionsButton extends StatelessWidget {
+  const _PastSessionsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push(const SessionHistoryScreen()),
+      child: Container(
+        width:      double.infinity,
+        padding: const EdgeInsets.symmetric(
+          vertical:   AppSpacing.buttonPaddingV,
+          horizontal: AppSpacing.cardPadding,
+        ),
+        decoration: AppDecorations.card(),
+        child: Row(
+          children: [
+            Container(
+              width:      AppSpacing.iconXl,
+              height:     AppSpacing.iconXl,
+              decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+              child: const Icon(Icons.history_rounded,
+                  color: AppColors.primary, size: AppSpacing.iconMd),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Past Sessions',
+                      style: AppTypography.bodyMedium(size: 15)),
+                  Text('View all your training history',
+                      style: AppTypography.caption()),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textSecondary, size: AppSpacing.iconMd),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private UI helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TargetLine extends StatelessWidget {
   final Color  color;
@@ -931,18 +1104,12 @@ class _TargetLine extends StatelessWidget {
           color:  color.withValues(alpha: 0.4),
         ),
         const SizedBox(width: AppSpacing.xs),
-        Text(
-          label,
-          style: AppTypography.caption(color: color.withValues(alpha: 0.7)),
-        ),
+        Text(label,
+            style: AppTypography.caption(color: color.withValues(alpha: 0.7))),
       ],
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Private UI helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _SummaryCell extends StatelessWidget {
   final String value;
@@ -957,21 +1124,14 @@ class _SummaryCell extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              value,
-              style: AppTypography.numericDisplay(
-                size:  20,
-                color: AppColors.textOnDark,
-              ),
-            ),
+            Text(value,
+                style: AppTypography.numericDisplay(
+                    size: 20, color: AppColors.textOnDark)),
             const SizedBox(height: AppSpacing.xxs),
-            Text(
-              label,
-              style: AppTypography.badge(
-                size:  9,
-                color: AppColors.textOnDark.withValues(alpha: 0.7),
-              ),
-            ),
+            Text(label,
+                style: AppTypography.badge(
+                    size: 9,
+                    color: AppColors.textOnDark.withValues(alpha: 0.7))),
           ],
         ),
       ),
@@ -998,9 +1158,7 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical:   AppSpacing.sm,
-      ),
+          horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         color:        AppColors.textOnDark.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
@@ -1008,22 +1166,15 @@ class _StatTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: AppTypography.numericDisplay(
-              size:  18,
-              color: AppColors.textOnDark,
-            ),
-          ),
+          Text(value,
+              style: AppTypography.numericDisplay(
+                  size: 18, color: AppColors.textOnDark)),
           const SizedBox(height: AppSpacing.xxs),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTypography.badge(
-              size:  9,
-              color: AppColors.textOnDark.withValues(alpha: 0.7),
-            ),
-          ),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: AppTypography.badge(
+                  size: 9,
+                  color: AppColors.textOnDark.withValues(alpha: 0.7))),
         ],
       ),
     );
@@ -1069,21 +1220,16 @@ class _DetailRow extends StatelessWidget {
               children: [
                 Text(label, style: AppTypography.bodyMedium(size: 13)),
                 if (note != null)
-                  Text(
-                    note!,
-                    style: AppTypography.caption(
-                        color: AppColors.textDisabled),
-                  ),
+                  Text(note!,
+                      style: AppTypography.caption(
+                          color: AppColors.textDisabled)),
               ],
             ),
           ),
-          Text(
-            value,
-            style: AppTypography.bodyBold(
-              size:  14,
-              color: valueColor ?? AppColors.textPrimary,
-            ),
-          ),
+          Text(value,
+              style: AppTypography.bodyBold(
+                  size:  14,
+                  color: valueColor ?? AppColors.textPrimary)),
         ],
       ),
     );
@@ -1098,9 +1244,18 @@ class _HDivider extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Divider(
-        height: AppSpacing.dividerThickness,
-        color:  AppColors.divider,
-      ),
+          height: AppSpacing.dividerThickness, color: AppColors.divider),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// gradeColor — shared utility used by SessionCard in session_history.dart
+// ─────────────────────────────────────────────────────────────────────────────
+
+Color gradeColor(double grade) {
+  if (grade >= 90) return AppColors.success;
+  if (grade >= 75) return AppColors.primary;
+  if (grade >= 55) return AppColors.warning;
+  return AppColors.error;
 }

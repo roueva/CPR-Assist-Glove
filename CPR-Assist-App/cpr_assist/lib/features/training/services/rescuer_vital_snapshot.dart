@@ -26,6 +26,17 @@ class RescuerVitalSnapshot {
   /// Context when sampled: "active", "ventilation", or "pulse_check".
   final String pauseType;
 
+  /// HRV RMSSD in ms (0–200, clamped uint8 from glove).
+  /// Within-session relative fatigue indicator. Not absolute clinical value.
+  final int rmssd;
+
+  /// Rescuer perfusion index 0–100 (wrist MAX30102).
+  /// Dropping PI during session indicates vasoconstriction/fatigue.
+  final int rescuerPi;
+
+  /// Composite physiological fatigue score 0–100 at time of snapshot.
+  final int fatigueScore;
+
   const RescuerVitalSnapshot({
     required this.timestampMs,
     this.heartRate     = 0.0,
@@ -33,6 +44,9 @@ class RescuerVitalSnapshot {
     this.temperature   = 0.0,
     this.signalQuality = 0,
     this.pauseType     = 'active',
+    this.rmssd        = 0,
+    this.rescuerPi    = 0,
+    this.fatigueScore = 0,
   });
 
   double get timestampSec => timestampMs / 1000.0;
@@ -45,6 +59,9 @@ class RescuerVitalSnapshot {
       temperature:   (json['temperature']    as num?)?.toDouble() ?? 0.0,
       signalQuality: (json['signal_quality'] as num?)?.toInt()    ?? 0,
       pauseType:      json['pause_type']     as String?           ?? 'active',
+      rmssd:        (json['rmssd']         as num?)?.toInt() ?? 0,
+      rescuerPi:    (json['rescuer_pi']    as num?)?.toInt() ?? 0,
+      fatigueScore: (json['fatigue_score'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -55,5 +72,8 @@ class RescuerVitalSnapshot {
     'temperature':    temperature,
     'signal_quality': signalQuality,
     'pause_type':     pauseType,
+    'rmssd':        rmssd,
+    'rescuer_pi':   rescuerPi,
+    'fatigue_score': fatigueScore,
   };
 }

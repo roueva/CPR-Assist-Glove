@@ -17,6 +17,9 @@ import 'package:cpr_assist/features/aed_map/screens/aed_webview_screen.dart';
 import 'package:cpr_assist/features/training/screens/session_service.dart';
 import 'package:cpr_assist/features/training/services/session_detail.dart';
 import 'package:cpr_assist/features/training/services/compression_event.dart';
+import 'package:cpr_assist/features/training/services/ventilation_event.dart';
+import 'package:cpr_assist/features/training/services/pulse_check_event.dart';
+import 'package:cpr_assist/features/training/services/rescuer_vital_snapshot.dart';
 import 'package:cpr_assist/features/training/widgets/session_history.dart';
 import 'package:cpr_assist/features/training/widgets/session_results.dart';
 
@@ -25,7 +28,11 @@ import 'package:cpr_assist/features/live_cpr/widgets/live_cpr_widgets.dart';
 import 'package:cpr_assist/features/live_cpr/widgets/depth_bar.dart';
 import 'package:cpr_assist/features/live_cpr/widgets/rotating_arrow.dart';
 
-// Other dialogs
+// Leaderboard
+import 'package:cpr_assist/features/training/screens/leaderboard_screen.dart';
+
+// Other
+import '../../providers/app_providers.dart';
 import '../account/screens/account_menu.dart';
 import '../training/widgets/simulation_112_dialog.dart';
 
@@ -38,10 +45,60 @@ import '../training/widgets/simulation_112_dialog.dart';
 
 List<CompressionEvent> _mockCompressions({int count = 60}) =>
     List.generate(count, (i) => CompressionEvent(
-      timestampMs:    i * 950,
-      depth:          5.3 + (i % 5 == 0 ? 1.1 : i % 3 == 0 ? -0.9 : 0.2),
-      frequency:      110 + (i % 4 == 0 ? 13.0 : i % 6 == 0 ? -14.0 : 1.5),
-      recoilAchieved: i % 7 != 0,
+      timestampMs:       i * 950,
+      depth:             5.3 + (i % 5 == 0 ? 1.1 : i % 3 == 0 ? -0.9 : 0.2),
+      instantaneousRate: 110 + (i % 4 == 0 ? 13.0 : i % 6 == 0 ? -14.0 : 1.5),
+      frequency:         110 + (i % 4 == 0 ? 13.0 : i % 6 == 0 ? -14.0 : 1.5),
+      recoilAchieved:    i % 7 != 0,
+    ));
+
+// ── Mock ventilation events ───────────────────────────────────────────────
+
+List<VentilationEvent> _mockVentilations({int count = 4}) =>
+    List.generate(count, (i) => VentilationEvent(
+      timestampMs:       (i + 1) * 29000,
+      cycleNumber:       i + 1,
+      ventilationsGiven: i % 3 == 0 ? 1 : 2,
+      durationSec:       3.2 + (i * 0.4),
+      compliant:         i % 3 != 0,
+    ));
+
+// ── Mock pulse check events ───────────────────────────────────────────────
+
+List<PulseCheckEvent> _mockPulseChecks({bool withPulse = false}) => [
+  const PulseCheckEvent(
+    timestampMs:    120000,
+    intervalNumber: 1,
+    classification: 0,
+    detectedBpm:    0.0,
+    confidence:     72,
+    perfusionIndex: 18,
+    userDecision:   'continue',
+  ),
+  if (withPulse) const PulseCheckEvent(
+    timestampMs:    240000,
+    intervalNumber: 2,
+    classification: 2,
+    detectedBpm:    64.0,
+    confidence:     85,
+    perfusionIndex: 42,
+    userDecision:   'stop_cpr',
+  ),
+];
+
+// ── Mock rescuer vitals ───────────────────────────────────────────────────
+
+List<RescuerVitalSnapshot> _mockRescuerVitals() => List.generate(6, (i) =>
+    RescuerVitalSnapshot(
+      timestampMs:   i * 30000,
+      heartRate:     88 + (i * 3.0),
+      spO2:          98 - (i * 0.3),
+      temperature:   37.1,
+      signalQuality: 75 + i,
+      pauseType:     i % 2 == 0 ? 'ventilation' : 'active',
+      rmssd:         42 - i,
+      rescuerPi:     55,
+      fatigueScore:  i * 8,
     ));
 
 // ── Mock SessionDetail ────────────────────────────────────────────────────
@@ -56,8 +113,13 @@ SessionDetail _mockDetail({
   double avgDepth           = 5.4,
   double avgFrequency       = 112,
   int    durationSecs       = 183,
-  int?   userHr,
+  double? userHr,
+  String mode               = 'training',
+  String scenario           = 'standard_adult',
   bool   withGraphs         = false,
+  bool   withVentilations   = false,
+  bool   withPulseChecks    = false,
+  bool   withRescuerVitals  = false,
 }) =>
     SessionDetail(
       sessionStart:           DateTime.now().subtract(const Duration(hours: 2)),
@@ -66,17 +128,32 @@ SessionDetail _mockDetail({
       correctFrequency:       correctFrequency,
       correctRecoil:          correctRecoil,
       depthRateCombo:         depthRateCombo,
+      correctPosture:         (correctRecoil * 0.85).round(),
+      leaningCount:           (compressions * 0.04).round(),
+      overForceCount:         2,
       averageDepth:           avgDepth,
       averageFrequency:       avgFrequency,
-      sessionDuration:        durationSecs,
-      totalGrade:             grade,
-      noFlowTime:             4.2,
-      handsOnRatio:           0.88,
-      timeToFirstCompression: 1.8,
+      averageEffectiveDepth:  avgDepth * 0.97,
+      peakDepth:              6.1,
       depthConsistency:       83,
       frequencyConsistency:   91,
-      userHeartRate:          userHr,
+      handsOnRatio:           0.88,
+      noFlowTime:             4.2,
+      timeToFirstCompression: 1.8,
+      sessionDuration:        durationSecs,
+      totalGrade:             mode == 'emergency' ? 0.0 : grade,
+      rescuerHRLastPause:     userHr,
+      mode:                   mode,
+      scenario:               scenario,
+      ventilationCount:       withVentilations ? 4 : 0,
+      ventilationCompliance:  withVentilations ? 75.0 : 0.0,
+      pulseChecksPrompted:    withPulseChecks ? 2 : 0,
+      pulseChecksComplied:    withPulseChecks ? 2 : 0,
+      pulseDetectedFinal:     withPulseChecks,
       compressions:           withGraphs ? _mockCompressions() : [],
+      ventilations:           withVentilations ? _mockVentilations() : [],
+      pulseChecks:            withPulseChecks ? _mockPulseChecks(withPulse: mode == 'emergency') : [],
+      rescuerVitals:          withRescuerVitals ? _mockRescuerVitals() : [],
     );
 
 // ── Mock SessionSummary ───────────────────────────────────────────────────
@@ -91,7 +168,9 @@ SessionSummary _mockSummary({
   double avgDepth         = 5.4,
   double avgFrequency     = 112,
   int    durationSecs     = 183,
-  int?   userHr,
+  double? userHr,
+  String mode = 'training',
+  String scenario = 'standard_adult',
 }) =>
     SessionSummary(
       totalGrade:       grade,
@@ -104,7 +183,9 @@ SessionSummary _mockSummary({
       averageFrequency: avgFrequency,
       sessionDuration:  durationSecs,
       sessionStart:     DateTime.now().subtract(const Duration(hours: 2)),
-      userHeartRate:    userHr,
+      rescuerHRLastPause: userHr,
+      mode:             mode,
+      scenario:         scenario,
     );
 
 final _mockSessions = [
@@ -113,6 +194,9 @@ final _mockSessions = [
   _mockSummary(grade: 72, compressions: 98,  correctDepth: 75,  durationSecs: 140),
   _mockSummary(grade: 55, compressions: 80,  correctDepth: 44,  durationSecs: 95),
   _mockSummary(grade: 91, compressions: 155, correctDepth: 140, durationSecs: 200, userHr: 95),
+  _mockSummary(grade: 0,  compressions: 200, correctDepth: 170, durationSecs: 240, mode: 'emergency'),
+  _mockSummary(grade: 78, compressions: 120, correctDepth: 100, durationSecs: 160, scenario: 'pediatric'),
+  _mockSummary(grade: 82, compressions: 130, correctDepth: 110, durationSecs: 170, mode: 'training_no_feedback'),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,11 +211,11 @@ class DevPreviewScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:       AppColors.headerBg,
-        foregroundColor:       AppColors.textPrimary,
-        elevation:             0,
+        backgroundColor:        AppColors.headerBg,
+        foregroundColor:        AppColors.textPrimary,
+        elevation:              0,
         scrolledUnderElevation: 0,
-        toolbarHeight:         AppSpacing.headerHeight,
+        toolbarHeight:          AppSpacing.headerHeight,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: AppColors.primary),
@@ -229,6 +313,13 @@ class DevPreviewScreen extends StatelessWidget {
           const _SectionHeader(label: 'Training & Sessions'),
           _PreviewCard(children: [
             _NavTile(
+              icon:     Icons.leaderboard_rounded,
+              label:    'Leaderboard Screen',
+              subtitle: 'Global · Friends · My Sessions tabs',
+              onTap:    () => context.push(const LeaderboardScreen()),
+            ),
+            const _Divider(),
+            _NavTile(
               icon:     Icons.history_rounded,
               label:    'Session History Screen',
               subtitle: 'Full training history with filters',
@@ -237,32 +328,28 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:     Icons.bar_chart_rounded,
-              label:    'Session Results — Post-session (87%)',
-              subtitle: 'Detail mode: flow metrics, no graphs',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(detail: _mockDetail()),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.show_chart_rounded,
-              label:    'Session Results — With Graphs (87%)',
-              subtitle: 'Detail mode: depth + rate charts',
+              label:    'Session Results — Excellent (94%)',
+              subtitle: 'Training · standard adult · no graphs',
               onTap:    () => context.push(
                 SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(withGraphs: true, userHr: 88),
+                  detail: _mockDetail(
+                    grade: 94, compressions: 160, correctDepth: 150,
+                    withVentilations: true,
+                  ),
                 ),
               ),
             ),
             const _Divider(),
             _NavTile(
-              icon:     Icons.bar_chart_rounded,
-              label:    'Session Results — Excellent (94%)',
-              subtitle: 'Detail mode: no graphs',
+              icon:     Icons.show_chart_rounded,
+              label:    'Session Results — Good (87%) + Graphs',
+              subtitle: 'Training · with depth/rate charts + rescuer HR',
               onTap:    () => context.push(
                 SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(grade: 94, compressions: 160,
-                      correctDepth: 150),
+                  detail: _mockDetail(
+                    withGraphs: true, withVentilations: true,
+                    withRescuerVitals: true, userHr: 88,
+                  ),
                 ),
               ),
             ),
@@ -270,20 +357,66 @@ class DevPreviewScreen extends StatelessWidget {
             _NavTile(
               icon:     Icons.bar_chart_rounded,
               label:    'Session Results — Needs Work (45%)',
-              subtitle: 'Detail mode: low scores',
+              subtitle: 'Training · low scores across all metrics',
               onTap:    () => context.push(
                 SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(grade: 45, compressions: 60,
-                      correctDepth: 22, correctFrequency: 30,
-                      correctRecoil: 15),
+                  detail: _mockDetail(
+                    grade: 45, compressions: 60,
+                    correctDepth: 22, correctFrequency: 30, correctRecoil: 15,
+                  ),
+                ),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.child_care_rounded,
+              label:    'Session Results — Pediatric (78%)',
+              subtitle: 'Pediatric scenario · 4–5 cm depth target · with graphs',
+              onTap:    () => context.push(
+                SessionResultsScreen.fromDetail(
+                  detail: _mockDetail(
+                    grade: 78, scenario: 'pediatric',
+                    withGraphs: true, withVentilations: true,
+                  ),
+                ),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.visibility_off_outlined,
+              label:    'Session Results — No-Feedback (82%)',
+              subtitle: 'training_no_feedback · blind assessment mode',
+              onTap:    () => context.push(
+                SessionResultsScreen.fromDetail(
+                  detail: _mockDetail(
+                    grade: 82, mode: 'training_no_feedback',
+                    withGraphs: true,
+                  ),
+                ),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.emergency_outlined,
+              iconColor: AppColors.emergencyRed,
+              label:     'Session Results — Emergency',
+              subtitle:  'No grade · factual summary · ventilations + pulse checks',
+              onTap: () => context.push(
+                SessionResultsScreen.fromDetail(
+                  detail: _mockDetail(
+                    grade: 0, mode: 'emergency',
+                    withVentilations: true,
+                    withPulseChecks: true,
+                    withRescuerVitals: true,
+                  ),
                 ),
               ),
             ),
             const _Divider(),
             _NavTile(
               icon:     Icons.history_edu_rounded,
-              label:    'Session Results — History (Summary)',
-              subtitle: 'Summary mode: no flow data, no graphs',
+              label:    'Session Results — History (Summary mode)',
+              subtitle: 'Opened from history card · no flow data · no graphs',
               onTap:    () => context.push(
                 SessionResultsScreen.fromSummary(
                   summary:       _mockSummary(userHr: 98),
@@ -299,7 +432,7 @@ class DevPreviewScreen extends StatelessWidget {
             _NavTile(
               icon:     Icons.credit_card_rounded,
               label:    'Session Card List',
-              subtitle: '5 mock sessions in a scrollable list',
+              subtitle: '8 mock sessions — training, emergency, pediatric, no-feedback',
               onTap:    () => context.push(const _SessionCardListPreview()),
             ),
             const _Divider(),
@@ -486,38 +619,55 @@ class DevPreviewScreen extends StatelessWidget {
           _PreviewCard(children: [
             _NavTile(
               icon:     Icons.monitor_heart_outlined,
-              label:    'Live CPR Metrics Card',
-              subtitle: 'Active session state',
+              label:    'CPR Metrics Card — Active Session',
+              subtitle: 'Depth bar + rate gauge + counters running',
               onTap:    () => context.push(const _LiveCprWidgetsPreview()),
             ),
             const _Divider(),
             _NavTile(
               icon:     Icons.monitor_heart_outlined,
-              label:    'Live CPR Metrics Card — Idle',
-              subtitle: 'No active session',
+              label:    'CPR Metrics Card — Idle',
+              subtitle: 'No active session · waiting for glove',
               onTap:    () => context.push(
                 const _LiveCprWidgetsPreview(idle: true),
               ),
             ),
             const _Divider(),
             _NavTile(
+              icon:     Icons.monitor_heart_outlined,
+              label:    'CPR Metrics Card — Pediatric',
+              subtitle: 'Scenario: pediatric · 4–5 cm depth target',
+              onTap:    () => context.push(
+                const _LiveCprWidgetsPreview(scenario: CprScenario.pediatric),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
               icon:     Icons.favorite_border_rounded,
-              label:    'Vitals Cards (Patient + Rescuer)',
-              subtitle: 'Heart rate and temperature readouts',
+              label:    'Vitals Cards — Active (Patient + Rescuer)',
+              subtitle: 'Normal readings during compressions',
               onTap:    () => context.push(const _VitalsCardsPreview()),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.favorite_rounded,
+              iconColor: AppColors.success,
+              label:     'Vitals Cards — Pulse Check Window',
+              subtitle:  'Patient vitals active · rescuer at pause · PPG signal',
+              onTap:    () => context.push(const _VitalsCardsPulseCheckPreview()),
             ),
             const _Divider(),
             _NavTile(
               icon:     Icons.compress_rounded,
               label:    'Animated Depth Bar',
-              subtitle: 'Vertical gauge — live compression depth',
+              subtitle: 'Interactive slider — live compression depth',
               onTap:    () => context.push(const _DepthBarPreview()),
             ),
             const _Divider(),
             _NavTile(
               icon:     Icons.rotate_90_degrees_ccw_rounded,
               label:    'Rotating Arrow (Frequency)',
-              subtitle: 'Needle gauge — live CPR rate',
+              subtitle: 'Interactive slider — live CPR rate gauge',
               onTap:    () => context.push(const _RotatingArrowPreview()),
             ),
           ]),
@@ -623,14 +773,25 @@ class _PersonalBestPreviewScreen extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LiveCprWidgetsPreview extends StatelessWidget {
-  final bool idle;
-  const _LiveCprWidgetsPreview({this.idle = false});
+  final bool        idle;
+  final CprScenario scenario;
+
+  const _LiveCprWidgetsPreview({
+    this.idle     = false,
+    this.scenario = CprScenario.standardAdult,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final title = idle
+        ? 'CPR Metrics — Idle'
+        : scenario == CprScenario.pediatric
+        ? 'CPR Metrics — Pediatric'
+        : 'CPR Metrics — Active';
+
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
-      appBar: const _PreviewAppBar(title: 'Live CPR Metrics Card'),
+      appBar: _PreviewAppBar(title: title),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.md, AppSpacing.md,
@@ -642,6 +803,7 @@ class _LiveCprWidgetsPreview extends StatelessWidget {
           cprTime:          idle ? Duration.zero : const Duration(minutes: 2, seconds: 47),
           compressionCount: idle ? 0 : 142,
           isSessionActive:  !idle,
+          scenario:         scenario,
         ),
       ),
     );
@@ -649,7 +811,7 @@ class _LiveCprWidgetsPreview extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vitals cards preview
+// Vitals cards — active session
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VitalsCardsPreview extends StatelessWidget {
@@ -659,7 +821,7 @@ class _VitalsCardsPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
-      appBar: const _PreviewAppBar(title: 'Vitals Cards'),
+      appBar: const _PreviewAppBar(title: 'Vitals Cards — Active'),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.md, AppSpacing.md,
@@ -669,18 +831,112 @@ class _VitalsCardsPreview extends StatelessWidget {
           children: [
             VitalsCard(
               label:       'Patient Vitals',
-              heartRate:   72,
+              heartRate:   0,
               temperature: 36.8,
             ),
             SizedBox(height: AppSpacing.md),
             VitalsCard(
-              label:       'Your Vitals',
-              heartRate:   98,
-              temperature: 37.1,
+              label:         'Your Vitals',
+              heartRate:     98,
+              spO2:          97,
+              temperature:   37.1,
+              signalQuality: 85,
             ),
             SizedBox(height: AppSpacing.md),
             VitalsCard(
-              label:    'Patient Vitals — No Data',
+              label:    'Patient Vitals — No Signal',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vitals cards — pulse check window
+// Shows patient vitals active + rescuer at pause + quality-gated display
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VitalsCardsPulseCheckPreview extends StatelessWidget {
+  const _VitalsCardsPulseCheckPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.screenBgGrey,
+      appBar: const _PreviewAppBar(title: 'Vitals — Pulse Check Window'),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.md, AppSpacing.md,
+          AppSpacing.md + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Context label
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical:   AppSpacing.xs,
+              ),
+              decoration: AppDecorations.chip(
+                color: AppColors.success,
+                bg:    AppColors.successBg,
+              ),
+              child: Text(
+                'PULSE CHECK ACTIVE — fingertip MAX30102 streaming',
+                style: AppTypography.badge(color: AppColors.success),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Patient vitals — live during pulse check
+            const VitalsCard(
+              label:       'Patient Vitals',
+              heartRate:   64,
+              spO2:        94,
+              temperature: 36.5,
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Patient — high quality signal
+            const VitalsCard(
+              label:         'Patient Vitals — Strong Signal (quality 85)',
+              heartRate:     71,
+              spO2:          96,
+              temperature:   36.7,
+              signalQuality: 85,
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Patient — weak signal (below 40 threshold → greyed)
+            const VitalsCard(
+              label:         'Patient Vitals — Weak Signal (quality 28)',
+              heartRate:     55,
+              spO2:          88,
+              temperature:   36.2,
+              signalQuality: 28,
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Rescuer at pause — motion settled, good quality
+            const VitalsCard(
+              label:         'Your Vitals — At Pause (quality 78)',
+              heartRate:     112,
+              spO2:          98,
+              temperature:   37.2,
+              signalQuality: 78,
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Rescuer during compressions — motion artefact
+            const VitalsCard(
+              label:         'Your Vitals — During Compressions (quality 12)',
+              heartRate:     118,
+              spO2:          97,
+              temperature:   37.3,
+              signalQuality: 12,
             ),
           ],
         ),
@@ -879,8 +1135,7 @@ class _BatteryWidgetPreview extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Charge Levels',
-                    style: AppTypography.subheading()),
+                Text('Charge Levels', style: AppTypography.subheading()),
                 const SizedBox(height: AppSpacing.md),
                 ...levels.map((pct) => Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -894,8 +1149,7 @@ class _BatteryWidgetPreview extends StatelessWidget {
                 )),
                 const Divider(color: AppColors.divider),
                 const SizedBox(height: AppSpacing.sm),
-                Text('Charging',
-                    style: AppTypography.subheading()),
+                Text('Charging', style: AppTypography.subheading()),
                 const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
@@ -918,7 +1172,6 @@ class _BatteryWidgetPreview extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BLE status indicator preview
-// Requires real BLEConnection — show static status labels instead
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BleStatusPreview extends StatelessWidget {
@@ -977,8 +1230,8 @@ class _BleStatusPreview extends StatelessWidget {
                               : s == 'Error'     ? Icons.bluetooth_disabled_rounded
                               : s == 'Scanning'  ? Icons.bluetooth_searching_rounded
                               : Icons.bluetooth_rounded,
-                          size: AppSpacing.iconSm,
-                          color: s == 'Connected'  ? AppColors.success
+                          size:  AppSpacing.iconSm,
+                          color: s == 'Connected' ? AppColors.success
                               : s == 'Error'      ? AppColors.emergencyRed
                               : AppColors.primary,
                         ),
@@ -1040,10 +1293,10 @@ class _PreviewAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor:       AppColors.headerBg,
-      elevation:             0,
+      backgroundColor:        AppColors.headerBg,
+      elevation:              0,
       scrolledUnderElevation: 0,
-      toolbarHeight:         AppSpacing.headerHeight,
+      toolbarHeight:          AppSpacing.headerHeight,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded,
             color: AppColors.primary),

@@ -44,13 +44,15 @@ class SessionHistoryScreen extends ConsumerStatefulWidget {
 class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
   String _filter = 'All';
 
-  static const _filters = ['All', 'Recent', 'Excellent', 'Good'];
+  static const _filters = ['All', 'Recent', 'Emergency', 'Training', 'Excellent', 'Good'];
 
   List<SessionSummary> _apply(List<SessionSummary> all) {
     switch (_filter) {
       case 'Excellent': return all.where((s) => s.totalGrade >= 90).toList();
       case 'Good':      return all.where((s) => s.totalGrade >= 70 && s.totalGrade < 90).toList();
       case 'Recent':    return all.take(10).toList();
+      case 'Emergency': return all.where((s) => s.isEmergency).toList();
+      case 'Training':  return all.where((s) => s.isTraining).toList();
       default:          return all;
     }
   }
@@ -73,7 +75,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
           onPressed: context.pop,
         ),
         title: Text(
-          'Training History',
+          'Session History',
           style: AppTypography.heading(size: 20, color: AppColors.primary),
         ),
       ),
@@ -147,12 +149,14 @@ class _StatsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avg = sessions.isEmpty
+    final trainingSessions = sessions.where((s) => s.isTraining).toList();
+    final avg = trainingSessions.isEmpty
         ? 0.0
-        : sessions.map((s) => s.totalGrade).reduce((a, b) => a + b) /
-        sessions.length;
+        : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a + b) /
+        trainingSessions.length;
     final total =
     sessions.fold<int>(0, (sum, s) => sum + s.compressionCount);
+    final avgDisplay = trainingSessions.isEmpty ? '—' : '${avg.toStringAsFixed(0)}%';
 
     return Container(
       margin:  const EdgeInsets.all(AppSpacing.md),
@@ -161,7 +165,7 @@ class _StatsHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: _StatItem('Total Sessions', '${sessions.length}')),
-          Expanded(child: _StatItem('Average Grade',  '${avg.toStringAsFixed(0)}%')),
+          Expanded(child: _StatItem('Avg Training Grade', avgDisplay)),
           Expanded(child: _StatItem('Compressions',   '$total')),
         ],
       ),
@@ -258,12 +262,12 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'No Training Sessions Yet',
+            'No Sessions Yet',
             style: AppTypography.subheading(color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Complete your first training session\nto see your progress here',
+            'Complete your first session\nto see your progress here',
             textAlign: TextAlign.center,
             style: AppTypography.body(color: AppColors.textDisabled),
           ),
@@ -375,20 +379,35 @@ class SessionCard extends ConsumerWidget  {
                       'Session $sessionNumber',
                       style: AppTypography.subheading(color: AppColors.primary),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.chipPaddingH,
-                        vertical:   AppSpacing.chipPaddingV,
-                      ),
-                      decoration: AppDecorations.chip(
-                        color: color,
-                        bg:    color.withValues(alpha: 0.12),
-                      ),
-                      child: Text(
-                        '${session.totalGrade.toStringAsFixed(0)}%',
-                        style: AppTypography.label(color: color),
-                      ),
-                    ),
+            session.isEmergency
+                ? Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.chipPaddingH,
+                vertical:   AppSpacing.chipPaddingV,
+              ),
+              decoration: AppDecorations.chip(
+                color: AppColors.emergencyRed,
+                bg:    AppColors.emergencyBg,
+              ),
+              child: Text(
+                'EMERGENCY',
+                style: AppTypography.label(color: AppColors.emergencyRed),
+              ),
+            )
+                : Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.chipPaddingH,
+                vertical:   AppSpacing.chipPaddingV,
+              ),
+              decoration: AppDecorations.chip(
+                color: color,
+                bg:    color.withValues(alpha: 0.12),
+              ),
+              child: Text(
+                '${session.totalGrade.toStringAsFixed(0)}%',
+                style: AppTypography.label(color: color),
+              ),
+            ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),

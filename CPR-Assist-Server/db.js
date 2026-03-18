@@ -165,7 +165,12 @@ async function ensureSessionTables() {
                 posture_ok            BOOLEAN DEFAULT false,
                 leaning_detected      BOOLEAN DEFAULT false,
                 wrist_alignment_angle FLOAT DEFAULT 0,
-                effective_depth       FLOAT DEFAULT 0
+                effective_depth       FLOAT DEFAULT 0,
+                wrist_flexion_angle   FLOAT DEFAULT 0,
+                instantaneous_rate    FLOAT DEFAULT 0,
+                compression_axis_dev  FLOAT DEFAULT 0,
+                peak_force            FLOAT DEFAULT 0,
+                downstroke_time_ms    INT DEFAULT 0
             );
         `);
 
@@ -203,7 +208,10 @@ async function ensureSessionTables() {
                 detected_bpm     FLOAT DEFAULT 0,
                 confidence       INT DEFAULT 0,
                 perfusion_index  INT DEFAULT 0,
-                user_decision    VARCHAR(20)
+                user_decision    VARCHAR(20),
+                classification   INT DEFAULT 0,
+                detector_a_count INT DEFAULT 0,
+                detector_b_count INT DEFAULT 0
             );
         `);
 
@@ -222,7 +230,10 @@ async function ensureSessionTables() {
                 spo2           FLOAT DEFAULT 0,
                 temperature    FLOAT DEFAULT 0,
                 signal_quality INT DEFAULT 0,
-                pause_type     VARCHAR(20)
+                pause_type     VARCHAR(20),
+                rmssd         FLOAT DEFAULT 0,
+                rescuer_pi    INT DEFAULT 0,
+                fatigue_score INT DEFAULT 0
             );
         `);
 

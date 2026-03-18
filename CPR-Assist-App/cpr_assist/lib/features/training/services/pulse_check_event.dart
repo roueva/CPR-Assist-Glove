@@ -15,8 +15,23 @@ class PulseCheckEvent {
   /// Which 2-minute interval triggered this check (starts at 1).
   final int intervalNumber;
 
-  /// True if glove detected a pulse.
-  final bool detected;
+  /// 3-way classification per spec v3.0:
+  /// 0 = ABSENT  — no pulse detected
+  /// 1 = UNCERTAIN — weak signal, verify manually
+  /// 2 = PRESENT — pulse detected
+  final int classification;
+
+  /// Raw Detector A peak count (all peaks, no refractory gate).
+  /// Evidence count for thesis analysis.
+  final int detectorACount;
+
+  /// Confirmed Detector B beat count (physiologically constrained rate).
+  final int detectorBCount;
+
+  /// True when classification == 2 (PRESENT).
+  bool get detected => classification == 2;
+  bool get isUncertain => classification == 1;
+  bool get isAbsent => classification == 0;
 
   /// BPM — 0.0 if not detected.
   final double detectedBpm;
@@ -33,10 +48,12 @@ class PulseCheckEvent {
   const PulseCheckEvent({
     required this.timestampMs,
     required this.intervalNumber,
-    this.detected       = false,
-    this.detectedBpm    = 0.0,
-    this.confidence     = 0,
-    this.perfusionIndex = 0,
+    this.classification  = 0,
+    this.detectorACount  = 0,
+    this.detectorBCount  = 0,
+    this.detectedBpm     = 0.0,
+    this.confidence      = 0,
+    this.perfusionIndex  = 0,
     this.userDecision,
   });
 
@@ -46,7 +63,11 @@ class PulseCheckEvent {
     return PulseCheckEvent(
       timestampMs:    (json['ts']               as num).toInt(),
       intervalNumber: (json['interval_number']  as num).toInt(),
-      detected:        json['detected']         as bool? ?? false,
+      // classification is primary; fall back to bool detected for old records
+      classification: (json['classification']   as num?)?.toInt()
+          ?? ((json['detected'] as bool? ?? false) ? 2 : 0),
+      detectorACount: (json['detector_a_count'] as num?)?.toInt()    ?? 0,
+      detectorBCount: (json['detector_b_count'] as num?)?.toInt()    ?? 0,
       detectedBpm:    (json['detected_bpm']     as num?)?.toDouble() ?? 0.0,
       confidence:     (json['confidence']       as num?)?.toInt()    ?? 0,
       perfusionIndex: (json['perfusion_index']  as num?)?.toInt()    ?? 0,
@@ -55,12 +76,15 @@ class PulseCheckEvent {
   }
 
   Map<String, dynamic> toJson() => {
-    'ts':              timestampMs,
-    'interval_number': intervalNumber,
-    'detected':        detected,
-    'detected_bpm':    detectedBpm,
-    'confidence':      confidence,
-    'perfusion_index': perfusionIndex,
+    'ts':               timestampMs,
+    'interval_number':  intervalNumber,
+    'classification':   classification,
+    'detected':         detected,          // keep for backend backward compat
+    'detected_bpm':     detectedBpm,
+    'confidence':       confidence,
+    'perfusion_index':  perfusionIndex,
+    'detector_a_count': detectorACount,
+    'detector_b_count': detectorBCount,
     if (userDecision != null) 'user_decision': userDecision,
   };
 }
