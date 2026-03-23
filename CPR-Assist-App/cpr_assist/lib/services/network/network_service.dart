@@ -199,6 +199,9 @@ class NetworkService {
       {bool requiresAuth = false}) =>
       _makeRequest('PATCH', endpoint, body: body, requiresAuth: requiresAuth);
 
+  Future<dynamic> delete(String endpoint, {bool requiresAuth = false}) =>
+      _makeRequest('DELETE', endpoint, requiresAuth: requiresAuth);
+
   Future<dynamic> _makeRequest(
       String method,
       String endpoint, {
@@ -228,6 +231,9 @@ class NetworkService {
               .timeout(AppConstants.apiTimeout);
         case 'PATCH':
           response = await http.patch(url, headers: headers, body: jsonEncode(body))
+              .timeout(AppConstants.apiTimeout);
+        case 'DELETE':
+          response = await http.delete(url, headers: headers)
               .timeout(AppConstants.apiTimeout);
         default:
           response = await http.get(url, headers: headers)

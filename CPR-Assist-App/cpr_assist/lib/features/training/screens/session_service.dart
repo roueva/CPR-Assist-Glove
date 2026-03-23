@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-
 import '../../../services/network/network_service.dart';
 import '../services/compression_event.dart';
 import '../services/rescuer_vital_snapshot.dart';
@@ -29,9 +28,11 @@ class SessionService {
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   /// Fetch all session summaries for list views (history, leaderboard).
+  /// Fetch all session summaries for list views (history, leaderboard).
+  /// Uses the paginated /sessions/summary endpoint with a high limit to get all records.
   Future<List<SessionSummary>> fetchSummaries() async {
     final response = await _network.get(
-      '/sessions/summaries',
+      '/sessions/summary?limit=100&offset=0',
       requiresAuth: true,
     );
     if (response['success'] != true) {
@@ -85,6 +86,52 @@ class SessionService {
     }
   }
 
+  /// Delete one session by ID. Sub-tables deleted via ON DELETE CASCADE.
+  Future<bool> deleteSession(int sessionId) async {
+    try {
+      await _network.delete('/sessions/$sessionId', requiresAuth: true);
+      return true;
+    } catch (e) {
+      debugPrint('deleteSession failed: $e');
+      return false;
+    }
+  }
+
+  /// Delete all sessions for the current user.
+  Future<bool> deleteAllSessions() async {
+    try {
+      await _network.delete('/sessions/all', requiresAuth: true);
+      return true;
+    } catch (e) {
+      debugPrint('deleteAllSessions failed: $e');
+      return false;
+    }
+  }
+
+  /// Fetch global leaderboard for a scenario.
+  /// Returns the ranked list + current user's own rank entry (may be null
+  /// if user hasn't qualified with ≥3 sessions yet).
+  Future<(List<LeaderboardEntry>, LeaderboardEntry?)> fetchGlobalLeaderboard({
+    String scenario = 'standard_adult',
+  }) async {
+    final response = await _network.get(
+      '/leaderboard/global?scenario=$scenario',
+      requiresAuth: true,
+    );
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to fetch leaderboard');
+    }
+    final entries = (response['data'] as List<dynamic>)
+        .map((j) => LeaderboardEntry.fromJson(j as Map<String, dynamic>))
+        .toList();
+    final myRankJson = response['my_rank'] as Map<String, dynamic>?;
+    final myRank     = myRankJson != null
+        ? LeaderboardEntry.fromJson(myRankJson)
+        : null;
+    return (entries, myRank);
+  }
+
+
   /// Legacy: save a summary-only record. Kept for backward compatibility.
   Future<bool> saveSummary(SessionSummary session) async {
     try {
@@ -123,7 +170,7 @@ class SessionService {
   //   Time to first comp      10%  (+5 — pediatric urgency)
   //   Frequency consistency   13%  (−5)
   //   Hands-on ratio          5%   (−5)
-  //   All other weights unchanged
+  //   Correct recoil          10%  (−5 — reduced to balance total to 100%)
   //
   // Timed Endurance adjustments:
   //   Depth consistency       25%
@@ -176,7 +223,7 @@ class SessionService {
       // Fatigue management is the primary goal — no time-to-first penalty,
       // heavier fatigue penalty, higher depth weight.
         grade =
-            (depthScore       * 0.25) +
+            (depthScore       * 0.30) +
                 (freqScore        * 0.18) +
                 (recoilScore      * 0.15) +
                 (comboScore       * 0.12) +
@@ -187,7 +234,7 @@ class SessionService {
                 (s.fatigueOnsetIndex > 0 ? 10.0 : 0.0);
 
       default:
-      // standard_adult and standard_adult_nofeedback
+      // standard_adult (default)
         grade =
             (depthScore       * 0.20) +
                 (freqScore        * 0.18) +
@@ -306,6 +353,8 @@ class SessionSummary {
   final double averageEffectiveDepth;
   final double peakDepth;
   final double depthSD;
+  final double depthConsistency;
+  final double frequencyConsistency;
 
   // ── Ventilation ───────────────────────────────────────────────────────────
   final int    ventilationCount;
@@ -348,6 +397,8 @@ class SessionSummary {
     this.averageEffectiveDepth = 0.0,
     this.peakDepth            = 0.0,
     this.depthSD              = 0.0,
+    this.depthConsistency     = 0.0,
+    this.frequencyConsistency = 0.0,
     this.ventilationCount     = 0,
     this.ventilationCompliance = 0.0,
     this.pulseDetectedFinal   = false,
@@ -422,6 +473,45 @@ class SessionSummary {
     );
   }
 
+  /// Build a lightweight summary from a full SessionDetail.
+  /// Used when merging local unsynced sessions into the session list.
+  factory SessionSummary.fromDetail(SessionDetail d) => SessionSummary(
+    id:                    d.id,
+    mode:                  d.mode,
+    scenario:              d.scenario,
+    compressionCount:      d.compressionCount,
+    correctDepth:          d.correctDepth,
+    correctFrequency:      d.correctFrequency,
+    correctRecoil:         d.correctRecoil,
+    depthRateCombo:        d.depthRateCombo,
+    correctPosture:        d.correctPosture,
+    leaningCount:          d.leaningCount,
+    overForceCount:        d.overForceCount,
+    noFlowIntervals:       d.noFlowIntervals,
+    rescuerSwapCount:      d.rescuerSwapCount,
+    fatigueOnsetIndex:     d.fatigueOnsetIndex,
+    averageDepth:          d.averageDepth,
+    averageFrequency:      d.averageFrequency,
+    averageEffectiveDepth: d.averageEffectiveDepth,
+    peakDepth:             d.peakDepth,
+    depthSD:               d.depthSD,
+    depthConsistency:      d.depthConsistency,
+    frequencyConsistency:  d.frequencyConsistency,
+    ventilationCount:      d.ventilationCount,
+    ventilationCompliance: d.ventilationCompliance,
+    pulseDetectedFinal:    d.pulseDetectedFinal,
+    pulseChecksPrompted:   d.pulseChecksPrompted,
+    pulseChecksComplied:   d.pulseChecksComplied,
+    patientTemperature:    d.patientTemperature,
+    rescuerHRLastPause:    d.rescuerHRLastPause,
+    rescuerSpO2LastPause:  d.rescuerSpO2LastPause,
+    sessionDuration:       d.sessionDuration,
+    totalGrade:            d.totalGrade,
+    sessionStart:          d.sessionStart,
+    sessionEnd:            d.sessionEnd,
+    note:                  d.note,
+  );
+
   // ── JSON factory — hydrate from backend GET /sessions/summaries ───────────
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
@@ -445,6 +535,8 @@ class SessionSummary {
       averageEffectiveDepth: (json['average_effective_depth'] as num?)?.toDouble() ?? 0.0,
       peakDepth:             (json['peak_depth']              as num?)?.toDouble() ?? 0.0,
       depthSD:               (json['depth_sd']                as num?)?.toDouble() ?? 0.0,
+      depthConsistency:      (json['depth_consistency']   as num?)?.toDouble() ?? 0.0,
+      frequencyConsistency:  (json['freq_consistency']    as num?)?.toDouble() ?? 0.0,
       ventilationCount:      (json['ventilation_count']       as num?)?.toInt()    ?? 0,
       ventilationCompliance: (json['ventilation_compliance']  as num?)?.toDouble() ?? 0.0,
       pulseDetectedFinal:     json['pulse_detected_final']    as bool?             ?? false,
@@ -484,6 +576,8 @@ class SessionSummary {
     'average_effective_depth': averageEffectiveDepth,
     'peak_depth':             peakDepth,
     'depth_sd':               depthSD,
+    'depth_consistency':      depthConsistency,
+    'freq_consistency':       frequencyConsistency,
     'ventilation_count':      ventilationCount,
     'ventilation_compliance': ventilationCompliance,
     'pulse_detected_final':   pulseDetectedFinal,
@@ -545,4 +639,36 @@ class UserStats {
 
   String get sessionCountFormatted =>
       sessionCount == 0 ? '—' : '$sessionCount';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LeaderboardEntry — matches GET /leaderboard/global response shape
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LeaderboardEntry {
+  final int    rank;
+  final String username;
+  final double avgGrade;
+  final double bestGrade;
+  final int    sessionCount;
+  final bool   isCurrentUser;
+
+  const LeaderboardEntry({
+    required this.rank,
+    required this.username,
+    required this.avgGrade,
+    required this.bestGrade,
+    required this.sessionCount,
+    required this.isCurrentUser,
+  });
+
+  factory LeaderboardEntry.fromJson(Map<String, dynamic> j) =>
+      LeaderboardEntry(
+        rank:          j['rank']            as int,
+        username:      j['username']        as String,
+        avgGrade:      (j['avg_grade']      as num).toDouble(),
+        bestGrade:     (j['best_grade']     as num?)?.toDouble() ?? 0.0,
+        sessionCount:  j['session_count']   as int,
+        isCurrentUser: j['is_current_user'] as bool? ?? false,
+      );
 }

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
+import '../../../providers/session_provider.dart';
+import '../../training/services/export_service.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SettingsScreen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,11 +126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon:     Icons.download_outlined,
               title:    'Export session data',
               subtitle: 'Download your training history as CSV',
-              onTap: () => UIHelper.showSnackbar(
-                context,
-                message: 'Export coming soon',
-                icon:    Icons.download_outlined,
-              ),
+              onTap: () => _exportData(),
             ),
             const _SettingsDivider(),
             _NavTile(
@@ -175,16 +174,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       iconColor:    AppColors.emergencyRed,
       iconBg:       AppColors.emergencyBg,
       title:        'Delete All Data?',
-      message:      'This will permanently delete all your training sessions and scores. '
-          'This cannot be undone.',
+      message:      'This will permanently delete all your training sessions '
+          'and scores. This cannot be undone.',
       confirmLabel: 'Delete',
       confirmColor: AppColors.emergencyRed,
       cancelLabel:  'Cancel',
     );
 
-    if (confirmed == true && mounted) {
-      // TODO: call delete API
+    if (confirmed != true || !mounted) return;
+
+    final service = ref.read(sessionServiceProvider);
+    final ok = await service.deleteAllSessions();
+    if (!mounted) return;
+    if (ok) {
+      ref.invalidate(sessionSummariesProvider);
       UIHelper.showSuccess(context, 'All session data deleted');
+    } else {
+      UIHelper.showError(context, 'Failed to delete. Check your connection.');
+    }
+  }
+
+  Future<void> _exportData() async {
+    final summaries = ref.read(sessionSummariesProvider);
+    final sessions  = summaries.valueOrNull ?? [];
+    if (sessions.isEmpty) {
+      UIHelper.showSnackbar(context,
+          message: 'No sessions to export', icon: Icons.info_outline_rounded);
+      return;
+    }
+    UIHelper.showSnackbar(context,
+        message: 'Preparing export…', icon: Icons.download_outlined);
+    final ok = await ExportService.exportSessionsAsCsv(sessions);
+    if (!ok && mounted) {
+      UIHelper.showError(context, 'Export failed. Please try again.');
     }
   }
 }

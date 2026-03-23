@@ -122,7 +122,7 @@ module.exports = function (pool) {
                         compression_count, correct_depth, correct_frequency,
                         correct_recoil, depth_rate_combo, correct_posture,
                         average_depth, average_frequency, average_effective_depth,
-                        peak_depth, depth_sd,
+                        peak_depth, depth_sd,depth_consistency, freq_consistency,
                         leaning_count, over_force_count, too_deep_count,
                         no_flow_intervals, rescuer_swap_count,
                         hands_on_ratio, no_flow_time, fatigue_onset_index,
@@ -187,6 +187,8 @@ module.exports = function (pool) {
             res.status(500).json({ success: false, message: 'Failed to delete sessions.' });
         }
     });
+
+
 
     // ── DELETE /sessions/:id — delete one session ─────────────────────────────
     router.delete('/:id', authenticate, async (req, res) => {
@@ -514,7 +516,7 @@ module.exports = function (pool) {
                         compression_count, correct_depth, correct_frequency,
                         correct_recoil, depth_rate_combo, correct_posture,
                         average_depth, average_frequency, average_effective_depth,
-                        peak_depth, depth_sd,
+                        peak_depth, depth_sd,depth_consistency, freq_consistency,
                         leaning_count, over_force_count, too_deep_count,
                         no_flow_intervals, rescuer_swap_count,
                         hands_on_ratio, no_flow_time, fatigue_onset_index,
@@ -550,6 +552,7 @@ module.exports = function (pool) {
             res.status(500).json({ success: false, message: 'Failed to fetch sessions.' });
         }
     });
+
 
     // ── GET /sessions/:id/detail — full session + all sub-lists ──────────────
     // MUST be declared last to avoid shadowing /summary, /summaries, /best.

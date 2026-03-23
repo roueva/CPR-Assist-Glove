@@ -464,7 +464,6 @@ class BLEConnection {
       'feedbackEnabled':    parsed.feedbackEnabled,
       'batteryPercentage':  parsed.batteryPercentage,
       'isCharging':         parsed.isCharging,
-      'sessionElapsedMs':   parsed.sessionElapsedMs,
     });
   }
 
@@ -575,7 +574,6 @@ class BLEConnection {
       _dataController.add({
         'isPulseCheckStart': true,
         'intervalNumber':    parsed.intervalNumber,
-        'sessionElapsedMs':  parsed.sessionElapsedMs,
       });
       return;
     }

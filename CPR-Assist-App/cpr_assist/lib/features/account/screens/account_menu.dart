@@ -13,6 +13,7 @@ import '../../../providers/session_provider.dart';
 import '../../dev/dev_preview_screen.dart';
 import '../../training/screens/leaderboard_screen.dart';
 import '../../training/screens/session_service.dart';
+import '../../training/widgets/session_history.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AccountPanel
@@ -255,8 +256,8 @@ class _PanelContent extends ConsumerWidget {
 
             const _PanelDivider(),
 
-            // ── Stats row (logged-in only) ─────────────────────────────────
-            if (isLoggedIn) ...[
+            // ── Stats row (Training mode + logged-in only) ─────────────────
+            if (isLoggedIn && isTraining) ...[
               _StatsRow(),
               const _PanelDivider(),
             ],
@@ -283,13 +284,22 @@ class _PanelContent extends ConsumerWidget {
 
                   const _PanelDivider(),
 
-                  if (isLoggedIn)
+                  // Leaderboard: Training mode only
+                  if (isLoggedIn && isTraining)
                     _PanelItem(
                       icon:  Icons.leaderboard_outlined,
                       label: 'Leaderboard',
                       onTap: () => onPush(
                         LeaderboardScreen(currentUsername: authState.username),
                       ),
+                    ),
+
+                  // My Sessions: all logged-in users
+                  if (isLoggedIn)
+                    _PanelItem(
+                      icon:  Icons.history_rounded,
+                      label: 'My Sessions',
+                      onTap: () => onPush(const SessionHistoryScreen()),
                     ),
 
                   _PanelItem(

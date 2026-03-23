@@ -115,7 +115,7 @@ class AppConstants {
   static const int maxDistanceCalculations = 15;
 
   // ═══════════════════════════════════════════════════════
-  // BLE  —  Spec v2.0
+  // BLE  —  Spec v3.0
   // ═══════════════════════════════════════════════════════
 
   static const String   bleDeviceName        = 'CPR_Glove';
@@ -132,24 +132,20 @@ class AppConstants {
   /// BLE GATT service UUID
   static const String bleServiceUuid         = '19b10000-e8f2-537e-4f6c-d104768a1214';
 
-  /// LIVE_STREAM characteristic UUID — notify, 88 bytes, 10 Hz
+  /// LIVE_STREAM characteristic UUID — notify, 100 bytes, 10 Hz
   static const String bleLiveStreamUuid      = '19b10001-e8f2-537e-4f6c-d104768a1214';
 
-  /// EVENT_CHANNEL characteristic UUID — notify + write-without-response, 80 bytes
+  /// EVENT_CHANNEL characteristic UUID — notify + write-without-response, 96 bytes
   static const String bleEventChannelUuid    = '19b10002-e8f2-537e-4f6c-d104768a1214';
 
-  /// LIVE_STREAM packet size in bytes (v2.0)
-  static const int bleLiveStreamPacketSize   = 88;
-
-  /// EVENT_CHANNEL packet size in bytes (v2.0)
-  static const int bleEventChannelPacketSize = 80;
+  /// LIVE_STREAM packet size in bytes (v3.0)
+  static const int bleLiveStreamPacketSize   = 100;
+  static const int bleEventChannelPacketSize = 96;
 
   /// Legacy alias — kept so any remaining callers compile without change.
   /// Points to the larger of the two packet sizes.
   @Deprecated('Use bleLiveStreamPacketSize or bleEventChannelPacketSize')
-  /// Packet sizes are kLiveStreamSize (100) and kEventChannelSize (80)
-  /// defined in ble_data_processor.dart. This constant is kept as a
-  /// reference only — do not use it for packet parsing logic.
+
   static const int blePacketSize = 100;
 
   /// Receive buffer overflow threshold (bytes) — clear when exceeded.

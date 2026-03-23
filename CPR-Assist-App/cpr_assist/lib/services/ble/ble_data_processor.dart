@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 //     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
 //
 //   EVENT_CHANNEL UUID 19b10002-e8f2-537e-4f6c-d104768a1214
-//     80 bytes fixed, on-event notify + write.
+//   96 bytes fixed, on-event notify + write.
 //     Session lifecycle, commands, offline sync.
 //
 // All multi-byte values are little-endian.
@@ -25,7 +25,7 @@ import 'package:flutter/foundation.dart';
 // ── Packet sizes ──────────────────────────────────────────────────────────────
 
 const int kLiveStreamSize   = 100;
-const int kEventChannelSize = 80;
+const int kEventChannelSize = 96;
 
 // ── EVENT_CHANNEL glove→app packet type bytes ────────────────────────────────
 
@@ -92,12 +92,12 @@ class BLEDataProcessor {
   //  64–67  float32  ppgRaw              0–1 (pulse check only)
   //  68     uint8    ppgSignalQuality    0–100
   //  69     uint8    perfusionIndex      0–100 (pulse check only)
-  //  70–71  uint8[2] patientTemperature partial float — see NOTE
+  //  70–71  uint16   patientTemperature  °C × 100 fixed-point (e.g. 3650 = 36.50°C)
   //  72–75  float32  heartRateUser       BPM
   //  76–79  float32  spO2User            %
   //  80     uint8    rescuerSignalQuality 0–100
   //  81     uint8    rescuerRMSSD        ms clamped 0–200
-  //  82–83  uint8[2] rescuerTemperature partial float — see NOTE
+  //  82–83  uint16   rescuerTemperature  °C × 100 fixed-point
   //  84     uint8    rescuerPI           0–100
   //  85–87  uint8[3] reserved
   //  88     uint8    sessionActive       0/1
@@ -106,17 +106,14 @@ class BLEDataProcessor {
   //  91     uint8    feedbackEnabled     0/1
   //  92     uint8    batteryPercentage   0–100
   //  93     uint8    isCharging          0/1
-  //  94–95  uint8[2] sessionElapsedMs   partial uint32 — wraps at ~65 s
-  //  96–99  uint8[4] reserved
+  //  94–99  uint8[4] reserved
   //
-  // NOTE on partial floats (bytes 70–71 and 82–83):
-  //   The spec stores temperature as "float32_lo" — only 2 bytes.
-  //   Until firmware confirms the exact layout we read 4 bytes starting
-  //   at a safe aligned offset that doesn't overlap neighbouring uint8 fields.
-  //   patientTemperature  → read float32 at byte 70 (4 bytes, into reserved area)
-  //   rescuerTemperature  → read float32 at byte 82 (4 bytes, into reserved area)
-  //   Confirmed safe because bytes 72 and 84 onwards are not single uint8 fields.
-  //   Re-verify these offsets against firmware before user study.
+  // NOTE on temperature encoding (bytes 70–71 and 82–83):
+  //   Both temperatures are sent as uint16 fixed-point: value = celsius × 100.
+  //   Example: 36.50°C → firmware sends 3650 as little-endian uint16.
+  //   App reads with getUint16() and divides by 100.0 to recover the float.
+  //   This fits cleanly in 2 bytes with no overlap into neighbouring fields.
+  //   Firmware must use: uint16_t raw = (uint16_t)(celsius * 100);
 
   ParsedBLEData? parseLiveStream(List<int> data) {
     if (data.length != kLiveStreamSize) {
@@ -164,8 +161,10 @@ class BLEDataProcessor {
       final ppgRaw            = b.getFloat32(64, Endian.little);
       final ppgSignalQuality  = b.getUint8(68);
       final perfusionIndex    = b.getUint8(69);
-      // patientTemperature: read float32 at byte 70 (safe aligned read)
-      final patientTemperatureRaw = b.getFloat32(70, Endian.little);
+      // Temperatures encoded as uint16 fixed-point: value × 100
+      // e.g. 36.50°C is stored as 3650. Divide by 100.0 to recover.
+      // This uses exactly 2 bytes with no overlap into neighbouring fields.
+      final patientTemperatureRaw = b.getUint16(70, Endian.little) / 100.0;
 
       // ── RESCUER VITALS ────────────────────────────────────────────────────
       final heartRateUser        = b.getFloat32(72, Endian.little);
@@ -173,7 +172,8 @@ class BLEDataProcessor {
       final rescuerSignalQuality = b.getUint8(80);
       final rescuerRMSSD         = b.getUint8(81);
       // rescuerTemperature: read float32 at byte 82 (safe aligned read)
-      final rescuerTemperatureRaw = b.getFloat32(82, Endian.little);
+      final rescuerTemperatureRaw = b.getUint16(82, Endian.little) / 100.0;
+
       final rescuerPI            = b.getUint8(84);
       // bytes 85–87 reserved
 
@@ -184,9 +184,7 @@ class BLEDataProcessor {
       final feedbackEnabled   = b.getUint8(91) == 1;
       final batteryPercentage = b.getUint8(92);
       final isCharging        = b.getUint8(93) == 1;
-      // sessionElapsedMs: 2-byte partial — read as uint16, wraps at 65535 ms
-      final sessionElapsedMs  = b.getUint16(94, Endian.little);
-      // bytes 96–99 reserved
+      // bytes 94–99 reserved
 
       // ── Derived: effective depth ──────────────────────────────────────────
       final axisRad    = compressionAxisDeviation * 3.141592653589793 / 180.0;
@@ -250,7 +248,6 @@ class BLEDataProcessor {
         feedbackEnabled:    feedbackEnabled,
         batteryPercentage:  battPct,
         isCharging:         battPct != null ? isCharging : null,
-        sessionElapsedMs:   sessionElapsedMs,
       );
     } catch (e) {
       debugPrint('BLEDataProcessor: LIVE_STREAM parse error — $e');
@@ -258,8 +255,7 @@ class BLEDataProcessor {
     }
   }
 
-  // ── EVENT_CHANNEL parser (80 bytes, on-event) ────────────────────────────
-  //
+// ── EVENT_CHANNEL parser (96 bytes, on-event) ────────────────────────────
   // Byte 0 is always the packetType discriminator.
   // All unused bytes are 0x00.
 
@@ -362,12 +358,10 @@ class BLEDataProcessor {
 
       // ── 0x04 PULSE_CHECK_START ───────────────────────────────────────────
       // byte[1–2] uint16 intervalNumber
-      // byte[3–6] uint32 sessionElapsedMs
         case kPacketPulseCheckStart:
           return ParsedBLEData._event(
             isPulseCheckStart: true,
             intervalNumber:    b.getUint16(1, Endian.little),
-            sessionElapsedMs:  b.getUint32(3, Endian.little),
           );
 
       // ── 0x05 PULSE_CHECK_RESULT ──────────────────────────────────────────
@@ -429,7 +423,9 @@ class BLEDataProcessor {
             localSessionIndex:   b.getUint8(1),
             localChunkIndex:     b.getUint8(2),
             localTotalChunks:    b.getUint8(3),
-            localChunkData:      data.sublist(4, 80),
+            // Chunk data occupies bytes 4–79 (76 bytes) per spec v3.0.
+// Bytes 80–95 are reserved. Update range if firmware expands chunk size.
+            localChunkData: data.sublist(4, 80),
           );
 
       // ── 0x0B SELFTEST_RESULT ─────────────────────────────────────────────
@@ -553,7 +549,6 @@ class ParsedBLEData {
   final bool  feedbackEnabled;
   final int?  batteryPercentage;
   final bool? isCharging;
-  final int   sessionElapsedMs;     // glove-side ms, wraps at ~65 s
 
   // ── SESSION_END summary fields ────────────────────────────────────────────
   final int    totalCompressions;
@@ -675,7 +670,6 @@ class ParsedBLEData {
     this.feedbackEnabled       = true,
     this.batteryPercentage,
     this.isCharging,
-    this.sessionElapsedMs      = 0,
     this.totalCompressions     = 0,
     this.correctDepth          = 0,
     this.correctFrequency      = 0,
@@ -769,7 +763,6 @@ class ParsedBLEData {
     int?   cycleNumber,
     int?   ventilationsExpected,
     int?   intervalNumber,
-    int?   sessionElapsedMs,
     int?   pulseClassification,
     double? detectedBPM,
     int?   confidencePct,
@@ -831,7 +824,6 @@ class ParsedBLEData {
     cycleNumber:           cycleNumber,
     ventilationsExpected:  ventilationsExpected,
     intervalNumber:        intervalNumber,
-    sessionElapsedMs:      sessionElapsedMs ?? 0,
     pulseClassification:   pulseClassification,
     detectedBPM:           detectedBPM,
     confidencePct:         confidencePct,

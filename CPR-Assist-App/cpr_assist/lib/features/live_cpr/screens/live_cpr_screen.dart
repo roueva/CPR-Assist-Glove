@@ -8,6 +8,7 @@ import 'package:cpr_assist/core/core.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../../account/screens/login_screen.dart';
+import '../../training/services/session_local_storage.dart';
 import '../../training/widgets/session_results.dart';
 import '../widgets/live_cpr_widgets.dart';
 
@@ -60,9 +61,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int    _swapAlertNumber    = 0;
   bool   _showFatigueBadge   = false;
   int    _fatigueScore       = 0;
-  bool   _pulseCheckActive   = false;
-  int?   _pulseCheckInterval;
-  int?   _pulseClassification; // null = pending, 0/1/2 = result
+  bool          _pulseCheckActive   = false;
+  int?          _pulseCheckInterval;
+  int?          _pulseClassification; // null = pending, 0/1/2 = result
+  final List<double> _ppgBuffer = []; // ring buffer for ECG waveform
+  static const int   _ppgBufferMax = 60;
 
   // ── Vitals display state ───────────────────────────────────────────────────
   double? _heartRatePatient;
@@ -74,14 +77,45 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int?    _rescuerSignalQuality;
 
   @override
+  void initState() {
+    super.initState();
+    // Sync local sessions when BLE connects
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(bleConnectionProvider).connectionStatusNotifier.addListener(_onBleStatusChange);
+    });
+  }
+
+  void _onBleStatusChange() {
+    final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
+    if (status == 'Connected') {
+      _syncLocalSessions();
+    }
+  }
+
+  Future<void> _syncLocalSessions() async {
+    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+    if (!isLoggedIn) return;
+    final locals  = await SessionLocalStorage.loadAll();
+    final pending = locals.where((d) => !d.syncedToBackend).toList();
+    if (pending.isEmpty) return;
+    final service = ref.read(sessionServiceProvider);
+    for (final detail in pending) {
+      final ok = await service.saveDetail(detail);
+      if (ok) await SessionLocalStorage.markSynced(detail);
+    }
+    if (pending.isNotEmpty) ref.invalidate(sessionSummariesProvider);
+  }
+
+  @override
   void dispose() {
+    ref.read(bleConnectionProvider).connectionStatusNotifier.removeListener(_onBleStatusChange);
     _sessionTimer?.cancel();
     _swapBannerTimer?.cancel();
     super.dispose();
   }
 
   // ── BLE data handler ───────────────────────────────────────────────────────
-  void _updateDisplayValues(Map<String, dynamic> data) {
+  Future<void> _updateDisplayValues(Map<String, dynamic> data) async {
     // ── SESSION_START ──────────────────────────────────────────────────────
     if (data['isStartPing'] == true) {
       _sessionStartTime = DateTime.now();
@@ -98,6 +132,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _showFatigueBadge        = false;
         _pulseCheckActive        = false;
         _pulseClassification     = null;
+        _ppgBuffer.clear();
       });
       _sessionTimer?.cancel();
       _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -133,10 +168,27 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── MODE_CHANGE from glove button ──────────────────────────────────────
     if (data['isModeChange'] == true) {
-      final newMode = data['currentMode'] as int? ?? 0;
-      // Only sync when idle — mid-session mode changes take effect next session
+      final newModeInt = data['currentMode'] as int? ?? 0;
+      final newMode    = AppMode.fromBleValue(newModeInt);
       if (!_isSessionActive) {
-        ref.read(appModeProvider.notifier).setModeFromGlove(newMode);
+        if (newMode.isTraining && !ref.read(authStateProvider).isLoggedIn) {
+          // Revert to Emergency — training requires login
+          ref.read(bleConnectionProvider).sendModeSet(AppMode.emergency.bleValue);
+          ref.read(appModeProvider.notifier).setMode(AppMode.emergency);
+          if (mounted) {
+            UIHelper.showWarning(context, 'Training mode requires an account.');
+            AppDialogs.promptLogin(context);
+          }
+        } else {
+          ref.read(appModeProvider.notifier).setModeFromGlove(newModeInt);
+          if (mounted) {
+            UIHelper.showSnackbar(
+            context,
+            message: 'Mode: ${newMode.label}',
+            icon: Icons.swap_horiz_rounded,
+          );
+          }
+        }
       }
       return;
     }
@@ -167,6 +219,25 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _showFatigueBadge = true;
         _fatigueScore     = data['fatigueAlertScore'] as int? ?? 0;
       });
+      return;
+    }
+
+    // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────────
+    if (data['isPendingLocalData'] == true) {
+      final count = data['pendingSessionCount'] as int? ?? 0;
+      if (count > 0 && mounted) {
+        UIHelper.showSnackbar(
+          context,
+          message: '$count session(s) stored on glove — syncing now…',
+          icon: Icons.sync_rounded,
+        );
+        // Request each stored session by index
+        final ble = ref.read(bleConnectionProvider);
+        for (int i = 0; i < count; i++) {
+          await Future.delayed(const Duration(milliseconds: 300));
+          await ble.sendRequestSession(i);
+        }
+      }
       return;
     }
 
@@ -249,6 +320,14 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       // Vitals — only update when non-null to avoid overwriting valid readings
       if (hrP   != null) _heartRatePatient   = hrP;
       if (spo2P != null) _spO2Patient = spo2P;
+
+      // Collect ppgRaw into ring buffer during pulse check window
+      if (_pulseCheckActive && data.containsKey('ppgRaw')) {
+        final raw = (data['ppgRaw'] as num?)?.toDouble() ?? 0.0;
+        _ppgBuffer.add(raw);
+        if (_ppgBuffer.length > _ppgBufferMax) _ppgBuffer.removeAt(0);
+      }
+
       if (tempP != null) _patientTemperature = tempP;
       if (hrU   != null) _heartRateUser      = hrU;
       if (spo2U != null) _spO2User           = spo2U;
@@ -265,6 +344,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final service     = ref.read(sessionServiceProvider);
     final bleConn     = ref.read(bleConnectionProvider);
 
+    // ── Step 1: assemble the detail
     final detail = service.assembleDetail(
       summaryPacket:         data,
       events:                List.from(bleConn.compressionEvents),
@@ -276,6 +356,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       mode:                  currentMode.sessionModeString,
       scenario:              scenario.sessionScenarioString,
     );
+
+    // ── Step 2: save locally immediately — before any network call
+    await SessionLocalStorage.saveLocal(detail);
 
     // Emergency mode: prompt login non-blocking AFTER session is assembled
     if (currentMode.isEmergency && !isLoggedIn) {
@@ -430,8 +513,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
           if (_pulseCheckActive)
             Positioned.fill(
               child: _PulseCheckOverlay(
-                intervalNumber:   _pulseCheckInterval,
-                classification:   _pulseClassification,
+                intervalNumber: _pulseCheckInterval,
+                classification: _pulseClassification,
+                ppgBuffer:      List.from(_ppgBuffer),
               ),
             ),
         ],
@@ -633,12 +717,14 @@ class _SwapBanner extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PulseCheckOverlay extends StatelessWidget {
-  final int? intervalNumber;
-  final int? classification; // null=pending, 0=absent, 1=uncertain, 2=present
+  final int?          intervalNumber;
+  final int?          classification; // null=pending, 0=absent, 1=uncertain, 2=present
+  final List<double>  ppgBuffer;
 
   const _PulseCheckOverlay({
     this.intervalNumber,
     this.classification,
+    this.ppgBuffer = const [],
   });
 
   @override
@@ -689,12 +775,13 @@ class _PulseCheckOverlay extends StatelessWidget {
               color:  hasPendingResult ? AppColors.textOnDark : resultColor,
             ),
           ),
-          if (hasPendingResult) ...[
-            const SizedBox(height: AppSpacing.lg),
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnDark),
-            ),
-          ] else ...[
+          const SizedBox(height: AppSpacing.lg),
+          _PpgWaveform(
+            buffer:      ppgBuffer,
+            resultColor: hasPendingResult ? AppColors.textOnDark : resultColor,
+            showPulse:   !hasPendingResult && classification == 2,
+          ),
+          if (!hasPendingResult) ...[
             const SizedBox(height: AppSpacing.md),
             Icon(resultIcon, size: AppSpacing.iconXl, color: resultColor),
           ],
@@ -711,4 +798,107 @@ class _PulseCheckOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _PpgWaveform — scrolling ECG-style PPG waveform during pulse check
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PpgWaveform extends StatelessWidget {
+  final List<double> buffer;
+  final Color        resultColor;
+  final bool         showPulse;
+
+  const _PpgWaveform({
+    required this.buffer,
+    required this.resultColor,
+    this.showPulse = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width:  double.infinity,
+      height: 80,
+      child: CustomPaint(
+        painter: _WaveformPainter(
+          buffer:     buffer,
+          lineColor:  resultColor,
+          showPulse:  showPulse,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  final List<double> buffer;
+  final Color        lineColor;
+  final bool         showPulse;
+
+  const _WaveformPainter({
+    required this.buffer,
+    required this.lineColor,
+    required this.showPulse,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (buffer.isEmpty) {
+      // Draw a flat baseline when no data yet
+      final paint = Paint()
+        ..color = lineColor.withValues(alpha: 0.3)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(
+        Offset(0, size.height / 2),
+        Offset(size.width, size.height / 2),
+        paint,
+      );
+      return;
+    }
+
+    final paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path();
+    final n    = buffer.length;
+
+    // Normalise 0–1 values to canvas height with 10% padding
+    const padFraction = 0.1;
+    final drawH = size.height * (1 - 2 * padFraction);
+    final padY  = size.height * padFraction;
+
+    for (int i = 0; i < n; i++) {
+      final x = i / (n - 1 == 0 ? 1 : n - 1) * size.width;
+      final y = padY + drawH * (1.0 - buffer[i].clamp(0.0, 1.0));
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+
+    canvas.drawPath(path, paint);
+
+    // Glow under the line when pulse detected
+    if (showPulse) {
+      final glowPaint = Paint()
+        ..color = lineColor.withValues(alpha: 0.15)
+        ..strokeWidth = 8.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawPath(path, glowPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveformPainter old) =>
+      old.buffer != buffer || old.lineColor != lineColor || old.showPulse != showPulse;
 }

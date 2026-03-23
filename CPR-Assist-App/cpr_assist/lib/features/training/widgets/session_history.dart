@@ -130,10 +130,55 @@ class _SessionsList extends StatelessWidget {
           child: ListView.builder(
             padding:   const EdgeInsets.all(AppSpacing.md),
             itemCount: filtered.length,
-            itemBuilder: (context, i) => SessionCard(
-              session:       filtered[i],
-              sessionNumber: all.indexOf(filtered[i]) + 1,
-            ),
+              itemBuilder: (context, i) {
+                final session   = filtered[i];
+                final sessionId = session.id;
+                final card = SessionCard(
+                  session:       session,
+                  sessionNumber: all.indexOf(session) + 1,
+                );
+                if (sessionId == null) return card;
+
+                return Dismissible(
+                  key:       ValueKey(sessionId),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding:   const EdgeInsets.only(right: AppSpacing.lg),
+                    margin:    const EdgeInsets.only(bottom: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color:        AppColors.emergencyBg,
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded,
+                        color: AppColors.emergencyRed, size: AppSpacing.iconMd),
+                  ),
+                  confirmDismiss: (_) => AppDialogs.showDestructiveConfirm(
+                    context,
+                    icon:         Icons.delete_outline_rounded,
+                    iconColor:    AppColors.emergencyRed,
+                    iconBg:       AppColors.emergencyBg,
+                    title:        'Delete Session?',
+                    message:      'This permanently deletes this session.',
+                    confirmLabel: 'Delete',
+                    confirmColor: AppColors.emergencyRed,
+                    cancelLabel:  'Cancel',
+                  ),
+                  onDismissed: (_) async {
+                    final c       = ProviderScope.containerOf(context);
+                    final service = c.read(sessionServiceProvider);
+                    final ok      = await service.deleteSession(sessionId);
+                    if (ok) {
+                      c.invalidate(sessionSummariesProvider);
+                    } else {
+                      if (context.mounted) {
+                        UIHelper.showError(context, 'Failed to delete. Check your connection.');
+                      }
+                    }
+                  },
+                  child: card,
+                );
+              },
           ),
         ),
       ],
@@ -337,8 +382,9 @@ class SessionCard extends ConsumerWidget  {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final color = gradeColor(session.totalGrade);
+    final canDelete = session.id != null;
 
-    return Container(
+    final card = Container(
       margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: AppDecorations.card(),
       child: Material(
@@ -379,35 +425,35 @@ class SessionCard extends ConsumerWidget  {
                       'Session $sessionNumber',
                       style: AppTypography.subheading(color: AppColors.primary),
                     ),
-            session.isEmergency
-                ? Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.chipPaddingH,
-                vertical:   AppSpacing.chipPaddingV,
-              ),
-              decoration: AppDecorations.chip(
-                color: AppColors.emergencyRed,
-                bg:    AppColors.emergencyBg,
-              ),
-              child: Text(
-                'EMERGENCY',
-                style: AppTypography.label(color: AppColors.emergencyRed),
-              ),
-            )
-                : Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.chipPaddingH,
-                vertical:   AppSpacing.chipPaddingV,
-              ),
-              decoration: AppDecorations.chip(
-                color: color,
-                bg:    color.withValues(alpha: 0.12),
-              ),
-              child: Text(
-                '${session.totalGrade.toStringAsFixed(0)}%',
-                style: AppTypography.label(color: color),
-              ),
-            ),
+                    session.isEmergency
+                        ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.chipPaddingH,
+                        vertical:   AppSpacing.chipPaddingV,
+                      ),
+                      decoration: AppDecorations.chip(
+                        color: AppColors.emergencyRed,
+                        bg:    AppColors.emergencyBg,
+                      ),
+                      child: Text(
+                        'EMERGENCY',
+                        style: AppTypography.label(color: AppColors.emergencyRed),
+                      ),
+                    )
+                        : Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.chipPaddingH,
+                        vertical:   AppSpacing.chipPaddingV,
+                      ),
+                      decoration: AppDecorations.chip(
+                        color: color,
+                        bg:    color.withValues(alpha: 0.12),
+                      ),
+                      child: Text(
+                        '${session.totalGrade.toStringAsFixed(0)}%',
+                        style: AppTypography.label(color: color),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -420,25 +466,33 @@ class SessionCard extends ConsumerWidget  {
                 const SizedBox(height: AppSpacing.sm),
 
                 // ── Quick stats ──────────────────────────────────────────
-                Row(
-                  children: [
-                    _QuickStat(
-                      Icons.compress_rounded,
-                      'Compressions',
-                      '${session.compressionCount}',
-                    ),
-                    _QuickStat(
-                      Icons.timer_outlined,
-                      'Duration',
-                      session.durationFormatted,
-                    ),
-                    _QuickStat(
-                      Icons.speed_rounded,
-                      'Correct Depth',
-                      '${session.correctDepth}',
-                    ),
-                  ],
-                ),
+// For training sessions: show consistency metrics
+                if (session.isTraining) ...[
+                  Row(
+                    children: [
+                      _QuickStat(Icons.compress_rounded,   'Compressions', '${session.compressionCount}'),
+                      _QuickStat(Icons.straighten_rounded, 'Depth',        '${session.depthConsistency.toStringAsFixed(0)}%'),
+                      _QuickStat(Icons.speed_rounded,      'Rate',         '${session.frequencyConsistency.toStringAsFixed(0)}%'),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      _QuickStat(Icons.timer_outlined,     'Duration',     session.durationFormatted),
+                      _QuickStat(Icons.trending_up_rounded,'Avg Depth',    '${session.averageDepth.toStringAsFixed(1)} cm'),
+                      _QuickStat(Icons.av_timer_rounded,   'Avg Rate',     '${session.averageFrequency.toStringAsFixed(0)} bpm'),
+                    ],
+                  ),
+                ] else ...[
+                  // Emergency: compressions, duration, avg depth
+                  Row(
+                    children: [
+                      _QuickStat(Icons.compress_rounded,   'Compressions', '${session.compressionCount}'),
+                      _QuickStat(Icons.timer_outlined,     'Duration',     session.durationFormatted),
+                      _QuickStat(Icons.trending_up_rounded,'Avg Depth',    '${session.averageDepth.toStringAsFixed(1)} cm'),
+                    ],
+                  ),
+                ],
 
                 // ── Note snippet ─────────────────────────────────────────────────────
                 if (session.note?.isNotEmpty == true) ...[
@@ -467,6 +521,56 @@ class SessionCard extends ConsumerWidget  {
           ),
         ),
       ),
+    );
+
+    if (!canDelete) return card;
+
+    return Dismissible(
+      key:       ValueKey('session_${session.id}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        return await AppDialogs.showDestructiveConfirm(
+          context,
+          icon:         Icons.delete_outline_rounded,
+          iconColor:    AppColors.emergencyRed,
+          iconBg:       AppColors.emergencyBg,
+          title:        'Delete Session?',
+          message:      'This will permanently remove Session $sessionNumber from your history.',
+          confirmLabel: 'Delete',
+          confirmColor: AppColors.emergencyRed,
+          cancelLabel:  'Cancel',
+        ) == true;
+      },
+      onDismissed: (_) async {
+        final service = ref.read(sessionServiceProvider);
+        try {
+          await service.deleteSession(session.id!);
+          ref.invalidate(sessionSummariesProvider);
+        } catch (_) {
+          if (context.mounted) {
+            UIHelper.showError(context, 'Failed to delete session');
+          }
+        }
+      },
+      background: Container(
+        margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color:        AppColors.error,
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        ),
+        alignment: Alignment.centerRight,
+        padding:   const EdgeInsets.only(right: AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.delete_outline_rounded,
+                color: AppColors.textOnDark, size: AppSpacing.iconMd),
+            const SizedBox(height: AppSpacing.xxs),
+            Text('Delete', style: AppTypography.label(size: 11, color: AppColors.textOnDark))
+          ],
+        ),
+      ),
+      child: card,
     );
   }
 }

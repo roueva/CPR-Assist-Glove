@@ -131,6 +131,37 @@ class _SessionResultsScreenState
     return AppColors.error;
   }
 
+  Future<void> _confirmDeleteSession() async {
+    final sessionId = widget._detail?.id ?? widget._summary?.id;
+    if (sessionId == null) return;
+
+    final confirmed = await AppDialogs.showDestructiveConfirm(
+      context,
+      icon:         Icons.delete_outline_rounded,
+      iconColor:    AppColors.emergencyRed,
+      iconBg:       AppColors.emergencyBg,
+      title:        'Delete Session?',
+      message:      'This permanently deletes this session and all its data.',
+      confirmLabel: 'Delete',
+      confirmColor: AppColors.emergencyRed,
+      cancelLabel:  'Cancel',
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final service = ref.read(sessionServiceProvider);
+    final ok      = await service.deleteSession(sessionId);
+    if (!mounted) return;
+
+    if (ok) {
+      ref.invalidate(sessionSummariesProvider);
+      context.pop();
+      UIHelper.showSuccess(context, 'Session deleted');
+    } else {
+      UIHelper.showError(context, 'Failed to delete. Check your connection.');
+    }
+  }
+
   // ── Note editing ───────────────────────────────────────────────────────────
   Future<void> _editNote() async {
     final controller = TextEditingController(text: _note ?? '');
@@ -143,9 +174,19 @@ class _SessionResultsScreenState
     final sessionId = widget._detail?.id ?? widget._summary?.id;
     if (sessionId != null) {
       final service = ref.read(sessionServiceProvider);
-      await service.updateNote(sessionId, result.isEmpty ? null : result);
+      final ok = await service.updateNote(sessionId, result.isEmpty ? null : result);
+      if (!mounted) return;
+      if (ok) {
+        ref.invalidate(sessionSummariesProvider);
+        setState(() => _note = result.isEmpty ? null : result);
+        UIHelper.showSuccess(context, 'Note saved');
+      } else {
+        UIHelper.showError(context, 'Failed to save note. Check your connection.');
+      }
+    } else {
+      // No backend ID — just update local state (post-session, not yet saved)
+      setState(() => _note = result.isEmpty ? null : result);
     }
-    setState(() => _note = result.isEmpty ? null : result);
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -188,7 +229,11 @@ class _SessionResultsScreenState
                   bg:    _isEmergency ? AppColors.emergencyBg  : AppColors.warningBg,
                 ),
                 child: Text(
-                  _isEmergency ? 'EMERGENCY' : 'TRAINING',
+                  _isEmergency
+                      ? 'EMERGENCY'
+                      : (widget._detail?.isNoFeedback ?? widget._summary?.isNoFeedback ?? false)
+                      ? 'NO-FEEDBACK'
+                      : 'TRAINING',
                   style: AppTypography.badge(
                     size:  10,
                     color: _isEmergency ? AppColors.emergencyRed : AppColors.warning,
@@ -197,6 +242,14 @@ class _SessionResultsScreenState
               ),
             ),
           ),
+          // Delete button — only for saved sessions
+          if ((widget._detail?.id ?? widget._summary?.id) != null)
+            IconButton(
+              icon:    const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.emergencyRed),
+              onPressed: _confirmDeleteSession,
+              tooltip: 'Delete session',
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -450,6 +503,23 @@ class _SessionResultsScreenState
                           : '—',
                       note: 'Compressions within $_targetDepthLabel',
                     ),
+
+                    if (widget._detail!.averageEffectiveDepth > 0)
+                      _DetailRow(
+                        icon:  Icons.architecture_rounded,
+                        label: 'Effective Depth (angle-corrected)',
+                        value: '${widget._detail!.averageEffectiveDepth.toStringAsFixed(1)} cm',
+                        note:  'Depth corrected for wrist axis deviation',
+                      ),
+
+                    if (widget._detail!.peakDepth > 0)
+                      _DetailRow(
+                        icon:  Icons.keyboard_double_arrow_down_rounded,
+                        label: 'Peak Depth',
+                        value: '${widget._detail!.peakDepth.toStringAsFixed(1)} cm',
+                        note:  'Maximum single compression this session',
+                      ),
+
                     _DetailRow(
                       icon:  Icons.speed_rounded,
                       label: 'Rate Consistency',
@@ -505,6 +575,16 @@ class _SessionResultsScreenState
                         valueColor: AppColors.error,
                       ),
 
+                    if (widget._detail!.tooDeepCount > 0)
+                      _DetailRow(
+                        icon:       Icons.arrow_downward_rounded,
+                        label:      'Too Deep',
+                        value:      '${widget._detail!.tooDeepCount}×',
+                        note:       'Compressions exceeded maximum depth',
+                        iconColor:  AppColors.error,
+                        valueColor: AppColors.error,
+                      ),
+
                     const _HDivider(),
 
                     // ── Flow ─────────────────────────────────────────────
@@ -546,6 +626,39 @@ class _SessionResultsScreenState
                           : AppColors.success,
                     ),
 
+                    if (widget._detail!.rateVariability > 0)
+                      _DetailRow(
+                        icon:       Icons.graphic_eq_rounded,
+                        label:      'Rate Variability',
+                        value:      '${widget._detail!.rateVariability.toStringAsFixed(0)} ms',
+                        note:       'Std deviation of inter-compression intervals (lower = steadier)',
+                        valueColor: widget._detail!.rateVariability < 100
+                            ? AppColors.success : AppColors.warning,
+                      ),
+
+                    if (widget._detail!.ventilationCount > 0) ...[
+                      const _HDivider(),
+                      Text('VENTILATION', style: AppTypography.badge(size: 10, color: AppColors.textDisabled)),
+                      const SizedBox(height: AppSpacing.sm),
+                      _DetailRow(
+                        icon:  Icons.air_rounded,
+                        label: 'Ventilation Cycles',
+                        value: '${widget._detail!.ventilationCount}',
+                      ),
+                      _DetailRow(
+                        icon:       Icons.check_circle_outline_rounded,
+                        label:      'Compliance',
+                        value:      '${widget._detail!.ventilationCompliance.round()}%',
+                        valueColor: widget._detail!.ventilationCompliance >= 80
+                            ? AppColors.success : AppColors.warning,
+                      ),
+                      _DetailRow(
+                        icon:  Icons.vaccines_rounded,
+                        label: 'Correct Ventilations',
+                        value: '${widget._detail!.correctVentilations}',
+                      ),
+                    ],
+
                     // ── Fatigue (Training only) ───────────────────────────
                     if (!_isEmergency &&
                         widget._detail!.rescuerSwapCount > 0) ...[
@@ -573,6 +686,15 @@ class _SessionResultsScreenState
                           valueColor: AppColors.warning,
                         ),
                     ],
+
+                    if (widget._detail!.consecutiveGoodPeak > 0)
+                      _DetailRow(
+                        icon:      Icons.local_fire_department_rounded,
+                        label:     'Best Streak',
+                        value:     '${widget._detail!.consecutiveGoodPeak} compressions',
+                        note:      'Longest unbroken run of perfect compressions',
+                        iconColor: AppColors.success,
+                      ),
 
                     // ── Pulse check results (Emergency only) ─────────────
                     if (_isEmergency &&
@@ -642,6 +764,14 @@ class _SessionResultsScreenState
                         icon:  Icons.air_rounded,
                         label: 'SpO₂ (last pause)',
                         value: '${_rescuerSpO2!.toStringAsFixed(0)}%',
+                      ),
+
+                    if ((widget._detail?.patientTemperature ?? widget._summary?.patientTemperature) != null)
+                      _DetailRow(
+                        icon:      Icons.thermostat_rounded,
+                        label:     'Patient Temperature',
+                        value:     '${(widget._detail?.patientTemperature ?? widget._summary!.patientTemperature!).toStringAsFixed(1)}°C',
+                        iconColor: AppColors.error,
                       ),
                   ],
 
@@ -1247,15 +1377,4 @@ class _HDivider extends StatelessWidget {
           height: AppSpacing.dividerThickness, color: AppColors.divider),
     );
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// gradeColor — shared utility used by SessionCard in session_history.dart
-// ─────────────────────────────────────────────────────────────────────────────
-
-Color gradeColor(double grade) {
-  if (grade >= 90) return AppColors.success;
-  if (grade >= 75) return AppColors.primary;
-  if (grade >= 55) return AppColors.warning;
-  return AppColors.error;
 }

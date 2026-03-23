@@ -48,6 +48,8 @@ dependencies:
   share_plus: ^10.1.4
   qr_flutter: ^4.1.0
 
+  path_provider: ^2.1.2
+
   # For location services
   geolocator: ^13.0.2
   google_maps_flutter: ^2.10.0

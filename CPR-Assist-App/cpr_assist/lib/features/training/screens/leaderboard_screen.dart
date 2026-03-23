@@ -1,50 +1,40 @@
+import 'package:cpr_assist/features/training/screens/session_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
 import '../../../providers/session_provider.dart';
 import '../widgets/session_history.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LeaderboardScreen
 //
 // Tab bar: Global | Friends | My Sessions
-// Global & Friends: placeholder data until backend leaderboard endpoint is wired.
-// My Sessions: real data via sessionSummariesProvider + shared SessionCard.
+//
+// Global  — real data from GET /leaderboard/global, filterable by scenario.
+// Friends — placeholder (no backend friends system yet).
+// My Sessions — real data via sessionSummariesProvider + SessionCard.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class LeaderboardScreen extends StatefulWidget {
+class LeaderboardScreen extends ConsumerStatefulWidget {
   final String? currentUsername;
   const LeaderboardScreen({super.key, this.currentUsername});
 
   @override
-  State<LeaderboardScreen> createState() => _LeaderboardScreenState();
+  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen>
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // ── Placeholder leaderboard data (replace with provider when API is ready) ─
-  final _global = [
-    const _LeaderEntry(rank: 1,  username: 'Maria K.',    score: 98.4, sessions: 42, badge: '🥇'),
-    const _LeaderEntry(rank: 2,  username: 'Nikos P.',    score: 96.1, sessions: 38, badge: '🥈'),
-    const _LeaderEntry(rank: 3,  username: 'Elena T.',    score: 94.7, sessions: 55, badge: '🥉'),
-    const _LeaderEntry(rank: 4,  username: 'Giorgos M.',  score: 92.3, sessions: 29),
-    const _LeaderEntry(rank: 5,  username: 'Sofia D.',    score: 91.0, sessions: 33),
-    const _LeaderEntry(rank: 6,  username: 'Alexis B.',   score: 89.5, sessions: 21),
-    const _LeaderEntry(rank: 7,  username: 'Katerina V.', score: 87.2, sessions: 18),
-    const _LeaderEntry(rank: 8,  username: 'Petros N.',   score: 85.9, sessions: 44),
-    const _LeaderEntry(rank: 9,  username: 'Anna L.',     score: 84.1, sessions: 12),
-    const _LeaderEntry(rank: 10, username: 'Kostas F.',   score: 82.7, sessions: 27),
-  ];
+  // Scenario filter for the Global tab
+  String _scenario = 'standard_adult';
 
-  final _friends = [
-    const _LeaderEntry(rank: 1, username: 'Nikos P.',  score: 96.1, sessions: 38, badge: '🥇'),
-    const _LeaderEntry(rank: 2, username: 'Sofia D.',  score: 91.0, sessions: 33, badge: '🥈'),
-    const _LeaderEntry(rank: 3, username: 'Alexis B.', score: 89.5, sessions: 21, badge: '🥉'),
-  ];
-
-  static const _me = _LeaderEntry(rank: 24, username: 'You', score: 78.4, sessions: 7);
+  static const _scenarioOptions = {
+    'standard_adult': 'Adult',
+    'pediatric':      'Pediatric',
+  };
 
   @override
   void initState() {
@@ -63,9 +53,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceWhite,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
+        backgroundColor:        AppColors.surfaceWhite,
+        foregroundColor:        AppColors.textPrimary,
+        elevation:              0,
         scrolledUnderElevation: 0,
         toolbarHeight: AppSpacing.headerHeight - AppSpacing.sm,
         leading: IconButton(
@@ -74,8 +64,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         ),
         title: Text('Leaderboard', style: AppTypography.heading(size: 18)),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(
-              AppSpacing.xxl + AppSpacing.xxs),
+          preferredSize: const Size.fromHeight(AppSpacing.xxl + AppSpacing.xxs),
           child: Column(
             children: [
               const Divider(height: 1, color: AppColors.divider),
@@ -102,9 +91,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _GlobalTab(entries: _global, myEntry: _me),
-          _FriendsTab(entries: _friends),
-          const _PersonalTab(),
+          _GlobalTab(
+            scenario:        _scenario,
+            scenarioOptions: _scenarioOptions,
+            onScenarioChanged: (s) => setState(() => _scenario = s),
+          ),
+          const _FriendsTab(),
+          const _MyStatsTab(),
         ],
       ),
     );
@@ -112,65 +105,188 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GLOBAL TAB
+// GLOBAL TAB — real data from /leaderboard/global
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GlobalTab extends StatelessWidget {
-  final List<_LeaderEntry> entries;
-  final _LeaderEntry myEntry;
-  const _GlobalTab({required this.entries, required this.myEntry});
+class _GlobalTab extends ConsumerWidget {
+  final String                    scenario;
+  final Map<String, String>       scenarioOptions;
+  final void Function(String)     onScenarioChanged;
+
+  const _GlobalTab({
+    required this.scenario,
+    required this.scenarioOptions,
+    required this.onScenarioChanged,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final top3 = entries.take(3).toList();
-    final rest = entries.skip(3).toList();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final leaderboardAsync = ref.watch(globalLeaderboardProvider(scenario));
 
-    return Stack(
-      children: [
-        ListView(
-          padding: const EdgeInsets.only(
-              bottom: AppSpacing.xxl + AppSpacing.xl),
-          children: [
-            _Podium(entries: top3),
-            if (rest.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl, AppSpacing.sm,
-                    AppSpacing.xl, AppSpacing.xs + AppSpacing.xxs),
-                child: Text('RANKINGS',
-                    style: AppTypography.label(size: 11)),
-              ),
-              Container(
-                margin: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md),
-                decoration: AppDecorations.card(),
-                child: Column(
-                  children: rest.asMap().entries.map((e) {
-                    final isLast = e.key == rest.length - 1;
-                    return Column(
-                      children: [
-                        _LeaderRow(entry: e.value),
-                        if (!isLast)
-                          const Divider(
-                            height: 1,
-                            color: AppColors.divider,
-                            indent: 60,
-                            endIndent: AppSpacing.md,
-                          ),
-                      ],
-                    );
-                  }).toList(),
-                ),
+    return leaderboardAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+        ),
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  size: AppSpacing.iconXl + AppSpacing.md,
+                  color: AppColors.textDisabled),
+              const SizedBox(height: AppSpacing.md),
+              Text('Could not load leaderboard',
+                  style: AppTypography.subheading(
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(e.toString(),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption(
+                      color: AppColors.textDisabled)),
+              const SizedBox(height: AppSpacing.lg),
+              TextButton(
+                onPressed: () =>
+                    ref.invalidate(globalLeaderboardProvider(scenario)),
+                child: const Text('Retry'),
               ),
             ],
-            const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+          ),
+        ),
+      ),
+      data: (data) {
+        final (entries, myRank) = data;
+
+        return Stack(
+          children: [
+            ListView(
+              padding: EdgeInsets.only(
+                bottom: myRank != null
+                    ? AppSpacing.xxl + AppSpacing.xl + AppSpacing.md
+                    : AppSpacing.md,
+              ),
+              children: [
+                // ── Scenario toggle ──────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color:        AppColors.screenBgGrey,
+                      borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+                    ),
+                    padding: const EdgeInsets.all(AppSpacing.xxs),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: scenarioOptions.entries.map((e) {
+                        final isSelected = e.key == scenario;
+                        return GestureDetector(
+                          onTap: () => onScenarioChanged(e.key),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical:   AppSpacing.sm - AppSpacing.xxs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primary : Colors.transparent,
+                              borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+                            ),
+                            child: Text(
+                              e.value,
+                              style: AppTypography.label(
+                                size:  13,
+                                color: isSelected
+                                    ? AppColors.textOnDark
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+
+                // ── Empty state ──────────────────────────────────────────────
+                if (entries.isEmpty) ...[
+                  const SizedBox(height: AppSpacing.xxl),
+                  Center(
+                    child: Column(
+                      children: [
+                        const Icon(Icons.leaderboard_outlined,
+                            size:  AppSpacing.iconXl + AppSpacing.md,
+                            color: AppColors.textDisabled),
+                        const SizedBox(height: AppSpacing.md),
+                        Text('No rankings yet',
+                            style: AppTypography.subheading(
+                                color: AppColors.textSecondary)),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Complete 3 training sessions to qualify',
+                          style: AppTypography.body(
+                              color: AppColors.textDisabled),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // ── Podium (top 3) ─────────────────────────────────────────
+                  if (entries.length >= 3)
+                    _Podium(entries: entries.take(3).toList()),
+
+                  // ── Rankings list (4th+) ───────────────────────────────────
+                  if (entries.length > 3) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xl, AppSpacing.sm,
+                          AppSpacing.xl, AppSpacing.xs),
+                      child: Text('RANKINGS',
+                          style: AppTypography.label(size: 11)),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md),
+                      decoration: AppDecorations.card(),
+                      child: Column(
+                        children: entries.skip(3).map((entry) {
+                          final isLast =
+                              entry == entries.last;
+                          return Column(
+                            children: [
+                              _LeaderRow(entry: entry),
+                              if (!isLast)
+                                const Divider(
+                                    height: 1,
+                                    color: AppColors.divider,
+                                    indent: 60,
+                                    endIndent: AppSpacing.md),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ],
+
+                const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
+              ],
+            ),
+
+            // ── My rank footer (pinned to bottom) ────────────────────────────
+            if (myRank != null)
+              Positioned(
+                bottom: 0,
+                left:   0,
+                right:  0,
+                child:  _MyRankFooter(entry: myRank),
+              ),
           ],
-        ),
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: _MyRankFooter(entry: myEntry),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -180,7 +296,7 @@ class _GlobalTab extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _Podium extends StatelessWidget {
-  final List<_LeaderEntry> entries;
+  final List<LeaderboardEntry> entries;
   const _Podium({required this.entries});
 
   @override
@@ -197,7 +313,8 @@ class _Podium extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(child: _PodiumSpot(entry: entries[1], height: 80)),
-          Expanded(child: _PodiumSpot(entry: entries[0], height: 106, isFirst: true)),
+          Expanded(
+              child: _PodiumSpot(entry: entries[0], height: 106, isFirst: true)),
           Expanded(child: _PodiumSpot(entry: entries[2], height: 64)),
         ],
       ),
@@ -206,9 +323,10 @@ class _Podium extends StatelessWidget {
 }
 
 class _PodiumSpot extends StatelessWidget {
-  final _LeaderEntry entry;
-  final double height;
-  final bool isFirst;
+  final LeaderboardEntry entry;
+  final double           height;
+  final bool             isFirst;
+
   const _PodiumSpot({
     required this.entry,
     required this.height,
@@ -224,8 +342,7 @@ class _PodiumSpot extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isFirst)
-          const Text('👑', style: TextStyle(fontSize: 20)),
+        if (isFirst) const Text('👑', style: TextStyle(fontSize: 20)),
         const SizedBox(height: AppSpacing.xs),
         Container(
           width:  avatarSize,
@@ -242,9 +359,8 @@ class _PodiumSpot extends StatelessWidget {
             child: Text(
               entry.username.initials,
               style: AppTypography.heading(
-                size:  isFirst ? 18 : 14,
-                color: AppColors.textOnDark,
-              ),
+                  size:  isFirst ? 18 : 14,
+                  color: AppColors.textOnDark),
             ),
           ),
         ),
@@ -252,19 +368,17 @@ class _PodiumSpot extends StatelessWidget {
         Text(
           entry.username,
           style: AppTypography.bodyMedium(
-            size:  isFirst ? 13 : 11,
-            color: AppColors.textOnDark,
-          ),
+              size:  isFirst ? 13 : 11,
+              color: AppColors.textOnDark),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
         const SizedBox(height: AppSpacing.xxs),
         Text(
-          '${entry.score.toStringAsFixed(1)}%',
+          '${entry.avgGrade.toStringAsFixed(1)}%',
           style: AppTypography.body(
-            size:  isFirst ? 13 : 11,
-            color: AppColors.textOnDark.withValues(alpha: 0.8),
-          ),
+              size:  isFirst ? 13 : 11,
+              color: AppColors.textOnDark.withValues(alpha: 0.8)),
         ),
         const SizedBox(height: AppSpacing.xs + AppSpacing.xxs),
         Container(
@@ -278,11 +392,12 @@ class _PodiumSpot extends StatelessWidget {
           ),
           child: Center(
             child: Text(
-              '#${entry.rank}',
-              style: AppTypography.numericDisplay(
-                size:  isFirst ? 20 : 16,
-                color: AppColors.textOnDark.withValues(alpha: 0.9),
-              ),
+              entry.rank == 1
+                  ? '🥇'
+                  : entry.rank == 2
+                  ? '🥈'
+                  : '🥉',
+              style: const TextStyle(fontSize: 22),
             ),
           ),
         ),
@@ -296,12 +411,16 @@ class _PodiumSpot extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LeaderRow extends StatelessWidget {
-  final _LeaderEntry entry;
+  final LeaderboardEntry entry;
   const _LeaderRow({required this.entry});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final isMe = entry.isCurrentUser;
+    return Container(
+      color: isMe
+          ? AppColors.primaryLight.withValues(alpha: 0.4)
+          : Colors.transparent,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical:   AppSpacing.sm + AppSpacing.xs,
@@ -318,12 +437,13 @@ class _LeaderRow extends StatelessWidget {
           Container(
             width:  AppSpacing.avatarSm + AppSpacing.xs,
             height: AppSpacing.avatarSm + AppSpacing.xs,
-            decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+            decoration: AppDecorations.iconCircle(
+              bg: isMe ? AppColors.primaryLight : AppColors.screenBgGrey,
+            ),
             child: Center(
               child: Text(
                 entry.username.initials,
-                style: AppTypography.label(
-                    size: 12, color: AppColors.primary),
+                style: AppTypography.label(size: 12, color: AppColors.primary),
               ),
             ),
           ),
@@ -332,9 +452,32 @@ class _LeaderRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.username,
-                    style: AppTypography.bodyMedium(size: 14)),
-                Text('${entry.sessions} sessions',
+                Row(
+                  children: [
+                    Text(entry.username,
+                        style: AppTypography.bodyMedium(
+                            size: 14,
+                            color: isMe
+                                ? AppColors.primary
+                                : AppColors.textPrimary)),
+                    if (isMe) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical:   AppSpacing.xxs,
+                        ),
+                        decoration: AppDecorations.chip(
+                            color: AppColors.primary,
+                            bg: AppColors.primaryLight),
+                        child: Text('You',
+                            style: AppTypography.badge(
+                                size: 9, color: AppColors.primary)),
+                      ),
+                    ],
+                  ],
+                ),
+                Text('${entry.sessionCount} sessions',
                     style: AppTypography.caption(
                         color: AppColors.textDisabled)),
               ],
@@ -348,7 +491,7 @@ class _LeaderRow extends StatelessWidget {
             decoration: AppDecorations.tintedCard(
                 radius: AppSpacing.cardRadiusSm),
             child: Text(
-              '${entry.score.toStringAsFixed(1)}%',
+              '${entry.avgGrade.toStringAsFixed(1)}%',
               style: AppTypography.bodyBold(
                   size: 13, color: AppColors.primary),
             ),
@@ -364,7 +507,7 @@ class _LeaderRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MyRankFooter extends StatelessWidget {
-  final _LeaderEntry entry;
+  final LeaderboardEntry entry;
   const _MyRankFooter({required this.entry});
 
   @override
@@ -375,10 +518,9 @@ class _MyRankFooter extends StatelessWidget {
         border: Border(top: BorderSide(color: AppColors.divider)),
         boxShadow: [
           BoxShadow(
-            color:      AppColors.shadowMedium,
-            blurRadius: 12,
-            offset:     Offset(0, -3),
-          ),
+              color:      AppColors.shadowMedium,
+              blurRadius: 12,
+              offset:     Offset(0, -3)),
         ],
       ),
       padding: const EdgeInsets.symmetric(
@@ -409,88 +551,81 @@ class _MyRankFooter extends StatelessWidget {
                     style: AppTypography.caption(
                         color: AppColors.textDisabled)),
                 Text(
-                  '${entry.sessions} sessions · '
-                      '${entry.score.toStringAsFixed(1)}% avg',
+                  '${entry.sessionCount} sessions · '
+                      '${entry.avgGrade.toStringAsFixed(1)}% avg',
                   style: AppTypography.bodyMedium(size: 13),
                 ),
               ],
             ),
           ),
-          Text('Top 24%',
-              style: AppTypography.label(
-                  size: 12, color: AppColors.success)),
         ],
       ),
     );
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
-// FRIENDS TAB
+// FRIENDS TAB — placeholder until friends backend is implemented
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FriendsTab extends StatelessWidget {
-  final List<_LeaderEntry> entries;
-  const _FriendsTab({required this.entries});
+  const _FriendsTab();
 
   @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.group_outlined,
-                size:  AppSpacing.iconXl + AppSpacing.sm,
-                color: AppColors.textDisabled),
-            const SizedBox(height: AppSpacing.md),
-            Text('No friends yet',
-                style: AppTypography.subheading(
-                    color: AppColors.textDisabled)),
-            const SizedBox(height: AppSpacing.xs + AppSpacing.xxs),
-            Text('Add friends to compare scores',
-                style: AppTypography.body(color: AppColors.textDisabled)),
-          ],
-        ),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+    return Column(
       children: [
-        Container(
-          decoration: AppDecorations.card(),
-          child: Column(
-            children: entries.asMap().entries.map((e) {
-              final isLast = e.key == entries.length - 1;
-              return Column(
-                children: [
-                  _LeaderRow(entry: e.value),
-                  if (!isLast)
-                    const Divider(
-                        height: 1, color: AppColors.divider, indent: 60),
-                ],
-              );
-            }).toList(),
+        // Search bar (non-functional placeholder)
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: TextField(
+            readOnly: true,
+            onTap: () => UIHelper.showSnackbar(
+              context,
+              message: 'Friends feature coming soon',
+              icon: Icons.group_outlined,
+            ),
+            decoration: InputDecoration(
+              hintText:   'Search by username…',
+              prefixIcon: const Icon(Icons.search_rounded,
+                  size: AppSpacing.iconSm, color: AppColors.textDisabled),
+              suffixIcon: GestureDetector(
+                onTap: () => UIHelper.showSnackbar(
+                  context,
+                  message: 'Friends feature coming soon',
+                  icon: Icons.group_add_outlined,
+                ),
+                child: const Icon(Icons.person_add_outlined,
+                    size: AppSpacing.iconSm, color: AppColors.primary),
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        OutlinedButton.icon(
-          onPressed: () => UIHelper.showSnackbar(
-            context,
-            message: 'Add friends coming soon',
-            icon: Icons.person_add_outlined,
-          ),
-          icon: const Icon(Icons.person_add_outlined,
-              size: AppSpacing.iconSm),
-          label: const Text('Add Friends'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
-            side: const BorderSide(
-                color: AppColors.primaryMid, width: 1.5),
-            shape: RoundedRectangleBorder(
-              borderRadius:
-              BorderRadius.circular(AppSpacing.buttonRadius),
+        // Coming soon body
+        Expanded(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width:  AppSpacing.iconXl + AppSpacing.lg,
+                  height: AppSpacing.iconXl + AppSpacing.lg,
+                  decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+                  child: const Icon(
+                    Icons.group_outlined,
+                    size:  AppSpacing.iconLg,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text('Friends Coming Soon',
+                    style: AppTypography.subheading(size: 18)),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Search for friends and compare scores\nin a future update.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body(color: AppColors.textDisabled),
+                ),
+              ],
             ),
           ),
         ),
@@ -500,13 +635,11 @@ class _FriendsTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MY SESSIONS TAB
-// Watches the real sessionSummariesProvider — same data as PastSessionsScreen.
-// Uses shared SessionCard and PersonalBestCard widgets.
+// MY STATS TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PersonalTab extends ConsumerWidget {
-  const _PersonalTab();
+class _MyStatsTab extends ConsumerWidget {
+  const _MyStatsTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -515,8 +648,7 @@ class _PersonalTab extends ConsumerWidget {
     return summaries.when(
       loading: () => const Center(
         child: CircularProgressIndicator(
-          valueColor:
-          AlwaysStoppedAnimation<Color>(AppColors.primary),
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
         ),
       ),
       error: (e, _) => Center(
@@ -527,9 +659,8 @@ class _PersonalTab extends ConsumerWidget {
                 size: AppSpacing.iconXl + AppSpacing.md,
                 color: AppColors.textDisabled),
             const SizedBox(height: AppSpacing.md),
-            Text('Could not load sessions',
-                style: AppTypography.subheading(
-                    color: AppColors.textSecondary)),
+            Text('Could not load stats',
+                style: AppTypography.subheading(color: AppColors.textSecondary)),
             const SizedBox(height: AppSpacing.sm),
             TextButton(
               onPressed: () => ref.invalidate(sessionSummariesProvider),
@@ -544,66 +675,275 @@ class _PersonalTab extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.history_rounded,
-                    size:  AppSpacing.iconXl + AppSpacing.md,
+                const Icon(Icons.bar_chart_rounded,
+                    size: AppSpacing.iconXl + AppSpacing.md,
                     color: AppColors.textDisabled),
                 const SizedBox(height: AppSpacing.md),
-                Text('No sessions yet',
-                    style: AppTypography.subheading(
-                        color: AppColors.textDisabled)),
-                const SizedBox(height: AppSpacing.xs + AppSpacing.xxs),
-                Text('Complete a CPR session to see it here',
-                    style: AppTypography.body(
-                        color: AppColors.textDisabled)),
+                Text('No stats yet',
+                    style: AppTypography.subheading(color: AppColors.textDisabled)),
+                const SizedBox(height: AppSpacing.xs),
+                Text('Complete training sessions to build your stats',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.body(color: AppColors.textDisabled)),
               ],
             ),
           );
         }
 
-        // Best session = highest grade
+        final stats = UserStats.fromSessions(sessions);
         final trainingSessions = sessions.where((s) => s.isTraining).toList();
-        final best = trainingSessions.isEmpty ? null : trainingSessions.reduce(
-                (a, b) => a.totalGrade >= b.totalGrade ? a : b);
+        final recentGrades = trainingSessions
+            .take(10)
+            .toList()
+            .reversed
+            .toList();
 
-        return ListView.builder(
+        // Streak: consecutive sessions ending with grade >= 75
+        int streak = 0;
+        for (final s in trainingSessions) {
+          if (s.totalGrade >= 75) streak++;
+          else break;
+        }
+
+        // Total compressions across all sessions
+        final totalCompressions =
+        sessions.fold<int>(0, (sum, s) => sum + s.compressionCount);
+
+        return ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
-          // +1 for the PersonalBestCard at index 0
-          itemCount: sessions.length + 1,
-          itemBuilder: (context, i) {
-            if (i == 0) {
-              if (best == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: PersonalBestCard(session: best),
-              );
-            }
-            final session = sessions[i - 1];
-            return SessionCard(
-              session:       session,
-              sessionNumber: i,
-            );
-          },
+          children: [
+            // ── Personal best card ─────────────────────────────────────────
+            if (stats.bestSession != null) ...[
+              PersonalBestCard(session: stats.bestSession!),
+              const SizedBox(height: AppSpacing.md),
+            ],
+
+            // ── Summary stat tiles ─────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: AppDecorations.primaryDarkCard(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatsTile(
+                      icon:  Icons.history_rounded,
+                      value: '${sessions.length}',
+                      label: 'Total Sessions',
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatsTile(
+                      icon:  Icons.compress_rounded,
+                      value: totalCompressions > 999
+                          ? '${(totalCompressions / 1000).toStringAsFixed(1)}k'
+                          : '$totalCompressions',
+                      label: 'Compressions',
+                    ),
+                  ),
+                  Expanded(
+                    child: _StatsTile(
+                      icon:  Icons.local_fire_department_rounded,
+                      value: streak > 0 ? '$streak' : '—',
+                      label: 'Good streak',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
+            // ── Grade history sparkline ────────────────────────────────────
+            if (recentGrades.length >= 2) ...[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: AppDecorations.card(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Grade Trend',
+                            style: AppTypography.subheading(size: 14)),
+                        Text('Last ${recentGrades.length} sessions',
+                            style: AppTypography.caption()),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SizedBox(
+                      height: 80,
+                      child: CustomPaint(
+                        painter: _GradeSparklinePainter(
+                          grades: recentGrades
+                              .map((s) => s.totalGrade)
+                              .toList(),
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(recentGrades.first.dateFormatted,
+                            style: AppTypography.caption()),
+                        Text(recentGrades.last.dateFormatted,
+                            style: AppTypography.caption()),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+
+            // ── Avg grade breakdown ────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: AppDecorations.card(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Training Averages',
+                      style: AppTypography.subheading(size: 14)),
+                  const SizedBox(height: AppSpacing.md),
+                  _AverageRow(
+                    label: 'Avg Grade',
+                    value: stats.averageGradeFormatted,
+                    color: gradeColor(stats.averageGrade),
+                  ),
+                  const Divider(height: AppSpacing.lg, color: AppColors.divider),
+                  _AverageRow(
+                    label: 'Best Grade',
+                    value: stats.sessionCount > 0
+                        ? '${stats.bestGrade.toStringAsFixed(1)}%'
+                        : '—',
+                    color: gradeColor(stats.bestGrade),
+                  ),
+                  if (trainingSessions.isNotEmpty) ...[
+                    const Divider(height: AppSpacing.lg, color: AppColors.divider),
+                    _AverageRow(
+                      label: 'Avg Depth',
+                      value: '${(trainingSessions.map((s) => s.averageDepth).reduce((a, b) => a + b) / trainingSessions.length).toStringAsFixed(1)} cm',
+                      color: AppColors.primary,
+                    ),
+                    const Divider(height: AppSpacing.lg, color: AppColors.divider),
+                    _AverageRow(
+                      label: 'Avg Rate',
+                      value: '${(trainingSessions.map((s) => s.averageFrequency).reduce((a, b) => a + b) / trainingSessions.length).round()} BPM',
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Leaderboard data model (placeholder — replace with backend model when ready)
-// ─────────────────────────────────────────────────────────────────────────────
+class _StatsTile extends StatelessWidget {
+  final IconData icon;
+  final String   value;
+  final String   label;
+  const _StatsTile({required this.icon, required this.value, required this.label});
 
-class _LeaderEntry {
-  final int rank;
-  final String username;
-  final double score;
-  final int sessions;
-  final String? badge;
-  const _LeaderEntry({
-    required this.rank,
-    required this.username,
-    required this.score,
-    required this.sessions,
-    this.badge,
-  });
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: AppSpacing.iconSm, color: AppColors.textOnDark.withValues(alpha: 0.7)),
+        const SizedBox(height: AppSpacing.xs),
+        Text(value,
+            style: AppTypography.numericDisplay(size: 20, color: AppColors.textOnDark)),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(label,
+            textAlign: TextAlign.center,
+            style: AppTypography.label(size: 10,
+                color: AppColors.textOnDark.withValues(alpha: 0.6))),
+      ],
+    );
+  }
+}
+
+class _AverageRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color  color;
+  const _AverageRow({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppTypography.body(size: 14)),
+        Text(value,
+            style: AppTypography.bodyBold(size: 14, color: color)),
+      ],
+    );
+  }
+}
+
+class _GradeSparklinePainter extends CustomPainter {
+  final List<double> grades;
+  const _GradeSparklinePainter({required this.grades});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (grades.length < 2) return;
+
+    final linePaint = Paint()
+      ..color = AppColors.primary
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final fillPaint = Paint()
+      ..color = AppColors.primary.withValues(alpha: 0.08)
+      ..style = PaintingStyle.fill;
+
+    final minG = grades.reduce((a, b) => a < b ? a : b).clamp(0.0, 100.0);
+    final maxG = grades.reduce((a, b) => a > b ? a : b).clamp(0.0, 100.0);
+    final range = (maxG - minG).abs() < 5 ? 20.0 : (maxG - minG) * 1.2;
+    final midG  = (minG + maxG) / 2;
+    final lo    = (midG - range / 2).clamp(0.0, 100.0);
+    final hi    = lo + range;
+
+    double xOf(int i) => i / (grades.length - 1) * size.width;
+    double yOf(double g) => size.height - ((g - lo) / (hi - lo)).clamp(0.0, 1.0) * size.height;
+
+    final path = Path()..moveTo(xOf(0), yOf(grades[0]));
+    for (int i = 1; i < grades.length; i++) {
+      path.lineTo(xOf(i), yOf(grades[i]));
+    }
+
+    // Fill area under line
+    final fillPath = Path.from(path)
+      ..lineTo(xOf(grades.length - 1), size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, linePaint);
+
+    // Draw dots at each point
+    final dotPaint = Paint()
+      ..color = AppColors.primary
+      ..style = PaintingStyle.fill;
+    for (int i = 0; i < grades.length; i++) {
+      canvas.drawCircle(Offset(xOf(i), yOf(grades[i])), 3.5, dotPaint);
+      canvas.drawCircle(
+        Offset(xOf(i), yOf(grades[i])), 3.5,
+        Paint()..color = AppColors.surfaceWhite..style = PaintingStyle.stroke..strokeWidth = 1.5,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GradeSparklinePainter old) =>
+      old.grades != grades;
 }
