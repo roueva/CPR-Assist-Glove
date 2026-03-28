@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
+import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../../training/services/export_service.dart';
 
@@ -19,18 +22,13 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // ── Local toggle state — wire to SharedPreferences / provider when ready ──
-  bool   _hapticFeedback     = true;
-  bool   _audioFeedback      = true;
-  bool   _keepScreenOn       = true;
-  bool   _autoSwitchToCPR    = true;
-  bool   _showDepthGuide     = true;
-  bool   _showRateGuide      = true;
-  bool   _notifyOnDisconnect = true;
-  String _compressionUnit    = 'cm'; // 'cm' | 'in'
+  StreamSubscription? _selftestSub;
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: _buildAppBar(context),
@@ -47,16 +45,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon:     Icons.bluetooth_rounded,
               title:    'Alert on disconnect',
               subtitle: 'Notify when glove loses BLE connection',
-              value:    _notifyOnDisconnect,
-              onChanged: (v) => setState(() => _notifyOnDisconnect = v),
+              value:    settings.notifyOnDisconnect,
+              onChanged: (v) => notifier.setNotifyOnDisconnect(v),
             ),
+            const _SettingsDivider(),
+            _GloveTile(),
             const _SettingsDivider(),
             _ToggleTile(
               icon:     Icons.switch_right_outlined,
               title:    'Auto-switch to Live CPR',
               subtitle: 'Navigate automatically when glove detects CPR start',
-              value:    _autoSwitchToCPR,
-              onChanged: (v) => setState(() => _autoSwitchToCPR = v),
+              value:    settings.autoSwitchToCPR,
+              onChanged: (v) => notifier.setAutoSwitchToCPR(v),
+            ),
+            const _SettingsDivider(),
+            _NavTile(
+              icon:     Icons.tune_rounded,
+              title:    'Calibrate glove',
+              subtitle: 'Run force baseline + brightness calibration',
+              onTap:    () => _runCalibration(),
+            ),
+
+            const _SettingsDivider(),
+            _NavTile(
+              icon:     Icons.biotech_outlined,
+              title:    'Run glove self-test',
+              subtitle: 'Check all sensors and battery status',
+              onTap:    () => _runSelftest(),
+            ),
+            const _SettingsDivider(),
+            _NavTile(
+              icon:     Icons.play_circle_outline_rounded,
+              title:    'App tutorial',
+              subtitle: 'Replay the introduction walkthrough',
+              onTap:    () => _showTutorialComingSoon(),
             ),
           ]),
 
@@ -67,10 +89,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon:     Icons.vibration_rounded,
               title:    'Haptic feedback',
               subtitle: 'Vibrate on compression detection',
-              value:    _hapticFeedback,
+              value:    settings.hapticFeedback,
               onChanged: (v) {
-                setState(() => _hapticFeedback = v);
+                notifier.setHapticFeedback(v);
                 if (v) HapticFeedback.lightImpact();
+                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v);
               },
             ),
             const _SettingsDivider(),
@@ -78,24 +101,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon:     Icons.volume_up_outlined,
               title:    'Audio feedback',
               subtitle: 'Spoken pace cues during CPR',
-              value:    _audioFeedback,
-              onChanged: (v) => setState(() => _audioFeedback = v),
+              value:    settings.audioFeedback,
+              onChanged: (v) {
+                notifier.setAudioFeedback(v);
+                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v);
+              },
             ),
             const _SettingsDivider(),
             _ToggleTile(
               icon:     Icons.straighten_outlined,
               title:    'Show depth guide',
               subtitle: 'Display target compression depth on screen',
-              value:    _showDepthGuide,
-              onChanged: (v) => setState(() => _showDepthGuide = v),
+              value:    settings.showDepthGuide,
+              onChanged: (v) => notifier.setShowDepthGuide(v),
             ),
             const _SettingsDivider(),
             _ToggleTile(
               icon:     Icons.speed_outlined,
               title:    'Show rate guide',
               subtitle: 'Display target compression rate on screen',
-              value:    _showRateGuide,
-              onChanged: (v) => setState(() => _showRateGuide = v),
+              value:    settings.showRateGuide,
+              onChanged: (v) => notifier.setShowRateGuide(v),
+            ),
+            const _SettingsDivider(),
+            _ToggleTile(
+              icon:     Icons.checklist_rounded,
+              title:    'Pre-session checklist',
+              subtitle: 'Show setup checklist before each training session',
+              value:    settings.showChecklist,
+              onChanged: (v) => notifier.setShowChecklist(v),
+            ),
+            const _SettingsDivider(),
+            _SelectTile(
+              icon:      Icons.medical_services_outlined,
+              title:     'Default scenario',
+              options:   const ['Adult', 'Pediatric', 'Timed'],
+              selected:  _scenarioLabel(settings.defaultScenario),
+              onChanged: (v) => notifier.setDefaultScenario(_scenarioKey(v)),
             ),
           ]),
 
@@ -106,16 +148,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon:     Icons.screen_lock_portrait_outlined,
               title:    'Keep screen on',
               subtitle: 'Prevent screen timeout during CPR sessions',
-              value:    _keepScreenOn,
-              onChanged: (v) => setState(() => _keepScreenOn = v),
+              value:    settings.keepScreenOn,
+              onChanged: (v) => notifier.setKeepScreenOn(v),
             ),
             const _SettingsDivider(),
             _SelectTile(
               icon:      Icons.straighten_rounded,
               title:     'Depth unit',
               options:   const ['cm', 'in'],
-              selected:  _compressionUnit,
-              onChanged: (v) => setState(() => _compressionUnit = v),
+              selected:  settings.compressionUnit,
+              onChanged: (v) => notifier.setCompressionUnit(v),
             ),
           ]),
 
@@ -125,7 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _NavTile(
               icon:     Icons.download_outlined,
               title:    'Export session data',
-              subtitle: 'Download your training history as CSV',
+              subtitle:  'Download all sessions (training + emergency) as CSV',
               onTap: () => _exportData(),
             ),
             const _SettingsDivider(),
@@ -136,6 +178,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle:   'Permanently remove all training records',
               titleColor: AppColors.emergencyRed,
               onTap:      () => _confirmDeleteData(),
+            ),
+            const _SettingsDivider(),
+            _NavTile(
+              icon:     Icons.settings_backup_restore_rounded,
+              title:    'Reset settings to defaults',
+              subtitle: 'Restore all app settings to their original values',
+              onTap:    () => _confirmResetDefaults(),
             ),
           ]),
 
@@ -164,6 +213,80 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           color:  AppColors.divider,
         ),
       ),
+    );
+  }
+
+  Future<void> _runCalibration() async {
+    final bleConn = ref.read(bleConnectionProvider);
+    if (!bleConn.isConnected) {
+      UIHelper.showError(context, 'Glove not connected.');
+      return;
+    }
+    final ok = await bleConn.sendCalibrate();
+    if (!mounted) return;
+    if (ok) {
+      UIHelper.showSuccess(context, 'Calibration started — keep glove still.');
+    } else {
+      UIHelper.showError(context, 'Calibration command failed. Try again.');
+    }
+  }
+
+  Future<void> _runSelftest() async {
+    final ble = ref.read(bleConnectionProvider);
+    if (!ble.isConnected) {
+      UIHelper.showError(context, 'Glove not connected.');
+      return;
+    }
+    ref.read(selftestRequestedProvider.notifier).state = true;
+    final ok = await ble.sendRunSelftest();
+    if (!mounted) return;
+    if (!ok) {
+      ref.read(selftestRequestedProvider.notifier).state = false;
+      UIHelper.showError(context, 'Self-test command failed.');
+    } else {
+      UIHelper.showSnackbar(
+        context,
+        message: 'Self-test running — results in a moment',
+        icon: Icons.hourglass_top_rounded,
+      );
+    }
+    _selftestSub?.cancel();
+    _selftestSub = ref.read(bleConnectionProvider).dataStream
+        .where((d) => d['isSelftestResult'] == true)
+        .take(1)
+        .listen((data) {
+      if (!mounted) return;
+      _selftestSub = null;
+      ref.read(selftestRequestedProvider.notifier).state = false;
+      _showSelftestResult(data);
+    });
+  }
+
+  Future<void> _confirmResetDefaults() async {
+    final confirmed = await AppDialogs.showDestructiveConfirm(
+      context,
+      icon:         Icons.settings_backup_restore_rounded,
+      iconColor:    AppColors.warning,
+      iconBg:       AppColors.warningBg,
+      title:        'Reset to Defaults?',
+      message:      'All settings will be restored to their original values.',
+      confirmLabel: 'Reset',
+      confirmColor: AppColors.warning,
+      cancelLabel:  'Cancel',
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(settingsProvider.notifier).resetToDefaults();
+    if (mounted) UIHelper.showSuccess(context, 'Settings reset to defaults');
+  }
+
+  void _showTutorialComingSoon() {
+    AppDialogs.showAlert(
+      context,
+      icon:      Icons.play_circle_outline_rounded,
+      iconColor: AppColors.primary,
+      iconBg:    AppColors.primaryLight,
+      title:     'Tutorial',
+      message:   'The tutorial walkthrough will be available in a future update.',
     );
   }
 
@@ -208,6 +331,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!ok && mounted) {
       UIHelper.showError(context, 'Export failed. Please try again.');
     }
+  }
+
+  String _scenarioLabel(String key) {
+    switch (key) {
+      case 'pediatric':       return 'Pediatric';
+      case 'timed_endurance': return 'Timed';
+      default:                return 'Adult';
+    }
+  }
+
+  String _scenarioKey(String label) {
+    switch (label) {
+      case 'Pediatric': return 'pediatric';
+      case 'Timed':     return 'timed_endurance';
+      default:          return 'standard_adult';
+    }
+  }
+
+
+  void _showSelftestResult(Map<String, dynamic> data) {
+    final warn     = (data['selftestWarnMask']     as int?) ?? 0;
+    final critical = (data['selftestCriticalMask'] as int?) ?? 0;
+    final battery  = (data['selftestBatteryPct']   as int?) ?? 0;
+
+    const sensorNames = [
+      'IMU 1', 'IMU 2', 'Force sensor',
+      'Fingertip optical', 'Wrist optical',
+      'Temperature (MAX30205)', 'Humidity (GXHT30)', 'Audio (DFPlayer)',
+    ];
+    final failed   = <String>[];
+    final warnings = <String>[];
+    for (int i = 0; i < sensorNames.length; i++) {
+      if (critical & (1 << i) != 0) failed.add(sensorNames[i]);
+      else if (warn & (1 << i) != 0) warnings.add(sensorNames[i]);
+    }
+    final allPassed = failed.isEmpty && warnings.isEmpty;
+    final parts = <String>[];
+    if (failed.isNotEmpty)   parts.add('Failed: ${failed.join(', ')}.');
+    if (warnings.isNotEmpty) parts.add('Warnings: ${warnings.join(', ')}.');
+    parts.add('Battery: $battery%.');
+
+    AppDialogs.showAlert(
+      context,
+      icon:      allPassed ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded,
+      iconColor: allPassed ? AppColors.success : AppColors.emergencyRed,
+      iconBg:    allPassed ? AppColors.successBg : AppColors.emergencyBg,
+      title:     allPassed ? 'Glove Ready' : 'Sensor Issue Detected',
+      message:   allPassed ? 'All sensors passed. Battery: $battery%.' : parts.join('\n'),
+    );
+  }
+
+  @override
+  void dispose() {
+    _selftestSub?.cancel();
+    super.dispose();
   }
 }
 
@@ -368,7 +546,7 @@ class _SelectTile extends StatelessWidget {
                       vertical:   AppSpacing.cardSpacing,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : Colors.transparent,
+                      color: isSelected ? AppColors.primary : AppColors.transparent,
                       borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
                     ),
                     child: Text(
@@ -472,6 +650,75 @@ class _IconBox extends StatelessWidget {
         radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
       ),
       child: Icon(icon, color: c, size: AppSpacing.iconSm),
+    );
+  }
+}
+class _GloveTile extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ble        = ref.watch(bleConnectionProvider);
+    return ValueListenableBuilder<String>(
+      valueListenable: ble.connectionStatusNotifier,
+      builder: (context, status, _) {
+        final isConnected = status == 'Connected';
+        return Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical:   AppSpacing.cardPadding - AppSpacing.xxs,
+            ),
+            child: Row(
+              children: [
+                _IconBox(icon: Icons.watch_rounded),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CPR Assist Glove',
+                          style: AppTypography.bodyMedium(size: 14)),
+                      Text(
+                        isConnected ? 'Connected' : 'Not connected',
+                        style: AppTypography.caption(
+                          color: isConnected ? AppColors.success : AppColors.textDisabled,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical:   AppSpacing.xs,
+                  ),
+                  decoration: AppDecorations.chip(
+                    color: isConnected ? AppColors.success : AppColors.textDisabled,
+                    bg:    isConnected ? AppColors.successBg : AppColors.screenBgGrey,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isConnected
+                            ? Icons.bluetooth_connected_rounded
+                            : Icons.bluetooth_disabled_rounded,
+                        size:  10,
+                        color: isConnected ? AppColors.success : AppColors.textDisabled,
+                      ),
+                      const SizedBox(width: AppSpacing.xxs),
+                      Text(
+                        isConnected ? 'BLE' : 'Offline',
+                        style: AppTypography.badge(
+                          size:  10,
+                          color: isConnected ? AppColors.success : AppColors.textDisabled,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+        );
+      },
     );
   }
 }

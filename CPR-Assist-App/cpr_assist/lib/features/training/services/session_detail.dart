@@ -407,7 +407,7 @@ class SessionDetail {
       rescuerVitals: (json['rescuer_vitals'] as List<dynamic>? ?? [])
           .map((e) => RescuerVitalSnapshot.fromJson(e as Map<String, dynamic>))
           .toList(),
-      syncedToBackend: true,
+      syncedToBackend: json['synced_to_backend'] as bool? ?? true,
       note:            json['note']              as String?,
     );
   }
@@ -460,7 +460,8 @@ class SessionDetail {
     'ventilations':    ventilations.map((e)  => e.toJson()).toList(),
     'pulse_checks':    pulseChecks.map((e)   => e.toJson()).toList(),
     'rescuer_vitals':  rescuerVitals.map((e) => e.toJson()).toList(),
-    'synced_from_local': false,  // always false — app-originated sessions are never from glove LittleFS
+    'synced_from_local': false,
+    'synced_to_backend': syncedToBackend,
     if (note != null) 'note': note,
   };
 

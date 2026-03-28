@@ -90,6 +90,16 @@ class _HelpAboutScreenState extends State<HelpAboutScreen> {
                   'manually, and ask a bystander to reconnect the glove. The session will '
                   'resume automatically when reconnected.',
             ),
+            _FaqItem(
+              question: 'What is No-Feedback Training Mode?',
+              answer:
+              'No-Feedback mode is a blind assessment mode. The glove suppresses '
+                  'all real-time audio, vibration, and LED cues during your session. '
+                  'You perform CPR entirely on your own judgement. '
+                  'The app still records and grades your performance, so you can '
+                  'review the results afterwards. It\'s useful for testing how much '
+                  'you\'ve retained from standard training sessions.',
+            ),
           ]),
 
           // ── CPR Quick Reference ──────────────────────────────────────────
@@ -468,16 +478,31 @@ class _AboutCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _AboutRow(label: 'Version',           value: '$_kAppVersion (build $_kBuildNumber)'),
+          const _AboutRow(label: 'Version',    value: '$_kAppVersion (build $_kBuildNumber)'),
           const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
-          const _AboutRow(label: 'Built with',        value: 'Flutter · Riverpod · BLE'),
+          const _AboutRow(label: 'Built with', value: 'Flutter · Riverpod · BLE'),
           const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
-          Text('Research context', style: AppTypography.label()),
+          const Divider(height: AppSpacing.dividerThickness, color: AppColors.divider),
+          const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
+          Text('Research Project', style: AppTypography.label()),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'CPR Assist Glove — Master\'s Thesis',
+            style: AppTypography.bodyMedium(size: 14),
+          ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            'Developed as part of a thesis project on improving bystander CPR quality '
-                'through real-time glove-assisted feedback.',
+            'Developed by Evanthia Rouka as part of a Master\'s thesis in Biomedical '
+                'Engineering at the Aristotle University of Thessaloniki (AUTH), '
+                'under the supervision of Prof. Panagiotis Bamidis.',
             style: AppTypography.body(size: 13),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'The system is designed for use in a controlled research study approved '
+                'by the Research Ethics Committee (ΕΗΔΕ) of AUTH. Participation is '
+                'voluntary and data is anonymised.',
+            style: AppTypography.body(size: 13, color: AppColors.textSecondary),
           ),
         ],
       ),

@@ -192,7 +192,7 @@ class _GlobalTab extends ConsumerWidget {
                               vertical:   AppSpacing.sm - AppSpacing.xxs,
                             ),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppColors.primary : Colors.transparent,
+                              color: isSelected ? AppColors.primary : AppColors.transparent,
                               borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
                             ),
                             child: Text(
@@ -222,13 +222,25 @@ class _GlobalTab extends ConsumerWidget {
                             color: AppColors.textDisabled),
                         const SizedBox(height: AppSpacing.md),
                         Text('No rankings yet',
-                            style: AppTypography.subheading(
-                                color: AppColors.textSecondary)),
+                            style: AppTypography.subheading(color: AppColors.textSecondary)),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Complete 3 training sessions to qualify',
-                          style: AppTypography.body(
-                              color: AppColors.textDisabled),
+                          'Complete 3 or more Training sessions\nto appear on the leaderboard.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.body(color: AppColors.textDisabled),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                          decoration: AppDecorations.card(),
+                          child: const Column(
+                            children: [
+                              _InfoRow(icon: Icons.looks_one_rounded,   label: 'Minimum 3 Training sessions required'),
+                              _InfoRow(icon: Icons.looks_two_rounded,   label: 'Each session must be ≥ 30 compressions'),
+                              _InfoRow(icon: Icons.looks_3_rounded,     label: 'Your best session score is used for ranking'),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -420,7 +432,7 @@ class _LeaderRow extends StatelessWidget {
     return Container(
       color: isMe
           ? AppColors.primaryLight.withValues(alpha: 0.4)
-          : Colors.transparent,
+          : AppColors.transparent,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical:   AppSpacing.sm + AppSpacing.xs,
@@ -527,39 +539,50 @@ class _MyRankFooter extends StatelessWidget {
         horizontal: AppSpacing.xl,
         vertical:   AppSpacing.sm + AppSpacing.xs,
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.chipPaddingH - AppSpacing.xxs,
-              vertical:   AppSpacing.chipPaddingV + AppSpacing.xxs,
-            ),
-            decoration: AppDecorations.tintedCard(
-                radius: AppSpacing.cardRadiusSm),
-            child: Text(
-              '#${entry.rank}',
-              style: AppTypography.bodyBold(
-                  size: 14, color: AppColors.primary),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Your rank',
-                    style: AppTypography.caption(
-                        color: AppColors.textDisabled)),
-                Text(
-                  '${entry.sessionCount} sessions · '
-                      '${entry.avgGrade.toStringAsFixed(1)}% avg',
-                  style: AppTypography.bodyMedium(size: 13),
+        child: Row(
+          children: [
+            Container(
+              width:  AppSpacing.iconXl + AppSpacing.sm,
+              height: AppSpacing.iconXl + AppSpacing.sm,
+              decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+              child: Center(
+                child: Text(
+                  entry.username.initials,
+                  style: AppTypography.label(size: 13, color: AppColors.primary)
+                      .copyWith(fontWeight: FontWeight.w800),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('You · ${entry.sessionCount} sessions',
+                      style: AppTypography.caption(color: AppColors.textDisabled)),
+                  Text(
+                    '${entry.avgGrade.toStringAsFixed(1)}% avg grade',
+                    style: AppTypography.bodyMedium(size: 13),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical:   AppSpacing.xs,
+              ),
+              decoration: AppDecorations.chip(
+                color: AppColors.primary,
+                bg:    AppColors.primaryLight,
+              ),
+              child: Text(
+                '#${entry.rank}',
+                style: AppTypography.bodyBold(size: 15, color: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
     );
   }
 }
@@ -701,8 +724,11 @@ class _MyStatsTab extends ConsumerWidget {
         // Streak: consecutive sessions ending with grade >= 75
         int streak = 0;
         for (final s in trainingSessions) {
-          if (s.totalGrade >= 75) streak++;
-          else break;
+          if (s.totalGrade >= 75) {
+            streak++;
+          } else {
+            break;
+          }
         }
 
         // Total compressions across all sessions
@@ -713,7 +739,7 @@ class _MyStatsTab extends ConsumerWidget {
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             // ── Personal best card ─────────────────────────────────────────
-            if (stats.bestSession != null) ...[
+            if (stats.bestSession != null && stats.bestSession!.isTraining) ...[
               PersonalBestCard(session: stats.bestSession!),
               const SizedBox(height: AppSpacing.md),
             ],
@@ -766,7 +792,12 @@ class _MyStatsTab extends ConsumerWidget {
                       children: [
                         Text('Grade Trend',
                             style: AppTypography.subheading(size: 14)),
-                        Text('Last ${recentGrades.length} sessions',
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          'Emergency sessions are not graded and do not appear here.',
+                          style: AppTypography.caption(color: AppColors.textDisabled),
+                        ),
+                        Text('Last ${recentGrades.length} training sessions (graded only)',
                             style: AppTypography.caption()),
                       ],
                     ),
@@ -799,8 +830,8 @@ class _MyStatsTab extends ConsumerWidget {
             ],
 
             // ── Avg grade breakdown ────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
+        if (trainingSessions.isNotEmpty)
+        Container(              padding: const EdgeInsets.all(AppSpacing.md),
               decoration: AppDecorations.card(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,4 +977,27 @@ class _GradeSparklinePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _GradeSparklinePainter old) =>
       old.grades != grades;
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  const _InfoRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(icon, size: AppSpacing.iconSm, color: AppColors.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(label,
+                style: AppTypography.bodyMedium(size: 13)),
+          ),
+        ],
+      ),
+    );
+  }
 }

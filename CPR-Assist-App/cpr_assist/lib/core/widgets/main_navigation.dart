@@ -8,6 +8,7 @@ import '../../features/account/screens/account_menu.dart';
 import '../../features/aed_map/screens/aed_map_screen.dart';
 import '../../features/guide/screens/guide_screen.dart';
 import '../../features/live_cpr/screens/live_cpr_screen.dart';
+import '../../main.dart';
 
 class MainNavigationScreen extends ConsumerStatefulWidget {
   const MainNavigationScreen({super.key});
@@ -37,6 +38,7 @@ class _MainNavigationScreenState
       LiveCPRScreen(onTabTapped: _onTabTapped),
       const GuideScreen(),
     ];
+    nfcTabNotifier.addListener(_onNfcTab);
   }
 
   void _onTabTapped(int index) {
@@ -49,6 +51,15 @@ class _MainNavigationScreenState
     _pageController.dispose();
     _panelController.dispose();
     super.dispose();
+    nfcTabNotifier.removeListener(_onNfcTab);
+  }
+
+  void _onNfcTab() {
+    final tab = nfcTabNotifier.value;
+    if (tab >= 0 && tab < _screens.length) {
+      _onTabTapped(tab);
+      nfcTabNotifier.value = -1; // reset so it doesn't retrigger
+    }
   }
 
   @override

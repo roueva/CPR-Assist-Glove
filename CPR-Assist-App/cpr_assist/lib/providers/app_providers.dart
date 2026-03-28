@@ -38,8 +38,28 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
     onStatusUpdate: (status) => debugPrint('BLE: $status'),
   );
   ref.onDispose(connection.dispose);
+  // Re-sync mode + scenario every time the glove reconnects from a reboot.
+  connection.setReconnectSyncCallback(() {
+    final mode     = ref.read(appModeProvider);
+    final scenario = ref.read(scenarioProvider);
+    connection.sendSyncTime();
+    connection.sendModeSet(mode.bleValue);
+    connection.sendSetScenario(scenario.bleValue);
+    connection.sendSetTargetDepth(
+      minMm: scenario.targetDepthMinMm,
+      maxMm: scenario.targetDepthMaxMm,
+    );
+    connection.sendSetTargetRate(
+      minBpm: scenario.targetRateMin,
+      maxBpm: scenario.targetRateMax,
+    );
+    final settings = ref.read(settingsProvider);
+    final feedbackOn = settings.hapticFeedback || settings.audioFeedback;
+    connection.sendFeedbackSet(enabled: feedbackOn);
+  });
   return connection;
 });
+
 
 final aedServiceProvider = Provider<AEDService>((ref) {
   final network = ref.watch(networkServiceProvider);
@@ -155,33 +175,60 @@ final cprSessionActiveProvider = StateProvider<bool>((ref) => false);
 
 enum CprScenario {
   standardAdult,
-  pediatric;
+  pediatric,
+  timedEndurance;
 
   /// Byte value sent in SCENARIO_CHANGE (0x0C) and 0xFD SET_SCENARIO.
-  int get bleValue => this == CprScenario.pediatric ? 1 : 0;
+  int get bleValue {
+    switch (this) {
+      case CprScenario.standardAdult:  return 0;
+      case CprScenario.pediatric:      return 1;
+      case CprScenario.timedEndurance: return 2;
+    }
+  }
 
   /// String stored in SessionDetail.scenario and sent to backend.
   String get sessionScenarioString {
     switch (this) {
       case CprScenario.standardAdult: return 'standard_adult';
       case CprScenario.pediatric:     return 'pediatric';
+      case CprScenario.timedEndurance: return 'timed_endurance';
     }
   }
 
   /// Human-readable label for UI.
-  String get label => this == CprScenario.pediatric ? 'Pediatric' : 'Adult';
+  String get label {
+    switch (this) {
+      case CprScenario.standardAdult:  return 'Adult';
+      case CprScenario.pediatric:      return 'Pediatric';
+      case CprScenario.timedEndurance: return 'Timed';
+    }
+  }
 
   /// Short description shown on the live CPR screen toggle.
   String get description {
     switch (this) {
       case CprScenario.standardAdult: return 'Adult — 5–6 cm';
       case CprScenario.pediatric:     return 'Pediatric — 4–5 cm';
+      case CprScenario.timedEndurance: return 'Timed — 2 min endurance';
     }
   }
 
   /// Depth target range in mm for this scenario.
-  int get targetDepthMinMm => this == CprScenario.pediatric ? 40 : 50;
-  int get targetDepthMaxMm => this == CprScenario.pediatric ? 50 : 60;
+  int get targetDepthMinMm {
+    switch (this) {
+      case CprScenario.pediatric:      return 40;
+      case CprScenario.timedEndurance:
+      case CprScenario.standardAdult:  return 50;
+    }
+  }
+  int get targetDepthMaxMm {
+    switch (this) {
+      case CprScenario.pediatric:      return 50;
+      case CprScenario.timedEndurance:
+      case CprScenario.standardAdult:  return 60;
+    }
+  }
 
   /// Depth target range in cm (for display and grading).
   double get targetDepthMinCm => targetDepthMinMm / 10.0;
@@ -192,27 +239,43 @@ enum CprScenario {
   int get targetRateMax => 120;
 
   /// Construct from glove BLE byte. Unknown values default to standardAdult.
-  static CprScenario fromBleValue(int value) =>
-      value == 1 ? CprScenario.pediatric : CprScenario.standardAdult;
+  static CprScenario fromBleValue(int value) {
+    switch (value) {
+      case 1:  return CprScenario.pediatric;
+      case 2:  return CprScenario.timedEndurance;
+      default: return CprScenario.standardAdult;
+    }
+  }
 
   /// Construct from the scenario string stored in SessionDetail / backend.
-  static CprScenario fromString(String value) =>
-      value == 'pediatric' ? CprScenario.pediatric : CprScenario.standardAdult;
+  static CprScenario fromString(String value) {
+    switch (value) {
+      case 'pediatric':       return CprScenario.pediatric;
+      case 'timed_endurance': return CprScenario.timedEndurance;
+      default:                return CprScenario.standardAdult;
+    }
+  }
 }
 
 final scenarioProvider = StateNotifierProvider<ScenarioNotifier, CprScenario>((ref) {
-  return ScenarioNotifier();
+  final defaultScenario = ref.watch(settingsProvider).defaultScenario;
+  return ScenarioNotifier(defaultScenario);
 });
 
 class ScenarioNotifier extends StateNotifier<CprScenario> {
-  ScenarioNotifier() : super(CprScenario.standardAdult);
+  ScenarioNotifier(String defaultScenario)
+      : super(CprScenario.fromString(defaultScenario));
 
   void setScenario(CprScenario s) => state = s;
 
-  /// Toggle between adult and pediatric.
-  void toggle() => state = state == CprScenario.standardAdult
-      ? CprScenario.pediatric
-      : CprScenario.standardAdult;
+  /// Toggle between adult and pediatric and timed endurance.
+  void toggle() {
+    switch (state) {
+      case CprScenario.standardAdult:  state = CprScenario.pediatric;      break;
+      case CprScenario.pediatric:      state = CprScenario.timedEndurance;  break;
+      case CprScenario.timedEndurance: state = CprScenario.standardAdult;   break;
+    }
+  }
 
   /// Called when glove fires SCENARIO_CHANGE (0x0C).
   void setFromGlove(int bleValue) => state = CprScenario.fromBleValue(bleValue);
@@ -471,3 +534,156 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
   void cancelNavigation() =>
       state = state.copyWith(navigation: const NavigationState());
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APP SETTINGS
+//
+// All user-configurable toggles persisted via SharedPreferences.
+// Keys are intentionally prefixed with 'settings_' to avoid collisions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppSettings {
+  final bool   hapticFeedback;
+  final bool   audioFeedback;
+  final bool   keepScreenOn;
+  final bool   autoSwitchToCPR;
+  final bool   showDepthGuide;
+  final bool   showRateGuide;
+  final bool   notifyOnDisconnect;
+  final String compressionUnit; // 'cm' | 'in'
+  final bool   showChecklist;   // true = show pre-session checklist before training
+  final String defaultScenario; // 'standard_adult' | 'pediatric' | 'timed_endurance'
+
+  const AppSettings({
+    this.hapticFeedback      = true,
+    this.audioFeedback       = true,
+    this.keepScreenOn        = true,
+    this.autoSwitchToCPR     = true,
+    this.showDepthGuide      = true,
+    this.showRateGuide       = true,
+    this.notifyOnDisconnect  = true,
+    this.compressionUnit     = 'cm',
+    this.showChecklist       = true,
+    this.defaultScenario = 'standard_adult',
+  });
+
+  AppSettings copyWith({
+    bool?   hapticFeedback,
+    bool?   audioFeedback,
+    bool?   keepScreenOn,
+    bool?   autoSwitchToCPR,
+    bool?   showDepthGuide,
+    bool?   showRateGuide,
+    bool?   notifyOnDisconnect,
+    String? compressionUnit,
+    bool?   showChecklist,
+    String? defaultScenario,
+  }) =>
+      AppSettings(
+        hapticFeedback:     hapticFeedback     ?? this.hapticFeedback,
+        audioFeedback:      audioFeedback      ?? this.audioFeedback,
+        keepScreenOn:       keepScreenOn       ?? this.keepScreenOn,
+        autoSwitchToCPR:    autoSwitchToCPR    ?? this.autoSwitchToCPR,
+        showDepthGuide:     showDepthGuide     ?? this.showDepthGuide,
+        showRateGuide:      showRateGuide      ?? this.showRateGuide,
+        notifyOnDisconnect: notifyOnDisconnect ?? this.notifyOnDisconnect,
+        compressionUnit:    compressionUnit    ?? this.compressionUnit,
+        showChecklist:      showChecklist      ?? this.showChecklist,
+        defaultScenario:    defaultScenario    ?? this.defaultScenario,
+      );
+}
+
+class SettingsNotifier extends StateNotifier<AppSettings> {
+  final SharedPreferences _prefs;
+
+  static const _kHaptic      = 'settings_hapticFeedback';
+  static const _kAudio       = 'settings_audioFeedback';
+  static const _kScreenOn    = 'settings_keepScreenOn';
+  static const _kAutoSwitch  = 'settings_autoSwitchToCPR';
+  static const _kDepthGuide  = 'settings_showDepthGuide';
+  static const _kRateGuide   = 'settings_showRateGuide';
+  static const _kDisconnect  = 'settings_notifyOnDisconnect';
+  static const _kUnit        = 'settings_compressionUnit';
+  static const _kChecklist = 'settings_showChecklist';
+  static const _kDefaultScenario = 'settings_defaultScenario';
+
+  SettingsNotifier(this._prefs) : super(_load(_prefs));
+
+  static AppSettings _load(SharedPreferences p) => AppSettings(
+    hapticFeedback:     p.getBool(_kHaptic)     ?? true,
+    audioFeedback:      p.getBool(_kAudio)      ?? true,
+    keepScreenOn:       p.getBool(_kScreenOn)   ?? true,
+    autoSwitchToCPR:    p.getBool(_kAutoSwitch) ?? true,
+    showDepthGuide:     p.getBool(_kDepthGuide) ?? true,
+    showRateGuide:      p.getBool(_kRateGuide)  ?? true,
+    notifyOnDisconnect: p.getBool(_kDisconnect) ?? true,
+    compressionUnit:    p.getString(_kUnit)     ?? 'cm',
+    showChecklist: p.getBool(_kChecklist) ?? true,
+    defaultScenario: p.getString(_kDefaultScenario) ?? 'standard_adult',
+  );
+
+  Future<void> setHapticFeedback(bool v)     async {
+    state = state.copyWith(hapticFeedback: v);
+    await _prefs.setBool(_kHaptic, v);
+  }
+  Future<void> setAudioFeedback(bool v)      async {
+    state = state.copyWith(audioFeedback: v);
+    await _prefs.setBool(_kAudio, v);
+  }
+  Future<void> setKeepScreenOn(bool v)       async {
+    state = state.copyWith(keepScreenOn: v);
+    await _prefs.setBool(_kScreenOn, v);
+  }
+  Future<void> setAutoSwitchToCPR(bool v)    async {
+    state = state.copyWith(autoSwitchToCPR: v);
+    await _prefs.setBool(_kAutoSwitch, v);
+  }
+  Future<void> setShowDepthGuide(bool v)     async {
+    state = state.copyWith(showDepthGuide: v);
+    await _prefs.setBool(_kDepthGuide, v);
+  }
+  Future<void> setShowRateGuide(bool v)      async {
+    state = state.copyWith(showRateGuide: v);
+    await _prefs.setBool(_kRateGuide, v);
+  }
+  Future<void> setNotifyOnDisconnect(bool v) async {
+    state = state.copyWith(notifyOnDisconnect: v);
+    await _prefs.setBool(_kDisconnect, v);
+  }
+  Future<void> setCompressionUnit(String v)  async {
+    state = state.copyWith(compressionUnit: v);
+    await _prefs.setString(_kUnit, v);
+  }
+  Future<void> setShowChecklist(bool v) async {
+    state = state.copyWith(showChecklist: v);
+    await _prefs.setBool(_kChecklist, v);
+  }
+  Future<void> setDefaultScenario(String v) async {
+    state = state.copyWith(defaultScenario: v);
+    await _prefs.setString(_kDefaultScenario, v);
+  }
+  Future<void> resetToDefaults() async {
+    state = const AppSettings();
+    await _prefs.remove(_kHaptic);
+    await _prefs.remove(_kAudio);
+    await _prefs.remove(_kScreenOn);
+    await _prefs.remove(_kAutoSwitch);
+    await _prefs.remove(_kDepthGuide);
+    await _prefs.remove(_kRateGuide);
+    await _prefs.remove(_kDisconnect);
+    await _prefs.remove(_kUnit);
+    await _prefs.remove(_kChecklist);
+    await _prefs.remove(_kDefaultScenario);
+  }
+}
+
+final settingsProvider =
+StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return SettingsNotifier(prefs);
+});
+
+/// Set to true by Settings before sending RUN_SELFTEST.
+/// BLEConnection checks this flag when SELFTEST_RESULT arrives and
+/// only shows the dialog when it is true, then resets it.
+final selftestRequestedProvider = StateProvider<bool>((ref) => false);

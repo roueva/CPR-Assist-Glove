@@ -36,6 +36,23 @@ class AppDialogs {
     );
   }
 
+  static Future<bool?> confirmDeleteAccount(BuildContext context) {
+    return _show(
+      context,
+      dialog: const _ConfirmDialog(
+        icon:         Icons.delete_forever_rounded,
+        iconColor:    AppColors.emergencyRed,
+        iconBg:       AppColors.emergencyBg,
+        title:        'Delete Account?',
+        message:      'This permanently deletes your account, all sessions, and scores. '
+            'This cannot be undone.',
+        confirmLabel: 'Delete Account',
+        confirmColor: AppColors.emergencyRed,
+        cancelLabel:  'Cancel',
+      ),
+    );
+  }
+
   // ── Switch to Training Mode ───────────────────────────────────────────────
 
   static Future<bool?> confirmSwitchToTraining(BuildContext context) {
@@ -56,6 +73,29 @@ class AppDialogs {
           color: AppColors.warning,
           bg: AppColors.warningBg,
         ),
+      ),
+    );
+  }
+
+  // ── Pre-session training checklist ───────────────────────────────────────
+
+  static Future<bool?> showTrainingChecklist(BuildContext context) {
+    return _show(
+      context,
+      dialog: const _ConfirmDialog(
+        icon:         Icons.checklist_rounded,
+        iconColor:    AppColors.warning,
+        iconBg:       AppColors.warningBg,
+        title:        'Ready to Start?',
+        message:
+        '• Manikin placed on a firm, flat surface\n'
+            '• Glove fitted snugly — sensors over fingertips\n'
+            '• Hands positioned centre of chest\n'
+            '• Elbows locked, arms straight\n\n'
+            'Press Start on the glove when ready.',
+        confirmLabel: 'I\'m Ready',
+        confirmColor: AppColors.warning,
+        cancelLabel:  'Not Yet',
       ),
     );
   }
@@ -155,6 +195,19 @@ class AppDialogs {
         confirmColor: AppColors.emergencyRed,
         cancelLabel:  'Keep editing',
       ),
+    );
+  }
+
+  // ── Edit session note ─────────────────────────────────────────────────────
+
+  static Future<String?> showNoteEditor(
+      BuildContext context, {
+        String? initialNote,
+      }) {
+    return showDialog<String>(
+      context: context,
+      barrierColor: AppColors.overlayDark,
+      builder: (_) => _NoteEditorDialog(initialNote: initialNote),
     );
   }
 
@@ -817,6 +870,137 @@ class _KSLInfoDialog extends StatelessWidget {
                         onVisitWebsite();
                       },
                       child: const Text('Visit Website'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _NoteEditorDialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NoteEditorDialog extends StatefulWidget {
+  final String? initialNote;
+  const _NoteEditorDialog({this.initialNote});
+
+  @override
+  State<_NoteEditorDialog> createState() => _NoteEditorDialogState();
+}
+
+class _NoteEditorDialogState extends State<_NoteEditorDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialNote ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.dialogInsetH,
+        vertical:   AppSpacing.dialogInsetV,
+      ),
+      child: Container(
+        decoration: AppDecorations.dialog(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.dialogPaddingH,
+                AppSpacing.dialogPaddingTop,
+                AppSpacing.dialogPaddingH,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Session Note', style: AppTypography.heading(size: 17)),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller:  _controller,
+                    maxLines:    4,
+                    maxLength:   300,
+                    style:       AppTypography.body(size: 14),
+                    decoration: InputDecoration(
+                      hintText:    'Add a note about this session…',
+                      hintStyle:   AppTypography.body(
+                          size: 14, color: AppColors.textDisabled),
+                      filled:      true,
+                      fillColor:   AppColors.screenBgGrey,
+                      border: OutlineInputBorder(
+                        borderRadius:
+                        BorderRadius.circular(AppSpacing.cardRadiusSm),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius:
+                        BorderRadius.circular(AppSpacing.cardRadiusSm),
+                        borderSide: const BorderSide(
+                            color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.divider),
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => context.pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.md),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            bottomLeft:
+                            Radius.circular(AppSpacing.dialogRadius),
+                          ),
+                        ),
+                      ),
+                      child: Text('Cancel',
+                          style: AppTypography.body(
+                              size: 15, color: AppColors.textSecondary)
+                              .copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const VerticalDivider(width: 1, color: AppColors.divider),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => context.pop(_controller.text),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.md),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            bottomRight:
+                            Radius.circular(AppSpacing.dialogRadius),
+                          ),
+                        ),
+                      ),
+                      child: Text('Save',
+                          style: AppTypography.bodyBold(
+                              size: 15, color: AppColors.primary)),
                     ),
                   ),
                 ],

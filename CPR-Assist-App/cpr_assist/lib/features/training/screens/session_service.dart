@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../../services/network/network_service.dart';
 import '../services/compression_event.dart';
 import '../services/rescuer_vital_snapshot.dart';
+import '../services/session_local_storage.dart';
 import '../services/ventilation_event.dart';
 import '../services/pulse_check_event.dart';
 import '../services/session_detail.dart';
@@ -28,18 +29,28 @@ class SessionService {
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   /// Fetch all session summaries for list views (history, leaderboard).
-  /// Fetch all session summaries for list views (history, leaderboard).
-  /// Uses the paginated /sessions/summary endpoint with a high limit to get all records.
-  Future<List<SessionSummary>> fetchSummaries() async {
-    final response = await _network.get(
-      '/sessions/summary?limit=100&offset=0',
-      requiresAuth: true,
-    );
-    if (response['success'] != true) {
-      throw Exception(response['message'] ?? 'Failed to fetch sessions');
+  /// Paginates through all pages until the server returns fewer than [pageSize] records.
+  Future<List<SessionSummary>> fetchSummaries({int pageSize = 50}) async {
+    final all = <SessionSummary>[];
+    int offset = 0;
+
+    while (true) {
+      final response = await _network.get(
+        '/sessions/summary?limit=$pageSize&offset=$offset',
+        requiresAuth: true,
+      );
+      if (response['success'] != true) {
+        throw Exception(response['message'] ?? 'Failed to fetch sessions');
+      }
+      final List<dynamic> raw = response['data'] ?? [];
+      all.addAll(raw.map((json) => SessionSummary.fromJson(json)));
+
+      // If we got fewer than pageSize, we've reached the last page
+      if (raw.length < pageSize) break;
+      offset += pageSize;
     }
-    final List<dynamic> raw = response['data'] ?? [];
-    return raw.map((json) => SessionSummary.fromJson(json)).toList();
+
+    return all;
   }
 
   /// Fetch a single session's full detail (with all sub-lists).
@@ -69,6 +80,14 @@ class SessionService {
       debugPrint('saveDetail failed: $e');
       return false;
     }
+  }
+
+  /// Save a session locally only, without hitting the backend.
+  /// Used when Emergency mode ends and the user declines to log in.
+  Future<void> saveLocalOnly(SessionDetail detail) async {
+    // SessionLocalStorage handles the SharedPreferences write.
+    // The sync-on-reconnect logic will pick this up later if the user logs in.
+    await SessionLocalStorage.saveLocal(detail);
   }
 
   /// Update the note on a saved session.
@@ -104,6 +123,17 @@ class SessionService {
       return true;
     } catch (e) {
       debugPrint('deleteAllSessions failed: $e');
+      return false;
+    }
+  }
+
+  /// Delete the current user's account and all associated data.
+  Future<bool> deleteAccount() async {
+    try {
+      await _network.delete('/auth/account', requiresAuth: true);
+      return true;
+    } catch (e) {
+      debugPrint('deleteAccount failed: $e');
       return false;
     }
   }
@@ -181,7 +211,7 @@ class SessionService {
   double calculateGradeFromDetail(SessionDetail s) {
     // Emergency sessions never have a grade
     if (s.isEmergency) return 0.0;
-    if (s.compressionCount == 0) return 0.0;
+    if (s.compressionCount < 10) return 0.0;
 
     final n = s.compressionCount.toDouble();
 
@@ -329,6 +359,7 @@ class SessionService {
 
 class SessionSummary {
   final int?     id;
+  final int? sessionNumber;
 
   // ── Mode & scenario ────────────────────────────────────────────────────────
   final String mode;      // "emergency" | "training" | "training_no_feedback"
@@ -379,6 +410,7 @@ class SessionSummary {
 
   const SessionSummary({
     this.id,
+    this.sessionNumber,
     this.mode                 = 'emergency',
     this.scenario             = 'standard_adult',
     required this.compressionCount,
@@ -517,6 +549,7 @@ class SessionSummary {
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
     return SessionSummary(
       id:                    json['id']                       as int?,
+      sessionNumber: (json['session_number'] as num?)?.toInt(),
       mode:                  json['mode']                     as String? ?? 'emergency',
       scenario:              json['scenario']                 as String? ?? 'standard_adult',
       compressionCount:      (json['compression_count']       as num).toInt(),
@@ -635,7 +668,7 @@ class UserStats {
   }
 
   String get averageGradeFormatted =>
-      sessionCount == 0 ? '—' : '${averageGrade.toStringAsFixed(1)}%';
+      (sessionCount == 0 || averageGrade == 0) ? '—' : '${averageGrade.toStringAsFixed(1)}%';
 
   String get sessionCountFormatted =>
       sessionCount == 0 ? '—' : '$sessionCount';

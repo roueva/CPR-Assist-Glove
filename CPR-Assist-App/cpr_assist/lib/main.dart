@@ -18,14 +18,21 @@ import 'services/network/network_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await WakelockPlus.enable();
-
   await CustomIcons.loadIcons();
   await AEDClusterManager.prewarmIconCache();
   await dotenv.load(fileName: '.env');
   await AvailabilityParser.loadRules();
 
   final prefs = await SharedPreferences.getInstance();
+
+  // Apply wakelock from persisted setting
+  final wakelockPref = prefs.getBool('settings_keepScreenOn') ?? true;
+  if (wakelockPref) {
+    await WakelockPlus.enable();
+  } else {
+    await WakelockPlus.disable();
+  }
+
   final networkService = NetworkService();
   await networkService.initialize(prefs);
 
@@ -61,6 +68,9 @@ void main() async {
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Exposes tab switching to NFC and deep link handlers outside the widget tree.
+final ValueNotifier<int> nfcTabNotifier = ValueNotifier<int>(-1);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root widget
@@ -134,6 +144,17 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           );
         });
       }
+      return;
+    }
+
+    // NFC glove tap — switch to Live CPR tab
+    if (uri.host == 'open') {
+      final tab = uri.queryParameters['tab'] ?? '';
+      if (tab == 'cpr') {
+        Future.delayed(const Duration(milliseconds: 400), () {
+          nfcTabNotifier.value = 1; // 1 = Live CPR tab
+        });
+      }
     }
   }
 
@@ -142,6 +163,17 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     // Keep BLE provider alive at root so the glove connection persists
     // across tab switches without re-initialising.
     ref.watch(bleConnectionProvider);
+
+    ref.listen<bool>(
+      settingsProvider.select((s) => s.keepScreenOn),
+          (_, keepOn)  {
+        if (keepOn) {
+          WakelockPlus.enable();
+        } else {
+          WakelockPlus.disable();
+        }
+      },
+    );
 
     return MaterialApp(
       title: 'CPR Assist',

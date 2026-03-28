@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,6 +36,9 @@ import 'package:cpr_assist/features/training/screens/leaderboard_screen.dart';
 // Other
 import '../../providers/app_providers.dart';
 import '../account/screens/account_menu.dart';
+import '../guide/screens/quiz_screen.dart';
+import '../training/screens/achievements_screen.dart';
+import '../training/widgets/pulse_check_overlay.dart';
 import '../training/widgets/simulation_112_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,16 +46,7 @@ import '../training/widgets/simulation_112_dialog.dart';
 // Remove the entry point in account_menu.dart before releasing.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Mock compression events ───────────────────────────────────────────────
 
-List<CompressionEvent> _mockCompressions({int count = 60}) =>
-    List.generate(count, (i) => CompressionEvent(
-      timestampMs:       i * 950,
-      depth:             5.3 + (i % 5 == 0 ? 1.1 : i % 3 == 0 ? -0.9 : 0.2),
-      instantaneousRate: 110 + (i % 4 == 0 ? 13.0 : i % 6 == 0 ? -14.0 : 1.5),
-      frequency:         110 + (i % 4 == 0 ? 13.0 : i % 6 == 0 ? -14.0 : 1.5),
-      recoilAchieved:    i % 7 != 0,
-    ));
 
 // ── Mock ventilation events ───────────────────────────────────────────────
 
@@ -65,24 +61,24 @@ List<VentilationEvent> _mockVentilations({int count = 4}) =>
 
 // ── Mock pulse check events ───────────────────────────────────────────────
 
-List<PulseCheckEvent> _mockPulseChecks({bool withPulse = false}) => [
+List<PulseCheckEvent> _mockPulseChecks({bool pulseDetected = false}) => [
   const PulseCheckEvent(
     timestampMs:    120000,
     intervalNumber: 1,
-    classification: 0,
+    classification: 0,   // ABSENT
     detectedBpm:    0.0,
     confidence:     72,
     perfusionIndex: 18,
     userDecision:   'continue',
   ),
-  if (withPulse) const PulseCheckEvent(
+  PulseCheckEvent(
     timestampMs:    240000,
     intervalNumber: 2,
-    classification: 2,
-    detectedBpm:    64.0,
-    confidence:     85,
-    perfusionIndex: 42,
-    userDecision:   'stop_cpr',
+    classification: pulseDetected ? 2 : 1,  // PRESENT or UNCERTAIN
+    detectedBpm:    pulseDetected ? 64.0 : 0.0,
+    confidence:     pulseDetected ? 85 : 38,
+    perfusionIndex: pulseDetected ? 42 : 12,
+    userDecision:   pulseDetected ? 'stop_cpr' : 'continue',
   ),
 ];
 
@@ -101,60 +97,369 @@ List<RescuerVitalSnapshot> _mockRescuerVitals() => List.generate(6, (i) =>
       fatigueScore:  i * 8,
     ));
 
-// ── Mock SessionDetail ────────────────────────────────────────────────────
+// ── Mock compressions — adult (5–6 cm, 110 BPM) ───────────────────────────
 
-SessionDetail _mockDetail({
-  double grade              = 87,
-  int    compressions       = 142,
-  int    correctDepth       = 118,
-  int    correctFrequency   = 130,
-  int    correctRecoil      = 105,
-  int    depthRateCombo     = 98,
-  double avgDepth           = 5.4,
-  double avgFrequency       = 112,
-  int    durationSecs       = 183,
-  double? userHr,
-  String mode               = 'training',
-  String scenario           = 'standard_adult',
-  bool   withGraphs         = false,
-  bool   withVentilations   = false,
-  bool   withPulseChecks    = false,
-  bool   withRescuerVitals  = false,
-}) =>
-    SessionDetail(
-      sessionStart:           DateTime.now().subtract(const Duration(hours: 2)),
-      compressionCount:       compressions,
-      correctDepth:           correctDepth,
-      correctFrequency:       correctFrequency,
-      correctRecoil:          correctRecoil,
-      depthRateCombo:         depthRateCombo,
-      correctPosture:         (correctRecoil * 0.85).round(),
-      leaningCount:           (compressions * 0.04).round(),
-      overForceCount:         2,
-      averageDepth:           avgDepth,
-      averageFrequency:       avgFrequency,
-      averageEffectiveDepth:  avgDepth * 0.97,
-      peakDepth:              6.1,
-      depthConsistency:       83,
-      frequencyConsistency:   91,
-      handsOnRatio:           0.88,
-      noFlowTime:             4.2,
-      timeToFirstCompression: 1.8,
-      sessionDuration:        durationSecs,
-      totalGrade:             mode == 'emergency' ? 0.0 : grade,
-      rescuerHRLastPause:     userHr,
-      mode:                   mode,
-      scenario:               scenario,
-      ventilationCount:       withVentilations ? 4 : 0,
-      ventilationCompliance:  withVentilations ? 75.0 : 0.0,
-      pulseChecksPrompted:    withPulseChecks ? 2 : 0,
-      pulseChecksComplied:    withPulseChecks ? 2 : 0,
-      pulseDetectedFinal:     withPulseChecks,
-      compressions:           withGraphs ? _mockCompressions() : [],
-      ventilations:           withVentilations ? _mockVentilations() : [],
-      pulseChecks:            withPulseChecks ? _mockPulseChecks(withPulse: mode == 'emergency') : [],
-      rescuerVitals:          withRescuerVitals ? _mockRescuerVitals() : [],
-    );
+List<CompressionEvent> _mockCompressionsAdult({int count = 60}) =>
+    List.generate(count, (i) => CompressionEvent(
+      timestampMs:          i * 545,
+      depth:                5.3 + (i % 5 == 0 ? 0.9 : i % 3 == 0 ? -0.6 : 0.1),
+      instantaneousRate:    110.0 + (i % 4 == 0 ? 8.0 : i % 7 == 0 ? -11.0 : 1.0),
+      frequency:            110.0 + (i % 4 == 0 ? 8.0 : i % 7 == 0 ? -11.0 : 1.0),
+      force:                350.0 + (i % 6 == 0 ? 80.0 : -20.0),
+      recoilAchieved:       i % 8 != 0,
+      overForce:            i % 25 == 0,
+      postureOk:            i % 10 != 0,
+      leaningDetected:      i % 18 == 0,
+      effectiveDepth:       5.1 + (i % 5 == 0 ? 0.7 : -0.3),
+      wristAlignmentAngle:  8.0 + (i % 9 == 0 ? 12.0 : 0.0),
+      compressionAxisDev:   5.0,
+    ));
+
+// ── Mock compressions — pediatric (4–5 cm, 110 BPM) ──────────────────────
+
+List<CompressionEvent> _mockCompressionsPediatric({int count = 40}) =>
+    List.generate(count, (i) => CompressionEvent(
+      timestampMs:       i * 545,
+      depth:             4.5 + (i % 5 == 0 ? 0.4 : i % 4 == 0 ? -0.5 : 0.1),
+      instantaneousRate: 112.0 + (i % 5 == 0 ? 6.0 : -4.0),
+      frequency:         112.0 + (i % 5 == 0 ? 6.0 : -4.0),
+      force:             220.0 + (i % 7 == 0 ? 40.0 : -10.0),
+      recoilAchieved:    i % 6 != 0,
+      postureOk:         i % 8 != 0,
+      effectiveDepth:    4.3 + (i % 5 == 0 ? 0.3 : -0.2),
+    ));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAINING — ADULT
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockTrainingAdult({
+  double grade           = 87,
+  int    compressions    = 160,
+  int    correctDepth    = 142,
+  int    correctFrequency = 148,
+  double avgDepth        = 5.4,
+  double avgFrequency    = 111.0,
+  int    durationSecs    = 185,
+  String scenario         = 'standard_adult',
+}) => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(hours: 2)),
+  mode:                  'training',
+  scenario: scenario,
+  compressionCount:      compressions,
+  correctDepth:          correctDepth,
+  correctFrequency:      correctFrequency,
+  correctRecoil:         (compressions * 0.88).round(),
+  depthRateCombo:        (compressions * 0.82).round(),
+  correctPosture:        (compressions * 0.91).round(),
+  leaningCount:          4,
+  overForceCount:        2,
+  tooDeepCount:          3,
+  correctVentilations:   7,
+  averageDepth:          avgDepth,
+  averageFrequency:      avgFrequency,
+  averageEffectiveDepth: avgDepth - 0.2,
+  peakDepth:             6.8,
+  depthSD:               0.31,
+  depthConsistency:      (correctDepth / compressions * 100),
+  frequencyConsistency:  (correctFrequency / compressions * 100),
+  handsOnRatio:          0.87,
+  noFlowTime:            3.2,
+  noFlowIntervals:       2,
+  rateVariability:       78.0,
+  timeToFirstCompression: 2.8,
+  consecutiveGoodPeak:   22,
+  fatigueOnsetIndex:     120,
+  rescuerSwapCount:      1,
+  ventilationCount:      5,
+  ventilationCompliance: 80.0,
+  sessionDuration:       durationSecs,
+  totalGrade:            grade,
+  compressions:          _mockCompressionsAdult(count: compressions.clamp(0, 120)),
+  ventilations:          _mockVentilations(),
+  rescuerVitals:         _mockRescuerVitals(),
+  patientTemperature:    36.8,
+  rescuerHRLastPause:    102.0,
+  rescuerSpO2LastPause:  97.0,
+  ambientTempStart:      22.1,
+  ambientTempEnd:        23.4,
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAINING — PEDIATRIC
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockTrainingPediatric({double grade = 91}) => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(days: 1)),
+  mode:                  'training',
+  scenario:              'pediatric',
+  compressionCount:      95,
+  correctDepth:          87,
+  correctFrequency:      89,
+  correctRecoil:         82,
+  depthRateCombo:        80,
+  correctPosture:        90,
+  leaningCount:          2,
+  overForceCount:        0,
+  tooDeepCount:          1,
+  correctVentilations:   6,
+  averageDepth:          4.6,
+  averageFrequency:      112.0,
+  averageEffectiveDepth: 4.4,
+  peakDepth:             5.2,
+  depthSD:               0.22,
+  depthConsistency:      91.6,
+  frequencyConsistency:  93.7,
+  handsOnRatio:          0.89,
+  noFlowTime:            2.1,
+  noFlowIntervals:       1,
+  rateVariability:       65.0,
+  timeToFirstCompression: 2.2,
+  consecutiveGoodPeak:   31,
+  fatigueOnsetIndex:     0,
+  rescuerSwapCount:      0,
+  ventilationCount:      3,
+  ventilationCompliance: 100.0,
+  sessionDuration:       140,
+  totalGrade:            grade,
+  compressions:          _mockCompressionsPediatric(),
+  ventilations:          _mockVentilations(count: 3),
+  rescuerVitals:         _mockRescuerVitals(),
+  patientTemperature:    36.5,
+  rescuerHRLastPause:    94.0,
+  rescuerSpO2LastPause:  98.0,
+  ambientTempStart:      21.8,
+  ambientTempEnd:        22.0,
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAINING — NO FEEDBACK
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockTrainingNoFeedback({double grade = 88}) => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(hours: 5)),
+  mode:                  'training_no_feedback',
+  scenario:              'standard_adult',
+  compressionCount:      145,
+  correctDepth:          128,
+  correctFrequency:      134,
+  correctRecoil:         120,
+  depthRateCombo:        115,
+  correctPosture:        132,
+  leaningCount:          3,
+  overForceCount:        1,
+  tooDeepCount:          2,
+  correctVentilations:   8,
+  averageDepth:          5.5,
+  averageFrequency:      113.0,
+  averageEffectiveDepth: 5.3,
+  peakDepth:             6.5,
+  depthSD:               0.28,
+  depthConsistency:      88.3,
+  frequencyConsistency:  92.4,
+  handsOnRatio:          0.91,
+  noFlowTime:            1.8,
+  noFlowIntervals:       1,
+  rateVariability:       71.0,
+  timeToFirstCompression: 3.1,
+  consecutiveGoodPeak:   28,
+  fatigueOnsetIndex:     0,
+  rescuerSwapCount:      1,
+  ventilationCount:      4,
+  ventilationCompliance: 75.0,
+  sessionDuration:       172,
+  totalGrade:            grade,
+  compressions:          _mockCompressionsAdult(count: 100),
+  ventilations:          _mockVentilations(),
+  rescuerVitals:         _mockRescuerVitals(),
+  patientTemperature:    36.9,
+  rescuerHRLastPause:    108.0,
+  rescuerSpO2LastPause:  96.0,
+  ambientTempStart:      22.5,
+  ambientTempEnd:        23.1,
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMERGENCY — ADULT
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockEmergencyAdult({required bool pulseDetected}) => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(days: 2)),
+  mode:                  'emergency',
+  scenario:              'standard_adult',
+  compressionCount:      187,
+  correctDepth:          162,
+  correctFrequency:      171,
+  correctRecoil:         155,
+  depthRateCombo:        148,
+  correctPosture:        170,
+  leaningCount:          6,
+  overForceCount:        3,
+  tooDeepCount:          4,
+  correctVentilations:   10,
+  averageDepth:          5.6,
+  averageFrequency:      113.0,
+  averageEffectiveDepth: 5.4,
+  peakDepth:             7.1,
+  depthSD:               0.38,
+  depthConsistency:      86.6,
+  frequencyConsistency:  91.4,
+  handsOnRatio:          0.83,
+  noFlowTime:            8.4,
+  noFlowIntervals:       4,
+  rateVariability:       92.0,
+  timeToFirstCompression: 4.1,
+  consecutiveGoodPeak:   18,
+  fatigueOnsetIndex:     140,
+  rescuerSwapCount:      2,
+  ventilationCount:      6,
+  ventilationCompliance: 83.3,
+  pulseChecksPrompted:   2,
+  pulseChecksComplied:   2,
+  pulseDetectedFinal:    pulseDetected,
+  patientTemperature:    35.2,
+  rescuerHRLastPause:    118.0,
+  rescuerSpO2LastPause:  95.0,
+  ambientTempStart:      20.3,
+  ambientTempEnd:        21.8,
+  sessionDuration:       252,
+  totalGrade:            0,  // Emergency always 0
+  compressions:          _mockCompressionsAdult(count: 120),
+  ventilations:          _mockVentilations(count: 6),
+  pulseChecks: _mockPulseChecks(pulseDetected: pulseDetected),
+  rescuerVitals:         _mockRescuerVitals(),
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMERGENCY — PEDIATRIC
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockEmergencyPediatric() => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(days: 3)),
+  mode:                  'emergency',
+  scenario:              'pediatric',
+  compressionCount:      95,
+  correctDepth:          82,
+  correctFrequency:      88,
+  correctRecoil:         79,
+  depthRateCombo:        74,
+  correctPosture:        88,
+  leaningCount:          2,
+  overForceCount:        0,
+  tooDeepCount:          1,
+  correctVentilations:   4,
+  averageDepth:          4.7,
+  averageFrequency:      115.0,
+  averageEffectiveDepth: 4.5,
+  peakDepth:             5.4,
+  depthSD:               0.25,
+  depthConsistency:      86.3,
+  frequencyConsistency:  92.6,
+  handsOnRatio:          0.85,
+  noFlowTime:            4.2,
+  noFlowIntervals:       2,
+  rateVariability:       68.0,
+  timeToFirstCompression: 3.5,
+  consecutiveGoodPeak:   14,
+  fatigueOnsetIndex:     0,
+  rescuerSwapCount:      1,
+  ventilationCount:      3,
+  ventilationCompliance: 100.0,
+  pulseChecksPrompted:   1,
+  pulseChecksComplied:   1,
+  pulseDetectedFinal:    false,
+  patientTemperature:    35.8,
+  rescuerHRLastPause:    111.0,
+  rescuerSpO2LastPause:  96.0,
+  ambientTempStart:      21.0,
+  ambientTempEnd:        21.5,
+  sessionDuration:       153,
+  totalGrade:            0,
+  compressions:          _mockCompressionsPediatric(),
+  ventilations:          _mockVentilations(count: 3),
+  pulseChecks: _mockPulseChecks(pulseDetected: false),
+  rescuerVitals:         _mockRescuerVitals(),
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUMMARY MOCKS — for fromSummary path
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionSummary _mockSummaryTraining({double grade = 81}) => SessionSummary(
+  id:                    42,
+  mode:                  'training',
+  scenario:              'standard_adult',
+  compressionCount:      138,
+  correctDepth:          110,
+  correctFrequency:      126,
+  correctRecoil:         118,
+  depthRateCombo:        104,
+  correctPosture:        128,
+  leaningCount:          5,
+  overForceCount:        2,
+  noFlowIntervals:       2,
+  rescuerSwapCount:      1,
+  fatigueOnsetIndex:     0,
+  averageDepth:          5.3,
+  averageFrequency:      110.0,
+  averageEffectiveDepth: 5.1,
+  peakDepth:             6.4,
+  depthSD:               0.33,
+  depthConsistency:      79.7,
+  frequencyConsistency:  91.3,
+  ventilationCount:      4,
+  ventilationCompliance: 75.0,
+  pulseDetectedFinal:    false,
+  pulseChecksPrompted:   0,
+  pulseChecksComplied:   0,
+  patientTemperature:    36.7,
+  rescuerHRLastPause:    99.0,
+  rescuerSpO2LastPause:  97.0,
+  sessionDuration:       168,
+  totalGrade:            grade,
+  sessionStart:          DateTime.now().subtract(const Duration(days: 4)),
+);
+
+SessionSummary _mockSummaryEmergency() => SessionSummary(
+  id:                    17,
+  mode:                  'emergency',
+  scenario:              'standard_adult',
+  compressionCount:      203,
+  correctDepth:          174,
+  correctFrequency:      185,
+  correctRecoil:         162,
+  depthRateCombo:        158,
+  correctPosture:        190,
+  leaningCount:          8,
+  overForceCount:        4,
+  noFlowIntervals:       5,
+  rescuerSwapCount:      2,
+  fatigueOnsetIndex:     160,
+  averageDepth:          5.5,
+  averageFrequency:      112.0,
+  averageEffectiveDepth: 5.3,
+  peakDepth:             7.2,
+  depthSD:               0.41,
+  depthConsistency:      85.7,
+  frequencyConsistency:  91.1,
+  ventilationCount:      6,
+  ventilationCompliance: 83.3,
+  pulseDetectedFinal:    true,
+  pulseChecksPrompted:   2,
+  pulseChecksComplied:   2,
+  patientTemperature:    35.1,
+  rescuerHRLastPause:    122.0,
+  rescuerSpO2LastPause:  94.0,
+  sessionDuration:       295,
+  totalGrade:            0,
+  sessionStart:          DateTime.now().subtract(const Duration(days: 5)),
+);
+
 
 // ── Mock SessionSummary ───────────────────────────────────────────────────
 
@@ -309,16 +614,137 @@ class DevPreviewScreen extends StatelessWidget {
             ),
           ]),
 
-          // ── Training & Sessions ──────────────────────────────────────────
-          const _SectionHeader(label: 'Training & Sessions'),
+          // ── Session Results — Training ───────────────────────────────────
+          const _SectionHeader(label: 'Session Results — Training'),
           _PreviewCard(children: [
+
             _NavTile(
-              icon:     Icons.leaderboard_rounded,
-              label:    'Leaderboard Screen',
-              subtitle: 'Global · Friends · My Sessions tabs',
-              onTap:    () => context.push(const LeaderboardScreen()),
+              icon:      Icons.emoji_events_rounded,
+              iconColor: AppColors.success,
+              label:     'Excellent — Adult, With Feedback (94%)',
+              subtitle:  'Standard adult · 160 compressions · 3:05 · graphs',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockTrainingAdult(grade: 94),
+              )),
             ),
             const _Divider(),
+            _NavTile(
+              icon:      Icons.thumb_up_outlined,
+              iconColor: AppColors.info,
+              label:     'Good — Adult, With Feedback (76%)',
+              subtitle:  'Standard adult · 130 compressions · 2:20',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockTrainingAdult(grade: 76,
+                    compressions: 130, correctDepth: 95, correctFrequency: 105,
+                    avgDepth: 5.1, avgFrequency: 108, durationSecs: 140),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.trending_up_rounded,
+              iconColor: AppColors.warning,
+              label:     'Needs Work — Adult (48%)',
+              subtitle:  'Standard adult · 80 compressions · 1:30',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockTrainingAdult(grade: 48,
+                    compressions: 80, correctDepth: 32, correctFrequency: 40,
+                    avgDepth: 4.2, avgFrequency: 95, durationSecs: 90),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.child_care_rounded,
+              iconColor: AppColors.primary,
+              label:     'Pediatric — Excellent (91%)',
+              subtitle:  'Pediatric scenario · 4–5 cm target · graphs',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockTrainingPediatric(grade: 91),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.visibility_off_rounded,
+              iconColor: AppColors.textSecondary,
+              label:     'No-Feedback Mode — Adult (88%)',
+              subtitle:  'training_no_feedback · blind assessment',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockTrainingNoFeedback(grade: 88),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.bar_chart_rounded,
+              label:    'From Summary (no graphs)',
+              subtitle: 'History-view path — no compression stream',
+              onTap: () => context.push(SessionResultsScreen.fromSummary(
+                summary:       _mockSummaryTraining(grade: 81),
+                sessionNumber: 7,
+              )),
+            ),
+          ]),
+
+          const _Divider(),
+          _NavTile(
+            icon:      Icons.timer_outlined,
+            iconColor: AppColors.primary,
+            label:     'Timed Endurance — Adult (83%)',
+            subtitle:  'timed_endurance · 8 min · fatigue onset · rescuer swap',
+            onTap: () => context.push(SessionResultsScreen.fromDetail(
+              detail: _mockTrainingAdult(
+                grade: 83, compressions: 310, correctDepth: 264,
+                correctFrequency: 289, avgDepth: 5.3, avgFrequency: 109.0,
+                durationSecs: 480, scenario: 'timed_endurance',
+              ),
+            )),
+          ),
+
+// ── Session Results — Emergency ──────────────────────────────────
+          const _SectionHeader(label: 'Session Results — Emergency'),
+          _PreviewCard(children: [
+            _NavTile(
+              icon:      Icons.emergency_rounded,
+              iconColor: AppColors.emergencyRed,
+              label:     'Emergency — Adult, Pulse Detected',
+              subtitle:  'ROSC · 187 compressions · 4:12 · pulse checks',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyAdult(pulseDetected: true),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.emergency_outlined,
+              iconColor: AppColors.warning,
+              label:     'Emergency — Adult, No Pulse',
+              subtitle:  'No ROSC · 210 compressions · 5:00',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyAdult(pulseDetected: false),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.child_care_rounded,
+              iconColor: AppColors.emergencyRed,
+              label:     'Emergency — Pediatric',
+              subtitle:  'Pediatric · 4–5 cm · 95 compressions · 2:30',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyPediatric(),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.summarize_outlined,
+              label:    'Emergency — From Summary (no graphs)',
+              subtitle: 'History-view path',
+              onTap: () => context.push(SessionResultsScreen.fromSummary(
+                summary:       _mockSummaryEmergency(),
+                sessionNumber: 3,
+              )),
+            ),
+          ]),
+
+// ── Session History & Leaderboard ────────────────────────────────
+          const _SectionHeader(label: 'History & Leaderboard'),
+          _PreviewCard(children: [
             _NavTile(
               icon:     Icons.history_rounded,
               label:    'Session History Screen',
@@ -327,102 +753,25 @@ class DevPreviewScreen extends StatelessWidget {
             ),
             const _Divider(),
             _NavTile(
-              icon:     Icons.bar_chart_rounded,
-              label:    'Session Results — Excellent (94%)',
-              subtitle: 'Training · standard adult · no graphs',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    grade: 94, compressions: 160, correctDepth: 150,
-                    withVentilations: true,
-                  ),
-                ),
-              ),
+              icon:     Icons.leaderboard_rounded,
+              label:    'Leaderboard Screen',
+              subtitle: 'Global · Friends · My Sessions tabs',
+              onTap:    () => context.push(const LeaderboardScreen()),
+            ),
+
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.emoji_events_outlined,
+              label:    'Achievements Screen',
+              subtitle: '12 achievements — unlocked/locked grid',
+              onTap:    () => context.push(const AchievementsScreen()),
             ),
             const _Divider(),
             _NavTile(
-              icon:     Icons.show_chart_rounded,
-              label:    'Session Results — Good (87%) + Graphs',
-              subtitle: 'Training · with depth/rate charts + rescuer HR',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    withGraphs: true, withVentilations: true,
-                    withRescuerVitals: true, userHr: 88,
-                  ),
-                ),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.bar_chart_rounded,
-              label:    'Session Results — Needs Work (45%)',
-              subtitle: 'Training · low scores across all metrics',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    grade: 45, compressions: 60,
-                    correctDepth: 22, correctFrequency: 30, correctRecoil: 15,
-                  ),
-                ),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.child_care_rounded,
-              label:    'Session Results — Pediatric (78%)',
-              subtitle: 'Pediatric scenario · 4–5 cm depth target · with graphs',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    grade: 78, scenario: 'pediatric',
-                    withGraphs: true, withVentilations: true,
-                  ),
-                ),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.visibility_off_outlined,
-              label:    'Session Results — No-Feedback (82%)',
-              subtitle: 'training_no_feedback · blind assessment mode',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    grade: 82, mode: 'training_no_feedback',
-                    withGraphs: true,
-                  ),
-                ),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:      Icons.emergency_outlined,
-              iconColor: AppColors.emergencyRed,
-              label:     'Session Results — Emergency',
-              subtitle:  'No grade · factual summary · ventilations + pulse checks',
-              onTap: () => context.push(
-                SessionResultsScreen.fromDetail(
-                  detail: _mockDetail(
-                    grade: 0, mode: 'emergency',
-                    withVentilations: true,
-                    withPulseChecks: true,
-                    withRescuerVitals: true,
-                  ),
-                ),
-              ),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.history_edu_rounded,
-              label:    'Session Results — History (Summary mode)',
-              subtitle: 'Opened from history card · no flow data · no graphs',
-              onTap:    () => context.push(
-                SessionResultsScreen.fromSummary(
-                  summary:       _mockSummary(userHr: 98),
-                  sessionNumber: 3,
-                ),
-              ),
+              icon:     Icons.quiz_outlined,
+              label:    'Quiz Screen',
+              subtitle: '10 CPR knowledge questions with scoring',
+              onTap:    () => context.push(const QuizScreen()),
             ),
           ]),
 
@@ -647,6 +996,38 @@ class DevPreviewScreen extends StatelessWidget {
               label:    'Vitals Cards — Active (Patient + Rescuer)',
               subtitle: 'Normal readings during compressions',
               onTap:    () => context.push(const _VitalsCardsPreview()),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.sensors_rounded,
+              iconColor: AppColors.primary,
+              label:     'Pulse Check Overlay — Assessing',
+              subtitle:  'Live waveform · countdown · no result yet',
+              onTap:     () => context.push(const _PulseCheckOverlayPreview(classification: null)),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.favorite_rounded,
+              iconColor: AppColors.success,
+              label:     'Pulse Check Overlay — Pulse Detected',
+              subtitle:  '64 BPM · 85% confidence · action buttons',
+              onTap:     () => context.push(const _PulseCheckOverlayPreview(classification: 2)),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.heart_broken_rounded,
+              iconColor: AppColors.emergencyRed,
+              label:     'Pulse Check Overlay — No Pulse',
+              subtitle:  'Continue CPR button',
+              onTap:     () => context.push(const _PulseCheckOverlayPreview(classification: 0)),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.help_outline_rounded,
+              iconColor: AppColors.warning,
+              label:     'Pulse Check Overlay — Uncertain',
+              subtitle:  'Weak signal · check manually',
+              onTap:     () => context.push(const _PulseCheckOverlayPreview(classification: 1)),
             ),
             const _Divider(),
             _NavTile(
@@ -1273,6 +1654,100 @@ class _AccountAvatarPreview extends ConsumerWidget {
             const AccountAvatarButton(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pulse check overlay preview — simulates the full assessment window
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PulseCheckOverlayPreview extends StatefulWidget {
+  final int? classification; // null=pending, 0=absent, 1=uncertain, 2=present
+  const _PulseCheckOverlayPreview({required this.classification});
+
+  @override
+  State<_PulseCheckOverlayPreview> createState() =>
+      _PulseCheckOverlayPreviewState();
+}
+
+class _PulseCheckOverlayPreviewState
+    extends State<_PulseCheckOverlayPreview> {
+  Timer?        _waveformTimer;
+  Timer?        _resultTimer;
+  int?          _classification;
+  final List<double> _ppgBuffer = [];
+  double        _phase = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _classification = widget.classification;
+
+    // Simulate PPG waveform at 10 Hz
+    _waveformTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted) return;
+      setState(() {
+        _phase += 0.35;
+        // Realistic PPG shape: sharp systolic peak + diastolic notch
+        final t      = _phase % (2 * 3.141592653589793);
+        final systol = (t < 1.2) ? (t * 0.83) : 0.0;
+        final diast  = (t > 2.0 && t < 3.5)
+            ? 0.25 * ((t - 2.0) / 1.5)
+            : 0.0;
+        const base   = 0.12;
+        double v = base
+            + systol * (1 - systol / 2)
+            + diast;
+        // Add tiny noise
+        v += ((_phase * 17.3) % 0.04) - 0.02;
+        _ppgBuffer.add(v.clamp(0.0, 1.0));
+        if (_ppgBuffer.length > 80) _ppgBuffer.removeAt(0);
+      });
+    });
+
+    // If pending mode: after 4 s, auto-apply the result from widget prop
+    if (widget.classification == null) {
+      _resultTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _classification = 2); // simulate pulse detected
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _waveformTimer?.cancel();
+    _resultTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.primaryDark,
+      appBar: AppBar(
+        backgroundColor:        AppColors.primaryDark,
+        elevation:              0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: AppColors.textOnDark),
+          onPressed: context.pop,
+        ),
+        title: Text(
+          'Pulse Check Preview',
+          style: AppTypography.heading(size: 18, color: AppColors.textOnDark),
+        ),
+      ),
+      body: PulseCheckOverlay(
+        intervalNumber: 1,
+        classification: _classification,
+        ppgBuffer:      List.from(_ppgBuffer),
+        detectedBpm:    _classification == 2 ? 64.0 : null,
+        confidence:     _classification != null ? 85 : null,
+        onContinueCpr:  context.pop,
+        onStopCpr:      context.pop,
       ),
     );
   }

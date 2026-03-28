@@ -37,6 +37,7 @@ class AppColors {
 
   static const Color emergencyRed   = Color(0xFFB71C1C); // Emergency call banner
   static const Color emergencyBg    = Color(0xFFFDF0F0); // = errorBg (alias kept for clarity)
+  static const Color emergencyDark   = Color(0xFF8B0000); // Dark red — emergency header gradient end
   static const Color cprGreen       = Color(0xFF2E7D32); // Correct compression
   static const Color cprOrange      = Color(0xFFF57C00); // Needs improvement
   static const Color cprRed         = Color(0xFFD32F2F); // Incorrect compression
@@ -58,6 +59,7 @@ class AppColors {
   // BACKGROUNDS & SURFACES
   // ═══════════════════════════════════════════════════════
 
+  static const Color transparent = Color(0x00000000); //Transparent
   static const Color screenBg       = Color(0xFFFFFFFF); // Default screen background
   static const Color screenBgGrey   = Color(0xFFF4F7FB); // Neutral grey screen bg
   static const Color cardBg         = Color(0xFFEDF4F9); // = primaryLight

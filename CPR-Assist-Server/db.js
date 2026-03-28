@@ -109,7 +109,7 @@ async function ensureSessionTables() {
         await client.query(`
             CREATE TABLE IF NOT EXISTS cpr_sessions (
                 id                      BIGSERIAL PRIMARY KEY,
-                user_id                 BIGINT NOT NULL,
+                user_id                 BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 mode                    VARCHAR(25)  DEFAULT 'emergency',
                 scenario                VARCHAR(40)  DEFAULT 'standard_adult',
                 session_start           TIMESTAMP    NOT NULL,
@@ -286,6 +286,21 @@ async function ensureSessionTables() {
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_time            FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS depth_consistency       FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS freq_consistency        FLOAT        DEFAULT 0`,
+
+            // Add FK from cpr_sessions.user_id → users.id with cascade delete
+            // DO $$ wrapping makes it safe to re-run — it only adds the constraint if it doesn't already exist
+            `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'cpr_sessions_user_id_fkey'
+      AND table_name = 'cpr_sessions'
+  ) THEN
+    ALTER TABLE cpr_sessions
+      ADD CONSTRAINT cpr_sessions_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+  END IF;
+END $$`,
 
             // Type fix — safe cast via text to handle any legacy non-numeric values
             `ALTER TABLE cpr_sessions ALTER COLUMN user_heart_rate TYPE FLOAT USING NULLIF(user_heart_rate::text, '')::float`,

@@ -6,17 +6,41 @@ import 'package:cpr_assist/core/core.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // AnimatedDepthBar
 //
-// Displays a vertical SVG gauge that tracks compression depth in real time.
-// The moving indicator line fades near the top and bottom extremes.
-// RELEASE pill lights up when depth < 0.2 cm (full recoil).
-// DEPTH   pill lights up when depth > 5.0 cm (correct compression target).
+// Shows the full compression/recoil cycle as a vertical bar.
+//
+// Physics:
+//   • Top    = full recoil (0 cm — hand fully released)
+//   • Bottom = maximum depth (6 cm — deepest compression)
+//
+// The indicator line moves between these extremes in real time:
+//   - When depth == 0 or recoilAchieved == true → line at TOP
+//   - As depth increases → line moves DOWN
+//   - As depth decreases back toward 0 → line moves UP
+//
+// The BLE live stream sends depth as a rolling average that stays at the
+// last compression value between compressions. To show the return stroke,
+// we use recoilAchieved (glove flag) to force the indicator back to 0.
+//
+// RELEASE pill (top)  — lights green when recoilAchieved == true
+// DEPTH   pill (bottom) — lights green when depth > targetDepth
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AnimatedDepthBar extends StatefulWidget {
-  /// Live depth value from the BLE glove — range 0–6 cm.
+  /// Live depth from BLE — 0–6 cm. Moves the indicator down as it increases.
   final double depth;
 
-  const AnimatedDepthBar({super.key, required this.depth});
+  /// True when the glove detects full chest recoil. Forces indicator to top.
+  final bool recoilAchieved;
+
+  /// Depth at which the DEPTH pill lights green (cm). Default = 5.0 (adult).
+  final double targetDepthCm;
+
+  const AnimatedDepthBar({
+    super.key,
+    required this.depth,
+    this.recoilAchieved  = false,
+    this.targetDepthCm   = 5.0,
+  });
 
   @override
   State<AnimatedDepthBar> createState() => _AnimatedDepthBarState();
@@ -24,78 +48,97 @@ class AnimatedDepthBar extends StatefulWidget {
 
 class _AnimatedDepthBarState extends State<AnimatedDepthBar>
     with SingleTickerProviderStateMixin {
+
+  // The bar maps 0 cm (top) → 6 cm (bottom).
   static const double _maxDepth = 6.0;
 
-  // Fade-out band at each extreme so the line doesn't hard-clip
-  static const double _fadeRange = 0.4;
+  // Fade the line near the very top/bottom so it doesn't hard-clip.
+  static const double _fadeRange = 0.3;
 
-  // Pixel headroom reserved for the RELEASE / DEPTH pills
-  static const double _topPadding    = 34.0;
-  static const double _bottomPadding = 28.0;
+  // Pixel space reserved for the pills at each end.
+  static const double _topPadding    = 36.0;
+  static const double _bottomPadding = 30.0;
 
-  late AnimationController _controller;
-  late Animation<double>   _animation;
-  double _currentValue = _maxDepth / 2;
-  bool   _hasReceivedData = false;
+  late AnimationController _ctrl;
+  late Animation<double>   _anim;
+
+  // Tracks the *displayed* position so tweens start from the right place.
+  double _displayedDepth = 0.0;
+
+  // Whether we have ever received a non-zero depth reading this session.
+  bool _hasData = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
+    _ctrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 120), // fast — matches 10 Hz BLE
     );
-    _animation = AlwaysStoppedAnimation(_currentValue);
+    _anim = const AlwaysStoppedAnimation(0.0);
   }
 
   @override
-  void didUpdateWidget(covariant AnimatedDepthBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
+  void didUpdateWidget(covariant AnimatedDepthBar old) {
+    super.didUpdateWidget(old);
 
-    final target = widget.depth.clamp(0.0, _maxDepth);
-    if (target == _currentValue) return;
+    // Determine target position:
+    //   • recoilAchieved → snap to 0 (line goes back to top)
+    //   • otherwise      → follow the current depth value
+    final double target = widget.recoilAchieved
+        ? 0.0
+        : widget.depth.clamp(0.0, _maxDepth);
 
-    _animation = Tween<double>(begin: _currentValue, end: target).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _controller.forward(from: 0);
-    _currentValue = target;
+    if ((target - _displayedDepth).abs() < 0.01) return;
 
-    if (!_hasReceivedData && target > 0.01) {
-      setState(() => _hasReceivedData = true);
+    _anim = Tween<double>(
+      begin: _displayedDepth,
+      end:   target,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+
+    _ctrl.forward(from: 0);
+    _displayedDepth = target;
+
+    if (!_hasData && widget.depth > 0.05) {
+      setState(() => _hasData = true);
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
-  // ── Opacity for the moving line ────────────────────────────────────────────
-
-  double _lineOpacity(double value) {
-    if (value <= _fadeRange) {
-      return (value / _fadeRange).clamp(0.0, 1.0);
-    }
-    if (value >= _maxDepth - _fadeRange) {
-      return ((_maxDepth - value) / _fadeRange).clamp(0.0, 1.0);
+  // Line opacity — fades near the very top and very bottom extremes.
+  double _opacity(double v) {
+    if (v <= _fadeRange) return (v / _fadeRange).clamp(0.0, 1.0);
+    if (v >= _maxDepth - _fadeRange) {
+      return ((_maxDepth - v) / _fadeRange).clamp(0.0, 1.0);
     }
     return 1.0;
+  }
+
+  // Line colour — green in target zone, orange too shallow, red too deep.
+  Color _lineColor(double v) {
+    if (!_hasData || v <= 0.05) return AppColors.textOnDark.withValues(alpha: 0.35);
+    if (v < widget.targetDepthCm)       return AppColors.cprOrange;
+    if (v <= widget.targetDepthCm + 1)  return AppColors.cprGreen;
+    return AppColors.cprRed;
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final usableHeight =
-            constraints.maxHeight - _topPadding - _bottomPadding;
+      builder: (ctx, constraints) {
+        final usable = constraints.maxHeight - _topPadding - _bottomPadding;
 
         return Stack(
-          alignment: Alignment.center,
+          alignment:   Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            // Background SVG gauge
+
+            // ── Background gauge SVG ─────────────────────────────────────
             SvgPicture.asset(
               'assets/icons/depth_background.svg',
               width:  constraints.maxWidth,
@@ -103,39 +146,49 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
               fit:    BoxFit.contain,
             ),
 
-            // RELEASE pill — top
+            // ── RELEASE pill — top ───────────────────────────────────────
             Positioned(
               top: 0,
               child: AnimatedPill(
                 label:     'RELEASE',
-                isCorrect: _hasReceivedData && widget.depth < 0.2,
+                isCorrect: _hasData && widget.recoilAchieved,
               ),
             ),
 
-            // DEPTH pill — bottom
+            // ── DEPTH pill — bottom ──────────────────────────────────────
             Positioned(
               bottom: 0,
               child: AnimatedPill(
                 label:     'DEPTH',
-                isCorrect: _hasReceivedData && widget.depth > 5.0,
+                isCorrect: _hasData && widget.depth >= widget.targetDepthCm,
               ),
             ),
 
-            // Moving indicator line
+            // ── Moving indicator line ────────────────────────────────────
+            //
+            // depth = 0  → percent = 0 → fromBottom = usable → line at TOP
+            // depth = 6  → percent = 1 → fromBottom = 0      → line at BOTTOM
             AnimatedBuilder(
-              animation: _animation,
+              animation: _anim,
               builder: (_, __) {
-                final percent = (_animation.value / _maxDepth).clamp(0.0, 1.0);
-                final fromBottom = (1.0 - percent) * usableHeight;
+                final v          = _anim.value.clamp(0.0, _maxDepth);
+                final percent    = v / _maxDepth;
+                final fromBottom = (1.0 - percent) * usable;
 
                 return Positioned(
                   bottom: _bottomPadding + fromBottom,
                   child: Opacity(
-                    opacity: _lineOpacity(_animation.value),
-                    child: SvgPicture.asset(
-                      'assets/icons/depth_line.svg',
-                      height: AppSpacing.cardSpacing,  // 6
-                      width:  AppSpacing.sm + AppSpacing.xs + AppSpacing.xxs, // 14
+                    opacity: _hasData ? _opacity(v) : 0.0,
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        _lineColor(v),
+                        BlendMode.srcIn,
+                      ),
+                      child: SvgPicture.asset(
+                        'assets/icons/depth_line.svg',
+                        height: AppSpacing.cardSpacing,
+                        width:  AppSpacing.sm + AppSpacing.xs + AppSpacing.xxs,
+                      ),
                     ),
                   ),
                 );
@@ -152,8 +205,7 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
 // AnimatedPill
 //
 // Pill label that pulses green when the compression target is met.
-// Inactive state: brand-blue fill.
-// Active  state: cprGreen fill + green glow shadow + scale pulse.
+// Inactive: brand-blue fill. Active: cprGreen + glow + scale pulse.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AnimatedPill extends StatefulWidget {
@@ -176,50 +228,49 @@ class AnimatedPill extends StatefulWidget {
 
 class _AnimatedPillState extends State<AnimatedPill>
     with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
+  late AnimationController _pulseCtrl;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
+    _pulseCtrl = AnimationController(
+      vsync:      this,
+      duration:   const Duration(milliseconds: 800),
       lowerBound: 0.98,
       upperBound: 1.05,
     );
     if (widget.isCorrect) {
-      _pulseController.repeat(reverse: true);
+      _pulseCtrl.repeat(reverse: true);
     } else {
-      _pulseController.value = 1.0;
+      _pulseCtrl.value = 1.0;
     }
   }
 
   @override
-  void didUpdateWidget(covariant AnimatedPill oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isCorrect == oldWidget.isCorrect) return;
-
+  void didUpdateWidget(covariant AnimatedPill old) {
+    super.didUpdateWidget(old);
+    if (widget.isCorrect == old.isCorrect) return;
     if (widget.isCorrect) {
-      _pulseController.repeat(reverse: true);
+      _pulseCtrl.repeat(reverse: true);
     } else {
-      _pulseController.stop();
-      _pulseController.value = 1.0;
+      _pulseCtrl.stop();
+      _pulseCtrl.value = 1.0;
     }
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final fillColor   = widget.isCorrect ? AppColors.cprGreen  : AppColors.primary;
-    final borderColor = widget.isCorrect ? AppColors.primary    : AppColors.cprGreen;
+    final fillColor   = widget.isCorrect ? AppColors.cprGreen : AppColors.primary;
+    final borderColor = widget.isCorrect ? AppColors.primary   : AppColors.cprGreen;
 
     return ScaleTransition(
-      scale: _pulseController,
+      scale: _pulseCtrl,
       child: Container(
         width:  widget.width,
         height: widget.height,
@@ -230,7 +281,6 @@ class _AnimatedPillState extends State<AnimatedPill>
           boxShadow: widget.isCorrect
               ? [
             BoxShadow(
-              // AppColors.cprGreen at 60% opacity
               color:       AppColors.cprGreen.withValues(alpha: 0.6),
               blurRadius:  AppSpacing.sm,
               spreadRadius: AppSpacing.xxs,
@@ -243,7 +293,7 @@ class _AnimatedPillState extends State<AnimatedPill>
           widget.label,
           textAlign: TextAlign.center,
           style: AppTypography.poppins(
-            size:   AppSpacing.md - AppSpacing.xxs, // 14
+            size:   AppSpacing.md - AppSpacing.xxs,
             weight: FontWeight.w600,
             color:  AppColors.textOnDark,
           ),

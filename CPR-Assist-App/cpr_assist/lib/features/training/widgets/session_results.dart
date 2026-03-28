@@ -6,8 +6,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cpr_assist/core/core.dart';
 import '../../../providers/session_provider.dart';
 import '../screens/session_service.dart';
+import '../services/achievement_service.dart';
+import '../services/certificate_service.dart';
 import '../services/compression_event.dart';
 import '../services/session_detail.dart';
+import 'export_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionResultsScreen
@@ -49,11 +52,93 @@ class SessionResultsScreen extends ConsumerStatefulWidget {
 class _SessionResultsScreenState
     extends ConsumerState<SessionResultsScreen> {
   String? _note;
+  List<String> _previouslyUnlockedIds = [];
+  List<String> _previouslyEarnedCertIds = [];
 
   @override
   void initState() {
     super.initState();
     _note = widget._detail?.note ?? widget._summary?.note;
+
+    if (widget._detail != null && !_isEmergency) {
+      // Snapshot which achievements were unlocked BEFORE this session
+      // by computing against all sessions except the one just completed
+      _previouslyUnlockedIds = _computePreviouslyUnlocked();
+      _previouslyEarnedCertIds = _computePreviouslyEarnedCerts();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkNewAchievements();
+      });
+    }
+  }
+
+  List<String> _computePreviouslyUnlocked() {
+    // Get current summaries from provider synchronously (may be empty if not yet loaded)
+    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+    // Exclude the session that just ended (match by sessionStart)
+    final start = widget._detail!.sessionStart;
+    final previous = summaries.where((s) =>
+    s.sessionStart == null ||
+        s.sessionStart!.millisecondsSinceEpoch !=
+            start.millisecondsSinceEpoch).toList();
+    return AchievementService.compute(previous)
+        .where((a) => a.unlocked)
+        .map((a) => a.id)
+        .toList();
+  }
+
+  List<String> _computePreviouslyEarnedCerts() {
+    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+    final start     = widget._detail!.sessionStart;
+    final previous  = summaries.where((s) =>
+    s.sessionStart == null ||
+        s.sessionStart!.millisecondsSinceEpoch !=
+            start.millisecondsSinceEpoch).toList();
+    return CertificateService.compute(previous)
+        .where((c) => c.earned)
+        .map((c) => c.id)
+        .toList();
+  }
+
+  void _checkNewAchievements() {
+    if (!mounted) return;
+    final achievements   = ref.read(achievementsProvider);
+    final newlyUnlocked  = achievements
+        .where((a) => a.unlocked && !_previouslyUnlockedIds.contains(a.id))
+        .toList();
+
+    for (int i = 0; i < newlyUnlocked.length; i++) {
+      final a = newlyUnlocked[i];
+      Future.delayed(Duration(milliseconds: 600 + i * 900), () {
+        if (mounted) {
+          UIHelper.showSnackbar(
+            context,
+            message: '${a.emoji} Achievement unlocked: ${a.title}',
+            icon: Icons.emoji_events_rounded,
+          );
+        }
+      });
+    }
+    // Certificate milestone toasts
+    final certs = ref.read(certificatesProvider);
+    final newCerts = certs
+        .where((c) => c.earned && !_previouslyEarnedCertIds.contains(c.id))
+        .toList();
+    for (int i = 0; i < newCerts.length; i++) {
+      final c = newCerts[i];
+      Future.delayed(
+        Duration(milliseconds: 1200 + newlyUnlocked.length * 900 + i * 1000),
+            () {
+          if (mounted) {
+            UIHelper.showSnackbar(
+              context,
+              message: '${c.emoji} Certificate earned: ${c.title}!',
+              icon: Icons.workspace_premium_rounded,
+            );
+          }
+        },
+      );
+    }
   }
 
   // ── Mode helpers ───────────────────────────────────────────────────────────
@@ -65,39 +150,49 @@ class _SessionResultsScreenState
 
   bool get _isPediatric => _scenario == 'pediatric';
 
-  double get _targetDepthMin => _isPediatric
-      ? CprTargets.depthMinPediatric
-      : CprTargets.depthMin;
-  double get _targetDepthMax => _isPediatric
-      ? CprTargets.depthMaxPediatric
-      : CprTargets.depthMax;
+  double get _targetDepthMin =>
+      _isPediatric
+          ? CprTargets.depthMinPediatric
+          : CprTargets.depthMin;
+
+  double get _targetDepthMax =>
+      _isPediatric
+          ? CprTargets.depthMaxPediatric
+          : CprTargets.depthMax;
+
   String get _targetDepthLabel =>
-      '${_targetDepthMin.toStringAsFixed(0)}–${_targetDepthMax.toStringAsFixed(0)} cm';
+      '${_targetDepthMin.toStringAsFixed(0)}–${_targetDepthMax.toStringAsFixed(
+          0)} cm';
 
   // ── Derived helpers ────────────────────────────────────────────────────────
   double get _grade =>
       widget._detail?.totalGrade ?? widget._summary?.totalGrade ?? 0;
 
   int get _compressionCount =>
-      widget._detail?.compressionCount ?? widget._summary?.compressionCount ?? 0;
+      widget._detail?.compressionCount ?? widget._summary?.compressionCount ??
+          0;
 
   String get _durationFormatted =>
-      widget._detail?.durationFormatted ?? widget._summary?.durationFormatted ?? '—';
+      widget._detail?.durationFormatted ?? widget._summary?.durationFormatted ??
+          '—';
 
   double get _averageFrequency =>
-      widget._detail?.averageFrequency ?? widget._summary?.averageFrequency ?? 0;
+      widget._detail?.averageFrequency ?? widget._summary?.averageFrequency ??
+          0;
 
   double get _averageDepth =>
       widget._detail?.averageDepth ?? widget._summary?.averageDepth ?? 0;
 
   String get _dateTimeFormatted =>
-      widget._detail?.dateTimeFormatted ?? widget._summary?.dateTimeFormatted ?? '—';
+      widget._detail?.dateTimeFormatted ?? widget._summary?.dateTimeFormatted ??
+          '—';
 
   int get _correctDepth =>
       widget._detail?.correctDepth ?? widget._summary?.correctDepth ?? 0;
 
   int get _correctFrequency =>
-      widget._detail?.correctFrequency ?? widget._summary?.correctFrequency ?? 0;
+      widget._detail?.correctFrequency ?? widget._summary?.correctFrequency ??
+          0;
 
   int get _correctRecoil =>
       widget._detail?.correctRecoil ?? widget._summary?.correctRecoil ?? 0;
@@ -105,11 +200,19 @@ class _SessionResultsScreenState
   int get _depthRateCombo =>
       widget._detail?.depthRateCombo ?? widget._summary?.depthRateCombo ?? 0;
 
+  double get _avgWristAngle {
+    final c = widget._detail?.compressions;
+    if (c == null || c.isEmpty) return 0.0;
+    return c.map((e) => e.wristAlignmentAngle).reduce((a, b) => a + b) / c.length;
+  }
+
   // Rescuer biometrics — use new field names only
-  double? get _rescuerHR   =>
-      widget._detail?.rescuerHRLastPause   ?? widget._summary?.rescuerHRLastPause;
+  double? get _rescuerHR =>
+      widget._detail?.rescuerHRLastPause ?? widget._summary?.rescuerHRLastPause;
+
   double? get _rescuerSpO2 =>
-      widget._detail?.rescuerSpO2LastPause ?? widget._summary?.rescuerSpO2LastPause;
+      widget._detail?.rescuerSpO2LastPause ??
+          widget._summary?.rescuerSpO2LastPause;
 
   bool get _hasBiometrics => _rescuerHR != null || _rescuerSpO2 != null;
 
@@ -131,26 +234,41 @@ class _SessionResultsScreenState
     return AppColors.error;
   }
 
+  Future<void> _exportSession() async {
+    final summary = widget._summary ??
+        (widget._detail != null
+            ? SessionSummary.fromDetail(widget._detail!)
+            : null);
+    if (summary == null) return;
+
+    await ExportBottomSheet.showForSingleSession(
+      context,
+      summary: summary,
+      detail:  widget._detail,
+    );
+  }
+
+
   Future<void> _confirmDeleteSession() async {
     final sessionId = widget._detail?.id ?? widget._summary?.id;
     if (sessionId == null) return;
 
     final confirmed = await AppDialogs.showDestructiveConfirm(
       context,
-      icon:         Icons.delete_outline_rounded,
-      iconColor:    AppColors.emergencyRed,
-      iconBg:       AppColors.emergencyBg,
-      title:        'Delete Session?',
-      message:      'This permanently deletes this session and all its data.',
+      icon: Icons.delete_outline_rounded,
+      iconColor: AppColors.emergencyRed,
+      iconBg: AppColors.emergencyBg,
+      title: 'Delete Session?',
+      message: 'This permanently deletes this session and all its data.',
       confirmLabel: 'Delete',
       confirmColor: AppColors.emergencyRed,
-      cancelLabel:  'Cancel',
+      cancelLabel: 'Cancel',
     );
 
     if (confirmed != true || !mounted) return;
 
     final service = ref.read(sessionServiceProvider);
-    final ok      = await service.deleteSession(sessionId);
+    final ok = await service.deleteSession(sessionId);
     if (!mounted) return;
 
     if (ok) {
@@ -164,24 +282,25 @@ class _SessionResultsScreenState
 
   // ── Note editing ───────────────────────────────────────────────────────────
   Future<void> _editNote() async {
-    final controller = TextEditingController(text: _note ?? '');
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (_) => _NoteDialog(controller: controller),
+    final result = await AppDialogs.showNoteEditor(
+      context,
+      initialNote: _note,
     );
     if (result == null) return;
 
     final sessionId = widget._detail?.id ?? widget._summary?.id;
     if (sessionId != null) {
       final service = ref.read(sessionServiceProvider);
-      final ok = await service.updateNote(sessionId, result.isEmpty ? null : result);
+      final ok = await service.updateNote(
+          sessionId, result.isEmpty ? null : result);
       if (!mounted) return;
       if (ok) {
         ref.invalidate(sessionSummariesProvider);
         setState(() => _note = result.isEmpty ? null : result);
         UIHelper.showSuccess(context, 'Note saved');
       } else {
-        UIHelper.showError(context, 'Failed to save note. Check your connection.');
+        UIHelper.showError(
+            context, 'Failed to save note. Check your connection.');
       }
     } else {
       // No backend ID — just update local state (post-session, not yet saved)
@@ -192,607 +311,297 @@ class _SessionResultsScreenState
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final hasGraphs   = widget._detail != null &&
-        widget._detail!.compressions.isNotEmpty;
+    final hasDetail = widget._detail != null;
+    final hasGraphs = hasDetail && widget._detail!.compressions.isNotEmpty;
     final canEditNote = (widget._detail?.id ?? widget._summary?.id) != null;
-    final title       = widget._sessionNumber != null
+    final title = widget._sessionNumber != null
         ? 'Session ${widget._sessionNumber}'
         : _isEmergency ? 'Emergency Session' : 'Session Results';
+
+    final isNoFeedback =
+        widget._detail?.isNoFeedback ?? widget._summary?.isNoFeedback ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:        AppColors.primaryLight,
-        elevation:              0,
+        backgroundColor: AppColors.primaryLight,
+        elevation: 0,
         scrolledUnderElevation: 0,
+        toolbarHeight: AppSpacing.headerHeight,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppColors.primary),
+          icon: const Icon(
+              Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
           onPressed: context.pop,
         ),
-        title: Text(
-          title,
-          style: AppTypography.heading(size: 20, color: AppColors.primary),
-        ),
+        title: Text(title,
+            style: AppTypography.heading(size: 18, color: AppColors.primary)),
         actions: [
-          // Mode badge in app bar
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.md),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical:   AppSpacing.xxs,
-                ),
-                decoration: AppDecorations.chip(
-                  color: _isEmergency ? AppColors.emergencyRed : AppColors.warning,
-                  bg:    _isEmergency ? AppColors.emergencyBg  : AppColors.warningBg,
-                ),
-                child: Text(
-                  _isEmergency
-                      ? 'EMERGENCY'
-                      : (widget._detail?.isNoFeedback ?? widget._summary?.isNoFeedback ?? false)
-                      ? 'NO-FEEDBACK'
-                      : 'TRAINING',
-                  style: AppTypography.badge(
-                    size:  10,
-                    color: _isEmergency ? AppColors.emergencyRed : AppColors.warning,
-                  ),
+          // Mode chip
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: AppSpacing.xs),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+              decoration: AppDecorations.chip(
+                color: _isEmergency ? AppColors.emergencyRed : AppColors
+                    .warning,
+                bg: _isEmergency ? AppColors.emergencyBg : AppColors.warningBg,
+              ),
+              child: Text(
+                _isEmergency ? 'EMERGENCY'
+                    : isNoFeedback ? 'NO-FEEDBACK'
+                    : _isPediatric ? 'PEDIATRIC'
+                    : 'TRAINING',
+                style: AppTypography.badge(
+                  size: 10,
+                  color: _isEmergency ? AppColors.emergencyRed : AppColors
+                      .warning,
                 ),
               ),
             ),
           ),
-          // Delete button — only for saved sessions
+          if (widget._detail != null || widget._summary != null)
+            IconButton(
+              icon: const Icon(
+                  Icons.download_outlined, color: AppColors.primary),
+              tooltip: 'Export',
+              onPressed: _exportSession,
+            ),
           if ((widget._detail?.id ?? widget._summary?.id) != null)
             IconButton(
-              icon:    const Icon(Icons.delete_outline_rounded,
-                  color: AppColors.emergencyRed),
+              icon: const Icon(
+                  Icons.delete_outline_rounded, color: AppColors.emergencyRed),
+              tooltip: 'Delete',
               onPressed: _confirmDeleteSession,
-              tooltip: 'Delete session',
             ),
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── ① Gradient header ─────────────────────────────────────────
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryAlt],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xl,
-              ),
-              child: Column(
-                children: [
-                  // Grade circle — Training only
-                  if (!_isEmergency) ...[
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width:  148,
-                          height: 148,
-                          child: CircularProgressIndicator(
-                            value:           _grade / 100,
-                            strokeWidth:     10,
-                            strokeCap:       StrokeCap.round,
-                            backgroundColor: AppColors.textOnDark.withValues(alpha: 0.2),
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.textOnDark,
-                            ),
-                          ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${_grade.toStringAsFixed(0)}%',
-                              style: AppTypography.numericDisplay(
-                                size: 38, color: AppColors.textOnDark,
-                              ),
-                            ),
-                            Text(
-                              _motivationalLabel,
-                              style: AppTypography.label(
-                                size:  11,
-                                color: AppColors.textOnDark.withValues(alpha: 0.85),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                  ],
-
-                  // Emergency header — icon instead of grade circle
-                  if (_isEmergency) ...[
-                    Container(
-                      width:  80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color:  AppColors.textOnDark.withValues(alpha: 0.15),
-                        shape:  BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.emergency_rounded,
-                        color: AppColors.textOnDark,
-                        size:  AppSpacing.iconXl,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'CPR Session Complete',
-                      style: AppTypography.poppins(
-                        size:   20,
-                        weight: FontWeight.w700,
-                        color:  AppColors.textOnDark,
-                      ),
-                    ),
-                    if (_isPediatric) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm, vertical: AppSpacing.xxs,
-                        ),
-                        decoration: AppDecorations.chip(
-                          color: AppColors.textOnDark,
-                          bg:    AppColors.textOnDark.withValues(alpha: 0.2),
-                        ),
-                        child: Text(
-                          'PEDIATRIC CPR',
-                          style: AppTypography.badge(
-                            size: 10, color: AppColors.textOnDark,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                  ],
-
-                  // ── Summary row ──────────────────────────────────────────
-                  Container(
-                    decoration: BoxDecoration(
-                      color:        AppColors.textOnDark.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-                    ),
-                    child: IntrinsicHeight(
-                      child: Row(
-                        children: [
-                          _SummaryCell(value: _durationFormatted,       label: 'DURATION'),
-                          _VDivider(),
-                          _SummaryCell(value: '$_compressionCount',     label: 'COMPRESSIONS'),
-                          _VDivider(),
-                          _SummaryCell(
-                            value: _averageFrequency > 0
-                                ? '${_averageFrequency.round()}'
-                                : '—',
-                            label: 'AVG BPM',
-                          ),
-                        ],
-                      ),
-                    ),
+            // ── Header ───────────────────────────────────────────────────────
+            _isEmergency
+                ? _EmergencyHeader(
+              durationFormatted: _durationFormatted,
+              compressionCount: _compressionCount,
+              isPediatric: _isPediatric,
+              correctDepthPct: _compressionCount > 0 ? (_correctDepth /
+                  _compressionCount * 100).round() : 0,
+              correctRatePct: _compressionCount > 0 ? (_correctFrequency /
+                  _compressionCount * 100).round() : 0,
+              handsOnPct: widget._detail?.handsOnPct ?? '—',
+              handsOnOk: widget._detail != null &&
+                  widget._detail!.handsOnRatio >= 0.80,
+              timeToFirst: widget._detail?.timeToFirstCompression,
+              avgBpm: _averageFrequency,
+              avgDepth: _averageDepth,
+              targetDepthLabel: _targetDepthLabel,
+            )
+                : _TrainingHeader(
+              grade: _grade,
+              isPediatric: _isPediatric,
+              isNoFeedback: isNoFeedback,
+              motivational: _motivationalLabel,
+              depthPct: _compressionCount > 0 ? (_correctDepth /
+                  _compressionCount * 100) : 0,
+              ratePct: _compressionCount > 0 ? (_correctFrequency /
+                  _compressionCount * 100) : 0,
+              recoilPct: _compressionCount > 0 ? (_correctRecoil /
+                  _compressionCount * 100) : 0,
+              durationFormatted: _durationFormatted,
+              compressionCount: _compressionCount,
+              avgBpm: _averageFrequency,
+              onGradeInfo: () =>
+                  AppDialogs.showAlert(
+                    context,
+                    title: 'How is the grade calculated?',
+                    message: _isPediatric
+                        ? 'Pediatric grading:\n\n'
+                        '• Depth consistency (25%) — within 4–5 cm\n'
+                        '• Rate consistency (13%) — 100–120 BPM\n'
+                        '• Full recoil (10%)\n'
+                        '• Depth + rate combined (12%)\n'
+                        '• Hands-on ratio (5%)\n'
+                        '• Ventilation compliance (10%)\n'
+                        '• Posture (5%)\n'
+                        '• Force safety (10%)\n'
+                        '• Time to first compression (10%)\n'
+                        '• Fatigue penalty (−5 pts)'
+                        : 'Adult grading:\n\n'
+                        '• Depth consistency (20%) — within 5–6 cm\n'
+                        '• Rate consistency (18%) — 100–120 BPM\n'
+                        '• Full recoil (15%)\n'
+                        '• Depth + rate combined (12%)\n'
+                        '• Hands-on ratio (10%)\n'
+                        '• Ventilation compliance (10%)\n'
+                        '• Posture (5%)\n'
+                        '• Force safety (5%)\n'
+                        '• Time to first compression (5%)\n'
+                        '• Fatigue penalty (−5 pts)',
                   ),
-
-                  const SizedBox(height: AppSpacing.lg),
-
-                  // ── Quality breakdown — Training only ────────────────────
-                  if (!_isEmergency) ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'QUALITY BREAKDOWN',
-                          style: AppTypography.badge(
-                            size:  10,
-                            color: AppColors.textOnDark.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        GridView.count(
-                          shrinkWrap:   true,
-                          crossAxisCount: 2,
-                          crossAxisSpacing: AppSpacing.sm,
-                          mainAxisSpacing:  AppSpacing.sm,
-                          physics: const NeverScrollableScrollPhysics(),
-                          childAspectRatio: 2.4,
-                          children: [
-                            _StatTile(label: 'CORRECT DEPTH',     value: _pct(_correctDepth)),
-                            _StatTile(label: 'CORRECT FREQUENCY', value: _pct(_correctFrequency)),
-                            _StatTile(label: 'CORRECT RECOIL',    value: _pct(_correctRecoil)),
-                            _StatTile(label: 'DEPTH + RATE',      value: _pct(_depthRateCombo)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // ── Factual breakdown — Emergency only ───────────────────
-                  if (_isEmergency) ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'SESSION OVERVIEW',
-                          style: AppTypography.badge(
-                            size:  10,
-                            color: AppColors.textOnDark.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        GridView.count(
-                          shrinkWrap:      true,
-                          crossAxisCount:  2,
-                          crossAxisSpacing: AppSpacing.sm,
-                          mainAxisSpacing:  AppSpacing.sm,
-                          physics: const NeverScrollableScrollPhysics(),
-                          childAspectRatio: 2.4,
-                          children: [
-                            _StatTile(label: 'CORRECT DEPTH',  value: _pct(_correctDepth)),
-                            _StatTile(label: 'CORRECT RATE',   value: _pct(_correctFrequency)),
-                            _StatTile(label: 'CORRECT RECOIL', value: _pct(_correctRecoil)),
-                            _StatTile(
-                              label: 'SCENARIO',
-                              value: _isPediatric ? 'Pediatric' : 'Adult',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
             ),
 
-            // ── ② White body ──────────────────────────────────────────────
-            Container(
-              width:   double.infinity,
-              color:   AppColors.surfaceWhite,
-              padding: const EdgeInsets.all(AppSpacing.lg),
+            // ── Body ─────────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  // ── Graphs (detail mode only) ────────────────────────────
+                  // Personal best — training only
+                  if (!_isEmergency) ...[
+                    _PersonalBestComparison(
+                        currentGrade: _grade, scenario: _scenario),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Graphs
                   if (hasGraphs) ...[
-                    Text(
-                      'PERFORMANCE OVER TIME',
-                      style: AppTypography.badge(
-                        size:  10, color: AppColors.textDisabled,
+                    _SectionCard(
+                      title: 'Performance Over Time',
+                      icon: Icons.show_chart_rounded,
+                      startOpen: true,
+                      child: _TappableGraphs(
+                        session: widget._detail!,
+                        targetDepthMin: _targetDepthMin,
+                        targetDepthMax: _targetDepthMax,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    _SessionGraphs(
-                      session:        widget._detail!,
-                      targetDepthMin: _targetDepthMin,
-                      targetDepthMax: _targetDepthMax,
-                    ),
-                    const _HDivider(),
                   ],
 
-                  // ── Metrics ──────────────────────────────────────────────
-                  Text(
-                    'METRICS',
-                    style: AppTypography.badge(
-                      size: 10, color: AppColors.textDisabled,
+                  // Emergency — pulse check
+                  if (_isEmergency && hasDetail &&
+                      widget._detail!.pulseChecks.isNotEmpty) ...[
+                    _SectionCard(
+                      title: 'Pulse Check Results',
+                      icon: Icons.sensors_rounded,
+                      iconColor: AppColors.primary,
+                      startOpen: true,
+                      child: _PulseChecksSection(detail: widget._detail!),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
-                  _DetailRow(
-                    icon:  Icons.compress_rounded,
-                    label: 'Average Depth',
-                    value: _averageDepth > 0
-                        ? '${_averageDepth.toStringAsFixed(1)} cm'
-                        : '—',
-                    note: 'Target: $_targetDepthLabel',
-                  ),
-
-                  if (widget._detail != null) ...[
-                    _DetailRow(
-                      icon:  Icons.straighten_rounded,
-                      label: 'Depth Consistency',
-                      value: widget._detail!.depthConsistency > 0
-                          ? '${widget._detail!.depthConsistency.round()}%'
-                          : '—',
-                      note: 'Compressions within $_targetDepthLabel',
-                    ),
-
-                    if (widget._detail!.averageEffectiveDepth > 0)
-                      _DetailRow(
-                        icon:  Icons.architecture_rounded,
-                        label: 'Effective Depth (angle-corrected)',
-                        value: '${widget._detail!.averageEffectiveDepth.toStringAsFixed(1)} cm',
-                        note:  'Depth corrected for wrist axis deviation',
-                      ),
-
-                    if (widget._detail!.peakDepth > 0)
-                      _DetailRow(
-                        icon:  Icons.keyboard_double_arrow_down_rounded,
-                        label: 'Peak Depth',
-                        value: '${widget._detail!.peakDepth.toStringAsFixed(1)} cm',
-                        note:  'Maximum single compression this session',
-                      ),
-
-                    _DetailRow(
-                      icon:  Icons.speed_rounded,
-                      label: 'Rate Consistency',
-                      value: widget._detail!.frequencyConsistency > 0
-                          ? '${widget._detail!.frequencyConsistency.round()}%'
-                          : '—',
-                      note: 'Compressions within 100–120 BPM',
-                    ),
-                    _DetailRow(
-                      icon:  Icons.show_chart_rounded,
-                      label: 'Depth Variability (SD)',
-                      value: widget._detail!.depthSD > 0
-                          ? '${widget._detail!.depthSD.toStringAsFixed(2)} cm'
-                          : '—',
-                      note: 'Lower is more consistent',
-                    ),
-
-                    const _HDivider(),
-
-                    // ── Posture ──────────────────────────────────────────
-                    Text(
-                      'POSTURE',
-                      style: AppTypography.badge(
-                        size: 10, color: AppColors.textDisabled,
+                  // Emergency — EMS handover
+                  if (_isEmergency && hasDetail) ...[
+                    _SectionCard(
+                      title: 'CPR Quality Summary',
+                      icon: Icons.medical_services_rounded,
+                      iconColor: AppColors.emergencyRed,
+                      startOpen: true,
+                      child: _EmergencyQualitySection(
+                        detail: widget._detail!,
+                        compressionCount: _compressionCount,
+                        targetDepthLabel: _targetDepthLabel,
+                        averageDepth: _averageDepth,
+                        averageFrequency: _averageFrequency,
+                        correctRecoil: _correctRecoil,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
-                    _DetailRow(
-                      icon:  Icons.accessibility_new_rounded,
-                      label: 'Correct Posture',
-                      value: _compressionCount > 0
-                          ? '${(widget._detail!.correctPosture / _compressionCount * 100).round()}%'
-                          : '—',
-                      note: 'Wrist alignment within 15°',
-                    ),
-                    if (widget._detail!.leaningCount > 0)
-                      _DetailRow(
-                        icon:       Icons.warning_amber_rounded,
-                        label:      'Leaning Detected',
-                        value:      '${widget._detail!.leaningCount}×',
-                        note:       'Incomplete decompression between compressions',
-                        iconColor:  AppColors.warning,
-                        valueColor: AppColors.warning,
-                      ),
-                    if (widget._detail!.overForceCount > 0)
-                      _DetailRow(
-                        icon:       Icons.fitness_center_rounded,
-                        label:      'Over-Force Events',
-                        value:      '${widget._detail!.overForceCount}×',
-                        note:       'Force exceeded safe threshold',
-                        iconColor:  AppColors.error,
-                        valueColor: AppColors.error,
-                      ),
-
-                    if (widget._detail!.tooDeepCount > 0)
-                      _DetailRow(
-                        icon:       Icons.arrow_downward_rounded,
-                        label:      'Too Deep',
-                        value:      '${widget._detail!.tooDeepCount}×',
-                        note:       'Compressions exceeded maximum depth',
-                        iconColor:  AppColors.error,
-                        valueColor: AppColors.error,
-                      ),
-
-                    const _HDivider(),
-
-                    // ── Flow ─────────────────────────────────────────────
-                    Text(
-                      'FLOW',
-                      style: AppTypography.badge(
-                        size: 10, color: AppColors.textDisabled,
+                  // Training — compression quality
+                  if (!_isEmergency && hasDetail) ...[
+                    _SectionCard(
+                      title: 'Compression Quality',
+                      icon: Icons.compress_rounded,
+                      startOpen: true,
+                      child: _CompressionQualitySection(
+                        detail: widget._detail!,
+                        compressionCount: _compressionCount,
+                        targetDepthLabel: _targetDepthLabel,
+                        averageDepth: _averageDepth,
+                        avgWristAngle: _avgWristAngle,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
 
-                    _DetailRow(
-                      icon:       Icons.touch_app_outlined,
-                      label:      'Hands-On Time',
-                      value:      widget._detail!.handsOnPct,
-                      note:       'Time actively compressing',
-                      valueColor: _flowColor(widget._detail!.handsOnRatio * 100),
+                    // Flow
+                    _SectionCard(
+                      title: 'Flow & Timing',
+                      icon: Icons.timer_outlined,
+                      startOpen: false,
+                      child: _FlowSection(detail: widget._detail!),
                     ),
-                    _DetailRow(
-                      icon:       Icons.pause_circle_outline_rounded,
-                      label:      'No-Flow Time',
-                      value:      widget._detail!.noFlowTime > 0
-                          ? '${widget._detail!.noFlowTime.toStringAsFixed(1)}s'
-                          : '0s',
-                      note:       '${widget._detail!.noFlowIntervals} unplanned pause(s) > 2 s',
-                      valueColor: widget._detail!.noFlowTime > 5
-                          ? AppColors.warning
-                          : AppColors.success,
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Ventilation — both modes if data exists
+                  if (hasDetail && widget._detail!.ventilationCount > 0) ...[
+                    _SectionCard(
+                      title: 'Ventilation',
+                      icon: Icons.air_rounded,
+                      iconColor: AppColors.info,
+                      startOpen: false,
+                      child: _VentilationSection(detail: widget._detail!),
                     ),
-                    _DetailRow(
-                      icon:       Icons.timer_outlined,
-                      label:      'Time to First Compression',
-                      value:      widget._detail!.timeToFirstCompression > 0
-                          ? '${widget._detail!.timeToFirstCompression.toStringAsFixed(1)}s'
-                          : '—',
-                      note:       'From session start to first compression',
-                      valueColor: widget._detail!.timeToFirstCompression > 5
-                          ? AppColors.warning
-                          : AppColors.success,
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Fatigue & endurance — training
+                  if (!_isEmergency && hasDetail &&
+                      (widget._detail!.rescuerSwapCount > 0 ||
+                          widget._detail!.fatigueOnsetIndex > 0)) ...[
+                    _SectionCard(
+                      title: 'Fatigue & Endurance',
+                      icon: Icons.local_fire_department_rounded,
+                      iconColor: AppColors.cprOrange,
+                      startOpen: false,
+                      child: _FatigueSection(detail: widget._detail!),
                     ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
-                    if (widget._detail!.rateVariability > 0)
-                      _DetailRow(
-                        icon:       Icons.graphic_eq_rounded,
-                        label:      'Rate Variability',
-                        value:      '${widget._detail!.rateVariability.toStringAsFixed(0)} ms',
-                        note:       'Std deviation of inter-compression intervals (lower = steadier)',
-                        valueColor: widget._detail!.rateVariability < 100
-                            ? AppColors.success : AppColors.warning,
+                  // Biometrics
+                  if (_hasBiometrics || (hasDetail && (
+                      widget._detail!.patientTemperature != null ||
+                          widget._detail!.ambientTempStart != null))) ...[
+                    _SectionCard(
+                      title: 'Biometrics',
+                      icon: Icons.monitor_heart_outlined,
+                      iconColor: AppColors.primary,
+                      startOpen: false,
+                      child: _BiometricsSection(
+                        detail: widget._detail,
+                        summary: widget._summary,
+                        rescuerHR: _rescuerHR,
+                        rescuerSpO2: _rescuerSpO2,
                       ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
-                    if (widget._detail!.ventilationCount > 0) ...[
-                      const _HDivider(),
-                      Text('VENTILATION', style: AppTypography.badge(size: 10, color: AppColors.textDisabled)),
-                      const SizedBox(height: AppSpacing.sm),
-                      _DetailRow(
-                        icon:  Icons.air_rounded,
-                        label: 'Ventilation Cycles',
-                        value: '${widget._detail!.ventilationCount}',
-                      ),
-                      _DetailRow(
-                        icon:       Icons.check_circle_outline_rounded,
-                        label:      'Compliance',
-                        value:      '${widget._detail!.ventilationCompliance.round()}%',
-                        valueColor: widget._detail!.ventilationCompliance >= 80
-                            ? AppColors.success : AppColors.warning,
-                      ),
-                      _DetailRow(
-                        icon:  Icons.vaccines_rounded,
-                        label: 'Correct Ventilations',
-                        value: '${widget._detail!.correctVentilations}',
-                      ),
-                    ],
-
-                    // ── Fatigue (Training only) ───────────────────────────
-                    if (!_isEmergency &&
-                        widget._detail!.rescuerSwapCount > 0) ...[
-                      const _HDivider(),
-                      Text(
-                        'FATIGUE & ENDURANCE',
-                        style: AppTypography.badge(
-                          size: 10, color: AppColors.textDisabled,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _DetailRow(
-                        icon:  Icons.swap_horiz_rounded,
-                        label: 'Rescuer Swap Prompts',
-                        value: '${widget._detail!.rescuerSwapCount}×',
-                        note:  'Times 2-minute alert fired',
-                      ),
-                      if (widget._detail!.fatigueOnsetIndex > 0)
+                  // Session metadata
+                  _SectionCard(
+                    title: 'Session Info',
+                    icon: Icons.info_outline_rounded,
+                    iconColor: AppColors.textSecondary,
+                    startOpen: false,
+                    child: Column(
+                      children: [
                         _DetailRow(
-                          icon:       Icons.trending_down_rounded,
-                          label:      'Fatigue Onset',
-                          value:      'Compression #${widget._detail!.fatigueOnsetIndex}',
-                          note:       'When physiological fatigue was first detected',
-                          iconColor:  AppColors.warning,
-                          valueColor: AppColors.warning,
+                          icon: Icons.calendar_today_outlined,
+                          label: 'Date & Time',
+                          value: _dateTimeFormatted,
                         ),
-                    ],
-
-                    if (widget._detail!.consecutiveGoodPeak > 0)
-                      _DetailRow(
-                        icon:      Icons.local_fire_department_rounded,
-                        label:     'Best Streak',
-                        value:     '${widget._detail!.consecutiveGoodPeak} compressions',
-                        note:      'Longest unbroken run of perfect compressions',
-                        iconColor: AppColors.success,
-                      ),
-
-                    // ── Pulse check results (Emergency only) ─────────────
-                    if (_isEmergency &&
-                        widget._detail!.pulseChecks.isNotEmpty) ...[
-                      const _HDivider(),
-                      Text(
-                        'PULSE CHECKS',
-                        style: AppTypography.badge(
-                          size: 10, color: AppColors.textDisabled,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _DetailRow(
-                        icon:  Icons.sensors_rounded,
-                        label: 'Checks Prompted',
-                        value: '${widget._detail!.pulseChecksPrompted}',
-                      ),
-                      _DetailRow(
-                        icon:  Icons.check_circle_outline_rounded,
-                        label: 'Checks Completed',
-                        value: '${widget._detail!.pulseChecksComplied}',
-                      ),
-                      ...widget._detail!.pulseChecks.map((pc) {
-                        final color = pc.detected
-                            ? AppColors.success
-                            : pc.isUncertain
-                            ? AppColors.warning
-                            : AppColors.textSecondary;
-                        final label = pc.detected
-                            ? 'Pulse Present'
-                            : pc.isUncertain
-                            ? 'Uncertain'
-                            : 'No Pulse';
-                        return _DetailRow(
-                          icon:       Icons.favorite_border_rounded,
-                          label:      'Check #${pc.intervalNumber}',
-                          value:      label,
-                          note:       pc.detectedBpm > 0
-                              ? '${pc.detectedBpm.toStringAsFixed(0)} BPM  ·  ${pc.confidence}% confidence'
-                              : null,
-                          iconColor:  color,
-                          valueColor: color,
-                        );
-                      }),
-                    ],
-                  ],
-
-                  // ── Biometrics ────────────────────────────────────────────
-                  if (_hasBiometrics) ...[
-                    const _HDivider(),
-                    Text(
-                      'RESCUER BIOMETRICS',
-                      style: AppTypography.badge(
-                        size: 10, color: AppColors.textDisabled,
-                      ),
+                        if (widget._detail?.syncedToBackend == false)
+                          const _UnsyncedBanner(),
+                      ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (_rescuerHR != null)
-                      _DetailRow(
-                        icon:      Icons.monitor_heart_outlined,
-                        label:     'Heart Rate (last pause)',
-                        value:     '${_rescuerHR!.toStringAsFixed(0)} bpm',
-                        iconColor: AppColors.primary,
-                      ),
-                    if (_rescuerSpO2 != null)
-                      _DetailRow(
-                        icon:  Icons.air_rounded,
-                        label: 'SpO₂ (last pause)',
-                        value: '${_rescuerSpO2!.toStringAsFixed(0)}%',
-                      ),
-
-                    if ((widget._detail?.patientTemperature ?? widget._summary?.patientTemperature) != null)
-                      _DetailRow(
-                        icon:      Icons.thermostat_rounded,
-                        label:     'Patient Temperature',
-                        value:     '${(widget._detail?.patientTemperature ?? widget._summary!.patientTemperature!).toStringAsFixed(1)}°C',
-                        iconColor: AppColors.error,
-                      ),
-                  ],
-
-                  // ── Session date ─────────────────────────────────────────
-                  const _HDivider(),
-                  _DetailRow(
-                    icon:  Icons.calendar_today_outlined,
-                    label: 'Session Date',
-                    value: _dateTimeFormatted,
                   ),
-
-                  // ── Note ─────────────────────────────────────────────────
-                  const SizedBox(height: AppSpacing.sm),
-                  _NoteCard(
-                    note:    _note,
-                    canEdit: canEditNote,
-                    onTap:   _editNote,
-                  ),
-
                   const SizedBox(height: AppSpacing.md),
+
+                  // Note
+                  _NoteCard(
+                    note: _note,
+                    canEdit: canEditNote,
+                    onTap: _editNote,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
                   const _PastSessionsButton(),
+                  const SizedBox(height: AppSpacing.xl),
                 ],
               ),
             ),
@@ -804,68 +613,1158 @@ class _SessionResultsScreenState
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _SessionGraphs — depth + rate graphs, scenario-aware target bands
+// _TrainingHeader
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SessionGraphs extends StatelessWidget {
+class _TrainingHeader extends StatelessWidget {
+  final double       grade;
+  final bool         isPediatric;
+  final bool         isNoFeedback;
+  final String       motivational;
+  final double       depthPct;
+  final double       ratePct;
+  final double       recoilPct;
+  final String       durationFormatted;
+  final int          compressionCount;
+  final double       avgBpm;
+  final VoidCallback onGradeInfo;
+
+  const _TrainingHeader({
+    required this.grade,
+    required this.isPediatric,
+    required this.isNoFeedback,
+    required this.motivational,
+    required this.depthPct,
+    required this.ratePct,
+    required this.recoilPct,
+    required this.durationFormatted,
+    required this.compressionCount,
+    required this.avgBpm,
+    required this.onGradeInfo,
+  });
+
+  Color get _gradeColor {
+    if (grade >= 90) return AppColors.success;
+    if (grade >= 75) return AppColors.info;
+    if (grade >= 55) return AppColors.warning;
+    return AppColors.error;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryAlt],
+          begin:  Alignment.topLeft,
+          end:    Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.lg),
+      child: Column(
+        children: [
+          // ── Grade circle + ? button ────────────────────────────────────
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width:  160,
+                height: 160,
+                child: CircularProgressIndicator(
+                  value:           grade / 100,
+                  strokeWidth:     12,
+                  strokeCap:       StrokeCap.round,
+                  backgroundColor: AppColors.textOnDark.withValues(alpha: 0.15),
+                  valueColor:      AlwaysStoppedAnimation<Color>(_gradeColor),
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${grade.toStringAsFixed(0)}%',
+                    style: AppTypography.numericDisplay(
+                      size: 42, color: AppColors.textOnDark,
+                    ),
+                  ),
+                  Text(
+                    motivational,
+                    style: AppTypography.label(
+                      size:  12,
+                      color: AppColors.textOnDark.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+              // ? button — top right of circle
+              Positioned(
+                top:   0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: onGradeInfo,
+                  child: Container(
+                    width:  28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.textOnDark.withValues(alpha: 0.15),
+                    ),
+                    child: const Icon(
+                      Icons.help_outline_rounded,
+                      size:  16,
+                      color: AppColors.textOnDark,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.sm),
+
+          // Scenario / mode pill — below circle
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+            decoration: BoxDecoration(
+              color:        AppColors.textOnDark.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+              border: Border.all(
+                  color: AppColors.textOnDark.withValues(alpha: 0.2)),
+            ),
+            child: Text(
+              isNoFeedback
+                  ? 'No-Feedback Training'
+                  : isPediatric ? 'Pediatric' : 'Standard Adult',
+              style: AppTypography.badge(
+                  size: 10, color: AppColors.textOnDark),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // ── 3 sub-rings: Depth / Rate / Recoil ────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _MetricRing(
+                label:   'DEPTH',
+                value:   depthPct,
+                color:   depthPct >= 80
+                    ? AppColors.success
+                    : depthPct >= 60
+                    ? AppColors.warning
+                    : AppColors.error,
+              ),
+              _MetricRing(
+                label:   'RATE',
+                value:   ratePct,
+                color:   ratePct >= 80
+                    ? AppColors.success
+                    : ratePct >= 60
+                    ? AppColors.warning
+                    : AppColors.error,
+              ),
+              _MetricRing(
+                label:   'RECOIL',
+                value:   recoilPct,
+                color:   recoilPct >= 80
+                    ? AppColors.success
+                    : recoilPct >= 60
+                    ? AppColors.warning
+                    : AppColors.error,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.lg),
+
+          // ── Stat bar ──────────────────────────────────────────────────
+          Container(
+            decoration: AppDecorations.darkStatTile(),
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  _SummaryCell(value: durationFormatted,          label: 'DURATION'),
+                  _VDivider(),
+                  _SummaryCell(value: '$compressionCount',        label: 'COMPRESSIONS'),
+                  _VDivider(),
+                  _SummaryCell(
+                    value: avgBpm > 0 ? '${avgBpm.round()}' : '—',
+                    label: 'AVG BPM',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _MetricRing — small circular sub-grade
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MetricRing extends StatelessWidget {
+  final String label;
+  final double value; // 0–100
+  final Color  color;
+
+  const _MetricRing({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width:  72,
+          height: 72,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value:           value / 100,
+                strokeWidth:     6,
+                strokeCap:       StrokeCap.round,
+                backgroundColor: AppColors.textOnDark.withValues(alpha: 0.15),
+                valueColor:      AlwaysStoppedAnimation<Color>(color),
+              ),
+              Text(
+                '${value.round()}%',
+                style: AppTypography.poppins(
+                  size:   14,
+                  weight: FontWeight.w700,
+                  color:  AppColors.textOnDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          label,
+          style: AppTypography.badge(
+              size: 9, color: AppColors.textOnDark.withValues(alpha: 0.7)),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _EmergencyHeader
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EmergencyHeader extends StatelessWidget {
+  final String  durationFormatted;
+  final int     compressionCount;
+  final bool    isPediatric;
+  final int     correctDepthPct;
+  final int     correctRatePct;
+  final String  handsOnPct;
+  final bool    handsOnOk;
+  final double? timeToFirst;
+  final double  avgBpm;
+  final double  avgDepth;
+  final String  targetDepthLabel;
+
+  const _EmergencyHeader({
+    required this.durationFormatted,
+    required this.compressionCount,
+    required this.isPediatric,
+    required this.correctDepthPct,
+    required this.correctRatePct,
+    required this.handsOnPct,
+    required this.handsOnOk,
+    this.timeToFirst,
+    required this.avgBpm,
+    required this.avgDepth,
+    required this.targetDepthLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.emergencyRed, AppColors.emergencyDark],
+          begin:  Alignment.topLeft,
+          end:    Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.lg),
+      child: Column(
+        children: [
+          // Icon + title
+          Container(
+            width:  80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.textOnDark.withValues(alpha: 0.15),
+            ),
+            child: const Icon(
+              Icons.emergency_rounded,
+              color: AppColors.textOnDark,
+              size:  AppSpacing.iconXl,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'CPR Session Complete',
+            style: AppTypography.poppins(
+                size: 20, weight: FontWeight.w700, color: AppColors.textOnDark),
+          ),
+          if (isPediatric) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+              decoration: AppDecorations.chip(
+                color: AppColors.textOnDark,
+                bg:    AppColors.textOnDark.withValues(alpha: 0.2),
+              ),
+              child: Text('PEDIATRIC CPR',
+                  style: AppTypography.badge(
+                      size: 10, color: AppColors.textOnDark)),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+
+          // Duration + compressions stat bar
+          Container(
+            decoration: AppDecorations.darkStatTile(),
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  _SummaryCell(value: durationFormatted,   label: 'DURATION'),
+                  _VDivider(),
+                  _SummaryCell(value: '$compressionCount', label: 'COMPRESSIONS'),
+                  _VDivider(),
+                  _SummaryCell(
+                    value: avgBpm > 0 ? '${avgBpm.round()}' : '—',
+                    label: 'AVG BPM',
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // 4 key quality tiles
+          Row(
+            children: [
+              _EmergencyTile(
+                label: 'CORRECT DEPTH',
+                value: '$correctDepthPct%',
+                ok:    correctDepthPct >= 70,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _EmergencyTile(
+                label: 'CORRECT RATE',
+                value: '$correctRatePct%',
+                ok:    correctRatePct >= 70,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _EmergencyTile(
+                label: 'HANDS-ON TIME',
+                value: handsOnPct,
+                ok:    handsOnOk,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _EmergencyTile(
+                label: 'TIME TO FIRST',
+                value: timeToFirst != null && timeToFirst! > 0
+                    ? '${timeToFirst!.toStringAsFixed(1)}s'
+                    : '—',
+                ok:    timeToFirst != null && timeToFirst! <= 10,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmergencyTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool   ok;
+
+  const _EmergencyTile({
+    required this.label,
+    required this.value,
+    required this.ok,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ok ? AppColors.success : AppColors.warning;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color:        AppColors.textOnDark.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+          border: Border.all(
+              color: color.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: AppTypography.poppins(
+                size:   22,
+                weight: FontWeight.w700,
+                color:  color,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppTypography.badge(
+                  size:  9,
+                  color: AppColors.textOnDark.withValues(alpha: 0.7)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SectionCard — expandable section
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionCard extends StatefulWidget {
+  final String    title;
+  final IconData  icon;
+  final Color     iconColor;
+  final bool      startOpen;
+  final Widget    child;
+
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    this.iconColor = AppColors.primary,
+    this.startOpen = false,
+    required this.child,
+  });
+
+  @override
+  State<_SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<_SectionCard> {
+  late bool _open;
+
+  @override
+  void initState() {
+    super.initState();
+    _open = widget.startOpen;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: AppDecorations.card(),
+      child: Column(
+        children: [
+          // Header row — always visible
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.cardPadding),
+              child: Row(
+                children: [
+                  Container(
+                    width:  32,
+                    height: 32,
+                    decoration: AppDecorations.iconRounded(
+                      bg:     widget.iconColor.withValues(alpha: 0.1),
+                      radius: AppSpacing.cardRadiusSm,
+                    ),
+                    child: Icon(
+                      widget.icon,
+                      size:  AppSpacing.iconSm,
+                      color: widget.iconColor,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: AppTypography.subheading(size: 14),
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns:    _open ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textSecondary,
+                      size:  AppSpacing.iconSm,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expandable content
+          AnimatedCrossFade(
+            firstChild:  const SizedBox(width: double.infinity, height: 0),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+              child: Column(
+                children: [
+                  const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: AppColors.divider),
+                  const SizedBox(height: AppSpacing.sm),
+                  widget.child,
+                ],
+              ),
+            ),
+            crossFadeState: _open
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _TappableGraphs — wraps SessionGraphs, each graph tappable for full-screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TappableGraphs extends StatelessWidget {
   final SessionDetail session;
   final double        targetDepthMin;
   final double        targetDepthMax;
 
-  const _SessionGraphs({
+  const _TappableGraphs({
     required this.session,
     required this.targetDepthMin,
     required this.targetDepthMax,
   });
+
+  void _showFullScreen(BuildContext context, Widget graph, String title) {
+    context.push(Scaffold(
+      backgroundColor: AppColors.surfaceWhite,
+      appBar: AppBar(
+        backgroundColor:        AppColors.surfaceWhite,
+        elevation:              0,
+        scrolledUnderElevation: 0,
+        title: Text(title, style: AppTypography.heading(size: 16)),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, color: AppColors.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Center(child: graph),
+      ),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
     final events = session.compressions;
     if (events.isEmpty) return const SizedBox.shrink();
 
+    final depthGraph = _GraphCard(
+      title:      'Compression Depth',
+      unit:       'cm',
+      minY:       0,
+      maxY:       9,
+      targetMin:  targetDepthMin,
+      targetMax:  targetDepthMax,
+      spots: events.map((e) => FlSpot(e.timestampSec, e.depth)).toList(),
+      lineColor:       AppColors.primary,
+      leftLabels:      const ['0', '3', '6', '9'],
+      leftLabelValues: const [0, 3, 6, 9],
+      targetLabel:
+      '${targetDepthMin.toStringAsFixed(0)}–${targetDepthMax.toStringAsFixed(0)} cm',
+    );
+
+    final rateGraph = _GraphCard(
+      title:     'Compression Rate',
+      unit:      'BPM',
+      minY:      60,
+      maxY:      160,
+      targetMin: CprTargets.rateMin,
+      targetMax: CprTargets.rateMax,
+      spots: events
+          .map((e) => FlSpot(
+        e.timestampSec,
+        e.instantaneousRate > 0 ? e.instantaneousRate : e.frequency,
+      ))
+          .toList(),
+      lineColor:       AppColors.success,
+      leftLabels:      const ['60', '100', '120', '160'],
+      leftLabelValues: const [60, 100, 120, 160],
+      targetLabel:     '100–120 BPM',
+    );
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _GraphCard(
-          title:      'Compression Depth',
-          unit:       'cm',
-          minY:       0,
-          maxY:       9,
-          targetMin:  targetDepthMin,
-          targetMax:  targetDepthMax,
-          // Use instantaneousRate for Y but depth for X — depth graph
-          spots: events
-              .map((e) => FlSpot(e.timestampSec, e.depth))
-              .toList(),
-          lineColor:       AppColors.primary,
-          leftLabels:      const ['0', '3', '6', '9'],
-          leftLabelValues: const [0, 3, 6, 9],
-          targetLabel:     '${targetDepthMin.toStringAsFixed(0)}–${targetDepthMax.toStringAsFixed(0)} cm',
+        GestureDetector(
+          onTap: () => _showFullScreen(
+              context, depthGraph, 'Compression Depth'),
+          child: Stack(
+            children: [
+              depthGraph,
+              Positioned(
+                top:   0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color:        AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  ),
+                  child: const Icon(Icons.fullscreen_rounded,
+                      size: 16, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
-        _GraphCard(
-          title:     'Compression Rate',
-          unit:      'BPM',
-          minY:      60,
-          maxY:      160,
-          targetMin: CprTargets.rateMin,
-          targetMax: CprTargets.rateMax,
-          // Use instantaneousRate — per-compression accuracy per spec v3.0
-          spots: events
-              .map((e) => FlSpot(
-            e.timestampSec,
-            e.instantaneousRate > 0 ? e.instantaneousRate : e.frequency,
-          ))
-              .toList(),
-          lineColor:       AppColors.success,
-          leftLabels:      const ['60', '100', '120', '160'],
-          leftLabelValues: const [60, 100, 120, 160],
-          targetLabel:     '100–120 BPM',
+        GestureDetector(
+          onTap: () => _showFullScreen(
+              context, rateGraph, 'Compression Rate'),
+          child: Stack(
+            children: [
+              rateGraph,
+              Positioned(
+                top:   0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color:        AppColors.successBg,
+                    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  ),
+                  child: const Icon(Icons.fullscreen_rounded,
+                      size: 16, color: AppColors.success),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section content widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CompressionQualitySection extends StatelessWidget {
+  final SessionDetail detail;
+  final int           compressionCount;
+  final String        targetDepthLabel;
+  final double        averageDepth;
+  final double        avgWristAngle;
+
+  const _CompressionQualitySection({
+    required this.detail,
+    required this.compressionCount,
+    required this.targetDepthLabel,
+    required this.averageDepth,
+    required this.avgWristAngle,
+  });
+
+  String _pct(int v) => compressionCount > 0
+      ? '${(v / compressionCount * 100).round()}%'
+      : '—';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Depth group
+        const _GroupLabel('Depth'),
+        _DetailRow(
+          icon:  Icons.compress_rounded,
+          label: 'Average Depth',
+          value: averageDepth > 0
+              ? '${averageDepth.toStringAsFixed(1)} cm'
+              : '—',
+          note:  'Target: $targetDepthLabel',
+        ),
+        if (detail.peakDepth > 0)
+          _DetailRow(
+            icon:  Icons.keyboard_double_arrow_down_rounded,
+            label: 'Peak Depth',
+            value: '${detail.peakDepth.toStringAsFixed(1)} cm',
+            note:  'Maximum single compression',
+          ),
+        _DetailRow(
+          icon:  Icons.straighten_rounded,
+          label: 'Depth Consistency',
+          value: detail.depthConsistency > 0
+              ? '${detail.depthConsistency.round()}%'
+              : '—',
+          note:  'Compressions within target',
+          valueColor: detail.depthConsistency >= 80
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:  Icons.show_chart_rounded,
+          label: 'Depth Variability (SD)',
+          value: detail.depthSD > 0
+              ? '${detail.depthSD.toStringAsFixed(2)} cm'
+              : '—',
+          note:  'Lower = more consistent',
+        ),
+        if (detail.averageEffectiveDepth > 0)
+          _DetailRow(
+            icon:  Icons.architecture_rounded,
+            label: 'Effective Depth',
+            value: '${detail.averageEffectiveDepth.toStringAsFixed(1)} cm',
+            note:  'Angle-corrected — accounts for wrist tilt',
+          ),
+
+        const SizedBox(height: AppSpacing.sm),
+        // Rate group
+        const _GroupLabel('Rate'),
+        _DetailRow(
+          icon:  Icons.speed_rounded,
+          label: 'Rate Consistency',
+          value: detail.frequencyConsistency > 0
+              ? '${detail.frequencyConsistency.round()}%'
+              : '—',
+          note:  'Within 100–120 BPM',
+          valueColor: detail.frequencyConsistency >= 80
+              ? AppColors.success : AppColors.warning,
+        ),
+        if (detail.rateVariability > 0)
+          _DetailRow(
+            icon:  Icons.graphic_eq_rounded,
+            label: 'Rate Variability',
+            value: '${detail.rateVariability.toStringAsFixed(0)} ms',
+            note:  'SD of inter-compression intervals',
+            valueColor: detail.rateVariability < 100
+                ? AppColors.success : AppColors.warning,
+          ),
+
+        const SizedBox(height: AppSpacing.sm),
+        // Recoil + Force group
+        const _GroupLabel('Recoil & Force'),
+        _DetailRow(
+          icon:  Icons.sync_rounded,
+          label: 'Full Recoil',
+          value: _pct(detail.correctRecoil),
+          note:  'Complete chest decompression',
+          valueColor: compressionCount > 0 &&
+              (detail.correctRecoil / compressionCount) >= 0.80
+              ? AppColors.success : AppColors.warning,
+        ),
+        if (detail.leaningCount > 0)
+          _DetailRow(
+            icon:       Icons.warning_amber_rounded,
+            label:      'Leaning Detected',
+            value:      '${detail.leaningCount}×',
+            note:       'Incomplete decompression',
+            iconColor:  AppColors.warning,
+            valueColor: AppColors.warning,
+          ),
+        if (detail.overForceCount > 0)
+          _DetailRow(
+            icon:       Icons.fitness_center_rounded,
+            label:      'Over-Force Events',
+            value:      '${detail.overForceCount}×',
+            note:       'Force exceeded safe threshold',
+            iconColor:  AppColors.error,
+            valueColor: AppColors.error,
+          ),
+        if (detail.tooDeepCount > 0)
+          _DetailRow(
+            icon:       Icons.arrow_downward_rounded,
+            label:      'Too Deep',
+            value:      '${detail.tooDeepCount}×',
+            note:       'Exceeded maximum depth',
+            iconColor:  AppColors.error,
+            valueColor: AppColors.error,
+          ),
+
+        const SizedBox(height: AppSpacing.sm),
+        // Posture group
+        const _GroupLabel('Posture'),
+        _DetailRow(
+          icon:  Icons.accessibility_new_rounded,
+          label: 'Correct Posture',
+          value: compressionCount > 0
+              ? '${(detail.correctPosture / compressionCount * 100).round()}%'
+              : '—',
+          note: 'Wrist alignment within 15°',
+        ),
+        if (avgWristAngle > 0)
+          _DetailRow(
+            icon:  Icons.straighten_rounded,
+            label: 'Avg Wrist Alignment',
+            value: '${avgWristAngle.toStringAsFixed(1)}°',
+            note: avgWristAngle <= 15
+                ? 'Good — within target range'
+                : avgWristAngle <= 25
+                ? 'Try keeping arms straighter'
+                : 'Significant tilt — lock elbows, arms perpendicular',
+            valueColor: avgWristAngle <= 15
+                ? AppColors.success
+                : avgWristAngle <= 25
+                ? AppColors.warning
+                : AppColors.error,
+          ),
+        if (detail.consecutiveGoodPeak > 0)
+          _DetailRow(
+            icon:      Icons.local_fire_department_rounded,
+            label:     'Best Streak',
+            value:     '${detail.consecutiveGoodPeak} compressions',
+            note:      'Longest perfect run',
+            iconColor: AppColors.success,
+          ),
+      ],
+    );
+  }
+}
+
+class _FlowSection extends StatelessWidget {
+  final SessionDetail detail;
+  const _FlowSection({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailRow(
+          icon:       Icons.touch_app_outlined,
+          label:      'Hands-On Time',
+          value:      detail.handsOnPct,
+          note:       'Target ≥ 80%',
+          valueColor: detail.handsOnRatio >= 0.80
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:       Icons.pause_circle_outline_rounded,
+          label:      'No-Flow Time',
+          value:      detail.noFlowTime > 0
+              ? '${detail.noFlowTime.toStringAsFixed(1)}s'
+              : '0s',
+          note:       '${detail.noFlowIntervals} unplanned pause(s) > 2 s',
+          valueColor: detail.noFlowTime > 5
+              ? AppColors.warning : AppColors.success,
+        ),
+        _DetailRow(
+          icon:       Icons.timer_outlined,
+          label:      'Time to First Compression',
+          value:      detail.timeToFirstCompression > 0
+              ? '${detail.timeToFirstCompression.toStringAsFixed(1)}s'
+              : '—',
+          note:       'From session start',
+          valueColor: detail.timeToFirstCompression > 5
+              ? AppColors.warning : AppColors.success,
+        ),
+      ],
+    );
+  }
+}
+
+class _VentilationSection extends StatelessWidget {
+  final SessionDetail detail;
+  const _VentilationSection({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailRow(
+          icon:  Icons.air_rounded,
+          label: 'Ventilation Cycles',
+          value: '${detail.ventilationCount}',
+        ),
+        _DetailRow(
+          icon:       Icons.check_circle_outline_rounded,
+          label:      'Compliance',
+          value:      '${detail.ventilationCompliance.round()}%',
+          valueColor: detail.ventilationCompliance >= 80
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:  Icons.vaccines_rounded,
+          label: 'Correct Ventilations',
+          value: '${detail.correctVentilations}',
+        ),
+      ],
+    );
+  }
+}
+
+class _FatigueSection extends StatelessWidget {
+  final SessionDetail detail;
+  const _FatigueSection({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (detail.rescuerSwapCount > 0)
+          _DetailRow(
+            icon:  Icons.swap_horiz_rounded,
+            label: 'Rescuer Swap Prompts',
+            value: '${detail.rescuerSwapCount}×',
+            note:  '2-minute alert count',
+          ),
+        if (detail.fatigueOnsetIndex > 0)
+          _DetailRow(
+            icon:       Icons.trending_down_rounded,
+            label:      'Fatigue Onset',
+            value:      'Compression #${detail.fatigueOnsetIndex}',
+            note:       'When physiological fatigue first detected',
+            iconColor:  AppColors.warning,
+            valueColor: AppColors.warning,
+          ),
+        if (detail.consecutiveGoodPeak > 0)
+          _DetailRow(
+            icon:      Icons.local_fire_department_rounded,
+            label:     'Best Streak',
+            value:     '${detail.consecutiveGoodPeak} compressions',
+            note:      'Longest unbroken run of perfect compressions',
+            iconColor: AppColors.success,
+          ),
+      ],
+    );
+  }
+}
+
+class _EmergencyQualitySection extends StatelessWidget {
+  final SessionDetail detail;
+  final int           compressionCount;
+  final String        targetDepthLabel;
+  final double        averageDepth;
+  final double        averageFrequency;
+  final int           correctRecoil;
+
+  const _EmergencyQualitySection({
+    required this.detail,
+    required this.compressionCount,
+    required this.targetDepthLabel,
+    required this.averageDepth,
+    required this.averageFrequency,
+    required this.correctRecoil,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailRow(
+          icon:  Icons.compress_rounded,
+          label: 'Average Depth',
+          value: averageDepth > 0
+              ? '${averageDepth.toStringAsFixed(1)} cm'
+              : '—',
+          note:  'Target: $targetDepthLabel',
+          valueColor: averageDepth >= 5.0 && averageDepth <= 6.0
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:  Icons.speed_rounded,
+          label: 'Average Rate',
+          value: averageFrequency > 0
+              ? '${averageFrequency.round()} BPM'
+              : '—',
+          note:  'Target: 100–120 BPM',
+          valueColor: averageFrequency >= 100 && averageFrequency <= 120
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:       Icons.compress_rounded,
+          label:      'Chest Compression Fraction',
+          value:      detail.handsOnPct,
+          note:       'Target ≥ 80% (AHA/ERC 2020)',
+          valueColor: detail.handsOnRatio >= 0.80
+              ? AppColors.success : AppColors.warning,
+        ),
+        _DetailRow(
+          icon:  Icons.sync_rounded,
+          label: 'Full Recoil',
+          value: compressionCount > 0
+              ? '${(correctRecoil / compressionCount * 100).round()}%'
+              : '—',
+          note:  'Compressions with complete decompression',
+          valueColor: compressionCount > 0 &&
+              (correctRecoil / compressionCount) >= 0.80
+              ? AppColors.success : AppColors.warning,
+        ),
+        if (detail.noFlowTime > 0)
+          _DetailRow(
+            icon:       Icons.pause_circle_outline_rounded,
+            label:      'No-Flow Time',
+            value:      '${detail.noFlowTime.toStringAsFixed(1)}s',
+            note:       'Unplanned pauses > 2 s',
+            valueColor: detail.noFlowTime > 5
+                ? AppColors.warning : AppColors.success,
+          ),
+      ],
+    );
+  }
+}
+
+class _PulseChecksSection extends StatelessWidget {
+  final SessionDetail detail;
+  const _PulseChecksSection({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailRow(
+          icon:  Icons.sensors_rounded,
+          label: 'Checks Prompted',
+          value: '${detail.pulseChecksPrompted}',
+        ),
+        _DetailRow(
+          icon:  Icons.check_circle_outline_rounded,
+          label: 'Checks Completed',
+          value: '${detail.pulseChecksComplied}',
+        ),
+        ...detail.pulseChecks.map((pc) {
+          final color = pc.detected
+              ? AppColors.success
+              : pc.isUncertain
+              ? AppColors.warning
+              : AppColors.textSecondary;
+          return _DetailRow(
+            icon:       Icons.favorite_border_rounded,
+            label:      'Check #${pc.intervalNumber}',
+            value:      pc.detected ? 'Present'
+                : pc.isUncertain ? 'Uncertain'
+                : 'Absent',
+            note: pc.detectedBpm > 0
+                ? '${pc.detectedBpm.toStringAsFixed(0)} BPM · ${pc.confidence}% confidence'
+                : null,
+            iconColor:  color,
+            valueColor: color,
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _BiometricsSection extends StatelessWidget {
+  final SessionDetail?  detail;
+  final SessionSummary? summary;
+  final double?         rescuerHR;
+  final double?         rescuerSpO2;
+
+  const _BiometricsSection({
+    required this.detail,
+    required this.summary,
+    required this.rescuerHR,
+    required this.rescuerSpO2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final patientTemp = detail?.patientTemperature ?? summary?.patientTemperature;
+
+    return Column(
+      children: [
+        if (rescuerHR != null)
+          _DetailRow(
+            icon:      Icons.monitor_heart_outlined,
+            label:     'Rescuer HR (last pause)',
+            value:     '${rescuerHR!.toStringAsFixed(0)} bpm',
+            iconColor: AppColors.primary,
+          ),
+        if (rescuerSpO2 != null)
+          _DetailRow(
+            icon:  Icons.air_rounded,
+            label: 'Rescuer SpO₂ (last pause)',
+            value: '${rescuerSpO2!.toStringAsFixed(0)}%',
+          ),
+        if (patientTemp != null)
+          _DetailRow(
+            icon:      Icons.thermostat_rounded,
+            label:     'Patient Skin Temperature',
+            value:     '${patientTemp.toStringAsFixed(1)}°C',
+            note:      'Measured via fingertip sensor',
+            iconColor: AppColors.error,
+          ),
+        if (detail?.ambientTempStart != null)
+          _DetailRow(
+            icon:      Icons.thermostat_rounded,
+            label:     'Room Temperature',
+            value:     '${detail!.ambientTempStart!.toStringAsFixed(1)}°C',
+            note:      'Ambient — measured at session start',
+            iconColor: AppColors.textSecondary,
+          ),
+      ],
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  final String text;
+  const _GroupLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        children: [
+          Text(
+            text.toUpperCase(),
+            style: AppTypography.badge(
+                size: 10, color: AppColors.textDisabled),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Container(
+              height: AppSpacing.dividerThickness,
+              color:  AppColors.divider,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _GraphCard
@@ -883,6 +1782,8 @@ class _GraphCard extends StatelessWidget {
   final List<String> leftLabels;
   final List<double> leftLabelValues;
   final String       targetLabel;
+  final List<FlSpot>? secondarySpots;  // optional fatigue trend line
+  final Color?        secondaryColor;
 
   const _GraphCard({
     required this.title,
@@ -896,6 +1797,8 @@ class _GraphCard extends StatelessWidget {
     required this.leftLabels,
     required this.leftLabelValues,
     required this.targetLabel,
+    this.secondarySpots,
+    this.secondaryColor,
   });
 
   double _niceInterval(double maxX) {
@@ -1032,6 +1935,17 @@ class _GraphCard extends StatelessWidget {
                     color: lineColor.withValues(alpha: 0.06),
                   ),
                 ),
+                if (secondarySpots != null && secondarySpots!.isNotEmpty)
+                  LineChartBarData(
+                    spots:           secondarySpots!,
+                    isCurved:        true,
+                    curveSmoothness: 0.5,
+                    color:           secondaryColor ?? AppColors.cprOrange,
+                    barWidth:        1.5,
+                    dashArray:       [6, 4],
+                    dotData:         const FlDotData(show: false),
+                    belowBarData:    BarAreaData(show: false),
+                  ),
               ],
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
@@ -1054,13 +1968,15 @@ class _GraphCard extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         Row(
           children: [
-            _TargetLine(
-                color: lineColor,
-                label: '${targetMin.toStringAsFixed(0)} $unit'),
+            _TargetLine(color: lineColor, label: '${targetMin.toStringAsFixed(0)} $unit'),
             const Spacer(),
-            _TargetLine(
-                color: lineColor,
-                label: '${targetMax.toStringAsFixed(0)} $unit'),
+            if (secondarySpots != null && secondarySpots!.isNotEmpty)
+              _TargetLine(
+                color: secondaryColor ?? AppColors.cprOrange,
+                label: 'Fatigue trend',
+              ),
+            if (secondarySpots == null || secondarySpots!.isEmpty)
+              _TargetLine(color: lineColor, label: '${targetMax.toStringAsFixed(0)} $unit'),
           ],
         ),
       ],
@@ -1125,47 +2041,6 @@ class _NoteCard extends StatelessWidget {
   }
 }
 
-class _NoteDialog extends StatelessWidget {
-  final TextEditingController controller;
-  const _NoteDialog({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Session Note', style: AppTypography.heading(size: 18)),
-      content: TextField(
-        controller:  controller,
-        maxLines:    5,
-        autofocus:   true,
-        decoration: InputDecoration(
-          hintText:  'What did you notice?',
-          hintStyle: AppTypography.caption(color: AppColors.textDisabled),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-            borderSide: const BorderSide(color: AppColors.divider),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: context.pop,
-          child: Text('Cancel',
-              style: AppTypography.label(color: AppColors.textSecondary)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(controller.text),
-          child: Text('Save',
-              style: AppTypography.label(color: AppColors.primary)),
-        ),
-      ],
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Past sessions button
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1200,7 +2075,7 @@ class _PastSessionsButton extends StatelessWidget {
                 children: [
                   Text('Past Sessions',
                       style: AppTypography.bodyMedium(size: 15)),
-                  Text('View all your training history',
+                  Text('View your session history',
                       style: AppTypography.caption()),
                 ],
               ),
@@ -1289,10 +2164,7 @@ class _StatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color:        AppColors.textOnDark.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-      ),
+      decoration: AppDecorations.darkStatTile(),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1366,6 +2238,44 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Unsynced session banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _UnsyncedBanner extends StatelessWidget {
+  const _UnsyncedBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width:   double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical:   AppSpacing.sm,
+      ),
+      decoration: AppDecorations.tintedCard(
+        radius: AppSpacing.cardRadius,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            size:  AppSpacing.iconSm,
+            color: AppColors.warning,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Saved locally — will sync when you log in and reconnect.',
+              style: AppTypography.caption(color: AppColors.warning),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HDivider extends StatelessWidget {
   const _HDivider();
 
@@ -1375,6 +2285,80 @@ class _HDivider extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Divider(
           height: AppSpacing.dividerThickness, color: AppColors.divider),
+    );
+  }
+}
+
+class _PersonalBestComparison extends ConsumerWidget {
+  final double currentGrade;
+  final String scenario;
+
+  const _PersonalBestComparison({
+    required this.currentGrade,
+    required this.scenario,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summaries = ref.watch(sessionSummariesProvider);
+
+    return summaries.when(
+      loading: () => const SizedBox.shrink(),
+      error:   (_, __) => const SizedBox.shrink(),
+      data: (sessions) {
+        final trainingSessions = sessions
+            .where((s) => s.isTraining && s.totalGrade > 0)
+            .toList();
+
+        if (trainingSessions.isEmpty) return const SizedBox.shrink();
+
+        final best = trainingSessions
+            .map((s) => s.totalGrade)
+            .reduce((a, b) => a > b ? a : b);
+
+        final isNewBest = currentGrade > 0 && currentGrade >= best;
+        final diff      = currentGrade - best;
+
+        return Container(
+          padding:    const EdgeInsets.all(AppSpacing.md),
+          decoration: AppDecorations.tintedCard(radius: AppSpacing.cardRadius),
+          child: Row(
+            children: [
+              Icon(
+                isNewBest
+                    ? Icons.emoji_events_rounded
+                    : Icons.bar_chart_rounded,
+                color: isNewBest ? AppColors.warning : AppColors.primary,
+                size:  AppSpacing.iconMd,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isNewBest ? '🏆 New Personal Best!' : 'Personal Best',
+                      style: AppTypography.label(
+                        color: isNewBest
+                            ? AppColors.warning
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      isNewBest
+                          ? '${currentGrade.toStringAsFixed(1)}% — your best score yet!'
+                          : 'Your best is ${best.toStringAsFixed(1)}%  '
+                          '(${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)}% vs this session)',
+                      style: AppTypography.body(size: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

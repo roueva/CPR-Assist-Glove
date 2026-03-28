@@ -44,7 +44,9 @@ dependencies:
   #For open from email
   app_links: ^6.0.0
 
-
+  #For export sessions
+  pdf: ^3.11.1
+  printing: ^5.13.2
   share_plus: ^10.1.4
   qr_flutter: ^4.1.0
 

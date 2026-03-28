@@ -146,7 +146,8 @@ class AppConstants {
   /// Points to the larger of the two packet sizes.
   @Deprecated('Use bleLiveStreamPacketSize or bleEventChannelPacketSize')
 
-  static const int blePacketSize = 100;
+  static const int blePacketSizeLive  = 100; // LIVE_STREAM characteristic
+  static const int blePacketSizeEvent = 96;  // EVENT_CHANNEL characteristic
 
   /// Receive buffer overflow threshold (bytes) — clear when exceeded.
   /// Set to 3 × larger packet size to absorb one full burst without losing data.

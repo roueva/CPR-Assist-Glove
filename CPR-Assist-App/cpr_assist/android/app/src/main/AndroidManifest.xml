@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.cpr_assist">
+    package="com.roueva.cpr_assist">
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
 
     <!-- Declare Bluetooth features (important for Android 12+) -->
@@ -48,7 +50,7 @@
 
 
         <activity
-            android:name="com.example.cpr_assist.MainActivity"
+            android:name="com.roueva.cpr_assist.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -65,7 +67,13 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="cpr-assist" android:host="reset-password" />
+                <data android:scheme="cpr_assist" android:host="reset-password" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="cpr_assist" android:host="open" />
             </intent-filter>
 
             <intent-filter>
@@ -96,6 +104,10 @@
         <!-- Allow querying for Bluetooth devices -->
         <intent>
             <action android:name="android.bluetooth.device.action.FOUND" />
+        </intent>
+
+        <intent>
+            <action android:name="android.nfc.action.NDEF_DISCOVERED" />
         </intent>
     </queries>
 </manifest>

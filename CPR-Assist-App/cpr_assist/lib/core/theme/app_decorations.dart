@@ -261,4 +261,40 @@ class AppDecorations {
       ),
     ],
   );
+
+  /// Pulsing session dot on the Live CPR card.
+  /// [glow] adds a coloured spread shadow when the session is active.
+  static BoxDecoration sessionDot({required Color color, bool glow = false}) =>
+      BoxDecoration(
+        color:  color,
+        shape:  BoxShape.circle,
+        boxShadow: glow
+            ? [
+          BoxShadow(
+            color:        color.withValues(alpha: 0.5),
+            blurRadius:   AppSpacing.sm,
+            spreadRadius: AppSpacing.xxs,
+          ),
+        ]
+            : const [],
+      );
+
+  /// Subtle dark inner container — status bar and gauge overlays on the
+  /// dark CPR metrics card.
+  static BoxDecoration darkInnerContainer({
+    double radius = AppSpacing.cardRadius,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.textOnDark.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  /// Small dark stat tile — used inside dark gradient/solid cards.
+  static BoxDecoration darkStatTile({
+    double radius = AppSpacing.cardRadiusSm,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.textOnDark.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(radius),
+      );
 }

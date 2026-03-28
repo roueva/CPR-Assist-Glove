@@ -64,7 +64,7 @@ class BLEConnection {
   int    _sessionMode        = 0;   // 0=emergency 1=training 2=no_feedback
   bool   _sessionActive      = false;
   bool   _pulseCheckOpen     = false;
-// for ventilation duration tracking
+  int _connectTimestampMs = 0;
 
   // ── Rescuer vital sampling state ──────────────────────────────────────────
   int _lastVitalSnapshotMs = 0;
@@ -99,6 +99,13 @@ class BLEConnection {
   final SharedPreferences prefs;
   final void Function(String) onStatusUpdate;
   String? _lastStatus;
+
+  // Set by the app after first connection to re-sync mode/scenario on every reconnect.
+  void Function()? _onReconnectSync;
+
+  void setReconnectSyncCallback(void Function() cb) {
+    _onReconnectSync = cb;
+  }
 
   // ── Constructor ───────────────────────────────────────────────────────────
   BLEConnection({
@@ -168,6 +175,10 @@ class BLEConnection {
     }
   }
 
+  Future<void> requestEnableBluetooth() async {
+    await FlutterBluePlus.turnOn(); // Android only; iOS shows a system alert automatically
+  }
+
   // ── Scan ──────────────────────────────────────────────────────────────────
   Future<void> _performSingleScan() async {
     if (isConnected || _isScanning || _isConnecting) return;
@@ -188,12 +199,16 @@ class BLEConnection {
         await Future.delayed(AppConstants.zoomAnimationDelay);
       }
 
-      await FlutterBluePlus.startScan(timeout: AppConstants.bleScanTimeout);
+      await FlutterBluePlus.startScan(
+        timeout: AppConstants.bleScanTimeout,
+        withServices: [Guid(_kServiceUuid)],
+      );
 
       _scanSub = FlutterBluePlus.scanResults.listen(
             (results) {
           for (final r in results) {
-            if (r.device.platformName.contains(AppConstants.bleDeviceName)) {
+            if (r.advertisementData.serviceUuids
+                .any((u) => u.toString().toLowerCase() == _kServiceUuid)) {
               debugPrint('BLE: found ${r.device.platformName}');
               _stopScanAndConnect(r.device);
               return;
@@ -209,6 +224,8 @@ class BLEConnection {
       );
     } catch (e) {
       debugPrint('BLE scan error: $e');
+      _scanSub?.cancel();
+      _scanSub = null;
       _isScanning = false;
       _updateStatus('Scan Failed — Tap to Retry');
     }
@@ -342,6 +359,12 @@ class BLEConnection {
       _userDisconnected = false;
       _reconnectAttempts = 0;
       _updateStatus('Connected');
+      // Sync wall-clock time so offline sessions have correct timestamps
+      unawaited(sendSyncTime());
+      // Re-sync mode and scenario so glove state matches app state after reboot/reconnect.
+      // onReconnectSync is set by BLEConnection's owner (bleConnectionProvider) after first connect.
+      _onReconnectSync?.call();
+
       debugPrint('BLE: connected and subscribed to both characteristics');
     } catch (e) {
       debugPrint('BLE notification setup failed: $e');
@@ -531,6 +554,7 @@ class BLEConnection {
         // Biometrics
         'patientTemperature':  parsed.patientTemperature,
         'rescuerHRLastPause':  parsed.rescuerHRLastPause,
+        'rescuerTemperatureEnd': parsed.rescuerTemperatureEnd,
         'rescuerSpO2LastPause': parsed.rescuerSpO2LastPause,
         'ambientTempStart':    parsed.ambientTempStart,
         'ambientTempEnd':      parsed.ambientTempEnd,
@@ -678,6 +702,9 @@ class BLEConnection {
     }
   }
 
+  /// Called when SELFTEST_RESULT arrives AND was requested by the user.
+  void Function(Map<String, dynamic>)? onSelftestResult;
+
   // ── App → Glove write commands ────────────────────────────────────────────
   // All commands are 80-byte frames. Unused bytes are 0x00.
 
@@ -822,6 +849,7 @@ class BLEConnection {
     _liveBuffer.clear();
     _eventBuffer.clear();
     _eventCharacteristic = null;
+    _connectTimestampMs = 0;
 
     _connectedDevice?.disconnect().catchError(
           (Object e) => debugPrint('BLE disconnect error: $e'),

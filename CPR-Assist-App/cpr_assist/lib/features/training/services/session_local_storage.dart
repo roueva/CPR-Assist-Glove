@@ -19,6 +19,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SessionLocalStorage {
   static const String _indexKey    = 'session_local_keys';
   static const int    _maxSessions = 20;
+  /// Called when sessions are evicted due to the local storage limit.
+  /// Set this from your app entry point or wherever UIHelper is accessible.
+  static void Function(int evictedCount)? onEviction;
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
@@ -34,9 +37,18 @@ class SessionLocalStorage {
       final keys = _readIndex(prefs)..remove(key)..add(key);
 
       // Evict oldest if over limit
+      int evicted = 0;
       while (keys.length > _maxSessions) {
         final oldest = keys.removeAt(0);
         await prefs.remove(oldest);
+        evicted++;
+      }
+      if (evicted > 0) {
+        debugPrint(
+          'SessionLocalStorage: evicted $evicted old session(s) — '
+              'device storage limit ($_maxSessions) reached',
+        );
+        onEviction?.call(evicted);
       }
 
       await prefs.setString(_indexKey, jsonEncode(keys));

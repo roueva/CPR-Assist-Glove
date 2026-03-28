@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/training/screens/session_service.dart';
+import '../features/training/services/achievement_service.dart';
+import '../features/training/services/certificate_service.dart';
 import '../features/training/services/session_local_storage.dart';
 import 'app_providers.dart';
 
@@ -42,11 +44,14 @@ FutureProvider<List<SessionSummary>>((ref) async {
 
   // Deduplicate: prefer backend version (has id) over local
   final backendStarts = backendSessions
-      .map((s) => s.sessionStart?.millisecondsSinceEpoch)
+      .map((s) => s.sessionStart != null
+      ? s.sessionStart!.millisecondsSinceEpoch ~/ 1000
+      : null)
       .whereType<int>()
       .toSet();
   final onlyLocal = localSummaries.where((s) =>
-  !backendStarts.contains(s.sessionStart?.millisecondsSinceEpoch),
+  s.sessionStart == null ||
+      !backendStarts.contains(s.sessionStart!.millisecondsSinceEpoch ~/ 1000),
   ).toList();
 
   final merged = [...backendSessions, ...onlyLocal]
@@ -67,4 +72,25 @@ FutureProvider.family<_LeaderboardData, String>((ref, scenario) async {
   if (!isLoggedIn) return (<LeaderboardEntry>[], null);
   final service = ref.read(sessionServiceProvider);
   return service.fetchGlobalLeaderboard(scenario: scenario);
+});
+
+final currentStreakProvider = Provider<int>((ref) {
+  final summaries = ref.watch(sessionSummariesProvider).valueOrNull ?? [];
+  final training = summaries.where((s) => s.isTraining && s.totalGrade > 0).toList();
+  int streak = 0;
+  for (final s in training) {
+    if (s.totalGrade >= 75) streak++;
+    else break;
+  }
+  return streak;
+});
+
+final achievementsProvider = Provider<List<Achievement>>((ref) {
+  final summaries = ref.watch(sessionSummariesProvider).valueOrNull ?? [];
+  return AchievementService.compute(summaries);
+});
+
+final certificatesProvider = Provider<List<CertificateMilestone>>((ref) {
+  final summaries = ref.watch(sessionSummariesProvider).valueOrNull ?? [];
+  return CertificateService.compute(summaries);
 });

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cpr_assist/features/guide/screens/quiz_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -103,6 +104,17 @@ class GuideScreen extends StatelessWidget {
 
                   // ── 8. Critical reminders ────────────────────────────────
                   const _CriticalRemindersCard(),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ── 8b. Pediatric CPR ────────────────────────────────────
+                  const _SectionHeader(
+                    icon:  Icons.child_care_rounded,
+                    color: AppColors.cprOrange,
+                    title: 'Pediatric CPR',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const _PediatricCprCard(),
 
                   const SizedBox(height: AppSpacing.xl),
 
@@ -221,6 +233,39 @@ class _GuideHero extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          GestureDetector(
+            onTap: () => context.push(const QuizScreen()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical:   AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color:        AppColors.textOnDark.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppSpacing.buttonRadius),
+                border: Border.all(
+                  color: AppColors.textOnDark.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.quiz_outlined,
+                      size: AppSpacing.iconSm, color: AppColors.textOnDark),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Test your CPR knowledge',
+                    style: AppTypography.label(
+                        size: 13, color: AppColors.textOnDark),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Icon(Icons.arrow_forward_ios_rounded,
+                      size: 11, color: AppColors.textOnDark),
+                ],
+              ),
             ),
           ),
         ],
@@ -1448,6 +1493,181 @@ class _FindAedCta extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 8b. PEDIATRIC CPR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _PediatricCprCard extends StatelessWidget {
+  const _PediatricCprCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width:      double.infinity,
+      padding:    const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: AppDecorations.card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Key differences banner ───────────────────────────────────────
+          Container(
+            width:   double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color:        AppColors.cprOrange.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+            ),
+            child: Text(
+              'Pediatric CPR differs from adult CPR in depth, hand technique, '
+                  'and rescue breath volume. Use the Pediatric scenario on the glove '
+                  'for adjusted feedback thresholds.',
+              style: AppTypography.body(
+                size:  13,
+                color: AppColors.cprOrange,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // ── Column headers ────────────────────────────────────────────────
+          Row(
+            children: [
+              const Expanded(flex: 3, child: SizedBox()),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Adult',
+                  style: AppTypography.label(
+                    size:  11,
+                    color: AppColors.textDisabled,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Pediatric',
+                  style: AppTypography.label(
+                    size:  11,
+                    color: AppColors.cprOrange,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: AppSpacing.md, color: AppColors.divider),
+
+          // ── Spec comparison table ────────────────────────────────────────
+          const _PediatricSpecRow(
+            label: 'Compression depth',
+            adult: '5–6 cm',
+            pediatric: '4–5 cm',
+            highlight: true,
+          ),
+          const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          const _PediatricSpecRow(
+            label: 'Compression rate',
+            adult: '100–120 / min',
+            pediatric: '100–120 / min',
+          ),
+          const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          const _PediatricSpecRow(
+            label: 'Hand technique',
+            adult: 'Two hands, heel of hand',
+            pediatric: 'Two fingers (infant)\nor one hand (child)',
+            highlight: true,
+          ),
+          const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          const _PediatricSpecRow(
+            label: 'Compression : breaths',
+            adult: '30 : 2',
+            pediatric: '30 : 2 (single rescuer)\n15 : 2 (two rescuers)',
+            highlight: true,
+          ),
+          const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          const _PediatricSpecRow(
+            label: 'Rescue breath volume',
+            adult: 'Visible chest rise',
+            pediatric: 'Gentle puff — chest just rises',
+            highlight: true,
+          ),
+          const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          const _PediatricSpecRow(
+            label: 'AED pad placement',
+            adult: 'Chest and side/back',
+            pediatric: 'Use pediatric pads if available\n(front and back for infants)',
+            highlight: true,
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // ── Key reminders ────────────────────────────────────────────────
+          Text(
+            'Key reminders',
+            style: AppTypography.label(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const _BulletList(
+            bulletColor: AppColors.cprOrange,
+            items: [
+              'For infants (under 1 year): use two fingers on the centre of the chest, just below the nipple line.',
+              'For children (1–8 years): use one or two hands depending on the child\'s size.',
+              'Never tilt an infant\'s head back too far — use a neutral sniffing position to open the airway.',
+              'Paediatric cardiac arrest is most often caused by airway or breathing problems, not heart disease — ventilations are especially important.',
+              'Check for a pulse at the brachial artery (inner upper arm) in infants, carotid in children.',
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PediatricSpecRow extends StatelessWidget {
+  final String label;
+  final String adult;
+  final String pediatric;
+  final bool   highlight;
+
+  const _PediatricSpecRow({
+    required this.label,
+    required this.adult,
+    required this.pediatric,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: Text(label, style: AppTypography.bodyMedium(size: 13)),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            adult,
+            style: AppTypography.body(size: 13, color: AppColors.textSecondary),
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            pediatric,
+            style: AppTypography.bodyMedium(
+              size:  13,
+              color: highlight ? AppColors.cprOrange : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

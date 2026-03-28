@@ -119,23 +119,25 @@ module.exports = function (pool) {
             const userId = req.user.id;
             const result = await pool.query(
                 `SELECT id, mode, scenario,
-                        compression_count, correct_depth, correct_frequency,
-                        correct_recoil, depth_rate_combo, correct_posture,
-                        average_depth, average_frequency, average_effective_depth,
-                        peak_depth, depth_sd,depth_consistency, freq_consistency,
-                        leaning_count, over_force_count, too_deep_count,
-                        no_flow_intervals, rescuer_swap_count,
-                        hands_on_ratio, no_flow_time, fatigue_onset_index,
-                        ventilation_count, ventilation_compliance, correct_ventilations,
-                        pulse_checks_prompted, pulse_checks_complied, pulse_detected_final,
-                        rescuer_hr_last_pause, rescuer_spo2_last_pause,
-                        patient_temperature, ambient_temp_start, ambient_temp_end,
-                        session_duration, total_grade,
-                        session_start, session_end, note
-                 FROM cpr_sessions
-                 WHERE user_id = $1
-                 ORDER BY session_start DESC`,
-                [userId]
+            compression_count, correct_depth, correct_frequency,
+            correct_recoil, depth_rate_combo, correct_posture,
+            average_depth, average_frequency, average_effective_depth,
+            peak_depth, depth_sd, depth_consistency, freq_consistency,
+            leaning_count, over_force_count, too_deep_count,
+            no_flow_intervals, rescuer_swap_count,
+            hands_on_ratio, no_flow_time, fatigue_onset_index,
+            ventilation_count, ventilation_compliance, correct_ventilations,
+            pulse_checks_prompted, pulse_checks_complied, pulse_detected_final,
+            rescuer_hr_last_pause, rescuer_spo2_last_pause,
+            patient_temperature, ambient_temp_start, ambient_temp_end,
+            session_duration, total_grade,
+            session_start, session_end, note,
+            ROW_NUMBER() OVER (ORDER BY session_start ASC) AS session_number
+     FROM cpr_sessions
+     WHERE user_id = $1
+     ORDER BY session_start DESC
+     LIMIT $2 OFFSET $3`,
+                [userId, limit, offset]
             );
             res.json({ success: true, data: result.rows });
         } catch (err) {
@@ -513,23 +515,24 @@ module.exports = function (pool) {
         try {
             const result = await pool.query(
                 `SELECT id, mode, scenario,
-                        compression_count, correct_depth, correct_frequency,
-                        correct_recoil, depth_rate_combo, correct_posture,
-                        average_depth, average_frequency, average_effective_depth,
-                        peak_depth, depth_sd,depth_consistency, freq_consistency,
-                        leaning_count, over_force_count, too_deep_count,
-                        no_flow_intervals, rescuer_swap_count,
-                        hands_on_ratio, no_flow_time, fatigue_onset_index,
-                        ventilation_count, ventilation_compliance, correct_ventilations,
-                        pulse_checks_prompted, pulse_checks_complied, pulse_detected_final,
-                        rescuer_hr_last_pause, rescuer_spo2_last_pause,
-                        patient_temperature, ambient_temp_start, ambient_temp_end,
-                        session_duration, total_grade,
-                        session_start, session_end, note
-                 FROM cpr_sessions
-                 WHERE user_id = $1
-                 ORDER BY session_start DESC
-                 LIMIT $2 OFFSET $3`,
+            compression_count, correct_depth, correct_frequency,
+            correct_recoil, depth_rate_combo, correct_posture,
+            average_depth, average_frequency, average_effective_depth,
+            peak_depth, depth_sd, depth_consistency, freq_consistency,
+            leaning_count, over_force_count, too_deep_count,
+            no_flow_intervals, rescuer_swap_count,
+            hands_on_ratio, no_flow_time, fatigue_onset_index,
+            ventilation_count, ventilation_compliance, correct_ventilations,
+            pulse_checks_prompted, pulse_checks_complied, pulse_detected_final,
+            rescuer_hr_last_pause, rescuer_spo2_last_pause,
+            patient_temperature, ambient_temp_start, ambient_temp_end,
+            session_duration, total_grade,
+            session_start, session_end, note,
+            ROW_NUMBER() OVER (ORDER BY session_start ASC) AS session_number
+     FROM cpr_sessions
+     WHERE user_id = $1
+     ORDER BY session_start DESC
+     LIMIT $2 OFFSET $3`,
                 [userId, limit, offset]
             );
 

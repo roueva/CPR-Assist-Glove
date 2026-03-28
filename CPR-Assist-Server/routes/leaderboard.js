@@ -51,37 +51,36 @@ module.exports = function (pool) {
 
             if (!myRank) {
                 const myStatsResult = await pool.query(
-                    `SELECT
-       COUNT(s.id)::int                         AS session_count,
-       ROUND(AVG(s.total_grade)::numeric, 1)     AS avg_grade,
-       (
-         SELECT COUNT(DISTINCT u2.id) + 1
-         FROM cpr_sessions s2
-         JOIN users u2 ON u2.id = s2.user_id
-         WHERE s2.mode IN ('training', 'training_no_feedback')
-           AND s2.scenario = $2
-           AND s2.total_grade > 0
-         GROUP BY u2.id
-         HAVING AVG(s2.total_grade) > AVG(s.total_grade)
-       ) AS rank
-     FROM cpr_sessions s
-     WHERE s.user_id = $1
-       AND s.mode IN ('training', 'training_no_feedback')
-       AND s.scenario = $2
-       AND s.total_grade > 0`,
+                    `WITH ranked AS (
+       SELECT
+         u.id                                        AS user_id,
+         ROUND(AVG(s.total_grade)::numeric, 1)       AS avg_grade,
+         COUNT(s.id)::int                             AS session_count,
+         RANK() OVER (ORDER BY AVG(s.total_grade) DESC) AS rank
+       FROM cpr_sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.mode IN ('training', 'training_no_feedback')
+         AND s.scenario = $2
+         AND s.total_grade > 0
+       GROUP BY u.id
+       HAVING COUNT(s.id) >= 3
+     )
+     SELECT rank, avg_grade, session_count
+     FROM ranked
+     WHERE user_id = $1`,
                     [userId, scenario]
                 );
 
                 const myRow = myStatsResult.rows[0];
                 if (myRow && myRow.session_count >= 3) {
                     myRank = {
-                        rank: myRow.rank ?? 99,
+                        rank: parseInt(myRow.rank),
                         username: currentUsername,
                         session_count: myRow.session_count,
                         avg_grade: parseFloat(myRow.avg_grade),
                         is_current_user: true,
                     };
-                }
+                }   
             }
 
             res.json({ success: true, data: ranked, my_rank: myRank ?? null });

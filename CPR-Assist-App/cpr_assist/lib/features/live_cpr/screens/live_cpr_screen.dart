@@ -9,6 +9,7 @@ import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../../account/screens/login_screen.dart';
 import '../../training/services/session_local_storage.dart';
+import '../../training/widgets/pulse_check_overlay.dart';
 import '../../training/widgets/session_results.dart';
 import '../widgets/live_cpr_widgets.dart';
 
@@ -44,7 +45,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
   // ── Session timer ──────────────────────────────────────────────────────────
   Timer? _sessionTimer;
-  Timer? _swapBannerTimer;
 
   // ── Display state ──────────────────────────────────────────────────────────
   bool     _isSessionActive         = false;
@@ -61,11 +61,27 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int    _swapAlertNumber    = 0;
   bool   _showFatigueBadge   = false;
   int    _fatigueScore       = 0;
-  bool          _pulseCheckActive   = false;
+  final CprScenario _currentScenario = CprScenario.standardAdult;
+  bool        _recoilAchieved  = false;
+  int         _compressionInCycle = 0;
+  bool          _pulseCheckActive      = false;
   int?          _pulseCheckInterval;
-  int?          _pulseClassification; // null = pending, 0/1/2 = result
+  int?          _pulseClassification;   // null = pending, 0/1/2 = result
+  double?       _pulseCheckDetectedBpm;
+  int?          _pulseCheckConfidence;
+  Timer?        _pulseResultTimer;
+  double? _wristAngle;
+  int _swapSecondsRemaining = 10;
+  Timer? _swapCountdownTimer;
+
+  // ── Ventilation window state ───────────────────────────────────────────────
+  bool _showVentilationOverlay = false;
+  int  _ventilationCycleNumber = 0;
+  int  _ventilationsExpected   = 2;
+
   final List<double> _ppgBuffer = []; // ring buffer for ECG waveform
   static const int   _ppgBufferMax = 60;
+  StreamSubscription<Map<String, dynamic>>? _bleDataSubscription;
 
   // ── Vitals display state ───────────────────────────────────────────────────
   double? _heartRatePatient;
@@ -83,6 +99,38 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(bleConnectionProvider).connectionStatusNotifier.addListener(_onBleStatusChange);
     });
+
+    // Prompt Bluetooth on when screen first loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _promptBluetoothIfNeeded();
+    });
+
+    // Warn user if old sessions are silently evicted
+    SessionLocalStorage.onEviction = (count) {
+      if (mounted) {
+        UIHelper.showWarning(
+          context,
+          'Oldest $count local session(s) removed — storage limit reached. '
+              'Log in to sync sessions to the cloud.',
+        );
+      }
+    };
+    // ADD THIS — process BLE data via subscription, not StreamBuilder callback
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bleDataSubscription = ref
+          .read(bleConnectionProvider)
+          .dataStream
+          .listen((data) {
+        if (mounted) _updateDisplayValues(data);
+      });
+    });
+  }
+
+  Future<void> _promptBluetoothIfNeeded() async {
+    final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
+    if (status == 'Connected') return;
+    // Request BLE permissions + prompt system Bluetooth enable dialog
+    await ref.read(bleConnectionProvider).requestEnableBluetooth();
   }
 
   void _onBleStatusChange() {
@@ -96,31 +144,62 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
     if (!isLoggedIn) return;
     final locals  = await SessionLocalStorage.loadAll();
-    final pending = locals.where((d) => !d.syncedToBackend).toList();
+    final pending = locals.where((d) => d.id == null).toList();
     if (pending.isEmpty) return;
     final service = ref.read(sessionServiceProvider);
+    bool anySynced = false;
     for (final detail in pending) {
       final ok = await service.saveDetail(detail);
-      if (ok) await SessionLocalStorage.markSynced(detail);
+      if (ok) {
+        await SessionLocalStorage.markSynced(detail);
+        anySynced = true;
+      }
     }
-    if (pending.isNotEmpty) ref.invalidate(sessionSummariesProvider);
+    // Only refresh the session list when not in an active CPR session
+    if (anySynced && !_isSessionActive && mounted) {
+      ref.invalidate(sessionSummariesProvider);
+    }
+  }
+
+  AppMode? _nextMode(AppMode current, bool isLoggedIn) {
+    switch (current) {
+      case AppMode.emergency:
+        if (!isLoggedIn) {
+          AppDialogs.promptLogin(context);
+          return null;
+        }
+        return AppMode.training;
+      case AppMode.training:
+        return AppMode.trainingNoFeedback;
+      case AppMode.trainingNoFeedback:
+        return AppMode.emergency;
+    }
   }
 
   @override
   void dispose() {
     ref.read(bleConnectionProvider).connectionStatusNotifier.removeListener(_onBleStatusChange);
     _sessionTimer?.cancel();
-    _swapBannerTimer?.cancel();
+    _bleDataSubscription?.cancel();
+    _pulseResultTimer?.cancel();
+    _swapCountdownTimer?.cancel();
+    SessionLocalStorage.onEviction = null;
     super.dispose();
   }
 
   // ── BLE data handler ───────────────────────────────────────────────────────
-  Future<void> _updateDisplayValues(Map<String, dynamic> data) async {
+  void _updateDisplayValues(Map<String, dynamic> data) {
     // ── SESSION_START ──────────────────────────────────────────────────────
     if (data['isStartPing'] == true) {
       _sessionStartTime = DateTime.now();
+      final gloveModeInt = data['currentMode'] as int? ?? 0;
+      ref.read(appModeProvider.notifier).setModeFromGlove(gloveModeInt);
       ref.read(cprSessionActiveProvider.notifier).state = true;
+      final autoSwitch = ref.read(settingsProvider).autoSwitchToCPR;
+      if (autoSwitch) widget.onTabTapped(1);
+
       setState(() {
+        _compressionInCycle = 0;
         _isSessionActive         = true;
         _hasHandledEndPing       = false;
         _displayDepth            = 0.0;
@@ -130,8 +209,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _imuCalibrated           = false;
         _showSwapBanner          = false;
         _showFatigueBadge        = false;
+        _fatigueScore     = 0;
+        _showVentilationOverlay = false;
+        _ventilationCycleNumber = 0;
         _pulseCheckActive        = false;
         _pulseClassification     = null;
+        _pulseCheckDetectedBpm   = null;
+        _pulseCheckConfidence    = null;
         _ppgBuffer.clear();
       });
       _sessionTimer?.cancel();
@@ -155,14 +239,55 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _hasHandledEndPing   = true;
         _displayDepth        = 0.0;
         _displayFrequency    = 0.0;
+        _showVentilationOverlay = false;
         _pulseCheckActive    = false;
         _showSwapBanner      = false;
         _showFatigueBadge    = false;
+        final total = data['totalCompressions'] as int?;
+        if (total != null && total > 0) _displayCompressionCount = total;
       });
       _sessionTimer?.cancel();
       _sessionTimer = null;
-      _swapBannerTimer?.cancel();
       _handleSessionEnd(data);
+      return;
+    }
+
+    // ── Two-minute swap alert ──────────────────────────────────────────
+    if (data['isTwoMinAlert'] == true) {
+      _swapCountdownTimer?.cancel();
+      setState(() {
+        _showSwapBanner       = true;
+        _swapAlertNumber      = (data['twoMinAlertNumber'] as int?) ?? 1;
+        _swapSecondsRemaining = 10;
+      });
+      _swapCountdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) { t.cancel(); return; }
+        setState(() => _swapSecondsRemaining--);
+        if (_swapSecondsRemaining <= 0) {
+          t.cancel();
+          setState(() => _showSwapBanner = false);
+        }
+      });
+      return;
+    }
+
+
+    // ── Ventilation window ─────────────────────────────────────────────
+    if (data['isVentilationWindow'] == true) {
+      setState(() {
+        _showVentilationOverlay = true;
+        _ventilationCycleNumber = (data['cycleNumber'] as int?) ?? 1;
+        _ventilationsExpected   = (data['ventilationsExpected'] as int?) ?? 2;
+      });
+      return;
+    }
+
+    // ── Fatigue alert ──────────────────────────────────────────────────
+    if (data['isFatigueAlert'] == true) {
+      setState(() {
+        _showFatigueBadge = true;
+        _fatigueScore     = (data['fatigueAlertScore'] as int?) ?? 0;
+      });
       return;
     }
 
@@ -170,24 +295,21 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     if (data['isModeChange'] == true) {
       final newModeInt = data['currentMode'] as int? ?? 0;
       final newMode    = AppMode.fromBleValue(newModeInt);
-      if (!_isSessionActive) {
-        if (newMode.isTraining && !ref.read(authStateProvider).isLoggedIn) {
-          // Revert to Emergency — training requires login
-          ref.read(bleConnectionProvider).sendModeSet(AppMode.emergency.bleValue);
-          ref.read(appModeProvider.notifier).setMode(AppMode.emergency);
-          if (mounted) {
-            UIHelper.showWarning(context, 'Training mode requires an account.');
-            AppDialogs.promptLogin(context);
-          }
-        } else {
-          ref.read(appModeProvider.notifier).setModeFromGlove(newModeInt);
-          if (mounted) {
-            UIHelper.showSnackbar(
+      if (newMode.isTraining && !ref.read(authStateProvider).isLoggedIn) {
+        ref.read(bleConnectionProvider).sendModeSet(AppMode.emergency.bleValue);
+        ref.read(appModeProvider.notifier).setMode(AppMode.emergency);
+        if (mounted) {
+          UIHelper.showWarning(context, 'Training mode requires an account.');
+          AppDialogs.promptLogin(context);
+        }
+      } else {
+        ref.read(appModeProvider.notifier).setModeFromGlove(newModeInt);
+        if (mounted) {
+          UIHelper.showSnackbar(
             context,
             message: 'Mode: ${newMode.label}',
             icon: Icons.swap_horiz_rounded,
           );
-          }
         }
       }
       return;
@@ -200,27 +322,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return;
     }
 
-    // ── TWO_MIN_ALERT — rescuer swap prompt ────────────────────────────────
-    if (data['isTwoMinAlert'] == true) {
-      setState(() {
-        _showSwapBanner  = true;
-        _swapAlertNumber = data['twoMinAlertNumber'] as int? ?? 1;
-      });
-      _swapBannerTimer?.cancel();
-      _swapBannerTimer = Timer(const Duration(seconds: 10), () {
-        if (mounted) setState(() => _showSwapBanner = false);
-      });
-      return;
-    }
-
-    // ── FATIGUE_ALERT ──────────────────────────────────────────────────────
-    if (data['isFatigueAlert'] == true) {
-      setState(() {
-        _showFatigueBadge = true;
-        _fatigueScore     = data['fatigueAlertScore'] as int? ?? 0;
-      });
-      return;
-    }
 
     // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────────
     if (data['isPendingLocalData'] == true) {
@@ -231,16 +332,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
           message: '$count session(s) stored on glove — syncing now…',
           icon: Icons.sync_rounded,
         );
-        // Request each stored session by index
-        final ble = ref.read(bleConnectionProvider);
-        for (int i = 0; i < count; i++) {
-          await Future.delayed(const Duration(milliseconds: 300));
-          await ble.sendRequestSession(i);
-        }
+        _requestGloveSessions(count); // fire-and-forget, no await
       }
       return;
     }
-
     // ── PULSE_CHECK_START ──────────────────────────────────────────────────
     if (data['isPulseCheckStart'] == true) {
       setState(() {
@@ -253,19 +348,33 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── PULSE_CHECK_RESULT ─────────────────────────────────────────────────
     if (data['isPulseCheckResult'] == true) {
+      _pulseResultTimer?.cancel();
       setState(() {
         _pulseClassification = data['pulseClassification'] as int? ?? 0;
-        // Keep overlay visible for 3 s so user can read the result
+        _pulseCheckDetectedBpm = (data['detectedBPM'] as num?)?.toDouble();
+        _pulseCheckConfidence = data['confidencePct'] as int?;
       });
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _pulseCheckActive = false);
-      });
-      return;
+      // Auto-dismiss only for absent/uncertain — PRESENT stays until user decides
+      final classification = data['pulseClassification'] as int? ?? 0;
+      if (classification != 2) {
+        _pulseResultTimer = Timer(const Duration(seconds: 120), () {
+          if (mounted) setState(() => _pulseCheckActive = false);
+        });
+      }
     }
 
     // ── LIVE_STREAM data ───────────────────────────────────────────────────
     if (data['isContinuousData'] == true || data.containsKey('depth')) {
       _updateLiveValues(data);
+    }
+  }
+
+  Future<void> _requestGloveSessions(int count) async {
+    final ble = ref.read(bleConnectionProvider);
+    for (int i = 0; i < count; i++) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      await ble.sendRequestSession(i);
     }
   }
 
@@ -291,13 +400,33 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final tempU  = readPositive('rescuerTemperature');
     final sigQ   = readPositiveInt('rescuerSignalQuality');
 
+    // Compressions resuming — dismiss ventilation overlay
+    if (_showVentilationOverlay && data['isContinuousData'] == true) {
+      if ((data['compressionInCycle'] as int? ?? 0) > 0) {
+        setState(() => _showVentilationOverlay = false);
+      }
+    }
+
     if (!mounted) return;
     setState(() {
+      if (data.containsKey('wristAlignmentAngle')) {
+        _wristAngle = (data['wristAlignmentAngle'] as num?)?.toDouble();
+      }
+
       _isSessionActive = data['isContinuousData'] == true;
 
       if (data.containsKey('compressionCount')) {
         _displayCompressionCount = data['compressionCount'] as int;
       }
+
+      if (data.containsKey('recoilAchieved')) {
+        _recoilAchieved = data['recoilAchieved'] as bool;
+      }
+
+      if (data.containsKey('compressionInCycle')) {
+        _compressionInCycle = (data['compressionInCycle'] as int?) ?? 0;
+      }
+
       if (_isSessionActive) {
         if (data.containsKey('depth')) {
           _displayDepth     = (data['depth'] as num).toDouble();
@@ -339,12 +468,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   // ── Session end ────────────────────────────────────────────────────────────
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
-    final scenario    = ref.read(scenarioProvider);
     final isLoggedIn  = ref.read(authStateProvider).isLoggedIn;
     final service     = ref.read(sessionServiceProvider);
     final bleConn     = ref.read(bleConnectionProvider);
 
-    // ── Step 1: assemble the detail
     final detail = service.assembleDetail(
       summaryPacket:         data,
       events:                List.from(bleConn.compressionEvents),
@@ -353,15 +480,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       rescuerVitalSnapshots: List.from(bleConn.rescuerVitalSnapshots),
       sessionStart:          _sessionStartTime ?? DateTime.now(),
       sessionDurationSecs:   _displaySessionDuration.inSeconds,
-      mode:                  currentMode.sessionModeString,
-      scenario:              scenario.sessionScenarioString,
+      mode: currentMode.sessionModeString,
     );
 
-    // ── Step 2: save locally immediately — before any network call
-    await SessionLocalStorage.saveLocal(detail);
-
-    // Emergency mode: prompt login non-blocking AFTER session is assembled
-    if (currentMode.isEmergency && !isLoggedIn) {
+    if (currentMode == AppMode.emergency && !isLoggedIn) {
       if (!mounted) return;
       final shouldLogin = await AppDialogs.promptLogin(
         context,
@@ -370,9 +492,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (shouldLogin == true && mounted) {
         await context.push(const LoginScreen());
       }
-      // If still not logged in after prompt, just show summary without saving
+
+      // Re-check after the login flow
       final nowLoggedIn = ref.read(authStateProvider).isLoggedIn;
       if (!nowLoggedIn) {
+        await service.saveLocalOnly(detail);
         if (mounted) {
           context.push(SessionResultsScreen.fromDetail(detail: detail));
         }
@@ -380,21 +504,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       }
     }
 
-    // Training mode: must be logged in (enforced at mode switch, but double-check)
-    if (currentMode.isTraining && !isLoggedIn) {
-      if (mounted) UIHelper.showError(context, 'Session not saved — please log in.');
-      return;
-    }
-
+    if (!mounted) return;
     final saved = await service.saveDetail(detail);
     if (!mounted) return;
 
-    if (!saved) {
-      UIHelper.showError(context, 'Failed to save session. Check your connection.');
+    if (saved || currentMode.isTraining) {
+      context.push(SessionResultsScreen.fromDetail(detail: detail));
+    } else {
+      UIHelper.showError(
+          context, 'Failed to save session. Please check your connection.');
     }
-
-    // Always navigate to results — Emergency gets factual summary, Training gets grade
-    context.push(SessionResultsScreen.fromDetail(detail: detail));
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -413,16 +532,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         children: [
           Column(
             children: [
-              // ── Mode / scenario header ─────────────────────────────────
-              _ModeScenarioBanner(
-                mode:         currentMode,
-                scenario:     scenario,
-                sessionLocked: sessionLocked,
-                onScenarioToggle: sessionLocked ? null : () {
-                  final notifier = ref.read(scenarioProvider.notifier);
-                  notifier.toggle();
-                  // Tell glove about the new scenario targets
-                  final ble = ref.read(bleConnectionProvider);
+              _StatusBar(
+                mode:             currentMode,
+                scenario:         scenario,
+                sessionLocked:    sessionLocked,
+                onScenarioToggle:() {
+                  ref.read(scenarioProvider.notifier).toggle();
+                  final ble  = ref.read(bleConnectionProvider);
                   final next = ref.read(scenarioProvider);
                   ble.sendSetTargetDepth(
                     minMm: next.targetDepthMinMm,
@@ -433,8 +549,24 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                     maxBpm: next.targetRateMax,
                   );
                 },
-              ),
+                onModeToggle: sessionLocked ? null : () async {
+                  final next = _nextMode(currentMode, ref.read(authStateProvider).isLoggedIn);
+                  if (next == null) return;
 
+                  // Show checklist only when entering training (not when leaving it)
+                  if (next.isTraining && !next.isNoFeedback) {
+                    final showChecklist = ref.read(settingsProvider).showChecklist;
+                    if (showChecklist && mounted) {
+                      final ready = await AppDialogs.showTrainingChecklist(context);
+                      if (ready != true) return; // user tapped "Not Yet" — abort
+                    }
+                  }
+
+                  if (!mounted) return;
+                  ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
+                  ref.read(appModeProvider.notifier).setMode(next);
+                },
+              ),
               // ── IMU calibrating banner ─────────────────────────────────
               if (_isSessionActive && !_imuCalibrated)
                 const _CalibrationBanner(),
@@ -444,12 +576,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                 child: StreamBuilder<Map<String, dynamic>>(
                   stream: bleConnection.dataStream,
                   builder: (context, snapshot) {
-                    if (snapshot.hasData && snapshot.data != null) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) _updateDisplayValues(snapshot.data!);
-                      });
-                    }
-
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       child: Column(
@@ -464,18 +590,49 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                           const SizedBox(height: AppSpacing.md),
 
                           // 2. CPR metrics
-                          LiveCprMetricsCard(
-                            depth:            _displayDepth,
-                            frequency:        _displayFrequency,
-                            cprTime:          _displaySessionDuration,
-                            compressionCount: _displayCompressionCount,
-                            isSessionActive:  _isSessionActive,
-                            imuCalibrated:    _imuCalibrated,
-                            showFatigueBadge: _showFatigueBadge,
-                            fatigueScore:     _fatigueScore,
-                            scenario:         scenario,
-                          ),
+                        LiveCprMetricsCard(
+                          depth:               _displayDepth,
+                          frequency:           _displayFrequency,
+                          cprTime:             _displaySessionDuration,
+                          compressionCount:    _displayCompressionCount,
+                          isSessionActive:     _isSessionActive,
+                          scenario:            _currentScenario,
+                          recoilAchieved:      _recoilAchieved,
+                          imuCalibrated:       _imuCalibrated,
+                          showFatigueBadge:    _showFatigueBadge,
+                          fatigueScore:        _fatigueScore,
+                          compressionInCycle:  _compressionInCycle,
+                          isNoFeedback: currentMode.isNoFeedback,
+                        ),
                           const SizedBox(height: AppSpacing.md),
+
+// Wrist alignment warning
+                          if (_isSessionActive && _wristAngle != null && _wristAngle! > 15.0)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+                                decoration: BoxDecoration(
+                                  color:        AppColors.warningBg,
+                                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.back_hand_outlined, size: 14, color: AppColors.warning),
+                                    const SizedBox(width: AppSpacing.xs),
+                                    Expanded(
+                                      child: Text(
+                                        'Wrist angle ${_wristAngle!.toStringAsFixed(0)}° — keep arms straight',
+                                        style: AppTypography.label(size: 12, color: AppColors.warning),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
 
                           // 3. Rescuer vitals
                           VitalsCard(
@@ -494,6 +651,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
             ],
           ),
 
+          // ── Ventilation (BREATHE) banner ───────────────────────────────
+          if (_showVentilationOverlay)
+            Positioned(
+              top: 0, left: 0, right: 0,
+              child: _VentilationBanner(
+                cycleNumber:          _ventilationCycleNumber,
+                ventilationsExpected: _ventilationsExpected,
+                onDismiss: () => setState(() => _showVentilationOverlay = false),
+              ),
+            ),
           // ── Rescuer swap banner (auto-dismissing overlay) ──────────────
           if (_showSwapBanner)
             Positioned(
@@ -503,109 +670,35 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               child: _SwapBanner(
                 alertNumber: _swapAlertNumber,
                 onDismiss: () {
-                  _swapBannerTimer?.cancel();
                   setState(() => _showSwapBanner = false);
                 },
               ),
             ),
 
-          // ── Pulse check overlay (full-width, above cards) ──────────────
+// ── Pulse check overlay (full-width, above cards) ──────────────
           if (_pulseCheckActive)
             Positioned.fill(
-              child: _PulseCheckOverlay(
+              child: PulseCheckOverlay(
                 intervalNumber: _pulseCheckInterval,
                 classification: _pulseClassification,
                 ppgBuffer:      List.from(_ppgBuffer),
+                detectedBpm:    _pulseCheckDetectedBpm,
+                confidence:     _pulseCheckConfidence,
+                onContinueCpr:  () {
+                  _pulseResultTimer?.cancel();
+                  setState(() => _pulseCheckActive = false);
+                },
+                onStopCpr: () {
+                  _pulseResultTimer?.cancel();
+                  setState(() => _pulseCheckActive = false);
+                },
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _ModeScenarioBanner
-// Shows mode (colour-coded) + scenario toggle (Emergency only, idle only).
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ModeScenarioBanner extends StatelessWidget {
-  final AppMode     mode;
-  final CprScenario scenario;
-  final bool        sessionLocked;
-  final VoidCallback? onScenarioToggle;
-
-  const _ModeScenarioBanner({
-    required this.mode,
-    required this.scenario,
-    required this.sessionLocked,
-    this.onScenarioToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isEmergency = mode.isEmergency;
-    final bg    = isEmergency ? AppColors.primaryLight    : AppColors.warningBg;
-    final color = isEmergency ? AppColors.primary         : AppColors.warning;
-    final icon  = isEmergency ? Icons.emergency_outlined  : Icons.school_outlined;
-    final label = isEmergency ? 'Emergency Mode'          : mode.label;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical:   AppSpacing.sm,
-      ),
-      color: bg,
-      child: Row(
-        children: [
-          Icon(icon, size: AppSpacing.iconSm, color: color),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            label,
-            style: AppTypography.label(size: 13, color: color),
-          ),
-          const Spacer(),
-          // Adult/Pediatric toggle — Emergency mode only, locked during session
-          if (isEmergency)
-            GestureDetector(
-              onTap: sessionLocked ? null : onScenarioToggle,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical:   AppSpacing.xxs,
-                ),
-                decoration: AppDecorations.chip(
-                  color: color,
-                  bg:    sessionLocked
-                      ? AppColors.divider
-                      : color.withValues(alpha: 0.15),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.swap_horiz_rounded,
-                      size:  AppSpacing.iconSm - 4,
-                      color: sessionLocked ? AppColors.textDisabled : color,
-                    ),
-                    const SizedBox(width: AppSpacing.xxs),
-                    Text(
-                      scenario.label,
-                      style: AppTypography.label(
-                        size:  12,
-                        color: sessionLocked ? AppColors.textDisabled : color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
+        ],      // Stack children
+      ),        // Stack
+    );          // ColoredBox
+  }             // build()
+}               // _LiveCPRScreenState
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _CalibrationBanner — shown at session start until imuCalibrated = true
@@ -658,21 +751,35 @@ class _SwapBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      elevation: 8,
-      color: AppColors.warning,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical:   AppSpacing.sm,
+      elevation: 6,
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primaryDark, AppColors.primary],
+            begin: Alignment.centerLeft,
+            end:   Alignment.centerRight,
           ),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm,
+        ),
+        child: SafeArea(
+          bottom: false,
           child: Row(
             children: [
-              const Icon(
-                Icons.swap_horiz_rounded,
-                color: AppColors.textOnDark,
-                size:  AppSpacing.iconMd,
+              Container(
+                width:  36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color:  AppColors.textOnDark.withValues(alpha: 0.15),
+                  shape:  BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.people_alt_outlined,
+                  color: AppColors.textOnDark,
+                  size:  18,
+                ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -681,28 +788,25 @@ class _SwapBanner extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Consider switching rescuers',
+                      '2 minutes — consider switching rescuers',
                       style: AppTypography.label(
-                        size:  13,
-                        color: AppColors.textOnDark,
-                      ),
+                          size: 13, color: AppColors.textOnDark),
                     ),
                     Text(
-                      '2 minutes elapsed — fatigue may be setting in',
+                      'Rescuer fatigue reduces compression quality',
                       style: AppTypography.caption(
-                        color: AppColors.textOnDark.withValues(alpha: 0.85),
+                        color: AppColors.textOnDark.withValues(alpha: 0.75),
                       ),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(
-                  Icons.close_rounded,
-                  color: AppColors.textOnDark,
-                  size:  AppSpacing.iconSm,
-                ),
+                icon: const Icon(Icons.close_rounded,
+                    color: AppColors.textOnDark, size: AppSpacing.iconSm),
                 onPressed: onDismiss,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ],
           ),
@@ -713,192 +817,221 @@ class _SwapBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _PulseCheckOverlay — shown during 10-second pulse assessment window
+// _VentilationBanner — full-attention BREATHE prompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PulseCheckOverlay extends StatelessWidget {
-  final int?          intervalNumber;
-  final int?          classification; // null=pending, 0=absent, 1=uncertain, 2=present
-  final List<double>  ppgBuffer;
+class _VentilationBanner extends StatelessWidget {
+  final int          cycleNumber;
+  final int          ventilationsExpected;
+  final VoidCallback onDismiss;
 
-  const _PulseCheckOverlay({
-    this.intervalNumber,
-    this.classification,
-    this.ppgBuffer = const [],
+  const _VentilationBanner({
+    required this.cycleNumber,
+    required this.ventilationsExpected,
+    required this.onDismiss,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasPendingResult = classification == null;
-    final resultColor = classification == 2
-        ? AppColors.success
-        : classification == 1
-        ? AppColors.warning
-        : AppColors.emergencyRed;
-    final resultLabel = classification == 2
-        ? 'Pulse Detected'
-        : classification == 1
-        ? 'Uncertain — Continue CPR'
-        : 'No Pulse — Continue CPR';
-    final resultIcon = classification == 2
-        ? Icons.favorite_rounded
-        : Icons.favorite_border_rounded;
-
-    return Container(
-      color: AppColors.primaryDark.withValues(alpha: 0.92),
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.sensors_rounded,
-            size:  AppSpacing.iconXl + AppSpacing.md,
-            color: AppColors.textOnDark,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            hasPendingResult ? 'PULSE CHECK' : 'PULSE CHECK RESULT',
-            style: AppTypography.badge(
-              size:  12,
-              color: AppColors.textOnDark.withValues(alpha: 0.6),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            hasPendingResult
-                ? 'Assessing patient pulse…'
-                : resultLabel,
-            textAlign: TextAlign.center,
-            style: AppTypography.poppins(
-              size:   22,
-              weight: FontWeight.w700,
-              color:  hasPendingResult ? AppColors.textOnDark : resultColor,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _PpgWaveform(
-            buffer:      ppgBuffer,
-            resultColor: hasPendingResult ? AppColors.textOnDark : resultColor,
-            showPulse:   !hasPendingResult && classification == 2,
-          ),
-          if (!hasPendingResult) ...[
-            const SizedBox(height: AppSpacing.md),
-            Icon(resultIcon, size: AppSpacing.iconXl, color: resultColor),
-          ],
-          if (intervalNumber != null) ...[
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              'Check #$intervalNumber',
-              style: AppTypography.caption(
-                color: AppColors.textOnDark.withValues(alpha: 0.5),
+    return Material(
+      elevation: 8,
+      child: Container(
+        width: double.infinity,
+        color: AppColors.success,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.sm, AppSpacing.sm,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Row(
+            children: [
+              Container(
+                width:  40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color:  AppColors.textOnDark.withValues(alpha: 0.2),
+                  shape:  BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.air_rounded,
+                  color: AppColors.textOnDark,
+                  size:  22,
+                ),
               ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _PpgWaveform — scrolling ECG-style PPG waveform during pulse check
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PpgWaveform extends StatelessWidget {
-  final List<double> buffer;
-  final Color        resultColor;
-  final bool         showPulse;
-
-  const _PpgWaveform({
-    required this.buffer,
-    required this.resultColor,
-    this.showPulse = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width:  double.infinity,
-      height: 80,
-      child: CustomPaint(
-        painter: _WaveformPainter(
-          buffer:     buffer,
-          lineColor:  resultColor,
-          showPulse:  showPulse,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'GIVE $ventilationsExpected RESCUE BREATHS',
+                      style: AppTypography.label(
+                        size: 13, color: AppColors.textOnDark,
+                      ),
+                    ),
+                    Text(
+                      'Cycle $cycleNumber · Tilt head, lift chin, seal and blow',
+                      style: AppTypography.caption(
+                        color: AppColors.textOnDark.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    color: AppColors.textOnDark, size: AppSpacing.iconSm),
+                onPressed: onDismiss,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _WaveformPainter extends CustomPainter {
-  final List<double> buffer;
-  final Color        lineColor;
-  final bool         showPulse;
+class _StatusBar extends StatelessWidget {
+  final AppMode       mode;
+  final CprScenario   scenario;
+  final bool          sessionLocked;
+  final VoidCallback? onScenarioToggle;
+  final VoidCallback? onModeToggle;
 
-  const _WaveformPainter({
-    required this.buffer,
-    required this.lineColor,
-    required this.showPulse,
+  const _StatusBar({
+    required this.mode,
+    required this.scenario,
+    required this.sessionLocked,
+    this.onScenarioToggle,
+    this.onModeToggle,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    if (buffer.isEmpty) {
-      // Draw a flat baseline when no data yet
-      final paint = Paint()
-        ..color = lineColor.withValues(alpha: 0.3)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke;
-      canvas.drawLine(
-        Offset(0, size.height / 2),
-        Offset(size.width, size.height / 2),
-        paint,
-      );
-      return;
-    }
+  Widget build(BuildContext context) {
+    final isEmergency = mode.isEmergency;
+    final modeColor   = isEmergency ? AppColors.primary : AppColors.warning;
+    final modeBg      = isEmergency ? AppColors.primaryLight : AppColors.warningBg;
+    final modeIcon    = isEmergency ? Icons.emergency_outlined : Icons.school_outlined;
+    final modeLabel   = isEmergency ? 'Emergency' : mode.label;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical:   AppSpacing.xs,
+      ),
+      color: modeBg,
+      child: Row(
+        children: [
+          // ── Mode icon + tappable label ───────────────────────────────────
+          Icon(modeIcon, size: 14, color: modeColor),
+          const SizedBox(width: AppSpacing.xs),
+          GestureDetector(
+            onTap: () => AppDialogs.showAlert(
+              context,
+              title:   isEmergency ? 'Emergency Mode' : 'Training Mode',
+              message: isEmergency
+                  ? 'Emergency mode guides you through a real cardiac arrest. '
+                  'No login required. Session saved locally and synced later.'
+                  : mode.isNoFeedback
+                  ? 'No-Feedback mode suppresses all glove feedback. '
+                  'Your session is still fully recorded and graded.'
+                  : 'Training mode records and grades your CPR on a manikin. '
+                  'Requires a logged-in account.',
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(modeLabel,
+                    style: AppTypography.label(size: 12, color: modeColor)),
+                const SizedBox(width: 2),
+                Icon(Icons.info_outline_rounded,
+                    size: 11, color: modeColor.withValues(alpha: 0.6)),
+              ],
+            ),
+          ),
 
-    final paint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+          // ── No-feedback inline pill ──────────────────────────────────────
+          if (mode.isNoFeedback) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color:        AppColors.primaryDark,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.visibility_off_rounded,
+                      size: 10, color: AppColors.textOnDark),
+                  const SizedBox(width: 3),
+                  Text('No feedback',
+                      style: AppTypography.label(
+                          size: 10, color: AppColors.textOnDark)),
+                ],
+              ),
+            ),
+          ],
 
-    final path = Path();
-    final n    = buffer.length;
+          const SizedBox(width: AppSpacing.xs),
+          if (!sessionLocked && onModeToggle != null)
+            GestureDetector(
+              onTap: onModeToggle,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs, vertical: AppSpacing.xxs),
+                decoration: BoxDecoration(
+                  color:        modeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+                  border: Border.all(color: modeColor.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.swap_vert_rounded, size: 11, color: modeColor),
+                    const SizedBox(width: 2),
+                    Text('Mode', style: AppTypography.label(size: 11, color: modeColor)),
+                  ],
+                ),
+              ),
+            ),
 
-    // Normalise 0–1 values to canvas height with 10% padding
-    const padFraction = 0.1;
-    final drawH = size.height * (1 - 2 * padFraction);
-    final padY  = size.height * padFraction;
+          const Spacer(),
 
-    for (int i = 0; i < n; i++) {
-      final x = i / (n - 1 == 0 ? 1 : n - 1) * size.width;
-      final y = padY + drawH * (1.0 - buffer[i].clamp(0.0, 1.0));
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-
-    canvas.drawPath(path, paint);
-
-    // Glow under the line when pulse detected
-    if (showPulse) {
-      final glowPaint = Paint()
-        ..color = lineColor.withValues(alpha: 0.15)
-        ..strokeWidth = 8.0
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawPath(path, glowPaint);
-    }
+          // ── Scenario toggle (both modes) ─────────────────────────────────
+          GestureDetector(
+            onTap: sessionLocked ? null : onScenarioToggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+              decoration: AppDecorations.chip(
+                color: modeColor,
+                bg:    sessionLocked
+                    ? AppColors.divider
+                    : modeColor.withValues(alpha: 0.15),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.swap_horiz_rounded,
+                      size:  AppSpacing.iconSm - 4,
+                      color: sessionLocked
+                          ? AppColors.textDisabled
+                          : modeColor),
+                  const SizedBox(width: AppSpacing.xxs),
+                  Text(scenario.label,
+                      style: AppTypography.label(
+                          size:  12,
+                          color: sessionLocked
+                              ? AppColors.textDisabled
+                              : modeColor)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant _WaveformPainter old) =>
-      old.buffer != buffer || old.lineColor != lineColor || old.showPulse != showPulse;
 }

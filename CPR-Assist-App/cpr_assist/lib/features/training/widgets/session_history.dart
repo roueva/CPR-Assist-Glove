@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
+import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
+import '../../account/screens/login_screen.dart';
+import '../../account/screens/registration_screen.dart';
 import '../screens/session_service.dart';
+import '../services/export_service.dart';
+import 'export_bottom_sheet.dart';
 import 'session_results.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,8 +29,8 @@ import 'session_results.dart';
 
 Color gradeColor(double grade) {
   if (grade >= 90) return AppColors.success;
-  if (grade >= 70) return AppColors.info;
-  if (grade >= 50) return AppColors.warning;
+  if (grade >= 75) return AppColors.info;
+  if (grade >= 55) return AppColors.warning;
   return AppColors.error;
 }
 
@@ -44,17 +49,100 @@ class SessionHistoryScreen extends ConsumerStatefulWidget {
 class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
   String _filter = 'All';
 
-  static const _filters = ['All', 'Recent', 'Emergency', 'Training', 'Excellent', 'Good'];
+  bool             _selectionMode = false;
+  Set<String>      _selectedIds   = {};
+
+  void _enterSelectionMode(String id) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds   = {id};
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _selectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds   = {};
+    });
+  }
+
+  void _selectAll(List<SessionSummary> all) {
+    setState(() {
+      _selectedIds = all
+          .where((s) => s.id != null)
+          .map((s) => s.id.toString())
+          .toSet();
+    });
+  }
+
+  static const _filters = ['All', 'Recent', 'Emergency', 'Training', 'No-Feedback', 'Excellent', 'Good'];
 
   List<SessionSummary> _apply(List<SessionSummary> all) {
     switch (_filter) {
       case 'Excellent': return all.where((s) => s.totalGrade >= 90).toList();
-      case 'Good':      return all.where((s) => s.totalGrade >= 70 && s.totalGrade < 90).toList();
+      case 'Good':      return all.where((s) => s.totalGrade >= 75 && s.totalGrade < 90).toList();
       case 'Recent':    return all.take(10).toList();
       case 'Emergency': return all.where((s) => s.isEmergency).toList();
-      case 'Training':  return all.where((s) => s.isTraining).toList();
+      case 'No-Feedback': return all.where((s) => s.isNoFeedback).toList();
+      case 'Training':    return all.where((s) => s.isTraining && !s.isNoFeedback).toList();
       default:          return all;
     }
+  }
+
+  Future<void> _exportSelected() async {
+    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+    final selected  = summaries
+        .where((s) => s.id != null && _selectedIds.contains(s.id.toString()))
+        .toList();
+    if (selected.isEmpty) return;
+
+    UIHelper.showSnackbar(context,
+        message: 'Preparing export…', icon: Icons.download_outlined);
+
+    bool ok = false;
+    try {
+      ok = await ExportService.exportSessionsAsCsv(selected);
+    } catch (_) {}
+
+    if (!mounted) return;
+    if (ok) {
+      UIHelper.showSuccess(context, 'Export ready');
+    } else {
+      UIHelper.showError(context, 'Export failed. Please try again.');
+    }
+    _clearSelection();
+  }
+
+  Future<void> _deleteSelected(BuildContext context) async {
+    final confirmed = await AppDialogs.showDestructiveConfirm(
+      context,
+      icon:         Icons.delete_outline_rounded,
+      iconColor:    AppColors.emergencyRed,
+      iconBg:       AppColors.emergencyBg,
+      title:        'Delete ${_selectedIds.length} sessions?',
+      message:      'This permanently removes the selected sessions.',
+      confirmLabel: 'Delete',
+      confirmColor: AppColors.emergencyRed,
+      cancelLabel:  'Cancel',
+    );
+    if (confirmed != true || !mounted) return;
+    final service = ref.read(sessionServiceProvider);
+    for (final id in _selectedIds) {
+      await service.deleteSession(int.parse(id));
+    }
+    ref.invalidate(sessionSummariesProvider);
+    _clearSelection();
   }
 
   @override
@@ -63,22 +151,66 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
-      appBar: AppBar(
-        backgroundColor:       AppColors.primaryLight,
-        elevation:             0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.primary,
+        appBar: _selectionMode
+            ? AppBar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnDark,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: AppColors.textOnDark),
+            onPressed: _clearSelection,
           ),
-          onPressed: context.pop,
+          title: Text(
+            '${_selectedIds.length} selected',
+            style: AppTypography.heading(size: 18, color: AppColors.textOnDark),
+          ),
+            actions: [
+              // Select all
+              IconButton(
+                icon:    const Icon(Icons.select_all_rounded, color: AppColors.textOnDark),
+                tooltip: 'Select all',
+                onPressed: () {
+                  final all = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+                  _selectAll(all);
+                },
+              ),
+              IconButton(
+                icon:    const Icon(Icons.download_outlined, color: AppColors.textOnDark),
+                tooltip: 'Export selected',
+                onPressed: _selectedIds.isEmpty ? null : () => _exportSelected(),
+              ),
+              IconButton(
+                icon:    const Icon(Icons.delete_outline_rounded, color: AppColors.textOnDark),
+                tooltip: 'Delete selected',
+                onPressed: _selectedIds.isEmpty ? null : () => _deleteSelected(context),
+              ),
+            ],
+        )
+            : AppBar(
+          backgroundColor: AppColors.primaryLight,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
+            onPressed: context.pop,
+          ),
+          title: Text(
+            'Session History',
+            style: AppTypography.heading(size: 20, color: AppColors.primary),
+          ),
+          actions: [
+            IconButton(
+              icon:    const Icon(Icons.download_outlined, color: AppColors.primary),
+              tooltip: 'Export all sessions',
+              onPressed: () {
+                final all = summaries.valueOrNull ?? [];
+                if (all.isEmpty) return;
+                ExportBottomSheet.showForMultipleSessions(context, sessions: all);
+              },
+            ),
+          ],
         ),
-        title: Text(
-          'Session History',
-          style: AppTypography.heading(size: 20, color: AppColors.primary),
-        ),
-      ),
       body: summaries.when(
         loading: () => const Center(
           child: CircularProgressIndicator(
@@ -89,15 +221,23 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
           message: e.toString(),
           onRetry: () => ref.invalidate(sessionSummariesProvider),
         ),
-        data: (all) => all.isEmpty
-            ? const _EmptyState()
-            : _SessionsList(
-          all:      all,
-          filtered: _apply(all),
-          filter:   _filter,
-          filters:  _filters,
-          onFilter: (f) => setState(() => _filter = f),
-        ),
+          data: (all) {
+            if (all.isEmpty) {
+              final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
+              return _EmptyState(isLoggedIn: isLoggedIn);
+            }
+            return _SessionsList(
+              all:           all,
+              filtered:      _apply(all),
+              filter:        _filter,
+              filters:       _filters,
+              onFilter:      (f) => setState(() => _filter = f),
+              selectionMode: _selectionMode,
+              selectedIds:   _selectedIds,
+              onLongPress:   _enterSelectionMode,
+              onToggle:      _toggleSelection,
+            );
+          },
       ),
     );
   }
@@ -111,6 +251,11 @@ class _SessionsList extends StatelessWidget {
   final String                  filter;
   final List<String>            filters;
   final void Function(String)   onFilter;
+  // ADD these:
+  final bool                    selectionMode;
+  final Set<String>             selectedIds;
+  final void Function(String)   onLongPress;
+  final void Function(String)   onToggle;
 
   const _SessionsList({
     required this.all,
@@ -118,6 +263,10 @@ class _SessionsList extends StatelessWidget {
     required this.filter,
     required this.filters,
     required this.onFilter,
+    required this.selectionMode,
+    required this.selectedIds,
+    required this.onLongPress,
+    required this.onToggle,
   });
 
   @override
@@ -130,17 +279,41 @@ class _SessionsList extends StatelessWidget {
           child: ListView.builder(
             padding:   const EdgeInsets.all(AppSpacing.md),
             itemCount: filtered.length,
-              itemBuilder: (context, i) {
-                final session   = filtered[i];
-                final sessionId = session.id;
-                final card = SessionCard(
-                  session:       session,
-                  sessionNumber: all.indexOf(session) + 1,
-                );
-                if (sessionId == null) return card;
+            itemBuilder: (context, i) {
+              final session   = filtered[i];
+              final idStr     = session.id?.toString() ?? '';
+              final isSelected = selectionMode && selectedIds.contains(idStr);
+              final idx          = all.indexOf(session);
+              final sessionNumber = session.sessionNumber ?? (all.length - all.indexOf(session));
+              // Previous session in chronological order = next item in the list (older)
+              final prevGrade = (idx + 1 < all.length && all[idx + 1].isTraining)
+                  ? all[idx + 1].totalGrade
+                  : null;
 
-                return Dismissible(
-                  key:       ValueKey(sessionId),
+              final card = SessionCard(
+                session:       session,
+                sessionNumber: sessionNumber,
+                prevGrade:     prevGrade,
+                selectionMode: selectionMode,
+                isSelected:    isSelected,
+                onLongPress:   session.id != null
+                    ? () => _showContextMenu(
+                  context,
+                  session:       session,
+                  sessionNumber: sessionNumber,
+                  onSelect:      () => onLongPress(idStr),
+                )
+                    : null,
+                onToggle:      session.id != null
+                    ? () => onToggle(idStr)
+                    : null,
+              );
+
+              // Don't wrap in Dismissible during selection mode
+              if (selectionMode || session.id == null) return card;
+
+              return Dismissible(
+                key:       ValueKey(session.id),
                   direction: DismissDirection.endToStart,
                   background: Container(
                     alignment: Alignment.centerRight,
@@ -167,7 +340,7 @@ class _SessionsList extends StatelessWidget {
                   onDismissed: (_) async {
                     final c       = ProviderScope.containerOf(context);
                     final service = c.read(sessionServiceProvider);
-                    final ok      = await service.deleteSession(sessionId);
+                    final ok = await service.deleteSession(session.id!);
                     if (ok) {
                       c.invalidate(sessionSummariesProvider);
                     } else {
@@ -186,6 +359,117 @@ class _SessionsList extends StatelessWidget {
   }
 }
 
+Future<void> _showContextMenu(
+    BuildContext context, {
+      required SessionSummary session,
+      required int            sessionNumber,
+      required VoidCallback   onSelect,
+    }) async {
+  await showModalBottomSheet<void>(
+    context:          context,
+    useRootNavigator: true,
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              margin:     const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              width:      40,
+              height:     4,
+              decoration: BoxDecoration(
+                color:        AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.check_circle_outline_rounded),
+            title:   const Text('Select'),
+            onTap: () {
+              context.pop();
+              onSelect();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.notes_rounded),
+            title:   Text(
+              session.note?.isNotEmpty == true ? 'Edit note' : 'Add note',
+            ),
+            onTap: () async {
+              final container = ProviderScope.containerOf(context);
+              context.pop();
+              final result = await AppDialogs.showNoteEditor(
+                context,
+                initialNote: session.note,
+              );
+              if (result == null) return;
+              final service = container.read(sessionServiceProvider);
+              final ok = await service.updateNote(
+                session.id!,
+                result.isEmpty ? null : result,
+              );
+              if (ok) {
+                container.invalidate(sessionSummariesProvider);
+                if (context.mounted) {
+                  UIHelper.showSuccess(context, 'Note saved');
+                }
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(
+              Icons.download_outlined,
+              color: AppColors.primary,
+            ),
+            title: const Text('Export this session'),
+            onTap: () async {
+              context.pop();
+              await ExportService.exportSingleSessionCsv(session);
+            },
+          ),
+          ListTile(
+            leading: const Icon(
+              Icons.delete_outline_rounded,
+              color: AppColors.emergencyRed,
+            ),
+            title: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.emergencyRed),
+            ),
+            onTap: () async {
+              final container = ProviderScope.containerOf(context);
+              context.pop();
+              final confirmed = await AppDialogs.showDestructiveConfirm(
+                context,
+                icon:         Icons.delete_outline_rounded,
+                iconColor:    AppColors.emergencyRed,
+                iconBg:       AppColors.emergencyBg,
+                title:        'Delete Session?',
+                message:      'This permanently removes Session $sessionNumber.',
+                confirmLabel: 'Delete',
+                confirmColor: AppColors.emergencyRed,
+                cancelLabel:  'Cancel',
+              );
+              if (confirmed != true) return;
+              final service = container.read(sessionServiceProvider);
+              final ok = await service.deleteSession(session.id!);
+              if (ok) {
+                container.invalidate(sessionSummariesProvider);
+                if (context.mounted) {
+                  UIHelper.showSuccess(context, 'Session deleted');
+                }
+              }
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ),
+    ),
+  );
+}
+
 // ── Stats header ───────────────────────────────────────────────────────────
 
 class _StatsHeader extends StatelessWidget {
@@ -201,7 +485,7 @@ class _StatsHeader extends StatelessWidget {
         trainingSessions.length;
     final total =
     sessions.fold<int>(0, (sum, s) => sum + s.compressionCount);
-    final avgDisplay = trainingSessions.isEmpty ? '—' : '${avg.toStringAsFixed(0)}%';
+    final avgDisplay = trainingSessions.isEmpty ? 'No data' : '${avg.toStringAsFixed(0)}%';
 
     return Container(
       margin:  const EdgeInsets.all(AppSpacing.md),
@@ -292,31 +576,78 @@ class _FilterBar extends StatelessWidget {
 // ── Empty / error states ───────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  final bool isLoggedIn;
+  const _EmptyState({required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
+    if (!isLoggedIn) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width:  AppSpacing.iconXl + AppSpacing.lg,
+                height: AppSpacing.iconXl + AppSpacing.lg,
+                decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+                child: const Icon(Icons.history_rounded,
+                    size: AppSpacing.iconLg, color: AppColors.primary),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('No sessions saved yet',
+                  style: AppTypography.subheading(color: AppColors.textSecondary)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Emergency sessions are saved locally on this device.\nLog in to track progress and sync across devices.',
+                textAlign: TextAlign.center,
+                style: AppTypography.body(color: AppColors.textDisabled),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => context.push(const LoginScreen()),
+                  child: const Text('Log In'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextButton(
+                onPressed: () => context.push(const RegistrationScreen()),
+                child: const Text('Create an account'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Logged in, no sessions yet
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.history_rounded,
-            size:  AppSpacing.iconXl + AppSpacing.md,
-            color: AppColors.textDisabled,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'No Sessions Yet',
-            style: AppTypography.subheading(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Complete your first session\nto see your progress here',
-            textAlign: TextAlign.center,
-            style: AppTypography.body(color: AppColors.textDisabled),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width:  AppSpacing.iconXl + AppSpacing.lg,
+              height: AppSpacing.iconXl + AppSpacing.lg,
+              decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+              child: const Icon(Icons.fitness_center_rounded,
+                  size: AppSpacing.iconLg, color: AppColors.primary),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('No Sessions Yet',
+                style: AppTypography.subheading(color: AppColors.textSecondary)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Complete your first training or emergency session\nto see your performance data here.',
+              textAlign: TextAlign.center,
+              style: AppTypography.body(color: AppColors.textDisabled),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -369,14 +700,25 @@ class _ErrorState extends StatelessWidget {
 // Used by SessionHistoryScreen and LeaderboardScreen.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class SessionCard extends ConsumerWidget  {
+class SessionCard extends ConsumerWidget {
   final SessionSummary session;
   final int            sessionNumber;
+  final double?        prevGrade;
+  // ADD:
+  final bool           selectionMode;
+  final bool           isSelected;
+  final VoidCallback?  onLongPress;
+  final VoidCallback?  onToggle;
 
   const SessionCard({
     super.key,
     required this.session,
     required this.sessionNumber,
+    this.prevGrade,
+    this.selectionMode = false,
+    this.isSelected    = false,
+    this.onLongPress,
+    this.onToggle,
   });
 
   @override
@@ -384,15 +726,23 @@ class SessionCard extends ConsumerWidget  {
     final color = gradeColor(session.totalGrade);
     final canDelete = session.id != null;
 
-    final card = Container(
+    final card = AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: AppDecorations.card(),
+      decoration: isSelected
+          ? AppDecorations.card().copyWith(
+        border: Border.all(color: AppColors.primary, width: 2),
+      )
+          : AppDecorations.card(),
       child: Material(
         color:        AppColors.surfaceWhite,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          onTap: () async {
+          onLongPress: onLongPress,
+          onTap: selectionMode
+              ? onToggle   // in selection mode, tap toggles
+              : () async {
             if (session.id == null) {
               context.push(SessionResultsScreen.fromSummary(
                   summary: session, sessionNumber: sessionNumber));
@@ -419,11 +769,25 @@ class SessionCard extends ConsumerWidget  {
               children: [
                 // ── Header ───────────────────────────────────────────────
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: selectionMode
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Session $sessionNumber',
-                      style: AppTypography.subheading(color: AppColors.primary),
+                    if (selectionMode) ...[
+                      Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        color: isSelected ? AppColors.primary : AppColors.textDisabled,
+                        size:  AppSpacing.iconSm,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    Expanded(
+                      child: Text(
+                        'Session $sessionNumber',
+                        style: AppTypography.subheading(color: AppColors.primary),
+                      ),
                     ),
                     session.isEmergency
                         ? Container(
@@ -440,19 +804,41 @@ class SessionCard extends ConsumerWidget  {
                         style: AppTypography.label(color: AppColors.emergencyRed),
                       ),
                     )
-                        : Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.chipPaddingH,
-                        vertical:   AppSpacing.chipPaddingV,
-                      ),
-                      decoration: AppDecorations.chip(
-                        color: color,
-                        bg:    color.withValues(alpha: 0.12),
-                      ),
-                      child: Text(
-                        '${session.totalGrade.toStringAsFixed(0)}%',
-                        style: AppTypography.label(color: color),
-                      ),
+                        : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Trend arrow — only for training sessions with a previous grade
+                        if (!session.isEmergency && prevGrade != null) ...[
+                          Icon(
+                            session.totalGrade > prevGrade!
+                                ? Icons.arrow_upward_rounded
+                                : session.totalGrade < prevGrade!
+                                ? Icons.arrow_downward_rounded
+                                : Icons.remove_rounded,
+                            size:  AppSpacing.iconSm - 4,
+                            color: session.totalGrade > prevGrade!
+                                ? AppColors.success
+                                : session.totalGrade < prevGrade!
+                                ? AppColors.error
+                                : AppColors.textDisabled,
+                          ),
+                          const SizedBox(width: AppSpacing.xxs),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.chipPaddingH,
+                            vertical:   AppSpacing.chipPaddingV,
+                          ),
+                          decoration: AppDecorations.chip(
+                            color: color,
+                            bg:    color.withValues(alpha: 0.12),
+                          ),
+                          child: Text(
+                            '${session.totalGrade.toStringAsFixed(0)}%',
+                            style: AppTypography.label(color: color),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

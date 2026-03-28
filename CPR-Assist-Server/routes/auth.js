@@ -235,6 +235,24 @@ function initializeAuthRoutes(pool) {
         }
     );
 
+    // Delete account — removes user and cascades to all sessions
+    router.delete('/account', authenticate, async (req, res) => {
+        try {
+            const userId = req.user.id;
+            const result = await pool.query(
+                'DELETE FROM users WHERE id = $1 RETURNING id',
+                [userId]
+            );
+            if (result.rowCount === 0) {
+                return res.status(404).json({ success: false, message: 'User not found.' });
+            }
+            res.json({ success: true, message: 'Account deleted.' });
+        } catch (err) {
+            console.error('Delete account error:', err.message);
+            res.status(500).json({ success: false, message: 'Failed to delete account.' });
+        }
+    });
+
     return router;
 }
 

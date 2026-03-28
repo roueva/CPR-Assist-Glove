@@ -11,6 +11,7 @@ import '../../../features/account/screens/help_about_screen.dart';
 import '../../../features/account/screens/login_screen.dart';
 import '../../../providers/session_provider.dart';
 import '../../dev/dev_preview_screen.dart';
+import '../../training/screens/achievements_screen.dart';
 import '../../training/screens/leaderboard_screen.dart';
 import '../../training/screens/session_service.dart';
 import '../../training/widgets/session_history.dart';
@@ -125,6 +126,27 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
     // Panel closes itself, AuthState update rebuilds the panel to show "Log In"
   }
 
+  Future<void> _handleDeleteAccount() async {
+    _close();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
+
+    final confirmed = await AppDialogs.confirmDeleteAccount(context);
+    if (confirmed != true || !mounted) return;
+
+    final container = ProviderScope.containerOf(context);
+    final service   = container.read(sessionServiceProvider);
+    final ok        = await service.deleteAccount();
+    if (!mounted) return;
+
+    if (ok) {
+      await container.read(authStateProvider.notifier).logout();
+      if (mounted) UIHelper.showSuccess(context, 'Account deleted');
+    } else {
+      if (mounted) UIHelper.showError(context, 'Failed to delete account. Try again.');
+    }
+  }
+
 
   // ── Mode switch ────────────────────────────────────────────────────────────
   //
@@ -161,6 +183,11 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
         goingToTraining ? AppMode.training : AppMode.emergency,
       );
       HapticFeedback.lightImpact();
+      // Show checklist only when entering Training — once, as a reminder
+      if (goingToTraining && mounted) {
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (mounted) AppDialogs.showTrainingChecklist(context);
+      }
     }
   }
 
@@ -198,10 +225,11 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
               child: FractionalTranslation(
                 translation: Offset(_slideAnim.value, 0),
                 child: _PanelContent(
-                  onClose:        _close,
-                  onModeSwitch:   _handleModeSwitch,
-                  onLogout:       _handleLogout,
-                  onPush:         _push,
+                  onClose:         _close,
+                  onModeSwitch:    _handleModeSwitch,
+                  onLogout:        _handleLogout,
+                  onDeleteAccount: _handleDeleteAccount,
+                  onPush:          _push,
                 ),
               ),
             ),
@@ -221,13 +249,14 @@ class _PanelContent extends ConsumerWidget {
   final VoidCallback                  onModeSwitch;
   final VoidCallback                  onLogout;
   final Future<void> Function(Widget) onPush;
+  final VoidCallback onDeleteAccount;
 
   const _PanelContent({
     required this.onClose,
     required this.onModeSwitch,
     required this.onLogout,
     required this.onPush,
-
+    required this.onDeleteAccount,
   });
 
   @override
@@ -236,7 +265,7 @@ class _PanelContent extends ConsumerWidget {
     final currentMode = ref.watch(appModeProvider);
     final isCprActive = ref.watch(cprSessionActiveProvider);
     final isLoggedIn  = authState.isLoggedIn;
-    final isTraining  = currentMode == AppMode.training;
+    final isTraining  = currentMode.isTraining;
 
     return Container(
         decoration: AppDecorations.sidePanel(),
@@ -256,11 +285,15 @@ class _PanelContent extends ConsumerWidget {
 
             const _PanelDivider(),
 
-            // ── Stats row (Training mode + logged-in only) ─────────────────
-            if (isLoggedIn && isTraining) ...[
+            // ── Stats row (logged-in only) ─────────────────────────────────
+            if (isLoggedIn) ...[
               _StatsRow(),
               const _PanelDivider(),
             ],
+
+            // ── Pending sync banner ────────────────────────────────────────
+            if (isLoggedIn)
+              _SyncPendingRow(onPush: onPush),
 
             // ── Menu items ─────────────────────────────────────────────────
             Expanded(
@@ -284,8 +317,8 @@ class _PanelContent extends ConsumerWidget {
 
                   const _PanelDivider(),
 
-                  // Leaderboard: Training mode only
-                  if (isLoggedIn && isTraining)
+                  // Leaderboard
+                  if (isLoggedIn)
                     _PanelItem(
                       icon:  Icons.leaderboard_outlined,
                       label: 'Leaderboard',
@@ -300,6 +333,13 @@ class _PanelContent extends ConsumerWidget {
                       icon:  Icons.history_rounded,
                       label: 'My Sessions',
                       onTap: () => onPush(const SessionHistoryScreen()),
+                    ),
+
+                  if (isLoggedIn)
+                    _PanelItem(
+                      icon:  Icons.emoji_events_outlined,
+                      label: 'Achievements',
+                      onTap: () => onPush(const AchievementsScreen()),
                     ),
 
                   _PanelItem(
@@ -334,6 +374,15 @@ class _PanelContent extends ConsumerWidget {
                       onTap: () => onPush(
                         const LoginScreen(),
                       ),
+                    ),
+                  if (isLoggedIn)
+                    _PanelItem(
+                      icon:        Icons.delete_forever_rounded,
+                      iconColor:   AppColors.emergencyRed,
+                      label:       'Delete Account',
+                      labelColor:  AppColors.emergencyRed,
+                      showChevron: false,
+                      onTap:       onDeleteAccount,
                     ),
                   const _PanelDivider(),
                   _PanelItem(
@@ -518,10 +567,13 @@ class _ProfileHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsRow extends ConsumerWidget {
+  const _StatsRow();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaries = ref.watch(sessionSummariesProvider);
-    final stats = summaries.whenOrNull(data: (s) => UserStats.fromSessions(s));
+    final stats     = summaries.whenOrNull(data: (s) => UserStats.fromSessions(s));
+    final streak    = ref.watch(currentStreakProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -538,7 +590,9 @@ class _StatsRow extends ConsumerWidget {
           _StatCard(
             icon:  Icons.bar_chart_rounded,
             label: 'Avg Score',
-            value: stats?.averageGradeFormatted ?? '—',
+            value: (stats == null || stats.averageGrade == 0)
+                ? '—'
+                : stats.averageGradeFormatted,
           ),
           const SizedBox(width: AppSpacing.sm),
           _StatCard(
@@ -548,8 +602,76 @@ class _StatsRow extends ConsumerWidget {
                 ? '${stats.bestGrade.toStringAsFixed(0)}%'
                 : '—',
           ),
+          const SizedBox(width: AppSpacing.sm),
+          _StatCard(
+            icon:  Icons.local_fire_department_rounded,
+            label: 'Streak',
+            value: streak > 0 ? '$streak 🔥' : '—',
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _SyncPendingRow extends ConsumerWidget {
+  final Future<void> Function(Widget) onPush;
+  const _SyncPendingRow({required this.onPush});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summaries = ref.watch(sessionSummariesProvider);
+    final pending = summaries.valueOrNull
+        ?.where((s) => s.id == null)
+        .length ?? 0;
+
+    if (pending == 0) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => ref.invalidate(sessionSummariesProvider),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical:   AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width:  AppSpacing.touchTargetMin - AppSpacing.sm,
+                  height: AppSpacing.touchTargetMin - AppSpacing.sm,
+                  decoration: AppDecorations.iconRounded(
+                    bg:     AppColors.warning.withValues(alpha: 0.1),
+                    radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_upload_outlined,
+                    size:  AppSpacing.iconSm,
+                    color: AppColors.warning,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.cardPadding - AppSpacing.xxs),
+                Expanded(
+                  child: Text(
+                    '$pending session${pending == 1 ? '' : 's'} pending sync',
+                    style: AppTypography.bodyMedium(
+                      size:  14,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.sync_rounded,
+                  size:  AppSpacing.iconSm,
+                  color: AppColors.warning,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const _PanelDivider(),
+      ],
     );
   }
 }
