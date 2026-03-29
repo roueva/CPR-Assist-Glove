@@ -363,8 +363,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final failed   = <String>[];
     final warnings = <String>[];
     for (int i = 0; i < sensorNames.length; i++) {
-      if (critical & (1 << i) != 0) failed.add(sensorNames[i]);
-      else if (warn & (1 << i) != 0) warnings.add(sensorNames[i]);
+      if (critical & (1 << i) != 0) {
+        failed.add(sensorNames[i]);
+      } else if (warn & (1 << i) != 0) warnings.add(sensorNames[i]);
     }
     final allPassed = failed.isEmpty && warnings.isEmpty;
     final parts = <String>[];
@@ -668,7 +669,7 @@ class _GloveTile extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                _IconBox(icon: Icons.watch_rounded),
+                const _IconBox(icon: Icons.watch_rounded),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(

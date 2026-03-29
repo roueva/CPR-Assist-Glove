@@ -34,8 +34,11 @@ class AchievementService {
     // Consecutive streak (newest-first, sessions already sorted that way)
     int streak = 0;
     for (final s in training) {
-      if (s.totalGrade >= 75) streak++;
-      else break;
+      if (s.totalGrade >= 75) {
+        streak++;
+      } else {
+        break;
+      }
     }
 
     final bestGrade = training.isEmpty

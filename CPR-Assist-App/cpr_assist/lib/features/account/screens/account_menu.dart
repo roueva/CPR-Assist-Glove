@@ -287,7 +287,7 @@ class _PanelContent extends ConsumerWidget {
 
             // ── Stats row (logged-in only) ─────────────────────────────────
             if (isLoggedIn) ...[
-              _StatsRow(),
+              const _StatsRow(),
               const _PanelDivider(),
             ],
 

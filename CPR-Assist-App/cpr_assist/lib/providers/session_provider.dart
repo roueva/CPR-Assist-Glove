@@ -79,8 +79,11 @@ final currentStreakProvider = Provider<int>((ref) {
   final training = summaries.where((s) => s.isTraining && s.totalGrade > 0).toList();
   int streak = 0;
   for (final s in training) {
-    if (s.totalGrade >= 75) streak++;
-    else break;
+    if (s.totalGrade >= 75) {
+      streak++;
+    } else {
+      break;
+    }
   }
   return streak;
 });
