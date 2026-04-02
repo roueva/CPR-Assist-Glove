@@ -22,7 +22,7 @@ const { body, validationResult } = require('express-validator');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VALID_MODES = ['emergency', 'training', 'training_no_feedback'];
-const VALID_SCENARIOS = ['standard_adult', 'standard_adult_nofeedback', 'pediatric', 'timed_endurance'];
+const VALID_SCENARIOS = ['standard_adult', 'standard_adult_nofeedback', 'pediatric'];
 
 module.exports = function (pool) {
     const router = express.Router();
@@ -259,6 +259,25 @@ module.exports = function (pool) {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // ── Enforce per-user session cap ──────────────────────────────────
+            const SESSION_CAP = 500;
+            const capCheck = await client.query(
+                'SELECT COUNT(*)::int AS n FROM cpr_sessions WHERE user_id = $1',
+                [req.user.id]
+            );
+            if (capCheck.rows[0].n >= SESSION_CAP) {
+                await client.query(
+                    `DELETE FROM cpr_sessions
+                     WHERE id = (
+                       SELECT id FROM cpr_sessions
+                       WHERE user_id = $1
+                       ORDER BY session_start ASC
+                       LIMIT 1
+                     )`,
+                    [req.user.id]
+                );
+            }
 
             // ── Ensure unique index exists (idempotent) ────────────────────────
             // Done here rather than in db.js to ensure it exists even on fresh deploys.

@@ -296,6 +296,10 @@ BEGIN
     WHERE constraint_name = 'cpr_sessions_user_id_fkey'
       AND table_name = 'cpr_sessions'
   ) THEN
+    -- Clean up orphaned sessions before adding FK
+    DELETE FROM cpr_sessions
+    WHERE user_id NOT IN (SELECT id FROM users);
+    
     ALTER TABLE cpr_sessions
       ADD CONSTRAINT cpr_sessions_user_id_fkey
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;

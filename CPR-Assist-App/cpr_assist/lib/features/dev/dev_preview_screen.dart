@@ -683,21 +683,6 @@ class DevPreviewScreen extends StatelessWidget {
             ),
           ]),
 
-          const _Divider(),
-          _NavTile(
-            icon:      Icons.timer_outlined,
-            iconColor: AppColors.primary,
-            label:     'Timed Endurance — Adult (83%)',
-            subtitle:  'timed_endurance · 8 min · fatigue onset · rescuer swap',
-            onTap: () => context.push(SessionResultsScreen.fromDetail(
-              detail: _mockTrainingAdult(
-                grade: 83, compressions: 310, correctDepth: 264,
-                correctFrequency: 289, avgDepth: 5.3, avgFrequency: 109.0,
-                durationSecs: 480, scenario: 'timed_endurance',
-              ),
-            )),
-          ),
-
 // ── Session Results — Emergency ──────────────────────────────────
           const _SectionHeader(label: 'Session Results — Emergency'),
           _PreviewCard(children: [
@@ -709,6 +694,47 @@ class DevPreviewScreen extends StatelessWidget {
               onTap: () => context.push(SessionResultsScreen.fromDetail(
                 detail: _mockEmergencyAdult(pulseDetected: true),
               )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.monitor_heart_outlined,
+              label:    'CPR Metrics Card — Calibrating',
+              subtitle: 'imuCalibrated = false overlay shown',
+              onTap:    () => context.push(
+                const _LiveCprWidgetsPreview(calibrating: true),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.monitor_heart_outlined,
+              label:    'CPR Metrics Card — No Feedback',
+              subtitle: 'trainingNoFeedback mode',
+              onTap:    () => context.push(
+                const _LiveCprWidgetsPreview(noFeedback: true),
+              ),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.favorite_rounded,
+              iconColor: AppColors.success,
+              label:    'Last Pulse Check — Pulse Detected',
+              subtitle: 'Emergency mode strip, 94% confidence',
+              onTap:    () => context.push(const _LastPulseCheckStripPreview()),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.heart_broken_rounded,
+              iconColor: AppColors.error,
+              label:    'Last Pulse Check — No Pulse',
+              subtitle: 'Emergency mode strip',
+              onTap:    () => context.push(const _LastPulseCheckStripPreviewAbsent()),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.swap_vert_rounded,
+              label:    'Status Bar — Emergency + Pediatric',
+              subtitle: 'All three control areas visible',
+              onTap:    () => context.push(const _StatusBarPreview()),
             ),
             const _Divider(),
             _NavTile(
@@ -1156,10 +1182,14 @@ class _PersonalBestPreviewScreen extends StatelessWidget {
 class _LiveCprWidgetsPreview extends StatelessWidget {
   final bool        idle;
   final CprScenario scenario;
+  final bool        calibrating;
+  final bool        noFeedback;
 
   const _LiveCprWidgetsPreview({
-    this.idle     = false,
-    this.scenario = CprScenario.standardAdult,
+    this.idle        = false,
+    this.scenario    = CprScenario.standardAdult,
+    this.calibrating = false,
+    this.noFeedback  = false,
   });
 
   @override
@@ -1185,6 +1215,8 @@ class _LiveCprWidgetsPreview extends StatelessWidget {
           compressionCount: idle ? 0 : 142,
           isSessionActive:  !idle,
           scenario:         scenario,
+          imuCalibrated:  !calibrating,
+          isNoFeedback:   noFeedback,
         ),
       ),
     );
@@ -1352,10 +1384,15 @@ class _DepthBarPreviewState extends State<_DepthBarPreview> {
         ),
         child: Column(
           children: [
-            SizedBox(
-              height: 260,
-              child: Center(child: AnimatedDepthBar(depth: _depth)),
-            ),
+          Container(
+          height: 260,
+          decoration: BoxDecoration(
+            color: AppColors.cprCardBg,
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Center(child: AnimatedDepthBar(depth: _depth)),
+        ),
             const SizedBox(height: AppSpacing.xl),
             Text(
               'Depth: ${_depth.toStringAsFixed(1)} cm',
@@ -1412,9 +1449,18 @@ class _RotatingArrowPreviewState extends State<_RotatingArrowPreview> {
         ),
         child: Column(
           children: [
-            SizedBox(
-              height: 180,
-              child: Center(child: RotatingArrow(frequency: _freq)),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.cprCardBg,
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+              ),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.md,
+              ),
+              child: AspectRatio(
+                aspectRatio: 1.6, // wide enough for semicircle arc + labels
+                child: FrequencyArcGauge(frequency: _freq),
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text(
@@ -1896,4 +1942,69 @@ class _NavTile extends StatelessWidget {
       ),
     );
   }
+}
+class _LastPulseCheckStripPreview extends StatelessWidget {
+  const _LastPulseCheckStripPreview();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.screenBgGrey,
+    appBar: const _PreviewAppBar(title: 'Last Pulse Check Strip'),
+    body: Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(children: [
+        LastPulseCheckStrip(
+          classification: 2,
+          detectedBpm:    72,
+          confidence:     94,
+          temperature:    36.8,
+          intervalNumber: 1,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const LastPulseCheckStrip(
+          classification: 1,
+          confidence:     55,
+          intervalNumber: 2,
+        ),
+      ]),
+    ),
+  );
+}
+
+class _LastPulseCheckStripPreviewAbsent extends StatelessWidget {
+  const _LastPulseCheckStripPreviewAbsent();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.screenBgGrey,
+    appBar: const _PreviewAppBar(title: 'Last Pulse Check — Absent'),
+    body: Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: const LastPulseCheckStrip(
+        classification: 0,
+        confidence:     88,
+        intervalNumber: 1,
+      ),
+    ),
+  );
+}
+
+class _StatusBarPreview extends StatelessWidget {
+  const _StatusBarPreview();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.screenBgGrey,
+    appBar: const _PreviewAppBar(title: 'Live CPR Status Bar'),
+    body: Column(children: [
+      // Emergency + Adult
+      // (StatusBar is private — note to self: make it internal-public
+      // or replicate the visual here with a note)
+      const Padding(
+        padding: EdgeInsets.all(AppSpacing.md),
+        child: Text(
+          'Status bar is embedded in LiveCPRScreen.\n'
+              'Use the full screen preview to test it.',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ]),
+  );
 }

@@ -33,7 +33,7 @@ class SessionDetail {
   /// "emergency" | "training" | "training_no_feedback"
   final String mode;
 
-  /// "standard_adult" | "standard_adult_nofeedback" | "pediatric" | "timed_endurance"
+  /// "standard_adult" | "pediatric"
   final String scenario;
 
   // ── Glove-side totals (from SESSION_END packet) ───────────────────────────

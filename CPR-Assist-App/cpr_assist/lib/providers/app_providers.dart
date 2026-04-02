@@ -144,9 +144,9 @@ class AppModeNotifier extends StateNotifier<AppMode> {
   /// Cycle forward through all three modes (for app-side mode toggle button).
   void cycleMode() {
     switch (state) {
-      case AppMode.emergency:          state = AppMode.training;           break;
-      case AppMode.training:           state = AppMode.trainingNoFeedback; break;
-      case AppMode.trainingNoFeedback: state = AppMode.emergency;          break;
+      case AppMode.emergency: state = AppMode.training; break;
+      case AppMode.training:
+      case AppMode.trainingNoFeedback: state = AppMode.emergency; break;
     }
   }
 }
@@ -175,15 +175,13 @@ final cprSessionActiveProvider = StateProvider<bool>((ref) => false);
 
 enum CprScenario {
   standardAdult,
-  pediatric,
-  timedEndurance;
+  pediatric;
 
   /// Byte value sent in SCENARIO_CHANGE (0x0C) and 0xFD SET_SCENARIO.
   int get bleValue {
     switch (this) {
       case CprScenario.standardAdult:  return 0;
       case CprScenario.pediatric:      return 1;
-      case CprScenario.timedEndurance: return 2;
     }
   }
 
@@ -192,7 +190,6 @@ enum CprScenario {
     switch (this) {
       case CprScenario.standardAdult: return 'standard_adult';
       case CprScenario.pediatric:     return 'pediatric';
-      case CprScenario.timedEndurance: return 'timed_endurance';
     }
   }
 
@@ -201,7 +198,6 @@ enum CprScenario {
     switch (this) {
       case CprScenario.standardAdult:  return 'Adult';
       case CprScenario.pediatric:      return 'Pediatric';
-      case CprScenario.timedEndurance: return 'Timed';
     }
   }
 
@@ -210,7 +206,6 @@ enum CprScenario {
     switch (this) {
       case CprScenario.standardAdult: return 'Adult — 5–6 cm';
       case CprScenario.pediatric:     return 'Pediatric — 4–5 cm';
-      case CprScenario.timedEndurance: return 'Timed — 2 min endurance';
     }
   }
 
@@ -218,14 +213,12 @@ enum CprScenario {
   int get targetDepthMinMm {
     switch (this) {
       case CprScenario.pediatric:      return 40;
-      case CprScenario.timedEndurance:
       case CprScenario.standardAdult:  return 50;
     }
   }
   int get targetDepthMaxMm {
     switch (this) {
       case CprScenario.pediatric:      return 50;
-      case CprScenario.timedEndurance:
       case CprScenario.standardAdult:  return 60;
     }
   }
@@ -242,7 +235,6 @@ enum CprScenario {
   static CprScenario fromBleValue(int value) {
     switch (value) {
       case 1:  return CprScenario.pediatric;
-      case 2:  return CprScenario.timedEndurance;
       default: return CprScenario.standardAdult;
     }
   }
@@ -251,7 +243,6 @@ enum CprScenario {
   static CprScenario fromString(String value) {
     switch (value) {
       case 'pediatric':       return CprScenario.pediatric;
-      case 'timed_endurance': return CprScenario.timedEndurance;
       default:                return CprScenario.standardAdult;
     }
   }
@@ -270,11 +261,9 @@ class ScenarioNotifier extends StateNotifier<CprScenario> {
 
   /// Toggle between adult and pediatric and timed endurance.
   void toggle() {
-    switch (state) {
-      case CprScenario.standardAdult:  state = CprScenario.pediatric;      break;
-      case CprScenario.pediatric:      state = CprScenario.timedEndurance;  break;
-      case CprScenario.timedEndurance: state = CprScenario.standardAdult;   break;
-    }
+    state = state == CprScenario.standardAdult
+        ? CprScenario.pediatric
+        : CprScenario.standardAdult;
   }
 
   /// Called when glove fires SCENARIO_CHANGE (0x0C).
@@ -552,7 +541,8 @@ class AppSettings {
   final bool   notifyOnDisconnect;
   final String compressionUnit; // 'cm' | 'in'
   final bool   showChecklist;   // true = show pre-session checklist before training
-  final String defaultScenario; // 'standard_adult' | 'pediatric' | 'timed_endurance'
+  final String defaultScenario; // 'standard_adult' | 'pediatric'
+  final bool   noFeedbackMode;  // true = trainingNoFeedback when entering training
 
   const AppSettings({
     this.hapticFeedback      = true,
@@ -565,6 +555,7 @@ class AppSettings {
     this.compressionUnit     = 'cm',
     this.showChecklist       = true,
     this.defaultScenario = 'standard_adult',
+    this.noFeedbackMode = false,
   });
 
   AppSettings copyWith({
@@ -578,6 +569,7 @@ class AppSettings {
     String? compressionUnit,
     bool?   showChecklist,
     String? defaultScenario,
+    bool?   noFeedbackMode,
   }) =>
       AppSettings(
         hapticFeedback:     hapticFeedback     ?? this.hapticFeedback,
@@ -590,6 +582,7 @@ class AppSettings {
         compressionUnit:    compressionUnit    ?? this.compressionUnit,
         showChecklist:      showChecklist      ?? this.showChecklist,
         defaultScenario:    defaultScenario    ?? this.defaultScenario,
+        noFeedbackMode:     noFeedbackMode     ?? this.noFeedbackMode,
       );
 }
 
@@ -606,6 +599,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _kUnit        = 'settings_compressionUnit';
   static const _kChecklist = 'settings_showChecklist';
   static const _kDefaultScenario = 'settings_defaultScenario';
+  static const _kNoFeedback = 'settings_noFeedbackMode';
 
   SettingsNotifier(this._prefs) : super(_load(_prefs));
 
@@ -620,6 +614,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     compressionUnit:    p.getString(_kUnit)     ?? 'cm',
     showChecklist: p.getBool(_kChecklist) ?? true,
     defaultScenario: p.getString(_kDefaultScenario) ?? 'standard_adult',
+    noFeedbackMode: p.getBool(_kNoFeedback) ?? false,
   );
 
   Future<void> setHapticFeedback(bool v)     async {
@@ -662,6 +657,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     state = state.copyWith(defaultScenario: v);
     await _prefs.setString(_kDefaultScenario, v);
   }
+
+  Future<void> setNoFeedbackMode(bool v) async {
+    state = state.copyWith(noFeedbackMode: v);
+    await _prefs.setBool(_kNoFeedback, v);
+  }
   Future<void> resetToDefaults() async {
     state = const AppSettings();
     await _prefs.remove(_kHaptic);
@@ -674,6 +674,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     await _prefs.remove(_kUnit);
     await _prefs.remove(_kChecklist);
     await _prefs.remove(_kDefaultScenario);
+    await _prefs.remove(_kNoFeedback);
   }
 }
 

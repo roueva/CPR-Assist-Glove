@@ -12,7 +12,8 @@ class AchievementsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final achievements = ref.watch(achievementsProvider);
-    final authState    = ref.watch(authStateProvider);
+    final streak = ref.watch(currentStreakProvider);
+    ref.watch(authStateProvider);
     final unlocked     = achievements.where((a) => a.unlocked).length;
 
     return Scaffold(
@@ -67,6 +68,23 @@ class AchievementsScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(width: AppSpacing.md),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        streak > 0 ? '$streak 🔥' : '—',
+                        style: AppTypography.numericDisplay(
+                            size: 22, color: AppColors.textOnDark),
+                      ),
+                      Text(
+                        'streak',
+                        style: AppTypography.label(
+                            size: 10,
+                            color: AppColors.textOnDark.withValues(alpha: 0.7)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -85,27 +103,9 @@ class AchievementsScreen extends ConsumerWidget {
               itemCount: achievements.length,
               itemBuilder: (context, i) {
                 final a        = achievements[i];
-                final bgColor  = a.unlocked ? AppColors.primaryLight  : AppColors.screenBgGrey;
-                final txtColor = a.unlocked ? AppColors.primary       : AppColors.textDisabled;
-                final capColor = a.unlocked ? AppColors.textSecondary : AppColors.textDisabled;
                 return Container(
                   padding:    const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color:        bgColor,
-                    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    border: Border.all(
-                      color: a.unlocked
-                          ? AppColors.primary.withValues(alpha: 0.2)
-                          : AppColors.divider,
-                    ),
-                    boxShadow: a.unlocked
-                        ? [BoxShadow(
-                      color:      AppColors.primary.withValues(alpha: 0.08),
-                      blurRadius: 8,
-                      offset:     const Offset(0, 2),
-                    )]
-                        : const [],
-                  ),
+                    decoration: AppDecorations.achievementCard(unlocked: a.unlocked),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -113,13 +113,13 @@ class AchievementsScreen extends ConsumerWidget {
                           style: const TextStyle(fontSize: 30)),
                       const SizedBox(height: AppSpacing.xs),
                       Text(a.title,
-                          style:     AppTypography.label(size: 12, color: txtColor),
+                          style:     AppTypography.label(size: 12, color: a.unlocked ? AppColors.primary : AppColors.textDisabled),
                           textAlign: TextAlign.center,
                           maxLines:  2,
                           overflow:  TextOverflow.ellipsis),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(a.description,
-                          style:     AppTypography.caption(color: capColor),
+                          style:     AppTypography.caption(color: a.unlocked ? AppColors.textSecondary : AppColors.textDisabled),
                           textAlign: TextAlign.center,
                           maxLines:  2,
                           overflow:  TextOverflow.ellipsis),
@@ -171,23 +171,7 @@ class _CertificatesList extends ConsumerWidget {
           return Container(
             margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
             padding:    const EdgeInsets.all(AppSpacing.md),
-            decoration: cert.earned
-                ? BoxDecoration(
-              color:        AppColors.warningBg,
-              borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-              border: Border.all(
-                  color: AppColors.warning.withValues(alpha: 0.35)),
-              boxShadow: [BoxShadow(
-                color:      AppColors.warning.withValues(alpha: 0.08),
-                blurRadius: 8,
-                offset:     const Offset(0, 2),
-              )],
-            )
-                : BoxDecoration(
-              color:        AppColors.screenBgGrey,
-              borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-              border: Border.all(color: AppColors.divider),
-            ),
+            decoration: AppDecorations.certificateCard(earned: cert.earned),
             child: Row(
               children: [
                 Text(

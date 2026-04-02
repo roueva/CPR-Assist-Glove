@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -61,7 +62,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int    _swapAlertNumber    = 0;
   bool   _showFatigueBadge   = false;
   int    _fatigueScore       = 0;
-  final CprScenario _currentScenario = CprScenario.standardAdult;
   bool        _recoilAchieved  = false;
   int         _compressionInCycle = 0;
   bool          _pulseCheckActive      = false;
@@ -127,12 +127,34 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   }
 
   Future<void> _promptBluetoothIfNeeded() async {
-    final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
+    final ble = ref.read(bleConnectionProvider);
+    final status = ble.connectionStatusNotifier.value;
     if (status == 'Connected') return;
-    // Request BLE permissions + prompt system Bluetooth enable dialog
-    await ref.read(bleConnectionProvider).requestEnableBluetooth();
-  }
 
+    // Check if BT is already on — if so, nothing to do
+    final adapterState = await FlutterBluePlus.adapterState.first;
+    if (adapterState == BluetoothAdapterState.on) return;
+
+    // Try the system prompt silently (no custom dialog before)
+    try {
+      await FlutterBluePlus.turnOn();
+    } on FlutterBluePlusException catch (e) {
+      // User denied the system prompt — now show our explanation dialog
+      if (mounted) {
+        await AppDialogs.showAlert(
+          context,
+          icon:      Icons.bluetooth_disabled_rounded,
+          iconColor: AppColors.emergencyRed,
+          iconBg:    AppColors.emergencyBg,
+          title:     'Bluetooth Required',
+          message:   'The CPR Assist glove connects via Bluetooth. '
+              'Please enable Bluetooth to use the glove.',
+        );
+      }
+    } catch (_) {
+      // iOS or other — system handles it automatically
+    }
+  }
   void _onBleStatusChange() {
     final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
     if (status == 'Connected') {
@@ -144,7 +166,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
     if (!isLoggedIn) return;
     final locals  = await SessionLocalStorage.loadAll();
-    final pending = locals.where((d) => d.id == null).toList();
+    final pending = locals.where((d) => !d.syncedToBackend).toList();
     if (pending.isEmpty) return;
     final service = ref.read(sessionServiceProvider);
     bool anySynced = false;
@@ -165,12 +187,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     switch (current) {
       case AppMode.emergency:
         if (!isLoggedIn) {
-          AppDialogs.promptLogin(context);
           return null;
         }
         return AppMode.training;
       case AppMode.training:
-        return AppMode.trainingNoFeedback;
       case AppMode.trainingNoFeedback:
         return AppMode.emergency;
     }
@@ -481,6 +501,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       sessionStart:          _sessionStartTime ?? DateTime.now(),
       sessionDurationSecs:   _displaySessionDuration.inSeconds,
       mode: currentMode.sessionModeString,
+      scenario: ref.read(scenarioProvider).sessionScenarioString,
     );
 
     if (currentMode == AppMode.emergency && !isLoggedIn) {
@@ -521,9 +542,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    final bleConnection = ref.watch(bleConnectionProvider);
-    final currentMode   = ref.watch(appModeProvider);
-    final scenario      = ref.watch(scenarioProvider);
+    ref.watch(bleConnectionProvider);
+    final currentMode = ref.watch(appModeProvider);
+    final scenario = ref.watch(scenarioProvider);
     final sessionLocked = ref.watch(cprSessionActiveProvider);
 
     return ColoredBox(
@@ -533,12 +554,12 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
           Column(
             children: [
               _StatusBar(
-                mode:             currentMode,
-                scenario:         scenario,
-                sessionLocked:    sessionLocked,
-                onScenarioToggle:() {
+                mode: currentMode,
+                scenario: scenario,
+                sessionLocked: sessionLocked,
+                onScenarioToggle: () {
                   ref.read(scenarioProvider.notifier).toggle();
-                  final ble  = ref.read(bleConnectionProvider);
+                  final ble = ref.read(bleConnectionProvider);
                   final next = ref.read(scenarioProvider);
                   ble.sendSetTargetDepth(
                     minMm: next.targetDepthMinMm,
@@ -549,123 +570,138 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                     maxBpm: next.targetRateMax,
                   );
                 },
-                onModeToggle: sessionLocked ? null : () async {
-                  final next = _nextMode(currentMode, ref.read(authStateProvider).isLoggedIn);
+                onModeToggle: sessionLocked
+                    ? null
+                    : () async {
+                  final next = _nextMode(
+                    currentMode,
+                    ref.read(authStateProvider).isLoggedIn,
+                  );
                   if (next == null) return;
-
-                  // Show checklist only when entering training (not when leaving it)
-                  if (next.isTraining && !next.isNoFeedback) {
-                    final showChecklist = ref.read(settingsProvider).showChecklist;
-                    if (showChecklist && mounted) {
-                      final ready = await AppDialogs.showTrainingChecklist(context);
-                      if (ready != true) return; // user tapped "Not Yet" — abort
-                    }
-                  }
 
                   if (!mounted) return;
                   ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
                   ref.read(appModeProvider.notifier).setMode(next);
                 },
+
+                  onNoFeedbackToggle: sessionLocked
+                      ? null
+                      : () {
+                    final next = currentMode.isNoFeedback
+                        ? AppMode.training
+                        : AppMode.trainingNoFeedback;
+                    ref.read(appModeProvider.notifier).setMode(next);
+                    ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
+                  },
               ),
-              // ── IMU calibrating banner ─────────────────────────────────
-              if (_isSessionActive && !_imuCalibrated)
-                const _CalibrationBanner(),
 
-              // ── Main content ───────────────────────────────────────────
+              if (_isSessionActive && !_imuCalibrated) const _CalibrationBanner(),
+
               Expanded(
-                child: StreamBuilder<Map<String, dynamic>>(
-                  stream: bleConnection.dataStream,
-                  builder: (context, snapshot) {
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Column(
-                        children: [
-                          // 1. Patient vitals
-                          VitalsCard(
-                            label:       'Patient Vitals',
-                            heartRate:   _heartRatePatient,
-                            spO2:        _spO2Patient,
-                            temperature: _patientTemperature,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-
-                          // 2. CPR metrics
-                        LiveCprMetricsCard(
-                          depth:               _displayDepth,
-                          frequency:           _displayFrequency,
-                          cprTime:             _displaySessionDuration,
-                          compressionCount:    _displayCompressionCount,
-                          isSessionActive:     _isSessionActive,
-                          scenario:            _currentScenario,
-                          recoilAchieved:      _recoilAchieved,
-                          imuCalibrated:       _imuCalibrated,
-                          showFatigueBadge:    _showFatigueBadge,
-                          fatigueScore:        _fatigueScore,
-                          compressionInCycle:  _compressionInCycle,
-                          isNoFeedback: currentMode.isNoFeedback,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    children: [
+                      if (!currentMode.isTraining && _pulseClassification != null) ...[
+                        LastPulseCheckStrip(
+                          classification:  _pulseClassification!,
+                          detectedBpm:     _pulseCheckDetectedBpm,
+                          confidence:      _pulseCheckConfidence,
+                          temperature:     _patientTemperature,
+                          intervalNumber:  _pulseCheckInterval,
                         ),
-                          const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                      const SizedBox(height: AppSpacing.md),
 
-// Wrist alignment warning
-                          if (_isSessionActive && _wristAngle != null && _wristAngle! > 15.0)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-                                decoration: BoxDecoration(
-                                  color:        AppColors.warningBg,
-                                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-                                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.back_hand_outlined, size: 14, color: AppColors.warning),
-                                    const SizedBox(width: AppSpacing.xs),
-                                    Expanded(
-                                      child: Text(
-                                        'Wrist angle ${_wristAngle!.toStringAsFixed(0)}° — keep arms straight',
-                                        style: AppTypography.label(size: 12, color: AppColors.warning),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                      LiveCprMetricsCard(
+                        depth: _displayDepth,
+                        frequency: _displayFrequency,
+                        cprTime: _displaySessionDuration,
+                        compressionCount: _displayCompressionCount,
+                        isSessionActive: _isSessionActive,
+                        scenario: scenario,
+                        recoilAchieved: _recoilAchieved,
+                        imuCalibrated: _imuCalibrated,
+                        showFatigueBadge: _showFatigueBadge,
+                        fatigueScore: _fatigueScore,
+                        compressionInCycle: _compressionInCycle,
+                        isNoFeedback: currentMode.isNoFeedback,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+
+                      if (_isSessionActive &&
+                          _wristAngle != null &&
+                          _wristAngle! > 15.0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.warningBg,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.cardRadiusSm,
+                              ),
+                              border: Border.all(
+                                color: AppColors.warning.withValues(alpha: 0.3),
                               ),
                             ),
-
-                          // 3. Rescuer vitals
-                          VitalsCard(
-                            label:         'Your Vitals',
-                            heartRate:     _heartRateUser,
-                            spO2:          _spO2User,
-                            temperature:   _rescuerTemperature,
-                            signalQuality: _rescuerSignalQuality,
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.back_hand_outlined,
+                                  size: 14,
+                                  color: AppColors.warning,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    'Wrist angle ${_wristAngle!.toStringAsFixed(0)}° — keep arms straight',
+                                    style: AppTypography.label(
+                                      size: 12,
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
+
+                      VitalsCard(
+                        label: 'Your Vitals',
+                        heartRate: _heartRateUser,
+                        spO2: _spO2User,
+                        temperature: _rescuerTemperature,
+                        signalQuality: _rescuerSignalQuality,
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
 
-          // ── Ventilation (BREATHE) banner ───────────────────────────────
           if (_showVentilationOverlay)
             Positioned(
-              top: 0, left: 0, right: 0,
+              top: 0,
+              left: 0,
+              right: 0,
               child: _VentilationBanner(
-                cycleNumber:          _ventilationCycleNumber,
+                cycleNumber: _ventilationCycleNumber,
                 ventilationsExpected: _ventilationsExpected,
                 onDismiss: () => setState(() => _showVentilationOverlay = false),
               ),
             ),
-          // ── Rescuer swap banner (auto-dismissing overlay) ──────────────
+
           if (_showSwapBanner)
             Positioned(
-              top:   0,
-              left:  0,
+              top: 0,
+              left: 0,
               right: 0,
               child: _SwapBanner(
                 alertNumber: _swapAlertNumber,
@@ -675,16 +711,15 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               ),
             ),
 
-// ── Pulse check overlay (full-width, above cards) ──────────────
           if (_pulseCheckActive)
             Positioned.fill(
               child: PulseCheckOverlay(
                 intervalNumber: _pulseCheckInterval,
                 classification: _pulseClassification,
-                ppgBuffer:      List.from(_ppgBuffer),
-                detectedBpm:    _pulseCheckDetectedBpm,
-                confidence:     _pulseCheckConfidence,
-                onContinueCpr:  () {
+                ppgBuffer: List.from(_ppgBuffer),
+                detectedBpm: _pulseCheckDetectedBpm,
+                confidence: _pulseCheckConfidence,
+                onContinueCpr: () {
                   _pulseResultTimer?.cancel();
                   setState(() => _pulseCheckActive = false);
                 },
@@ -694,11 +729,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                 },
               ),
             ),
-        ],      // Stack children
-      ),        // Stack
-    );          // ColoredBox
-  }             // build()
-}               // _LiveCPRScreenState
+        ],
+      ),
+    );
+  }// build()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _CalibrationBanner — shown at session start until imuCalibrated = true
@@ -898,6 +933,7 @@ class _StatusBar extends StatelessWidget {
   final bool          sessionLocked;
   final VoidCallback? onScenarioToggle;
   final VoidCallback? onModeToggle;
+  final VoidCallback? onNoFeedbackToggle;
 
   const _StatusBar({
     required this.mode,
@@ -905,15 +941,17 @@ class _StatusBar extends StatelessWidget {
     required this.sessionLocked,
     this.onScenarioToggle,
     this.onModeToggle,
+    this.onNoFeedbackToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isEmergency = mode.isEmergency;
-    final modeColor   = isEmergency ? AppColors.primary : AppColors.warning;
-    final modeBg      = isEmergency ? AppColors.primaryLight : AppColors.warningBg;
-    final modeIcon    = isEmergency ? Icons.emergency_outlined : Icons.school_outlined;
-    final modeLabel   = isEmergency ? 'Emergency' : mode.label;
+    final isEmergency  = mode.isEmergency;
+    final isNoFeedback = mode.isNoFeedback;
+    final modeColor    = isEmergency ? AppColors.primary : AppColors.warning;
+    final modeBg       = isEmergency ? AppColors.primaryLight : AppColors.warningBg;
+    final modeLabel    = isEmergency ? 'Emergency' : 'Training';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -923,9 +961,36 @@ class _StatusBar extends StatelessWidget {
       color: modeBg,
       child: Row(
         children: [
-          // ── Mode icon + tappable label ───────────────────────────────────
-          Icon(modeIcon, size: 14, color: modeColor),
-          const SizedBox(width: AppSpacing.xs),
+
+          // ── LEFT: Mode swap ──────────────────────────────────────────────
+          GestureDetector(
+            onTap: (sessionLocked || onModeToggle == null) ? null : onModeToggle,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  modeLabel,
+                  style: AppTypography.label(
+                    size:  12,
+                    color: (sessionLocked || onModeToggle == null)
+                        ? AppColors.textDisabled
+                        : modeColor,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.swap_horiz_rounded,
+                  size:  12,
+                  color: (sessionLocked || onModeToggle == null)
+                      ? AppColors.textDisabled
+                      : modeColor,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Info icon ────────────────────────────────────────────────────
+          const SizedBox(width: AppSpacing.xxs),
           GestureDetector(
             onTap: () => AppDialogs.showAlert(
               context,
@@ -933,103 +998,96 @@ class _StatusBar extends StatelessWidget {
               message: isEmergency
                   ? 'Emergency mode guides you through a real cardiac arrest. '
                   'No login required. Session saved locally and synced later.'
-                  : mode.isNoFeedback
-                  ? 'No-Feedback mode suppresses all glove feedback. '
-                  'Your session is still fully recorded and graded.'
+                  : isNoFeedback
+                  ? 'No-Feedback mode suppresses all glove feedback — audio, '
+                  'vibration and LEDs. Your session is still fully recorded and graded.'
                   : 'Training mode records and grades your CPR on a manikin. '
                   'Requires a logged-in account.',
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(modeLabel,
-                    style: AppTypography.label(size: 12, color: modeColor)),
-                const SizedBox(width: 2),
-                Icon(Icons.info_outline_rounded,
-                    size: 11, color: modeColor.withValues(alpha: 0.6)),
-              ],
+            child: Icon(
+              Icons.info_outline_rounded,
+              size:  12,
+              color: modeColor.withValues(alpha: 0.55),
             ),
           ),
 
-          // ── No-feedback inline pill ──────────────────────────────────────
-          if (mode.isNoFeedback) ...[
-            const SizedBox(width: AppSpacing.xs),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color:        AppColors.primaryDark,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.visibility_off_rounded,
-                      size: 10, color: AppColors.textOnDark),
-                  const SizedBox(width: 3),
-                  Text('No feedback',
-                      style: AppTypography.label(
-                          size: 10, color: AppColors.textOnDark)),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(width: AppSpacing.xs),
-          if (!sessionLocked && onModeToggle != null)
+          // ── No-Feedback pill (training only) ─────────────────────────────
+          if (!isEmergency) ...[
+            const SizedBox(width: AppSpacing.sm),
             GestureDetector(
-              onTap: onModeToggle,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xs, vertical: AppSpacing.xxs),
+              onTap: (sessionLocked || onNoFeedbackToggle == null)
+                  ? null
+                  : onNoFeedbackToggle,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color:        modeColor.withValues(alpha: 0.12),
+                  color: isNoFeedback
+                      ? AppColors.warning
+                      : AppColors.warning.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
-                  border: Border.all(color: modeColor.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.warning.withValues(
+                        alpha: isNoFeedback ? 0.0 : 0.35),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.swap_vert_rounded, size: 11, color: modeColor),
-                    const SizedBox(width: 2),
-                    Text('Mode', style: AppTypography.label(size: 11, color: modeColor)),
+                    Icon(
+                      Icons.visibility_off_rounded,
+                      size:  10,
+                      color: isNoFeedback
+                          ? AppColors.textOnDark
+                          : AppColors.warning,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      'No feedback',
+                      style: AppTypography.label(
+                        size:  10,
+                        color: isNoFeedback
+                            ? AppColors.textOnDark
+                            : AppColors.warning,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+          ],
 
           const Spacer(),
 
-          // ── Scenario toggle (both modes) ─────────────────────────────────
+          // ── RIGHT: Scenario swap ─────────────────────────────────────────
           GestureDetector(
-            onTap: sessionLocked ? null : onScenarioToggle,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
-              decoration: AppDecorations.chip(
-                color: modeColor,
-                bg:    sessionLocked
-                    ? AppColors.divider
-                    : modeColor.withValues(alpha: 0.15),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.swap_horiz_rounded,
-                      size:  AppSpacing.iconSm - 4,
-                      color: sessionLocked
-                          ? AppColors.textDisabled
-                          : modeColor),
-                  const SizedBox(width: AppSpacing.xxs),
-                  Text(scenario.label,
-                      style: AppTypography.label(
-                          size:  12,
-                          color: sessionLocked
-                              ? AppColors.textDisabled
-                              : modeColor)),
-                ],
-              ),
+            onTap: (sessionLocked || onScenarioToggle == null)
+                ? null
+                : onScenarioToggle,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  scenario.label,
+                  style: AppTypography.label(
+                    size:  12,
+                    color: sessionLocked
+                        ? AppColors.textDisabled
+                        : modeColor,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.swap_horiz_rounded,
+                  size:  12,
+                  color: sessionLocked
+                      ? AppColors.textDisabled
+                      : modeColor,
+                ),
+              ],
             ),
           ),
+
         ],
       ),
     );

@@ -15,9 +15,10 @@ module.exports = function (pool) {
             const result = await pool.query(
                 `SELECT
        u.username,
-       COUNT(s.id)::int                           AS session_count,
-       ROUND(AVG(s.total_grade)::numeric, 1)       AS avg_grade,
-       ROUND(MAX(s.total_grade)::numeric, 1)        AS best_grade
+       COUNT(s.id)::int                                        AS session_count,
+       ROUND(AVG(s.total_grade)::numeric, 1)                   AS avg_grade,
+       ROUND(MAX(s.total_grade)::numeric, 1)                   AS best_grade,
+       RANK() OVER (ORDER BY AVG(s.total_grade) DESC)::int     AS rank
      FROM cpr_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.mode IN ('training', 'training_no_feedback')
@@ -28,7 +29,7 @@ module.exports = function (pool) {
      ORDER BY avg_grade DESC
      LIMIT 50`,
                 [scenario]
-            );
+            ); currentUsername
 
             // Inject rank and flag current user's row
             const userId = req.user.id;
@@ -37,8 +38,8 @@ module.exports = function (pool) {
             );
             const currentUsername = currentUserResult.rows[0]?.username;
 
-            const ranked = result.rows.map((row, index) => ({
-                rank: index + 1,
+            const ranked = result.rows.map((row) => ({
+                rank: parseInt(row.rank),
                 username: row.username,
                 session_count: row.session_count,
                 avg_grade: parseFloat(row.avg_grade),

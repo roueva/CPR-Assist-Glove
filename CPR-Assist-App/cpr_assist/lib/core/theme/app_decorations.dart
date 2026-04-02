@@ -95,6 +95,46 @@ class AppDecorations {
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       );
 
+  /// Achievement card — unlocked state has a tinted border + subtle shadow.
+  static BoxDecoration achievementCard({required bool unlocked}) => unlocked
+      ? BoxDecoration(
+    color:        AppColors.primaryLight,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+    boxShadow: [
+      BoxShadow(
+        color:      AppColors.primary.withValues(alpha: 0.08),
+        blurRadius: 8,
+        offset:     const Offset(0, 2),
+      ),
+    ],
+  )
+      : BoxDecoration(
+    color:        AppColors.screenBgGrey,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.divider),
+  );
+
+  /// Certificate row — earned has a warm gold tint.
+  static BoxDecoration certificateCard({required bool earned}) => earned
+      ? BoxDecoration(
+    color:        AppColors.warningBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+    boxShadow: [
+      BoxShadow(
+        color:      AppColors.warning.withValues(alpha: 0.08),
+        blurRadius: 8,
+        offset:     const Offset(0, 2),
+      ),
+    ],
+  )
+      : BoxDecoration(
+    color:        AppColors.screenBgGrey,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.divider),
+  );
+
   /// Brand gradient card — used for the CPR grade/score panel.
   /// Start: AppColors.primary (#194E9D), End: a slightly lighter brand blue.
   static BoxDecoration primaryGradientCard({
@@ -195,6 +235,24 @@ class AppDecorations {
         color: bg,
         borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
         border: Border.all(color: color.withValues(alpha: 0.25)),
+      );
+
+  /// Selected segment inside a segmented control (e.g. cm/in, Adult/Pediatric).
+  static BoxDecoration segmentSelected({
+    double radius = AppSpacing.cardRadiusSm,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.primary,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  /// Unselected segment — transparent, same radius.
+  static BoxDecoration segmentUnselected({
+    double radius = AppSpacing.cardRadiusSm,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.transparent,
+        borderRadius: BorderRadius.circular(radius),
       );
 
   // ═══════════════════════════════════════════════════════

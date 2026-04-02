@@ -166,9 +166,10 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
     if (goingToTraining && !isLoggedIn) {
       // Training requires login — show non-blocking prompt then stop.
       // User stays in Emergency mode if they dismiss.
-      final shouldLogin = await AppDialogs.promptLogin(context);
+      final ctx = context;
+      final shouldLogin = await AppDialogs.promptLogin(ctx);
       if (shouldLogin != true || !mounted) return;
-      await context.push(const LoginScreen());
+      await ctx.push(const LoginScreen());
       return;
     }
 
@@ -639,8 +640,8 @@ class _SyncPendingRow extends ConsumerWidget {
             child: Row(
               children: [
                 Container(
-                  width:  AppSpacing.touchTargetMin - AppSpacing.sm,
-                  height: AppSpacing.touchTargetMin - AppSpacing.sm,
+                  width:  AppSpacing.iconBoxSize,
+                  height: AppSpacing.iconBoxSize,
                   decoration: AppDecorations.iconRounded(
                     bg:     AppColors.warning.withValues(alpha: 0.1),
                     radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
@@ -757,8 +758,8 @@ class _PanelItem extends StatelessWidget {
             children: [
               // Icon box
               Container(
-                width:  AppSpacing.touchTargetMin - AppSpacing.sm, // 36
-                height: AppSpacing.touchTargetMin - AppSpacing.sm,
+                width:  AppSpacing.iconBoxSize,
+                height: AppSpacing.iconBoxSize,
                 decoration: AppDecorations.iconRounded(
                   bg:     effectiveIconColor.withValues(alpha: 0.1),
                   radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
@@ -843,8 +844,8 @@ class AccountAvatarButton extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return Container(
-      width:  AppSpacing.touchTargetMin - AppSpacing.sm, // 36
-      height: AppSpacing.touchTargetMin - AppSpacing.sm,
+      width:  AppSpacing.iconBoxSize,
+      height: AppSpacing.iconBoxSize,
       decoration: AppDecorations.iconCircle(bg: AppColors.primaryMid),
       child: Center(
         child: authState.isLoggedIn

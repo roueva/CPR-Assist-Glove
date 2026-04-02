@@ -356,6 +356,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     debugPrint('🛰️ First real GPS fix — clearing stale distances and resorting');
     CacheService.clearDistanceCache();
 
+    // Wait one frame so the location written by onLocationUpdate is visible in state
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (!mounted) return;
+
     final currentState  = ref.read(mapStateProvider);
     final aedRepository = ref.read(aedServiceProvider);
     final freshSorted   = aedRepository.sortAEDsByDistance(
@@ -526,7 +530,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       currentState.navigation.transportMode,
     );
 
-    final checkCount = newSorted.length < 5 ? newSorted.length : 5;
+    final checkCount = newSorted.length < 10 ? newSorted.length : 10;
     bool topChanged = false;
     for (int i = 0; i < checkCount; i++) {
       if (currentState.aedList[i].id != newSorted[i].id) {

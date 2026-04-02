@@ -51,6 +51,51 @@ Field Definitions & Logic Rules:
   - Wrap-around (e.g., "October to May"): start_month: 10, end_month: 5.
   - "School months": start_month: 9, end_month: 6.
 
+- SCHOOL ("σχολεί", "σχολει", "ΣΧΟΛΕΙ", "χώρο του σχολείου", "μήνες λειτουργίας σχολείων"):
+  - Always status="uncertain" (may also be used afternoons/weekends for sports clubs).
+  - Always add rule: days=[1,2,3,4,5], open_time="08:00", close_time="14:00", start_month=9, end_month=6.
+  - Even if the text mentions additional afternoon or sports use, still use status="uncertain" with these rules.
+
+- PUBLIC SERVICES ("δημόσιων υπηρεσιών", "υπηρεσιών" without specific times, "Σχολείων - Υπηρεσιών"):
+  - status="uncertain", days=[1,2,3,4,5], open_time="07:30", close_time="14:30", start_month=null, end_month=null.
+
+- MUNICIPAL ("δήμου", "δημαρχείο", "δημοτικ"):
+  - status="uncertain", days=[1,2,3,4,5], open_time="08:00", close_time="14:00", start_month=null, end_month=null.
+
+- AIRPORTS ("αεροδρομίου", "αεροδρομίο", "Αεροδρομίου"):
+  - Airports operate 24/7. status="parsed", is_24_7=true.
+
+- HOSPITALS / CLINICS with no specific times ("νοσοκομείου", "νοσοκομείο", "κλινικ"):
+  - Hospitals operate 24/7. status="parsed", is_24_7=true.
+  - Exception: if the text says "εξωτερικά ιατρεία" (outpatient), use the specific times given.
+
+- RURAL CLINICS ("αγροτικού ιατρείου", "αγροτικό ιατρείο"):
+  - status="uncertain", days=[1,2,3,4,5], open_time="08:00", close_time="14:00", start_month=null, end_month=null.
+
+- PRIVATE CLINICS / DOCTOR OFFICES ("ιατρείου", "ιατρείο") with no specific times:
+  - status="uncertain", uncertain_reason="Private clinic hours unknown".
+
+- SPORTS FACILITIES with no specific times ("γηπέδου", "γήπεδο", "γυμναστηρίου", "γυμναστήριο", "σταδίου", "στάδιο"):
+  - status="uncertain", uncertain_reason="During training/games only".
+
+- SPORTS CLUBS / ACADEMIES with no specific times ("αθλητικού σωματείου", "ακαδημίας", "ομάδας", "προπονήσεις", "αγώνες"):
+  - status="uncertain", uncertain_reason="During club activities only".
+
+- CHURCHES / TEMPLES ("ιερού ναού", "εκκλησία", "ναός"):
+  - status="uncertain", uncertain_reason="Church operating hours vary".
+
+- BANKS ("τράπεζας", "τραπέζης", "Τράπεζας Κύπρου"):
+  - status="uncertain", days=[1,2,3,4,5], open_time="08:00", close_time="14:30", start_month=null, end_month=null.
+
+- FACTORIES / WORKPLACES ("εργοστασίου", "εργασίας εργοστασίου"):
+  - status="uncertain", uncertain_reason="Factory/workplace hours vary by shift".
+
+- ARCHAEOLOGICAL SITES ("αρχαιολογικού χώρου"):
+  - status="uncertain", uncertain_reason="Seasonal archaeological site hours".
+
+- SHOPPING / STORES ("καταστημάτων", "κατάστημα") with no specific times:
+  - status="uncertain", uncertain_reason="Store hours vary".
+
 Respond ONLY with valid JSON matching this exact structure, no extra text:
 {
   "original_text": "the input text here",

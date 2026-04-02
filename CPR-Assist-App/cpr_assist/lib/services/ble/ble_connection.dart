@@ -175,8 +175,14 @@ class BLEConnection {
     }
   }
 
-  Future<void> requestEnableBluetooth() async {
-    await FlutterBluePlus.turnOn(); // Android only; iOS shows a system alert automatically
+  Future<bool> requestEnableBluetooth() async {
+    try {
+      await FlutterBluePlus.turnOn();
+      return true;
+    } catch (_) {
+      // User denied or not supported (iOS handles it natively)
+      return false;
+    }
   }
 
   // ── Scan ──────────────────────────────────────────────────────────────────

@@ -495,19 +495,41 @@ class _LeaderRow extends StatelessWidget {
               ],
             ),
           ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.chipPaddingH - AppSpacing.xxs,
               vertical:   AppSpacing.chipPaddingV,
             ),
-            decoration: AppDecorations.tintedCard(
-                radius: AppSpacing.cardRadiusSm),
+            decoration: AppDecorations.tintedCard(radius: AppSpacing.cardRadiusSm),
             child: Text(
               '${entry.avgGrade.toStringAsFixed(1)}%',
-              style: AppTypography.bodyBold(
-                  size: 13, color: AppColors.primary),
+              style: AppTypography.bodyBold(size: 13, color: AppColors.primary),
             ),
           ),
+          const SizedBox(height: AppSpacing.xxs),
+          SizedBox(
+            width: 80,
+            height: 4,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+              child: LinearProgressIndicator(
+                value:            (entry.avgGrade / 100).clamp(0.0, 1.0),
+                backgroundColor:  AppColors.divider,
+                valueColor:       AlwaysStoppedAnimation<Color>(
+                  entry.avgGrade >= 90 ? AppColors.success
+                      : entry.avgGrade >= 75 ? AppColors.info
+                      : entry.avgGrade >= 55 ? AppColors.warning
+                      : AppColors.error,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
         ],
       ),
     );
@@ -554,19 +576,37 @@ class _MyRankFooter extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('You · ${entry.sessionCount} sessions',
-                      style: AppTypography.caption(color: AppColors.textDisabled)),
-                  Text(
-                    '${entry.avgGrade.toStringAsFixed(1)}% avg grade',
-                    style: AppTypography.bodyMedium(size: 13),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You · ${entry.sessionCount} sessions',
+                style: AppTypography.caption(color: AppColors.textDisabled)),
+            Text(
+              '${entry.avgGrade.toStringAsFixed(1)}% avg grade',
+              style: AppTypography.bodyMedium(size: 13),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            SizedBox(
+              width:  120,
+              height: 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+                child: LinearProgressIndicator(
+                  value:           (entry.avgGrade / 100).clamp(0.0, 1.0),
+                  backgroundColor: AppColors.divider,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    entry.avgGrade >= 90 ? AppColors.success
+                        : entry.avgGrade >= 75 ? AppColors.info
+                        : entry.avgGrade >= 55 ? AppColors.warning
+                        : AppColors.error,
                   ),
-                ],
+                ),
               ),
             ),
+          ],
+        ),
+      ),
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
@@ -576,7 +616,8 @@ class _MyRankFooter extends StatelessWidget {
                 color: AppColors.primary,
                 bg:    AppColors.primaryLight,
               ),
-              child: Text(
+              child:
+              Text(
                 '#${entry.rank}',
                 style: AppTypography.bodyBold(size: 15, color: AppColors.primary),
               ),

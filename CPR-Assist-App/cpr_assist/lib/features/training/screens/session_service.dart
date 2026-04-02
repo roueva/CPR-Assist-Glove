@@ -201,12 +201,6 @@ class SessionService {
   //   Frequency consistency   13%  (−5)
   //   Hands-on ratio          5%   (−5)
   //   Correct recoil          10%  (−5 — reduced to balance total to 100%)
-  //
-  // Timed Endurance adjustments:
-  //   Depth consistency       25%
-  //   Fatigue penalty        −10 pts
-  //   Time to first comp removed (not relevant)
-  //   Remaining weights redistributed proportionally
 
   double calculateGradeFromDetail(SessionDetail s) {
     // Emergency sessions never have a grade
@@ -248,21 +242,6 @@ class SessionService {
                 (forceSafetyScore * 0.10) +
                 (timeScore        * 0.10) -
                 (s.fatigueOnsetIndex > 0 ? 5.0 : 0.0);
-
-      case 'timed_endurance':
-      // Fatigue management is the primary goal — no time-to-first penalty,
-      // heavier fatigue penalty, higher depth weight.
-        grade =
-            (depthScore       * 0.30) +
-                (freqScore        * 0.18) +
-                (recoilScore      * 0.15) +
-                (comboScore       * 0.12) +
-                (handsOnScore     * 0.10) +
-                (ventScore        * 0.10) +
-                (postureScore     * 0.05) +
-                (forceSafetyScore * 0.05) -
-                (s.fatigueOnsetIndex > 0 ? 10.0 : 0.0);
-
       default:
       // standard_adult (default)
         grade =

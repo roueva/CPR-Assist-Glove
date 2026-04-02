@@ -274,7 +274,7 @@ class LiveCprMetricsCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color:        AppColors.primaryDark,
+        color:        AppColors.cprCardBg,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
         boxShadow: const [
           BoxShadow(
@@ -646,7 +646,7 @@ class _FrequencyGauge extends StatelessWidget {
   final _FeedbackState state;
 
   static const double _arcWidth  = 200.0;
-  static const double _arcHeight = 110.0;
+  static const double _arcHeight = 150.0;
 
   const _FrequencyGauge({required this.frequency, required this.state});
 
@@ -670,16 +670,10 @@ class _FrequencyGauge extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              SvgPicture.asset(
-                'assets/icons/frequency_arc.svg',
-                width:  _arcWidth,
-                height: _arcHeight,
-              ),
-              RotatingArrow(frequency: frequency),
-            ],
+          SizedBox(
+            width:  _arcWidth,
+            height: _arcHeight,
+            child:  FrequencyArcGauge(frequency: frequency),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -747,11 +741,11 @@ class _DepthColumn extends StatelessWidget {
           SizedBox(
             width:  _barWidth,
             height: _barHeight,
-            child:  AnimatedDepthBar(
-              depth:          depth,
-              recoilAchieved: recoilAchieved,
-              targetDepthCm:  scenario.targetDepthMinCm,  // ADD — already available on _DepthColumn via LiveCprMetricsCard
-
+            child: AnimatedDepthBar(
+              depth:             depth,
+              recoilAchieved:    recoilAchieved,
+              targetDepthCm:     scenario.targetDepthMinCm,
+              targetDepthMaxCm:  scenario.targetDepthMaxCm,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -768,6 +762,100 @@ class _DepthColumn extends StatelessWidget {
             style: AppTypography.badge(
               size:  9,
               color: AppColors.textOnDark.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LastPulseCheckStrip
+//
+// Compact read-only banner showing the result of the most recent pulse check.
+// Only shown in Emergency mode, after at least one check has completed.
+// Disappears when a new session starts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LastPulseCheckStrip extends StatelessWidget {
+  final int     classification; // 0=absent, 1=uncertain, 2=present
+  final double? detectedBpm;
+  final int?    confidence;
+  final double? temperature;
+  final int?    intervalNumber;
+
+  const LastPulseCheckStrip({
+    required this.classification,
+    this.detectedBpm,
+    this.confidence,
+    this.temperature,
+    this.intervalNumber,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon, color) = switch (classification) {
+      2 => ('Pulse detected', Icons.favorite_rounded,       AppColors.success),
+      1 => ('Pulse uncertain', Icons.favorite_border_rounded, AppColors.warning),
+      _ => ('No pulse found', Icons.heart_broken_rounded,   AppColors.error),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical:   AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color:        color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+        border:       Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Last pulse check${intervalNumber != null ? ' #$intervalNumber' : ''}',
+                      style: AppTypography.badge(color: AppColors.textSecondary),
+                    ),
+                    if (confidence != null) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        '· $confidence% confidence',
+                        style: AppTypography.badge(color: AppColors.textDisabled),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(label, style: AppTypography.label(size: 13, color: color)),
+                    if (detectedBpm != null) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        '· ${detectedBpm!.toStringAsFixed(0)} bpm',
+                        style: AppTypography.label(size: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                    if (temperature != null) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        '· ${temperature!.toStringAsFixed(1)}°C',
+                        style: AppTypography.label(size: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
         ],

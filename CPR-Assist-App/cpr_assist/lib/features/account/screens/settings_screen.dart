@@ -77,7 +77,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _NavTile(
               icon:     Icons.play_circle_outline_rounded,
               title:    'App tutorial',
-              subtitle: 'Replay the introduction walkthrough',
+              subtitle: 'Coming in a future update',
               onTap:    () => _showTutorialComingSoon(),
             ),
           ]),
@@ -93,7 +93,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (v) {
                 notifier.setHapticFeedback(v);
                 if (v) HapticFeedback.lightImpact();
-                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v);
+                final audio = ref.read(settingsProvider).audioFeedback;
+                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v || audio);
               },
             ),
             const _SettingsDivider(),
@@ -104,7 +105,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               value:    settings.audioFeedback,
               onChanged: (v) {
                 notifier.setAudioFeedback(v);
-                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v);
+                final haptic = ref.read(settingsProvider).hapticFeedback;
+                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v || haptic);
               },
             ),
             const _SettingsDivider(),
@@ -132,10 +134,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (v) => notifier.setShowChecklist(v),
             ),
             const _SettingsDivider(),
+            _ToggleTile(
+              icon:     Icons.visibility_off_rounded,
+              title:    'No-Feedback training',
+              subtitle: 'Suppresses all glove cues — for self-assessment',
+              value:    settings.noFeedbackMode,
+              onChanged: (v) async {
+                await notifier.setNoFeedbackMode(v);
+                final current = ref.read(appModeProvider);
+                if (current.isTraining) {
+                  final newMode = v ? AppMode.trainingNoFeedback : AppMode.training;
+                  ref.read(appModeProvider.notifier).setMode(newMode);
+                  ref.read(bleConnectionProvider).sendModeSet(newMode.bleValue);
+                }
+              },
+            ),
+            const _SettingsDivider(),
             _SelectTile(
               icon:      Icons.medical_services_outlined,
               title:     'Default scenario',
-              options:   const ['Adult', 'Pediatric', 'Timed'],
+              options:   const ['Adult', 'Pediatric'],
               selected:  _scenarioLabel(settings.defaultScenario),
               onChanged: (v) => notifier.setDefaultScenario(_scenarioKey(v)),
             ),
@@ -291,6 +309,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _confirmDeleteData() async {
+    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+    if (!isLoggedIn) {
+      UIHelper.showSnackbar(
+        context,
+        message: 'Sign in to manage session data',
+        icon:    Icons.lock_outline_rounded,
+      );
+      return;
+    }
+
     final confirmed = await AppDialogs.showDestructiveConfirm(
       context,
       icon:         Icons.delete_outline_rounded,
@@ -334,19 +362,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   String _scenarioLabel(String key) {
-    switch (key) {
-      case 'pediatric':       return 'Pediatric';
-      case 'timed_endurance': return 'Timed';
-      default:                return 'Adult';
-    }
+    return key == 'pediatric' ? 'Pediatric' : 'Adult';
   }
 
   String _scenarioKey(String label) {
-    switch (label) {
-      case 'Pediatric': return 'pediatric';
-      case 'Timed':     return 'timed_endurance';
-      default:          return 'standard_adult';
-    }
+    return label == 'Pediatric' ? 'pediatric' : 'standard_adult';
   }
 
 
@@ -489,9 +509,10 @@ class _ToggleTile extends StatelessWidget {
             ),
           ),
           Switch(
-            value:       value,
-            onChanged:   onChanged,
+            value:            value,
+            onChanged:        onChanged,
             activeThumbColor: AppColors.primary,
+            activeTrackColor: AppColors.primaryMid,
           ),
         ],
       ),
@@ -546,10 +567,9 @@ class _SelectTile extends StatelessWidget {
                       horizontal: AppSpacing.cardPadding - AppSpacing.xxs,
                       vertical:   AppSpacing.cardSpacing,
                     ),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.transparent,
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-                    ),
+                    decoration: isSelected
+                        ? AppDecorations.segmentSelected()
+                        : AppDecorations.segmentUnselected(),
                     child: Text(
                       opt,
                       style: AppTypography.buttonSmall(
@@ -644,8 +664,8 @@ class _IconBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = color ?? AppColors.primary;
     return Container(
-      width:  AppSpacing.touchTargetMin - AppSpacing.sm, // 36
-      height: AppSpacing.touchTargetMin - AppSpacing.sm,
+      width:  AppSpacing.iconBoxSize,
+      height: AppSpacing.iconBoxSize,
       decoration: AppDecorations.iconRounded(
         bg:     c.withValues(alpha: 0.1),
         radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,

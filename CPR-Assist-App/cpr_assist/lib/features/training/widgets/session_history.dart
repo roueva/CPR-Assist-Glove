@@ -273,6 +273,7 @@ class _SessionsList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        _EvictionWarningBanner(sessionCount: all.length),
         _StatsHeader(sessions: all),
         _FilterBar(filters: filters, selected: filter, onSelect: onFilter),
         Expanded(
@@ -1082,6 +1083,43 @@ class _Pill extends StatelessWidget {
       child: Text(
         label,
         style: AppTypography.label(size: 12, color: AppColors.textOnDark),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _EvictionWarningBanner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EvictionWarningBanner extends StatelessWidget {
+  final int sessionCount;
+  const _EvictionWarningBanner({required this.sessionCount});
+
+  @override
+  Widget build(BuildContext context) {
+    const int cap = 500;
+    if (sessionCount < 450) return const SizedBox.shrink();
+    final int remaining = cap - sessionCount;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: AppDecorations.warningCard(),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: AppColors.warning, size: AppSpacing.iconMd),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              remaining <= 0
+                  ? 'Session limit reached (500). Oldest sessions will be removed automatically when new ones are saved.'
+                  : '$remaining sessions remaining before the oldest are automatically removed (500 session limit).',
+              style: AppTypography.body(size: 13, color: AppColors.warning),
+            ),
+          ),
+        ],
       ),
     );
   }

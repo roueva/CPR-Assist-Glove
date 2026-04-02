@@ -99,10 +99,9 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   }
 
   void _onAdapterState(BluetoothAdapterState state) {
-    if (state == BluetoothAdapterState.off && mounted) {
-      setState(() {});
-      _showBluetoothDialog();
-    }
+    // Just rebuild the icon — don't show a dialog automatically.
+    // The user can tap the BT icon to get guidance.
+    if (mounted) setState(() {});
   }
 
   // ── Icon ─────────────────────────────────────────────────────────────────

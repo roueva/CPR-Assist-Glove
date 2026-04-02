@@ -117,18 +117,17 @@ class AvailabilityParser {
                 // String doesn't exist in cache
                 analysis.new.push(str);
             } else if (cache[str].status === 'parsed') {
-                // String exists and was successfully parsed
                 analysis.unchanged.push(str);
-            } else if (cache[str].status === 'error' || cache[str].status === 'pending') {
-                // String exists but parsing failed or is pending - retry
+            } else if (cache[str].status === 'uncertain' || cache[str].status === 'closed_for_use') {
+                // These are valid terminal states — treat as unchanged
+                analysis.unchanged.push(str);
+            } else {
+                // 'error', 'pending', or unknown — retry
                 analysis.changed.push({
                     string: str,
                     oldStatus: cache[str].status,
                     reason: 'Previous parse failed or incomplete'
                 });
-            } else {
-                // String exists but might need re-parsing
-                analysis.unchanged.push(str);
             }
         }
 

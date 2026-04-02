@@ -86,6 +86,7 @@ class AppSpacing {
   static const double avatarSm = 32.0;
   static const double avatarMd = 44.0;
   static const double avatarLg = 64.0;
+  static const double iconBoxSize   = 36.0;  // Icon container (touchTargetMin − sm)
 
   // Live CPR widget dimensions
   static const double sessionDotSize   = 10.0;
@@ -99,5 +100,5 @@ class AppSpacing {
   static const double bottomNavHeight   = 64.0;
   static const double dividerThickness  = 1.0;
   static const double depthBarWidth    = 116.0;
-  static const double depthBarHeight   = 140.0;
+  static const double depthBarHeight   = 220.0;
 }

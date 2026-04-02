@@ -146,9 +146,3 @@ flutter:
     - assets/icons/locations.svg
     - assets/icons/live.svg
     - assets/icons/training.svg
-    - assets/icons/frequency_arc.svg
-    - assets/icons/frequency_arrow.svg
-    - assets/icons/depth.svg
-    - assets/icons/depth_line.svg
-    - assets/icons/depth_circle.svg
-    - assets/icons/depth_background.svg

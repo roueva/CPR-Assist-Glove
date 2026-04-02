@@ -1235,25 +1235,48 @@ class _TappableGraphs extends StatelessWidget {
       targetLabel:     '100–120 BPM',
     );
 
+// Build fatigue trend spots: 5-compression rolling avg of depth
+    List<FlSpot> fatigueTrendSpots = [];
+    if (session.fatigueOnsetIndex > 0 && events.length >= 5) {
+      for (int i = 4; i < events.length; i++) {
+        final avg = (events[i-4].depth + events[i-3].depth + events[i-2].depth +
+            events[i-1].depth + events[i].depth) / 5.0;
+        fatigueTrendSpots.add(FlSpot(events[i].timestampSec, avg));
+      }
+    }
+
+    final fatigueGraph = fatigueTrendSpots.isNotEmpty
+        ? _GraphCard(
+      title:           'Depth Trend (Fatigue)',
+      unit:            'cm',
+      minY:            0,
+      maxY:            9,
+      targetMin:       targetDepthMin,
+      targetMax:       targetDepthMax,
+      spots:           fatigueTrendSpots,
+      lineColor:       AppColors.cprOrange,
+      leftLabels:      const ['0', '3', '6', '9'],
+      leftLabelValues: const [0, 3, 6, 9],
+      targetLabel:     '${targetDepthMin.toStringAsFixed(0)}–${targetDepthMax.toStringAsFixed(0)} cm',
+    )
+        : null;
+
     return Column(
       children: [
         GestureDetector(
-          onTap: () => _showFullScreen(
-              context, depthGraph, 'Compression Depth'),
+          onTap: () => _showFullScreen(context, depthGraph, 'Compression Depth'),
           child: Stack(
             children: [
               depthGraph,
               Positioned(
-                top:   0,
-                right: 0,
+                top: 0, right: 0,
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color:        AppColors.primaryLight,
+                    color: AppColors.primaryLight,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
                   ),
-                  child: const Icon(Icons.fullscreen_rounded,
-                      size: 16, color: AppColors.primary),
+                  child: const Icon(Icons.fullscreen_rounded, size: 16, color: AppColors.primary),
                 ),
               ),
             ],
@@ -1261,27 +1284,46 @@ class _TappableGraphs extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         GestureDetector(
-          onTap: () => _showFullScreen(
-              context, rateGraph, 'Compression Rate'),
+          onTap: () => _showFullScreen(context, rateGraph, 'Compression Rate'),
           child: Stack(
             children: [
               rateGraph,
               Positioned(
-                top:   0,
-                right: 0,
+                top: 0, right: 0,
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color:        AppColors.successBg,
+                    color: AppColors.successBg,
                     borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
                   ),
-                  child: const Icon(Icons.fullscreen_rounded,
-                      size: 16, color: AppColors.success),
+                  child: const Icon(Icons.fullscreen_rounded, size: 16, color: AppColors.success),
                 ),
               ),
             ],
           ),
         ),
+        if (fatigueGraph != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          GestureDetector(
+            onTap: () => _showFullScreen(context, fatigueGraph, 'Depth Trend (Fatigue)'),
+            child: Stack(
+              children: [
+                fatigueGraph,
+                Positioned(
+                  top: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    decoration: BoxDecoration(
+                      color: AppColors.warningBg,
+                      borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                    ),
+                    child: const Icon(Icons.fullscreen_rounded, size: 16, color: AppColors.warning),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

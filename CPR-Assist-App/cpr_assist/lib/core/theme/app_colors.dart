@@ -55,6 +55,9 @@ class AppColors {
 
   static const Color vitalsValue  = Color(0xFF4D4A4A); // Vitals reading text
   static const Color statCardBg   = Color(0xFF315FA3); // Small stat card inside dark hub
+  static const Color cprStatTileBg = Color(0xFF243357); // Stat tile inside CPR card
+  static const Color cprCardBg = Color(0xFF112244); // CPR metrics card — dark navy, not saturated blue
+
   // ═══════════════════════════════════════════════════════
   // BACKGROUNDS & SURFACES
   // ═══════════════════════════════════════════════════════
