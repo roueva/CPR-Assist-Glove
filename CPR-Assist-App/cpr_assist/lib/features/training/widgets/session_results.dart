@@ -10,6 +10,7 @@ import '../services/achievement_service.dart';
 import '../services/certificate_service.dart';
 import '../services/compression_event.dart';
 import '../services/session_detail.dart';
+import '../services/session_local_storage.dart';
 import 'export_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,8 +304,14 @@ class _SessionResultsScreenState
             context, 'Failed to save note. Check your connection.');
       }
     } else {
-      // No backend ID — just update local state (post-session, not yet saved)
-      setState(() => _note = result.isEmpty ? null : result);
+      // No backend ID — update UI state and persist to local SharedPreferences
+      final newNote = result.isEmpty ? null : result;
+      setState(() => _note = newNote);
+      final updatedDetail = widget._detail?.withNote(newNote);
+      if (updatedDetail != null) {
+        await SessionLocalStorage.saveLocal(updatedDetail);
+      }
+      ref.invalidate(sessionSummariesProvider);
     }
   }
 
@@ -313,7 +320,9 @@ class _SessionResultsScreenState
   Widget build(BuildContext context) {
     final hasDetail = widget._detail != null;
     final hasGraphs = hasDetail && widget._detail!.compressions.isNotEmpty;
-    final canEditNote = (widget._detail?.id ?? widget._summary?.id) != null;
+    // Allow note editing for both saved (has id) and local-only sessions (has detail)
+    final canEditNote = (widget._detail?.id ?? widget._summary?.id) != null
+        || widget._detail != null;
     final title = widget._sessionNumber != null
         ? 'Session ${widget._sessionNumber}'
         : _isEmergency ? 'Emergency Session' : 'Session Results';
@@ -1824,8 +1833,6 @@ class _GraphCard extends StatelessWidget {
   final List<String> leftLabels;
   final List<double> leftLabelValues;
   final String       targetLabel;
-  final List<FlSpot>? secondarySpots;  // optional fatigue trend line
-  final Color?        secondaryColor;
 
   const _GraphCard({
     required this.title,
@@ -1839,8 +1846,6 @@ class _GraphCard extends StatelessWidget {
     required this.leftLabels,
     required this.leftLabelValues,
     required this.targetLabel,
-    this.secondarySpots,
-    this.secondaryColor,
   });
 
   double _niceInterval(double maxX) {
@@ -1977,17 +1982,6 @@ class _GraphCard extends StatelessWidget {
                     color: lineColor.withValues(alpha: 0.06),
                   ),
                 ),
-                if (secondarySpots != null && secondarySpots!.isNotEmpty)
-                  LineChartBarData(
-                    spots:           secondarySpots!,
-                    isCurved:        true,
-                    curveSmoothness: 0.5,
-                    color:           secondaryColor ?? AppColors.cprOrange,
-                    barWidth:        1.5,
-                    dashArray:       [6, 4],
-                    dotData:         const FlDotData(show: false),
-                    belowBarData:    BarAreaData(show: false),
-                  ),
               ],
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
@@ -2012,13 +2006,6 @@ class _GraphCard extends StatelessWidget {
           children: [
             _TargetLine(color: lineColor, label: '${targetMin.toStringAsFixed(0)} $unit'),
             const Spacer(),
-            if (secondarySpots != null && secondarySpots!.isNotEmpty)
-              _TargetLine(
-                color: secondaryColor ?? AppColors.cprOrange,
-                label: 'Fatigue trend',
-              ),
-            if (secondarySpots == null || secondarySpots!.isEmpty)
-              _TargetLine(color: lineColor, label: '${targetMax.toStringAsFixed(0)} $unit'),
           ],
         ),
       ],

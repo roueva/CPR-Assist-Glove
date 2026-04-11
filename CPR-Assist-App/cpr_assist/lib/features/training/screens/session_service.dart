@@ -67,21 +67,22 @@ class SessionService {
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
-  /// Save a completed SessionDetail to the backend (upsert on session_start).
-  Future<bool> saveDetail(SessionDetail detail) async {
+
+  /// Saves a completed SessionDetail to the backend.
+  /// Returns the backend session id on success, null on failure.
+  Future<int?> saveDetail(SessionDetail detail) async {
     try {
-      await _network.post(
+      final response = await _network.post(
         '/sessions/detail',
         detail.toJson(),
         requiresAuth: true,
       );
-      return true;
+      return (response['data']?['id'] as num?)?.toInt();
     } catch (e) {
       debugPrint('saveDetail failed: $e');
-      return false;
+      return null;
     }
   }
-
   /// Save a session locally only, without hitting the backend.
   /// Used when Emergency mode ends and the user declines to log in.
   Future<void> saveLocalOnly(SessionDetail detail) async {

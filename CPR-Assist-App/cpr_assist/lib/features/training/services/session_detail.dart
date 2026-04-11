@@ -415,7 +415,9 @@ class SessionDetail {
   // ── Serialisation — sent to backend via POST /sessions/detail ────────────
   Map<String, dynamic> toJson() => {
     if (id != null) 'id':              id,
-    'session_start':            sessionStart.toIso8601String(),
+    'session_start':            sessionStart
+        .copyWith(millisecond: 0, microsecond: 0)
+        .toIso8601String(),
     if (sessionEnd != null) 'session_end': sessionEnd!.toIso8601String(),
     'mode':                     mode,
     'scenario':                 scenario,
@@ -470,10 +472,11 @@ class SessionDetail {
   SessionDetail markSynced() => _copyWith(syncedToBackend: true);
 
   SessionDetail withNote(String? newNote) => _copyWith(note: newNote);
+  SessionDetail withId(int newId) => _copyWith(id: newId, syncedToBackend: true);
 
-  SessionDetail _copyWith({bool? syncedToBackend, String? note}) =>
+  SessionDetail _copyWith({int? id, bool? syncedToBackend, String? note}) =>
       SessionDetail(
-        id:                     id,
+        id:                     id ?? this.id,
         sessionStart:           sessionStart,
         sessionEnd:             sessionEnd,
         mode:                   mode,

@@ -35,6 +35,12 @@ class AppDecorations {
         borderRadius: BorderRadius.circular(radius),
       );
 
+  /// Inline success banner — soft green background, no border.
+  static BoxDecoration successBanner() => BoxDecoration(
+    color: AppColors.successBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
+  );
+
   /// Card with a colored left accent border.
   static BoxDecoration accentCard({
     required Color accentColor,
@@ -312,10 +318,17 @@ class AppDecorations {
       bottomLeft: Radius.circular(AppSpacing.cardRadiusLg),
     ),
     boxShadow: [
+      // Left/horizontal shadow — panel edge depth
       BoxShadow(
         color:      AppColors.shadowStrong,
         blurRadius: AppSpacing.xl,
         offset:     Offset(-AppSpacing.xs, 0),
+      ),
+      // Top shadow — sells the "sliding under header" effect
+      BoxShadow(
+        color:      AppColors.shadowMedium,
+        blurRadius: AppSpacing.md,
+        offset:     Offset(0, -AppSpacing.xs),
       ),
     ],
   );
@@ -355,4 +368,79 @@ class AppDecorations {
         color:        AppColors.textOnDark.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(radius),
       );
+
+  static BoxDecoration statusBanner({required Color color}) => BoxDecoration(
+    color:        color.withValues(alpha: 0.08),
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+    border:       Border.all(color: color.withValues(alpha: 0.25)),
+  );
+  static BoxDecoration warningBanner() => BoxDecoration(
+    color:        AppColors.warningBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+    border:       Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+  );
+
+  static BoxDecoration warningBadge() => BoxDecoration(
+    color:        AppColors.warning.withValues(alpha: 0.12),
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+    border:       Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+  );
+
+  static BoxDecoration cprStatBlock() => BoxDecoration(
+    color:        AppColors.textOnDark.withValues(alpha: 0.10),
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+  );
+
+  /// Bordered circle avatar — profile header in account panel.
+  static BoxDecoration avatarCircle({Color? borderColor}) => BoxDecoration(
+    shape:  BoxShape.circle,
+    color:  AppColors.primaryLight,
+    border: Border.all(
+      color: borderColor ?? AppColors.primaryMid,
+      width: 1, // 4px — visible as a ring
+    ),
+  );
+
+  /// 3D-style avatar — gradient fill + layered shadow depth effect.
+  static BoxDecoration avatarCircle3d() => const BoxDecoration(
+    shape: BoxShape.circle,
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end:   Alignment.bottomRight,
+      colors: [
+        AppColors.primaryLight,
+        AppColors.primaryMid,
+      ],
+    ),
+    boxShadow: [
+      // Outer depth shadow
+      BoxShadow(
+        color:       AppColors.shadowDefault,
+        blurRadius:  10,
+        spreadRadius: 1,
+        offset:      Offset(0, 4),
+      ),
+      // Inner highlight (top-left light source illusion)
+      BoxShadow(
+        color:       AppColors.primaryMid,
+        blurRadius:  6,
+        spreadRadius: -2,
+        offset:      Offset(-2, -2),
+      ),
+    ],
+  );
+
+  /// Small edit badge overlaid on an avatar circle.
+  static BoxDecoration avatarEditBadge() => BoxDecoration(
+    color:  AppColors.primary,
+    shape:  BoxShape.circle,
+    border: Border.all(color: AppColors.surfaceWhite, width: AppSpacing.xxs),
+  );
+
+  /// Corner mode badge on the account avatar button.
+  static BoxDecoration avatarModeBadge({required bool isTraining}) => BoxDecoration(
+    color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
+    shape:  BoxShape.circle,
+    border: Border.all(color: AppColors.headerBg, width: AppSpacing.xxs),
+  );
 }

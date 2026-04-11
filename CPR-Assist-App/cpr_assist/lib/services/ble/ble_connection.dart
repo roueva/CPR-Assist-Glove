@@ -401,11 +401,16 @@ class BLEConnection {
     // compression has just been confirmed (compressionCount incremented).
     // We detect this by checking compressionCount vs last known value.
     if (_sessionActive && parsed.isContinuousData &&
-        parsed.depth > 0 && parsed.compressionCount > _lastCompressionCount) {
+        parsed.compressionCount > _lastCompressionCount) {
       _lastCompressionCount = parsed.compressionCount;
+      // Use depthTrend as the per-compression depth record (5-comp rolling avg peak)
+      // since instantaneous depth may be 0 at the moment the count increments.
+      final recordDepth = parsed.depthTrend > 0
+          ? parsed.depthTrend
+          : (parsed.depth > 0 ? parsed.depth : 0.1);
       _compressionEvents.add(CompressionEvent(
         timestampMs:          now - _sessionStartMs,
-        depth:                parsed.depth,
+        depth: recordDepth,
         instantaneousRate:    parsed.instantaneousRate,
         frequency:            parsed.frequency,
         force:                parsed.force,

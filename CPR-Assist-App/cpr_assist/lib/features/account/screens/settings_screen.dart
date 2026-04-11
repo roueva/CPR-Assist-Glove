@@ -7,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../../providers/app_providers.dart';
-import '../../../providers/session_provider.dart';
-import '../../training/services/export_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SettingsScreen
@@ -38,176 +36,235 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           bottom: AppSpacing.sm + MediaQuery.paddingOf(context).bottom,
         ),
         children: [
-          // ── Glove & Connection ───────────────────────────────────────────
+// ── Glove & Connection ───────────────────────────────────────────
           const _SectionHeader(label: 'Glove & Connection'),
-          _SettingsCard(children: [
-            _ToggleTile(
-              icon:     Icons.bluetooth_rounded,
-              title:    'Alert on disconnect',
-              subtitle: 'Notify when glove loses BLE connection',
-              value:    settings.notifyOnDisconnect,
-              onChanged: (v) => notifier.setNotifyOnDisconnect(v),
-            ),
-            const _SettingsDivider(),
-            _GloveTile(),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.switch_right_outlined,
-              title:    'Auto-switch to Live CPR',
-              subtitle: 'Navigate automatically when glove detects CPR start',
-              value:    settings.autoSwitchToCPR,
-              onChanged: (v) => notifier.setAutoSwitchToCPR(v),
-            ),
-            const _SettingsDivider(),
-            _NavTile(
-              icon:     Icons.tune_rounded,
-              title:    'Calibrate glove',
-              subtitle: 'Run force baseline + brightness calibration',
-              onTap:    () => _runCalibration(),
-            ),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.bluetooth_rounded,
+          title:    'Alert on disconnect',
+          subtitle: 'Warn if glove loses connection during an active session',
+          value:    settings.notifyOnDisconnect,
+          onChanged: (v) => notifier.setNotifyOnDisconnect(v),
+        ),
+        const _SettingsDivider(),
+        _NavTile(
+          icon:     Icons.tune_rounded,
+          title:    'Recalibrate sensors',
+          subtitle: 'Run if force readings seem inaccurate',
+          onTap:    () => _runCalibration(),
+        ),
+        const _SettingsDivider(),
+        _NavTile(
+          icon:     Icons.biotech_outlined,
+          title:    'Run glove self-test',
+          subtitle: 'Check all sensors and battery status',
+          onTap:    () => _runSelftest(),
+        ),
+      ]),
 
-            const _SettingsDivider(),
-            _NavTile(
-              icon:     Icons.biotech_outlined,
-              title:    'Run glove self-test',
-              subtitle: 'Check all sensors and battery status',
-              onTap:    () => _runSelftest(),
-            ),
-            const _SettingsDivider(),
-            _NavTile(
-              icon:     Icons.play_circle_outline_rounded,
-              title:    'App tutorial',
-              subtitle: 'Coming in a future update',
-              onTap:    () => _showTutorialComingSoon(),
-            ),
-          ]),
+// ── Glove Feedback ───────────────────────────────────────────────
+      const _SectionHeader(label: 'Glove Feedback'),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.vibration_rounded,
+          title:    'Haptic feedback',
+          subtitle: 'Vibrate glove on compression detection',
+          value:    settings.hapticFeedback,
+          onChanged: (v) {
+            notifier.setHapticFeedback(v);
+            if (v) HapticFeedback.lightImpact();
+            // ⚠️ TODO(firmware): replace with per-channel bitmask when 0xFE available
+            final any = v || settings.audioFeedback || settings.visualFeedback;
+            ref.read(bleConnectionProvider).sendFeedbackSet(enabled: any);
+          },
+        ),
+        const _SettingsDivider(),
+        _ToggleTile(
+          icon:     Icons.volume_up_outlined,
+          title:    'Audio feedback',
+          subtitle: 'Spoken pace cues during CPR',
+          value:    settings.audioFeedback,
+          onChanged: (v) {
+            notifier.setAudioFeedback(v);
+            // ⚠️ TODO(firmware): replace with per-channel bitmask when 0xFE available
+            final any = settings.hapticFeedback || v || settings.visualFeedback;
+            ref.read(bleConnectionProvider).sendFeedbackSet(enabled: any);
+          },
+        ),
+        const _SettingsDivider(),
+        // ⚠️ TODO(firmware): visual feedback (NeoPixels) currently shares the same
+        // 0xF2 sendFeedbackSet boolean as haptic+audio. When firmware implements
+        // 0xFE SET_FEEDBACK_CHANNELS with a bitmask, wire this toggle separately.
+        _ToggleTile(
+          icon:     Icons.light_mode_outlined,
+          title:    'Visual feedback',
+          subtitle: 'NeoPixel LED depth bar and alerts on glove',
+          value:    settings.visualFeedback,
+          onChanged: (v) {
+            notifier.setVisualFeedback(v);
+            final any = settings.hapticFeedback || settings.audioFeedback || v;
+            ref.read(bleConnectionProvider).sendFeedbackSet(enabled: any);
+          },
+        ),
+      ]),
 
-          // ── Feedback ────────────────────────────────────────────────────
-          const _SectionHeader(label: 'Feedback'),
-          _SettingsCard(children: [
-            _ToggleTile(
-              icon:     Icons.vibration_rounded,
-              title:    'Haptic feedback',
-              subtitle: 'Vibrate on compression detection',
-              value:    settings.hapticFeedback,
-              onChanged: (v) {
-                notifier.setHapticFeedback(v);
-                if (v) HapticFeedback.lightImpact();
-                final audio = ref.read(settingsProvider).audioFeedback;
-                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v || audio);
-              },
-            ),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.volume_up_outlined,
-              title:    'Audio feedback',
-              subtitle: 'Spoken pace cues during CPR',
-              value:    settings.audioFeedback,
-              onChanged: (v) {
-                notifier.setAudioFeedback(v);
-                final haptic = ref.read(settingsProvider).hapticFeedback;
-                ref.read(bleConnectionProvider).sendFeedbackSet(enabled: v || haptic);
-              },
-            ),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.straighten_outlined,
-              title:    'Show depth guide',
-              subtitle: 'Display target compression depth on screen',
-              value:    settings.showDepthGuide,
-              onChanged: (v) => notifier.setShowDepthGuide(v),
-            ),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.speed_outlined,
-              title:    'Show rate guide',
-              subtitle: 'Display target compression rate on screen',
-              value:    settings.showRateGuide,
-              onChanged: (v) => notifier.setShowRateGuide(v),
-            ),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.checklist_rounded,
-              title:    'Pre-session checklist',
-              subtitle: 'Show setup checklist before each training session',
-              value:    settings.showChecklist,
-              onChanged: (v) => notifier.setShowChecklist(v),
-            ),
-            const _SettingsDivider(),
-            _ToggleTile(
-              icon:     Icons.visibility_off_rounded,
-              title:    'No-Feedback training',
-              subtitle: 'Suppresses all glove cues — for self-assessment',
-              value:    settings.noFeedbackMode,
-              onChanged: (v) async {
-                await notifier.setNoFeedbackMode(v);
-                final current = ref.read(appModeProvider);
-                if (current.isTraining) {
-                  final newMode = v ? AppMode.trainingNoFeedback : AppMode.training;
-                  ref.read(appModeProvider.notifier).setMode(newMode);
-                  ref.read(bleConnectionProvider).sendModeSet(newMode.bleValue);
-                }
-              },
-            ),
-            const _SettingsDivider(),
-            _SelectTile(
-              icon:      Icons.medical_services_outlined,
-              title:     'Default scenario',
-              options:   const ['Adult', 'Pediatric'],
-              selected:  _scenarioLabel(settings.defaultScenario),
-              onChanged: (v) => notifier.setDefaultScenario(_scenarioKey(v)),
-            ),
-          ]),
+// ── Screen Feedback ──────────────────────────────────────────────
+      const _SectionHeader(label: 'Screen Feedback'),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.monitor_heart_outlined,
+          title:    'Show CPR metrics',
+          subtitle: 'Display depth, rate and coaching during CPR. '
+              'When off, only vitals are shown.',
+          value:    settings.showCprMetrics,
+          onChanged: (v) => notifier.setShowCprMetrics(v),
+        ),
+        const _SettingsDivider(),
+        _ToggleTile(
+          icon:     Icons.checklist_rounded,
+          title:    'Pre-session checklist',
+          subtitle: 'Confirm setup before each training session starts',
+          value:    settings.showChecklist,
+          onChanged: (v) => notifier.setShowChecklist(v),
+        ),
+      ]),
 
-          // ── Display ─────────────────────────────────────────────────────
-          const _SectionHeader(label: 'Display'),
-          _SettingsCard(children: [
-            _ToggleTile(
-              icon:     Icons.screen_lock_portrait_outlined,
-              title:    'Keep screen on',
-              subtitle: 'Prevent screen timeout during CPR sessions',
-              value:    settings.keepScreenOn,
-              onChanged: (v) => notifier.setKeepScreenOn(v),
-            ),
-            const _SettingsDivider(),
-            _SelectTile(
-              icon:      Icons.straighten_rounded,
-              title:     'Depth unit',
-              options:   const ['cm', 'in'],
-              selected:  settings.compressionUnit,
-              onChanged: (v) => notifier.setCompressionUnit(v),
-            ),
-          ]),
+// ── CPR Session ──────────────────────────────────────────────────
+      const _SectionHeader(label: 'CPR Session'),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.switch_right_outlined,
+          title:    'Auto-switch to Live CPR',
+          subtitle: 'Navigate automatically when glove detects CPR start',
+          value:    settings.autoSwitchToCPR,
+          onChanged: (v) => notifier.setAutoSwitchToCPR(v),
+        ),
+        const _SettingsDivider(),
+        _ToggleTile(
+          icon:     Icons.visibility_off_rounded,
+          title:    'No-Feedback mode as default',
+          subtitle: 'Start training without glove cues — for self-assessment',
+          value:    settings.noFeedbackMode,
+          onChanged: (v) async {
+            await notifier.setNoFeedbackMode(v);
+            final current = ref.read(appModeProvider);
+            if (current.isTraining) {
+              final newMode = v ? AppMode.trainingNoFeedback : AppMode.training;
+              ref.read(appModeProvider.notifier).setMode(newMode);
+              ref.read(bleConnectionProvider).sendModeSet(newMode.bleValue);
+            }
+          },
+        ),
+        const _SettingsDivider(),
+        _SelectTile(
+          icon:      Icons.medical_services_outlined,
+          title:     'Default scenario',
+          options:   const ['Adult', 'Pediatric'],
+          selected:  _scenarioLabel(settings.defaultScenario),
+          onChanged: (v) => notifier.setDefaultScenario(_scenarioKey(v)),
+        ),
+        const _SettingsDivider(),
+        _SelectTile(
+          icon:      Icons.mode_standby_outlined,
+          title:     'Default mode',
+          options:   const ['Emergency', 'Training'],
+          selected:  settings.defaultMode == 'training' ? 'Training' : 'Emergency',
+          onChanged: (v) => notifier.setDefaultMode(
+            v == 'Training' ? 'training' : 'emergency',
+          ),
+        ),
+      ]),
 
-          // ── Data & Privacy ───────────────────────────────────────────────
-          const _SectionHeader(label: 'Data & Privacy'),
-          _SettingsCard(children: [
-            _NavTile(
-              icon:     Icons.download_outlined,
-              title:    'Export session data',
-              subtitle:  'Download all sessions (training + emergency) as CSV',
-              onTap: () => _exportData(),
-            ),
-            const _SettingsDivider(),
-            _NavTile(
-              icon:       Icons.delete_outline_rounded,
-              iconColor:  AppColors.emergencyRed,
-              title:      'Delete all session data',
-              subtitle:   'Permanently remove all training records',
-              titleColor: AppColors.emergencyRed,
-              onTap:      () => _confirmDeleteData(),
-            ),
-            const _SettingsDivider(),
-            _NavTile(
-              icon:     Icons.settings_backup_restore_rounded,
-              title:    'Reset settings to defaults',
-              subtitle: 'Restore all app settings to their original values',
-              onTap:    () => _confirmResetDefaults(),
-            ),
-          ]),
+// ── Display ──────────────────────────────────────────────────────
+      const _SectionHeader(label: 'Display'),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.screen_lock_portrait_outlined,
+          title:    'Keep screen on',
+          subtitle: 'Prevent screen timeout during CPR sessions',
+          value:    settings.keepScreenOn,
+          onChanged: (v) => notifier.setKeepScreenOn(v),
+        ),
+        const _SettingsDivider(),
+        _SelectTile(
+          icon:      Icons.straighten_rounded,
+          title:     'Depth unit',
+          options:   const ['cm', 'in'],
+          selected:  settings.compressionUnit,
+          onChanged: (v) => notifier.setCompressionUnit(v),
+        ),
+      ]),
 
-          const SizedBox(height: AppSpacing.xl),
+// ── Notifications ────────────────────────────────────────────────
+      const _SectionHeader(label: 'Notifications'),
+      _SettingsCard(children: [
+        _ToggleTile(
+          icon:     Icons.fitness_center_outlined,
+          title:    'Training reminders',
+          subtitle: 'Get reminded to keep your CPR skills sharp',
+          value:    settings.trainingReminders,
+          onChanged: (v) => notifier.setTrainingReminders(v),
+        ),
+        if (settings.trainingReminders) ...[
+          const _SettingsDivider(),
+          _SelectTile(
+            icon:      Icons.schedule_outlined,
+            title:     'Reminder frequency',
+            options:   const ['Daily', 'Weekly'],
+            selected:  settings.reminderFrequency == 'daily' ? 'Daily' : 'Weekly',
+            onChanged: (v) => notifier.setReminderFrequency(
+              v == 'Daily' ? 'daily' : 'weekly',
+            ),
+          ),
         ],
+        const _SettingsDivider(),
+        _ToggleTile(
+          icon:     Icons.emoji_events_outlined,
+          title:    'Achievement alerts',
+          subtitle: 'Notify when you unlock a new achievement',
+          value:    settings.achievementAlerts,
+          onChanged: (v) => notifier.setAchievementAlerts(v),
+        ),
+        const _SettingsDivider(),
+        // ⚠️ TODO: Nearby emergency alerts require backend support — a POST endpoint
+        // to register active emergency sessions with coordinates, FCM/APNs push tokens,
+        // and a background geofence listener. Wire this toggle when that is built.
+        _ToggleTile(
+          icon:     Icons.place_outlined,
+          title:    'Nearby emergency alerts',
+          subtitle: 'Get notified when CPR is needed near you',
+          value:    settings.nearbyEmergencyAlerts,
+          onChanged: (v) {
+            if (v) {
+              AppDialogs.showAlert(
+                context,
+                icon:      Icons.place_outlined,
+                iconColor: AppColors.primary,
+                iconBg:    AppColors.primaryLight,
+                title:     'Coming Soon',
+                message:   'Nearby emergency notifications will be '
+                    'available in a future update.',
+              );
+              return;
+            }
+            notifier.setNearbyEmergencyAlerts(false);
+          },
+        ),
+      ]),
+
+// ── Reset ────────────────────────────────────────────────────────
+      const _SectionHeader(label: 'Reset'),
+      _SettingsCard(children: [
+        _NavTile(
+          icon:     Icons.settings_backup_restore_rounded,
+          title:    'Reset settings to defaults',
+          subtitle: 'Restore all app settings to their original values',
+          onTap:    () => _confirmResetDefaults(),
+        ),
+      ]),
+
+      const SizedBox(height: AppSpacing.xl),
+      ],
       ),
     );
   }
@@ -295,70 +352,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed != true || !mounted) return;
     await ref.read(settingsProvider.notifier).resetToDefaults();
     if (mounted) UIHelper.showSuccess(context, 'Settings reset to defaults');
-  }
-
-  void _showTutorialComingSoon() {
-    AppDialogs.showAlert(
-      context,
-      icon:      Icons.play_circle_outline_rounded,
-      iconColor: AppColors.primary,
-      iconBg:    AppColors.primaryLight,
-      title:     'Tutorial',
-      message:   'The tutorial walkthrough will be available in a future update.',
-    );
-  }
-
-  Future<void> _confirmDeleteData() async {
-    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
-    if (!isLoggedIn) {
-      UIHelper.showSnackbar(
-        context,
-        message: 'Sign in to manage session data',
-        icon:    Icons.lock_outline_rounded,
-      );
-      return;
-    }
-
-    final confirmed = await AppDialogs.showDestructiveConfirm(
-      context,
-      icon:         Icons.delete_outline_rounded,
-      iconColor:    AppColors.emergencyRed,
-      iconBg:       AppColors.emergencyBg,
-      title:        'Delete All Data?',
-      message:      'This will permanently delete all your training sessions '
-          'and scores. This cannot be undone.',
-      confirmLabel: 'Delete',
-      confirmColor: AppColors.emergencyRed,
-      cancelLabel:  'Cancel',
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    final service = ref.read(sessionServiceProvider);
-    final ok = await service.deleteAllSessions();
-    if (!mounted) return;
-    if (ok) {
-      ref.invalidate(sessionSummariesProvider);
-      UIHelper.showSuccess(context, 'All session data deleted');
-    } else {
-      UIHelper.showError(context, 'Failed to delete. Check your connection.');
-    }
-  }
-
-  Future<void> _exportData() async {
-    final summaries = ref.read(sessionSummariesProvider);
-    final sessions  = summaries.valueOrNull ?? [];
-    if (sessions.isEmpty) {
-      UIHelper.showSnackbar(context,
-          message: 'No sessions to export', icon: Icons.info_outline_rounded);
-      return;
-    }
-    UIHelper.showSnackbar(context,
-        message: 'Preparing export…', icon: Icons.download_outlined);
-    final ok = await ExportService.exportSessionsAsCsv(sessions);
-    if (!ok && mounted) {
-      UIHelper.showError(context, 'Export failed. Please try again.');
-    }
   }
 
   String _scenarioLabel(String key) {
@@ -601,11 +594,11 @@ class _NavTile extends StatelessWidget {
 
   const _NavTile({
     required this.icon,
-    this.iconColor,
     required this.title,
     this.subtitle,
-    this.titleColor,
     required this.onTap,
+    this.iconColor,
+    this.titleColor,
   });
 
   @override
@@ -671,75 +664,6 @@ class _IconBox extends StatelessWidget {
         radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
       ),
       child: Icon(icon, color: c, size: AppSpacing.iconSm),
-    );
-  }
-}
-class _GloveTile extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ble        = ref.watch(bleConnectionProvider);
-    return ValueListenableBuilder<String>(
-      valueListenable: ble.connectionStatusNotifier,
-      builder: (context, status, _) {
-        final isConnected = status == 'Connected';
-        return Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical:   AppSpacing.cardPadding - AppSpacing.xxs,
-            ),
-            child: Row(
-              children: [
-                const _IconBox(icon: Icons.watch_rounded),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('CPR Assist Glove',
-                          style: AppTypography.bodyMedium(size: 14)),
-                      Text(
-                        isConnected ? 'Connected' : 'Not connected',
-                        style: AppTypography.caption(
-                          color: isConnected ? AppColors.success : AppColors.textDisabled,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical:   AppSpacing.xs,
-                  ),
-                  decoration: AppDecorations.chip(
-                    color: isConnected ? AppColors.success : AppColors.textDisabled,
-                    bg:    isConnected ? AppColors.successBg : AppColors.screenBgGrey,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isConnected
-                            ? Icons.bluetooth_connected_rounded
-                            : Icons.bluetooth_disabled_rounded,
-                        size:  10,
-                        color: isConnected ? AppColors.success : AppColors.textDisabled,
-                      ),
-                      const SizedBox(width: AppSpacing.xxs),
-                      Text(
-                        isConnected ? 'BLE' : 'Offline',
-                        style: AppTypography.badge(
-                          size:  10,
-                          color: isConnected ? AppColors.success : AppColors.textDisabled,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            )
-        );
-      },
     );
   }
 }

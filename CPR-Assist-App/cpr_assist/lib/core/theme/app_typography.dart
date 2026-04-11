@@ -62,6 +62,7 @@ class AppTypography {
   static TextStyle heading({
     double size = 18,
     Color color = AppColors.textPrimary,
+    FontWeight weight = FontWeight.w700,
   }) =>
       inter(size: size, weight: FontWeight.w800, color: color, letterSpacing: -0.3);
 

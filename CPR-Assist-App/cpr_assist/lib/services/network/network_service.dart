@@ -152,7 +152,7 @@ class NetworkService {
         Uri.parse('$baseUrl/auth/refresh-token'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': token}),
-      ).timeout(AppConstants.apiTimeout);
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final body   = jsonDecode(response.body) as Map<String, dynamic>;

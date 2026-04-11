@@ -67,7 +67,7 @@ class _MainNavigationScreenState
     return Scaffold(
       key: _scaffoldKey,
       appBar: UniversalHeader.forMainScreens(
-        onAccountTap: _panelController.open,  // ← was openEndDrawer
+        onAccountTap: _panelController.toggle,  // ← was openEndDrawer
       ),
       body: Stack(
         children: [

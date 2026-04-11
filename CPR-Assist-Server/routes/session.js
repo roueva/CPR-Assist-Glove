@@ -117,6 +117,8 @@ module.exports = function (pool) {
     router.get('/summaries', authenticate, async (req, res) => {
         try {
             const userId = req.user.id;
+            const limit = Math.min(parseInt(req.query.limit) || 50, 200);  // ADD
+            const offset = parseInt(req.query.offset) || 0;                   // ADD
             const result = await pool.query(
                 `SELECT id, mode, scenario,
             compression_count, correct_depth, correct_frequency,
@@ -358,7 +360,9 @@ module.exports = function (pool) {
                     userId,                            // $1
                     resolvedMode,                      // $2
                     resolvedScenario,                  // $3
-                    d.session_start,                   // $4
+                    d.session_start
+                        ? new Date(d.session_start).toISOString().replace(/\.\d+Z$/, 'Z')
+                        : null,                        // $4 — ms stripped for stable upsert key
                     d.session_end ?? null,  // $5
                     d.compression_count ?? 0,     // $6
                     d.correct_depth ?? 0,     // $7

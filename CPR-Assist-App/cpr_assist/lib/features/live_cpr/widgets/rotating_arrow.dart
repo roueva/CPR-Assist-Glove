@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cpr_assist/core/core.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,11 +123,14 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
       final double cx = W / 2;
       final double cy = H * 0.88;
 
-      const double dotR    = 12.0;
-      const double needleW = 20.0;
-      const double needleH = 66.0;
-      // total height = triangle + overlap into circle so base touches circle edge
-      const double totalH  = needleH + dotR;
+      // Radius mirrors _ArcPainter: limited by width and available height
+      final double maxRByW  = W * 0.46;
+      final double maxRByH  = H * 0.88 - H * 0.08;
+      final double radius   = maxRByW < maxRByH ? maxRByW : maxRByH;
+      final double dotR     = radius * 0.10;
+      final double needleW  = radius * 0.16;
+      final double needleH  = radius * 0.42;
+      final double totalH   = needleH + dotR;
 
       return Stack(
         clipBehavior: Clip.none,
@@ -145,9 +147,20 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
                 alignment: Alignment.bottomCenter, // pivot = circle centre
                 child:     child,
               ),
-              child: const CustomPaint(
-                size: Size(needleW, totalH),
-                painter: _TrianglePainter(dotR: dotR),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color:      Color(0x44000000),
+                      blurRadius: 9,
+                      offset:     Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: CustomPaint(
+                  size: Size(needleW, totalH),
+                  painter: _TrianglePainter(dotR: dotR),
+                ),
               ),
             ),
           ),
@@ -159,14 +172,21 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
             child: Container(
               width:  dotR * 2,
               height: dotR * 2,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFACC9F6),
-                border: Border.all(
-                  color: const Color(0xFFDDEAFF),
-                  width: 3.5,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFACC9F6),
+                  border: Border.all(
+                    color: const Color(0xFFDDEAFF),
+                    width: 3.5,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color:      Color(0x44000000),
+                      blurRadius: 6,
+                      offset:     Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ),
             ),
           ),
 
@@ -234,10 +254,15 @@ class _ArcPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
-    final cx     = size.width / 2;
-    final cy     = size.height * 0.88; // centre close to bottom edge
-    final radius = size.width * 0.46; // large radius, near full width
-    final strokeW = size.width * 0.045; // chunky stroke
+    final cx      = size.width / 2;
+    final cy      = size.height * 0.88;
+    // Radius: limited by both width and available height above cy
+    // Available height above pivot = cy = H * 0.88
+    // We want the top of the arc to sit ~8% from the top of the widget
+    final maxRByW = size.width * 0.46;
+    final maxRByH = cy - size.height * 0.08; // don't let arc go above 8% from top
+    final radius  = maxRByW < maxRByH ? maxRByW : maxRByH;
+    final strokeW = radius * 0.095; // proportional to radius, not fixed width
 
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
 
@@ -263,11 +288,12 @@ class _ArcPainter extends CustomPainter {
       ..strokeWidth = strokeW;
 
     // ── When in green zone: full green illumination + dim red ─────────────
+    // When idle (no data): all zones lit equally at medium alpha
     // When outside: dim green + bright red on the relevant side
     final bool inGreen = _inGreenZone;
-    final double greenAlpha  = inGreen ? 0.85 + pulseValue * 0.15 : 0.35;
-    final double redAlpha    = inGreen ? 0.30 : 0.75;
-
+    final bool isIdle  = frequency <= 0;
+    final double greenAlpha = isIdle ? 0.85 : (inGreen ? 0.85 + pulseValue * 0.15 : 0.35);
+    final double redAlpha   = isIdle ? 0.75 : (inGreen ? 0.30 : 0.75);
     // Left red arc
     canvas.drawArc(rect, leftRedStart, leftRedSweep, false,
         arcPaint..color = AppColors.cprRed.withValues(alpha: redAlpha));

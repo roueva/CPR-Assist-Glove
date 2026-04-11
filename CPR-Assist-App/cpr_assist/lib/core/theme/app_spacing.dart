@@ -91,6 +91,9 @@ class AppSpacing {
   // Live CPR widget dimensions
   static const double sessionDotSize   = 10.0;
 
+  static const double arcWidth  = 300.0;
+  static const double arcHeight = 300.0;
+
   // ═══════════════════════════════════════════════════════
   // LAYOUT
   // ═══════════════════════════════════════════════════════
@@ -99,6 +102,8 @@ class AppSpacing {
   static const double emergencyBannerH  = 56.0;
   static const double bottomNavHeight   = 64.0;
   static const double dividerThickness  = 1.0;
-  static const double depthBarWidth    = 116.0;
-  static const double depthBarHeight   = 220.0;
+  static const double depthBarWidth    = 114.0;
+  static const double depthBarHeight   = 200.0;
+
+  static const double vitalsItemHeight = 44.0; // Divider height in VitalsCard
 }

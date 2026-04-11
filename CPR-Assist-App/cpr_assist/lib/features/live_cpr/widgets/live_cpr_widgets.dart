@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:cpr_assist/core/core.dart';
 import '../../../providers/app_providers.dart';
@@ -19,11 +18,15 @@ import 'rotating_arrow.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class VitalsCard extends StatelessWidget {
-  final String  label;
+  final String label;
   final double? heartRate;
   final double? temperature;
   final double? spO2;
-  final int?    signalQuality; // 0–100; shown as signal dots on rescuer card
+
+  // pulseConfidence: for patient card — gates HR/SpO₂ display (requires ≥ 40)
+  // null = rescuer card (no gating)
+  final int? pulseConfidence;
+  final int? rescuerSignalQuality;
 
   const VitalsCard({
     super.key,
@@ -31,150 +34,218 @@ class VitalsCard extends StatelessWidget {
     this.heartRate,
     this.temperature,
     this.spO2,
-    this.signalQuality,
+    this.pulseConfidence,
+    this.rescuerSignalQuality,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Patient card: HR and SpO₂ only shown when pulse check confidence >= 40
+    final bool hasValidPulse = pulseConfidence == null ||
+        pulseConfidence! >= 40;
+    final bool hasGoodSignal = rescuerSignalQuality == null ||
+        rescuerSignalQuality! >= 40;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.poppins(
-            size:   20,
-            weight: FontWeight.bold,
-            color:  AppColors.primary,
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.xs),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: AppTypography.poppins(
+                  size:   20,
+                  weight: FontWeight.bold,
+                  color:  AppColors.primary,
+                ),
+              ),
+              // Confidence badge — patient card only, when a check has run
+              if (pulseConfidence != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: hasValidPulse
+                        ? AppColors.successBg
+                        : AppColors.warningBg,
+                    borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+                  ),
+                  child: Text(
+                    '$pulseConfidence% confidence',
+                    style: AppTypography.poppins(
+                      size: 9,
+                      weight: FontWeight.w600,
+                      color: hasValidPulse
+                          ? AppColors.success
+                          : AppColors.warning,
+                    ),
+                  ),
+                ),
+              ],
+              // Signal quality badge — rescuer card only
+              if (rescuerSignalQuality != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs, vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: rescuerSignalQuality! >= 40
+                        ? AppColors.successBg
+                        : AppColors.warningBg,
+                    borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+                  ),
+                  child: Text(
+                    rescuerSignalQuality! >= 40 ? 'Good signal' : 'Poor signal',
+                    style: AppTypography.poppins(
+                      size: 9,
+                      weight: FontWeight.w600,
+                      color: rescuerSignalQuality! >= 40
+                          ? AppColors.success
+                          : AppColors.warning,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            vertical:   AppSpacing.cardPadding,
-            horizontal: AppSpacing.cardPadding,
-          ),
-          decoration: AppDecorations.card(),
+        Opacity(
+          opacity: hasGoodSignal ? 1.0 : 0.45,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.md,
+              horizontal: AppSpacing.sm,
+            ),
+            decoration: AppDecorations.card(),
             child: Row(
               children: [
                 Expanded(
                   child: _VitalItem(
-                    value: heartRate != null
-                        ? '${heartRate!.toStringAsFixed(0)} bpm'
+                    icon: Icons.favorite_rounded,
+                    iconColor: heartRate != null && hasValidPulse
+                        ? AppColors.primary
+                        : AppColors.textDisabled,
+                    value: heartRate != null && hasValidPulse
+                        ? heartRate!.toStringAsFixed(0)
                         : '--',
+                    unit: heartRate != null && hasValidPulse ? 'BPM' : '',
                     label: 'HEART RATE',
                   ),
                 ),
-                Container(
-                  width:  AppSpacing.dividerThickness,
-                  height: AppSpacing.iconXl,
-                  color:  AppColors.divider,
-                ),
+                _Divider(),
                 Expanded(
                   child: _VitalItem(
-                    value: spO2 != null
-                        ? '${spO2!.toStringAsFixed(0)}%'
+                    icon: Icons.air_rounded,
+                    iconColor: spO2 != null && hasValidPulse
+                        ? AppColors.primary
+                        : AppColors.textDisabled,
+                    value: spO2 != null && hasValidPulse
+                        ? spO2!.toStringAsFixed(0)
                         : '--',
+                    unit: spO2 != null && hasValidPulse ? '%' : '',
                     label: 'SpO₂',
-                    alignRight: false,
                   ),
                 ),
-                Container(
-                  width:  AppSpacing.dividerThickness,
-                  height: AppSpacing.iconXl,
-                  color:  AppColors.divider,
-                ),
+                _Divider(),
                 Expanded(
                   child: _VitalItem(
+                    icon: Icons.thermostat_rounded,
+                    iconColor: temperature != null
+                        ? AppColors.primary
+                        : AppColors.textDisabled,
                     value: temperature != null
-                        ? '${temperature!.toStringAsFixed(1)}°C'
+                        ? temperature!.toStringAsFixed(1)
                         : '--',
-                    label:      'TEMPERATURE',
-                    alignRight: true,
+                    unit: temperature != null ? '°C' : '',
+                    label: 'TEMP',
                   ),
                 ),
-
-                if (signalQuality != null) ...[
-                  Container(
-                    width:  AppSpacing.dividerThickness,
-                    height: AppSpacing.iconXl,
-                    color:  AppColors.divider,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(4, (i) {
-                            final filled = (signalQuality! / 25).ceil() > i;
-                            return Container(
-                              width:  4,
-                              height: 6 + (i * 3.0),
-                              margin: const EdgeInsets.symmetric(horizontal: 1),
-                              decoration: BoxDecoration(
-                                color: filled ? AppColors.success : AppColors.divider,
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(height: AppSpacing.xxs),
-                        Text('SIGNAL', style: AppTypography.poppins(size: 9, weight: FontWeight.w600, color: AppColors.textDisabled)),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
+          ),
         ),
       ],
     );
   }
 }
 
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+    width:  AppSpacing.dividerThickness,
+    height: AppSpacing.vitalsItemHeight,
+    color:  AppColors.divider,
+  );
+}
+
 class _VitalItem extends StatelessWidget {
-  final String value;
-  final String label;
-  final bool   alignRight;
+  final IconData icon;
+  final Color    iconColor;
+  final String   value;
+  final String   unit;
+  final String   label;
 
   const _VitalItem({
+    required this.icon,
+    required this.iconColor,
     required this.value,
+    required this.unit,
     required this.label,
-    this.alignRight = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left:  alignRight ? AppSpacing.md : 0,
-        right: alignRight ? 0 : AppSpacing.md,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: AppTypography.poppins(
-              size:   20,
-              weight: FontWeight.w600,
-              color:  AppColors.vitalsValue,
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Icon
+        Icon(icon, size: AppSpacing.iconSm, color: iconColor),
+        const SizedBox(height: AppSpacing.xxs),
+        // Value + unit on same line
+        RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: value,
+                style: AppTypography.poppins(
+                  size:   22,
+                  weight: FontWeight.w700,
+                  color:  AppColors.vitalsValue,
+                ),
+              ),
+              if (unit.isNotEmpty)
+                TextSpan(
+                  text: ' $unit',
+                  style: AppTypography.poppins(
+                    size:   11,
+                    weight: FontWeight.w500,
+                    color:  AppColors.textDisabled,
+                  ),
+                ),
+            ],
           ),
-          Text(
-            label,
-            style: AppTypography.poppins(
-              size:   12,
-              weight: FontWeight.w600,
-              color:  AppColors.textDisabled,
-            ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        // Label
+        Text(
+          label,
+          style: AppTypography.poppins(
+            size:   9,
+            weight: FontWeight.w600,
+            color:  AppColors.textDisabled,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveCprMetricsCard
@@ -185,8 +256,9 @@ class _VitalItem extends StatelessWidget {
 //   C) Status bar — only visible during an active session
 // ─────────────────────────────────────────────────────────────────────────────
 
-class LiveCprMetricsCard extends StatelessWidget {
+class LiveCprMetricsCard extends StatefulWidget {
   final double      depth;
+  final double peakDepth;
   final double      frequency;
   final Duration    cprTime;
   final int         compressionCount;
@@ -202,62 +274,126 @@ class LiveCprMetricsCard extends StatelessWidget {
   const LiveCprMetricsCard({
     super.key,
     required this.depth,
+    required this.peakDepth,
     required this.frequency,
     required this.cprTime,
     required this.compressionCount,
     required this.isSessionActive,
-    this.recoilAchieved = false,   // ADD
-    this.imuCalibrated    = true,
-    this.showFatigueBadge = false,
-    this.fatigueScore     = 0,
+    this.recoilAchieved    = false,
+    this.imuCalibrated     = true,
+    this.showFatigueBadge  = false,
+    this.fatigueScore      = 0,
     required this.scenario,
     this.compressionInCycle = 0,
-    this.isNoFeedback      = false,
+    this.isNoFeedback       = false,
   });
 
-  // Depth feedback — adult AHA target: 5–6 cm
-  _FeedbackState _depthFeedback(double d) {
-    if (d <= 0)                       return _FeedbackState.idle;
-    if (d < scenario.targetDepthMinCm) return _FeedbackState.bad;
-    if (d <= scenario.targetDepthMaxCm) return _FeedbackState.good;
-    return                              _FeedbackState.warn;
+  @override
+  State<LiveCprMetricsCard> createState() => _LiveCprMetricsCardState();
+}
+
+class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
+  // Consecutive compression counters for coaching throttle
+  int _consecutiveGood      = 0;
+  int _consecutiveTooShallow = 0;
+  int _consecutiveTooDeep   = 0;
+  int _consecutiveTooSlow   = 0;
+  int _consecutiveTooFast   = 0;
+  int _lastCompressionCount = 0;
+
+  static const int _kCoachingThreshold = 5;
+
+  @override
+  void didUpdateWidget(covariant LiveCprMetricsCard old) {
+    super.didUpdateWidget(old);
+    if (!old.isSessionActive && widget.isSessionActive) {
+      _consecutiveGood       = 0;
+      _lastCompressionCount  = 0;
+      _consecutiveTooShallow = 0;
+      _consecutiveTooDeep    = 0;
+      _consecutiveTooSlow    = 0;
+      _consecutiveTooFast    = 0;
+    }
   }
 
-  // Frequency feedback — adult AHA guideline: 100–120 CPM
+  _FeedbackState _depthFeedback(double d) {
+    if (d <= 0)                                    return _FeedbackState.idle;
+    if (d < widget.scenario.targetDepthMinCm)       return _FeedbackState.tooLittle;
+    if (d <= widget.scenario.targetDepthMaxCm)      return _FeedbackState.good;
+    return                                          _FeedbackState.tooMuch;
+  }
+
+  // Frequency: too slow = orange (tooLittle), too fast = red (tooMuch)
   _FeedbackState _freqFeedback(double f) {
     if (f <= 0)   return _FeedbackState.idle;
-    if (f < 100)  return _FeedbackState.bad;
+    if (f < 100)  return _FeedbackState.tooLittle;
     if (f <= 120) return _FeedbackState.good;
-    return         _FeedbackState.warn;
+    return         _FeedbackState.tooMuch;
   }
 
-  Widget _buildCoachingHint(_FeedbackState depthState, _FeedbackState freqState) {
+  void _updateConsecutiveCounts(
+      _FeedbackState depthState, _FeedbackState freqState) {
+    // Only count when a new compression arrives (compressionCount changed)
+    // Called once per build when session active — counts accumulate
+    if (depthState == _FeedbackState.good && freqState == _FeedbackState.good) {
+      _consecutiveGood++;
+      _consecutiveTooShallow = 0;
+      _consecutiveTooDeep    = 0;
+      _consecutiveTooSlow    = 0;
+      _consecutiveTooFast    = 0;
+    } else {
+      _consecutiveGood = 0;
+      if (depthState == _FeedbackState.tooLittle) {
+        _consecutiveTooShallow++;
+        _consecutiveTooDeep = 0;
+      } else if (depthState == _FeedbackState.tooMuch) {
+        _consecutiveTooDeep++;
+        _consecutiveTooShallow = 0;
+      }
+      if (freqState == _FeedbackState.tooLittle) {
+        _consecutiveTooSlow++;
+        _consecutiveTooFast = 0;
+      } else if (freqState == _FeedbackState.tooMuch) {
+        _consecutiveTooFast++;
+        _consecutiveTooSlow = 0;
+      }
+    }
+  }
+
+  Widget _buildCoachingHint(
+      _FeedbackState depthState, _FeedbackState freqState) {
+    final depthTarget = widget.scenario == CprScenario.pediatric
+        ? '4–5 cm' : '5–6 cm';
+    final rateMin = widget.scenario.targetRateMin;
+    final rateMax = widget.scenario.targetRateMax;
+
     String? message;
     Color   color = AppColors.cprOrange;
 
-    final depthTarget = scenario == CprScenario.pediatric ? '4–5 cm' : '5–6 cm';
-
-    if (depthState == _FeedbackState.bad) {
+    // Only show after threshold consecutive bad compressions
+    if (_consecutiveTooShallow >= _kCoachingThreshold) {
       message = 'Push deeper — aim for $depthTarget';
-    } else if (depthState == _FeedbackState.warn) {
-      message = 'Ease up slightly — too deep';
-    } else if (freqState == _FeedbackState.bad) {
-      message = 'Speed up — aim for ${scenario.targetRateMin}–${scenario.targetRateMax} per min';
-    } else if (freqState == _FeedbackState.warn) {
-      message = 'Slow down — you\'re above ${scenario.targetRateMax} per min';
-    } else if (depthState == _FeedbackState.good && freqState == _FeedbackState.good) {
+      color   = AppColors.cprOrange;
+    } else if (_consecutiveTooDeep >= _kCoachingThreshold) {
+      message = 'Ease up — you\'re going too deep';
+      color   = AppColors.cprRed;
+    } else if (_consecutiveTooSlow >= _kCoachingThreshold) {
+      message = 'Speed up — aim for $rateMin–$rateMax per min';
+      color   = AppColors.cprOrange;
+    } else if (_consecutiveTooFast >= _kCoachingThreshold) {
+      message = 'Slow down — above $rateMax per min';
+      color   = AppColors.cprRed;
+    } else if (_consecutiveGood >= _kCoachingThreshold) {
       message = 'Great technique — keep it up!';
-      color   = AppColors.cprGreen;
+      color   = AppColors.cprGreenBright;
     }
 
     if (message == null) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.cardPadding,
-        0,
-        AppSpacing.cardPadding,
-        AppSpacing.sm,
+        AppSpacing.cardPadding, 0,
+        AppSpacing.cardPadding, AppSpacing.sm,
       ),
       child: Text(
         message,
@@ -269,8 +405,13 @@ class LiveCprMetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final depthState = _depthFeedback(depth);
-    final freqState  = _freqFeedback(frequency);
+    final depthState = _depthFeedback(widget.depth);
+    final freqState  = _freqFeedback(widget.frequency);
+    if (widget.isSessionActive && !widget.isNoFeedback &&
+        widget.compressionCount != _lastCompressionCount) {
+      _lastCompressionCount = widget.compressionCount;
+      _updateConsecutiveCounts(depthState, freqState);
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -288,7 +429,7 @@ class LiveCprMetricsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
 
-          // ── A) Header ───────────────────────────────────────────────────
+// ── A) Header ───────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.cardPadding,
@@ -296,26 +437,66 @@ class LiveCprMetricsCard extends StatelessWidget {
               AppSpacing.cardPadding,
               AppSpacing.sm,
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _SessionDot(isActive: isSessionActive),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  cprTime.mmss,
-                  style: AppTypography.poppins(
-                    size:   38,
-                    weight: FontWeight.w700,
-                    color:  AppColors.textOnDark,
-                  ),
+            child: IntrinsicHeight(
+              child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+
+            // ── Timer block (first) ────────────────────────────────
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.sm,
                 ),
-                const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                decoration: AppDecorations.cprStatBlock(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.cprTime.mmss,
+                        style: AppTypography.poppins(
+                          size:   32,
+                          weight: FontWeight.w700,
+                          color:  AppColors.textOnDark,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _SessionDot(isActive: widget.isSessionActive),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            'CPR TIME',
+                            style: AppTypography.badge(
+                              size:  9,
+                              color: AppColors.textOnDark.withValues(alpha: 0.55),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+              ),
+            ),
+
+            const SizedBox(width: AppSpacing.sm),
+
+            // ── Compressions block (second) ───────────────────────
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.sm,
+                ),
+                decoration: AppDecorations.cprStatBlock(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      compressionCount.toString(),
+                      widget.compressionCount.toString(),
                       style: AppTypography.poppins(
                         size:   32,
                         weight: FontWeight.w700,
@@ -329,30 +510,79 @@ class LiveCprMetricsCard extends StatelessWidget {
                         color: AppColors.textOnDark.withValues(alpha: 0.55),
                       ),
                     ),
-                    // Cycle counter — only when session active and in a cycle
-                    if (isSessionActive && compressionInCycle > 0) ...[
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        '$compressionInCycle / 30',
-                        style: AppTypography.badge(
-                          size:  9,
-                          color: compressionInCycle >= 26
-                              ? AppColors.cprOrange
-                              : AppColors.textOnDark.withValues(alpha: 0.55),
-                        ),
+                    if (widget.isSessionActive && widget.compressionInCycle > 0) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          // Counter label
+                          Text(
+                            '${widget.compressionInCycle}/30',
+                            style: AppTypography.badge(
+                              size:  9,
+                              color: widget.compressionInCycle >= 26
+                                  ? AppColors.cprOrange
+                                  : AppColors.textOnDark.withValues(alpha: 0.55),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          // Progress bar fills remaining space
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(AppSpacing.xxs),
+                              child: LinearProgressIndicator(
+                                value:           widget.compressionInCycle / 30,
+                                minHeight:       4,
+                                backgroundColor: AppColors.textOnDark.withValues(alpha: 0.15),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  widget.compressionInCycle >= 26
+                                      ? AppColors.cprOrange
+                                      : AppColors.cprGreenBright,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
 
-          // Separator
-          Container(
-            height: AppSpacing.dividerThickness,
-            color:  AppColors.textOnDark.withValues(alpha: 0.08),
-          ),
+          ],
+        ),
+      ),
+    ),
+// ── Calibration strip — shown during first seconds of session ─────
+          if (widget.isSessionActive && !widget.imuCalibrated)
+            Container(
+              margin: const EdgeInsets.fromLTRB(
+                AppSpacing.cardPadding, AppSpacing.xs,
+                AppSpacing.cardPadding, 0,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical:   AppSpacing.xs,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width:  AppSpacing.iconSm,
+                    height: AppSpacing.iconSm,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Calibrating...',
+                    style: AppTypography.label(size: 11, color: AppColors.warning),
+                  ),
+                ],
+              ),
+            ),
 
           // ── B) Gauge row ─────────────────────────────────────────────────
           Padding(
@@ -372,7 +602,7 @@ class LiveCprMetricsCard extends StatelessWidget {
                       flex: 3,
                       child: Align(
                         alignment: Alignment.center,
-                        child: _FrequencyGauge(frequency: frequency, state: freqState),
+                        child: _FrequencyGauge(frequency: widget.frequency, state: freqState),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
@@ -381,10 +611,11 @@ class LiveCprMetricsCard extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: _DepthColumn(
-                          depth:          depth,
+                          depth:          widget.depth,
+                          peakDepth:      widget.peakDepth,
                           state:          depthState,
-                          recoilAchieved: recoilAchieved,
-                          scenario:       scenario,
+                          recoilAchieved: widget.recoilAchieved,
+                          scenario:       widget.scenario,
                         ),
                       ),
                     ),
@@ -395,46 +626,11 @@ class LiveCprMetricsCard extends StatelessWidget {
           ),
 
           // ── Coaching hint — shown when something is off ───────────────────
-          if (isSessionActive && !isNoFeedback)
+          if (widget.isSessionActive && !widget.isNoFeedback)
             _buildCoachingHint(depthState, freqState),
 
-          // ── Fatigue indicator ─────────────────────────────────────────────────
-          if (showFatigueBadge && isSessionActive)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.cardPadding, 0,
-                AppSpacing.cardPadding, AppSpacing.xs,
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: AppSpacing.xs,
-                ),
-                decoration: BoxDecoration(
-                  color:        AppColors.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-                  border: Border.all(
-                    color: AppColors.warning.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.trending_down_rounded,
-                        size: 14, color: AppColors.warning),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Text(
-                        'Depth declining — press harder',
-                        style: AppTypography.label(size: 11, color: AppColors.warning),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
           // ── C) Status bar — active sessions only ─────────────────────────
-          if (isSessionActive && !isNoFeedback)
+          if (widget.isSessionActive && !widget.isNoFeedback)
             Container(
               margin: const EdgeInsets.fromLTRB(
                 AppSpacing.cardPadding,
@@ -451,10 +647,10 @@ class LiveCprMetricsCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _FeedbackLabel(
-                      state:    freqState,
-                      goodText: 'GOOD RATE',
-                      badText:  'TOO SLOW',
-                      warnText: 'TOO FAST',
+                      state:         freqState,
+                      goodText:      'GOOD RATE',
+                      tooLittleText: 'TOO SLOW',
+                      tooMuchText:   'TOO FAST',
                     ),
                   ),
                   Container(
@@ -464,11 +660,11 @@ class LiveCprMetricsCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: _FeedbackLabel(
-                      state:      depthState,
-                      goodText:   'GOOD DEPTH',
-                      badText:    'TOO SHALLOW',
-                      warnText:   'TOO DEEP',
-                      alignRight: true,
+                      state:         depthState,
+                      goodText:      'GOOD DEPTH',
+                      tooLittleText: 'TOO SHALLOW',
+                      tooMuchText:   'TOO DEEP',
+                      alignRight:    true,
                     ),
                   ),
                 ],
@@ -532,7 +728,7 @@ class _SessionDotState extends State<_SessionDot>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isActive ? AppColors.cprGreen : AppColors.textDisabled;
+    final color = widget.isActive ? AppColors.cprGreenBright : AppColors.textDisabled;
     return ScaleTransition(
       scale: _scale,
       child: Container(
@@ -551,15 +747,17 @@ class _SessionDotState extends State<_SessionDot>
 // _FeedbackState
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _FeedbackState { idle, good, bad, warn }
+enum _FeedbackState { idle, good, tooLittle, tooMuch }
 
 extension _FeedbackStateX on _FeedbackState {
+  // tooLittle = orange (needs more effort — correctable)
+  // tooMuch   = red    (dangerous — back off)
   Color get color {
     switch (this) {
-      case _FeedbackState.good: return AppColors.cprGreen;
-      case _FeedbackState.bad:  return AppColors.cprRed;
-      case _FeedbackState.warn: return AppColors.cprOrange;
-      case _FeedbackState.idle: return AppColors.textOnDark;
+      case _FeedbackState.good:      return AppColors.cprGreenBright;
+      case _FeedbackState.tooLittle: return AppColors.cprOrange;
+      case _FeedbackState.tooMuch:   return AppColors.cprRed;
+      case _FeedbackState.idle:      return AppColors.textOnDark;
     }
   }
 }
@@ -571,24 +769,24 @@ extension _FeedbackStateX on _FeedbackState {
 class _FeedbackLabel extends StatelessWidget {
   final _FeedbackState state;
   final String         goodText;
-  final String         badText;
-  final String         warnText;
+  final String         tooLittleText;
+  final String         tooMuchText;
   final bool           alignRight;
 
   const _FeedbackLabel({
     required this.state,
     required this.goodText,
-    required this.badText,
-    required this.warnText,
+    required this.tooLittleText,
+    required this.tooMuchText,
     this.alignRight = false,
   });
 
   String get _text {
     switch (state) {
-      case _FeedbackState.good: return goodText;
-      case _FeedbackState.bad:  return badText;
-      case _FeedbackState.warn: return warnText;
-      case _FeedbackState.idle: return '';
+      case _FeedbackState.good:      return goodText;
+      case _FeedbackState.tooLittle: return tooLittleText;
+      case _FeedbackState.tooMuch:   return tooMuchText;
+      case _FeedbackState.idle:      return '';
     }
   }
 
@@ -645,9 +843,6 @@ class _FrequencyGauge extends StatelessWidget {
   final double         frequency;
   final _FeedbackState state;
 
-  static const double _arcWidth  = 200.0;
-  static const double _arcHeight = 150.0;
-
   const _FrequencyGauge({required this.frequency, required this.state});
 
   @override
@@ -656,43 +851,40 @@ class _FrequencyGauge extends StatelessWidget {
         ? AppColors.textOnDark.withValues(alpha: 0.4)
         : state.color;
 
-    return SizedBox(
-      width: _arcWidth,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'FREQUENCY',
-            textAlign: TextAlign.center,
-            style: AppTypography.badge(
-              size:  10,
-              color: AppColors.textOnDark.withValues(alpha: 0.55),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'FREQUENCY',
+          textAlign: TextAlign.center,
+          style: AppTypography.badge(
+            size:  10,
+            color: AppColors.textOnDark.withValues(alpha: 0.55),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width:  _arcWidth,
-            height: _arcHeight,
-            child:  FrequencyArcGauge(frequency: frequency),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        // Arc fills all available width; height driven by aspect ratio
+        AspectRatio(
+          aspectRatio: 1.1, // slightly wider than tall — adjust this to make taller/shorter
+          child: FrequencyArcGauge(frequency: frequency),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          frequency > 0 ? frequency.toStringAsFixed(0) : '--',
+          style: AppTypography.poppins(
+            size:   28,
+            weight: FontWeight.w700,
+            color:  valueColor,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            frequency > 0 ? frequency.toStringAsFixed(0) : '--',
-            style: AppTypography.poppins(
-              size:   28,
-              weight: FontWeight.w700,
-              color:  valueColor,
-            ),
+        ),
+        Text(
+          'CPM',
+          style: AppTypography.badge(
+            size:  9,
+            color: AppColors.textOnDark.withValues(alpha: 0.4),
           ),
-          Text(
-            'CPM',
-            style: AppTypography.badge(
-              size:  9,
-              color: AppColors.textOnDark.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -703,6 +895,7 @@ class _FrequencyGauge extends StatelessWidget {
 
 class _DepthColumn extends StatelessWidget {
   final double         depth;
+  final double         peakDepth;
   final _FeedbackState state;
   final bool           recoilAchieved;
   final CprScenario    scenario;
@@ -712,6 +905,7 @@ class _DepthColumn extends StatelessWidget {
 
   const _DepthColumn({
     required this.depth,
+    required this.peakDepth,
     required this.state,
     required this.scenario,
     this.recoilAchieved = false,
@@ -743,14 +937,14 @@ class _DepthColumn extends StatelessWidget {
             height: _barHeight,
             child: AnimatedDepthBar(
               depth:             depth,
-              recoilAchieved:    recoilAchieved,
+              recoilAchieved:    recoilAchieved && depth > 0,
               targetDepthCm:     scenario.targetDepthMinCm,
               targetDepthMaxCm:  scenario.targetDepthMaxCm,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            depth > 0 ? '${depth.toStringAsFixed(1)} cm' : '--',
+            peakDepth > 0 ? '${peakDepth.toStringAsFixed(1)} cm' : '--',
             style: AppTypography.poppins(
               size:   22,
               weight: FontWeight.w700,
@@ -762,100 +956,6 @@ class _DepthColumn extends StatelessWidget {
             style: AppTypography.badge(
               size:  9,
               color: AppColors.textOnDark.withValues(alpha: 0.4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _LastPulseCheckStrip
-//
-// Compact read-only banner showing the result of the most recent pulse check.
-// Only shown in Emergency mode, after at least one check has completed.
-// Disappears when a new session starts.
-// ─────────────────────────────────────────────────────────────────────────────
-
-class LastPulseCheckStrip extends StatelessWidget {
-  final int     classification; // 0=absent, 1=uncertain, 2=present
-  final double? detectedBpm;
-  final int?    confidence;
-  final double? temperature;
-  final int?    intervalNumber;
-
-  const LastPulseCheckStrip({
-    required this.classification,
-    this.detectedBpm,
-    this.confidence,
-    this.temperature,
-    this.intervalNumber,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon, color) = switch (classification) {
-      2 => ('Pulse detected', Icons.favorite_rounded,       AppColors.success),
-      1 => ('Pulse uncertain', Icons.favorite_border_rounded, AppColors.warning),
-      _ => ('No pulse found', Icons.heart_broken_rounded,   AppColors.error),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical:   AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color:        color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
-        border:       Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'Last pulse check${intervalNumber != null ? ' #$intervalNumber' : ''}',
-                      style: AppTypography.badge(color: AppColors.textSecondary),
-                    ),
-                    if (confidence != null) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        '· $confidence% confidence',
-                        style: AppTypography.badge(color: AppColors.textDisabled),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(label, style: AppTypography.label(size: 13, color: color)),
-                    if (detectedBpm != null) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        '· ${detectedBpm!.toStringAsFixed(0)} bpm',
-                        style: AppTypography.label(size: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
-                    if (temperature != null) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        '· ${temperature!.toStringAsFixed(1)}°C',
-                        style: AppTypography.label(size: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
             ),
           ),
         ],

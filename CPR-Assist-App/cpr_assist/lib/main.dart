@@ -18,53 +18,50 @@ import 'services/network/network_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await CustomIcons.loadIcons();
-  await AEDClusterManager.prewarmIconCache();
-  await dotenv.load(fileName: '.env');
-  await AvailabilityParser.loadRules();
-
   final prefs = await SharedPreferences.getInstance();
-
-  // Apply wakelock from persisted setting
-  final wakelockPref = prefs.getBool('settings_keepScreenOn') ?? true;
-  if (wakelockPref) {
-    await WakelockPlus.enable();
-  } else {
-    await WakelockPlus.disable();
-  }
-
   final networkService = NetworkService();
-  await networkService.initialize(prefs);
-
-  bool cachesInitialized = false;
-  String? cacheError;
-  try {
-    await CacheService.initializeAllCaches();
-    cachesInitialized = true;
-  } catch (e) {
-    cacheError = e.toString();
-  }
-
-  NetworkService.startConnectivityMonitoring(
-    interval: AppConstants.connectivityCheckInterval,
-  );
+  networkService.initialize(prefs); // drop the await — it's just _prefs = prefs
   _filterLogs();
 
+  final wakelockPref = prefs.getBool('settings_keepScreenOn') ?? true;
+  if (wakelockPref) { unawaited(WakelockPlus.enable()); }
+  else { unawaited(WakelockPlus.disable()); }
+
   final container = ProviderContainer(
-    overrides: [
-      sharedPreferencesProvider.overrideWithValue(prefs),
-      cacheAvailabilityProvider.overrideWithValue(cachesInitialized),
-    ],
+    overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
   );
 
-  await container.read(authStateProvider.notifier).checkAuthStatus();
-
+  // Show the app NOW — don't block on network or disk I/O
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: MyApp(cacheError: cacheError),
+      child: const MyApp(),
     ),
   );
+
+  // Deferred: runs after first frame is painted
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // ADD these two at the top:
+    await dotenv.load(fileName: '.env');
+    NetworkService.startConnectivityMonitoring(
+      interval: AppConstants.connectivityCheckInterval,
+    );
+    // Heavy rendering work — doesn't need to block UI
+    unawaited(CustomIcons.loadIcons());
+    unawaited(AEDClusterManager.prewarmIconCache());
+    unawaited(AvailabilityParser.loadRules());
+
+    // Auth check — may do HTTP, must not block launch
+    unawaited(container.read(authStateProvider.notifier).checkAuthStatus());
+
+    // Cache init — disk reads
+    try {
+      await CacheService.initializeAllCaches();
+      container.read(cacheInitializedProvider.notifier).state = true;
+    } catch (e) {
+      container.read(cacheErrorProvider.notifier).state = e.toString();
+    }
+  });
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -77,8 +74,7 @@ final ValueNotifier<int> nfcTabNotifier = ValueNotifier<int>(-1);
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MyApp extends ConsumerStatefulWidget {
-  final String? cacheError;
-  const MyApp({super.key, this.cacheError});
+  const MyApp({super.key});
 
   @override
   ConsumerState<MyApp> createState() => _MyAppState();
@@ -91,19 +87,21 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    if (widget.cacheError != null) {
-      // Show after first frame — no inline ScaffoldMessenger calls.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          UIHelper.showWarning(
-            context,
-            'Offline mode limited — some features may be unavailable',
-          );
-        }
-      });
-    }
     _handleIncomingLinks();
+
+    // ADD this:
+    ref.listenManual<String?>(cacheErrorProvider, (_, error) {
+      if (error != null && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            UIHelper.showWarning(
+              context,
+              'Offline mode limited — some features may be unavailable',
+            );
+          }
+        });
+      }
+    });
   }
 
   @override

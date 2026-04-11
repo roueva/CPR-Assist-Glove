@@ -8,15 +8,6 @@ import 'registration_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LoginScreen
-//
-// Login is NEVER required to use the app.
-// This screen is only reached from:
-//   1. AccountPanel → "Log In" item (unauthenticated state)
-//   2. Post-session prompt after an Emergency session
-//   3. Training mode gate when not logged in
-//
-// On success: pops with true so the caller can react.
-// On dismiss:  pops with false — caller stays in current state.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -28,9 +19,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _formKey            = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _formKey              = GlobalKey<FormState>();
+  final _identifierController = TextEditingController();
+  final _passwordController   = TextEditingController();
 
   bool    _isLoading       = false;
   bool    _passwordVisible = false;
@@ -44,23 +35,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     super.initState();
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
     )..forward();
-    _fadeAnim = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    );
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
-    _usernameController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // ── Login logic ────────────────────────────────────────────────────────────
+  // ── Error mapping ──────────────────────────────────────────────────────────
+
+  String _friendlyError(dynamic e) {
+    final raw = e.toString().toLowerCase();
+    if (raw.contains('no internet connection') ||
+        raw.contains('socketexception') ||
+        raw.contains('failed host lookup') ||
+        raw.contains('connection refused')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    if (raw.contains('timed out') || raw.contains('request timed out')) {
+      return 'Request timed out. Please check your connection and try again.';
+    }
+    if (raw.contains('401') ||
+        raw.contains('invalid credentials') ||
+        raw.contains('unauthorized')) {
+      return 'Incorrect username/email or password. Please try again.';
+    }
+    if (raw.contains('400') || raw.contains('validation failed')) {
+      return 'Please check your input and try again.';
+    }
+    if (raw.contains('429')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    if (raw.contains('500') || raw.contains('503') || raw.contains('502')) {
+      return 'Server error. Please try again later.';
+    }
+    return e.toString().replaceFirst('Exception: ', '');
+  }
+
+  // ── Login ──────────────────────────────────────────────────────────────────
 
   Future<void> _login() async {
     UIHelper.unfocus(context);
@@ -74,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     try {
       final network  = ref.read(networkServiceProvider);
       final response = await network.post('/auth/login', {
-        'username': _usernameController.text.trim(),
+        'username': _identifierController.text.trim(),
         'password': _passwordController.text.trim(),
       });
 
@@ -82,21 +100,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         await ref.read(authStateProvider.notifier).login(
           response['token'],
           response['user_id'],
-          _usernameController.text.trim(),
+          _identifierController.text.trim(),
         );
         if (mounted) context.pop(true);
       } else {
+        final serverMsg = response['message'] as String? ??
+            response['error']   as String? ?? '';
         setState(() {
-          _errorMessage =
-              response['message'] ?? 'Login failed. Please try again.';
+          _errorMessage = _friendlyError(serverMsg.isEmpty ? '401' : serverMsg);
         });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().contains('SocketException') || e.toString().contains('timed out')
-            ? 'Network error. Please check your connection and try again.'
-            : e.toString().replaceFirst('Exception: ', '');
-      });
+      setState(() => _errorMessage = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -110,55 +125,89 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       onTap: () => UIHelper.unfocus(context),
       child: Scaffold(
         backgroundColor: AppColors.screenBgGrey,
-        body: FadeTransition(
+        body: Stack(
+          children: [
+          FadeTransition(
           opacity: _fadeAnim,
           child: CustomScrollView(
             slivers: [
-              // ── Hero header ────────────────────────────────────────────────
-              SliverToBoxAdapter(child: _HeroHeader()),
+// ── Logo block ────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+            padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            context.padding.top + AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.sm,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width:  72,
+                    height: 72,
+                    decoration: AppDecorations.card(
+                        radius: AppSpacing.cardRadiusLg),
+                    child: const Icon(
+                      Icons.show_chart_rounded,
+                      color: AppColors.primary,
+                      size:  AppSpacing.iconLg + AppSpacing.sm,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'CPR Assist',
+                    style: AppTypography.heading(
+                        size: 24, color: AppColors.textPrimary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+      ),
+    ),
 
               // ── Form card ─────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.md,
+                    AppSpacing.md, AppSpacing.md,
+                    AppSpacing.md, AppSpacing.sm,
                   ),
                   child: Container(
                     decoration: AppDecorations.card(),
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Form(
                       key: _formKey,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      autovalidateMode: AutovalidateMode.disabled,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Welcome back',
+                          Text('Log In',
                               style: AppTypography.heading(size: 22)),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            'Log in to track your sessions and progress.',
+                            'Welcome back. Enter your credentials to continue.',
                             style: AppTypography.body(
                                 color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: AppSpacing.lg),
 
-                          // Username
-                          const _FieldLabel('Username'),
+                          // Username / Email
+                          const _FieldLabel('Username or Email'),
                           const SizedBox(height: AppSpacing.xs),
                           _AppTextField(
-                            controller: _usernameController,
-                            hint:       'Enter your username',
-                            icon:       Icons.person_outline_rounded,
-                            action:     TextInputAction.next,
+                            controller:   _identifierController,
+                            hint:         'name@example.com or username',
+                            icon:         Icons.person_outline_rounded,
+                            action:       TextInputAction.next,
+                            keyboardType: TextInputType.emailAddress,
                             validator: (v) {
                               if (v == null || v.trim().isEmpty) {
-                                return 'Please enter your username';
-                              }
-                              if (v.trim().length < 3) {
-                                return 'At least 3 characters';
+                                return 'Please enter your username or email';
                               }
                               return null;
                             },
@@ -190,40 +239,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               if (v == null || v.isEmpty) {
                                 return 'Please enter your password';
                               }
-                              if (v.length < 6) return 'At least 6 characters';
                               return null;
                             },
                           ),
 
+                          // Forgot password
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () => context.push(const ForgotPasswordScreen()),
+                              onPressed: () =>
+                                  context.push(const ForgotPasswordScreen()),
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.xs,
-                                  vertical:   AppSpacing.xxs,
+                                padding: const EdgeInsets.only(
+                                  left:   AppSpacing.xs,
+                                  right:  AppSpacing.xs,
+                                  top:    AppSpacing.xxs,
+                                  bottom: AppSpacing.xxs,
                                 ),
+                                tapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: Text(
                                 'Forgot password?',
                                 style: AppTypography.body(
-                                  size:  13,
-                                  color: AppColors.primary,
-                                ),
+                                    size: 13, color: AppColors.primary),
                               ),
                             ),
                           ),
 
-                          // Error message
+                          // Error banner
                           if (_errorMessage != null) ...[
-                            const SizedBox(height: AppSpacing.md),
+                            const SizedBox(height: AppSpacing.xs),
                             _ErrorBanner(message: _errorMessage!),
                           ],
+                          const SizedBox(height: AppSpacing.md),
 
-                          const SizedBox(height: AppSpacing.lg),
-
-                          // Login button
+                          // Log In button
                           SizedBox(
                             width: double.infinity,
                             child: _isLoading
@@ -241,6 +292,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             )
                                 : ElevatedButton(
                               onPressed: _login,
+                              style: ElevatedButton.styleFrom(
+                                elevation: 4,
+                                shadowColor: AppColors.primary
+                                    .withValues(alpha: 0.4),
+                              ),
                               child: const Text('Log In'),
                             ),
                           ),
@@ -251,16 +307,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
               ),
 
-              // ── Register link ──────────────────────────────────────────────
+              // ── "or" divider ───────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md),
-                  child: _RegisterPrompt(),
+                    horizontal: AppSpacing.md,
+                    vertical:   AppSpacing.sm,
+                  ),
+                  child: Row(children: [
+                    const Expanded(
+                        child: Divider(
+                            thickness: 0.5,
+                            color: AppColors.textDisabled)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm),
+                      child: Text('or',
+                          style: AppTypography.body(
+                              size: 13,
+                              color: AppColors.textDisabled)),
+                    ),
+                    const Expanded(
+                        child: Divider(
+                            thickness: 0.5,
+                            color: AppColors.textDisabled)),
+                  ]),
                 ),
               ),
 
-              // ── Skip link ──────────────────────────────────────────────────
+              // ── Create account ─────────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md, 0, AppSpacing.md, 0),
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        context.push(const RegistrationScreen()),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      'Create Account',
+                      style: AppTypography.buttonSecondary(),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Skip ───────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Center(
                   child: TextButton(
@@ -275,10 +371,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
 
               SliverToBoxAdapter(
-                child: SizedBox(height: AppSpacing.xl + MediaQuery.paddingOf(context).bottom),
+                child: SizedBox(
+                    height: AppSpacing.md + context.padding.bottom),
               ),
             ],
           ),
+          ),
+            // ── Fixed back arrow ───────────────────────────────────────────
+            Positioned(
+              top:  context.padding.top + AppSpacing.xs,
+              left: AppSpacing.xs,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.textSecondary,
+                  size:  AppSpacing.iconMd,
+                ),
+                onPressed: () => context.pop(false),
+                tooltip: 'Back',
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -286,117 +399,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Register prompt card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _RegisterPrompt extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.primaryCard(),
-      child: Row(
-        children: [
-          Container(
-            width:  AppSpacing.iconXl,
-            height: AppSpacing.iconXl,
-            decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
-            child: const Icon(Icons.person_add_outlined,
-                color: AppColors.primary, size: AppSpacing.iconMd),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Don't have an account?",
-                    style: AppTypography.bodyMedium(size: 14)),
-                Text('Create one — it only takes a minute.',
-                    style: AppTypography.caption()),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => context.push(const RegistrationScreen()),
-            child: Text('Register',
-                style: AppTypography.buttonSecondary()),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Hero header
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HeroHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        context.padding.top + AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
-      ),
-      decoration: AppDecorations.primaryGradientCard(radius: 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: () => context.pop(false),
-            child: Container(
-              width:  AppSpacing.touchTargetMin,
-              height: AppSpacing.touchTargetMin,
-              decoration: AppDecorations.iconCircle(
-                bg: AppColors.textOnDark.withValues(alpha: 0.15),
-              ),
-              child: const Icon(
-                Icons.arrow_back_rounded,
-                color: AppColors.textOnDark,
-                size:  AppSpacing.iconMd,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          // Icon
-          Container(
-            width:  AppSpacing.iconXl + AppSpacing.lg,  // 72
-            height: AppSpacing.iconXl + AppSpacing.lg,
-            decoration: AppDecorations.iconCircle(
-              bg: AppColors.textOnDark.withValues(alpha: 0.15),
-            ),
-            child: const Icon(
-              Icons.monitor_heart_outlined,
-              color: AppColors.textOnDark,
-              size:  AppSpacing.iconLg + AppSpacing.sm,  // 40
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          Text(
-            'CPR Assist',
-            style: AppTypography.displayLg(color: AppColors.textOnDark),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Your sessions, progress, and rankings\nare just one login away.',
-            style: AppTypography.body(
-                color: AppColors.textOnDark.withValues(alpha: 0.75)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared field label
+// Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FieldLabel extends StatelessWidget {
@@ -404,19 +407,15 @@ class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.text);
 
   @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: AppTypography.label(
-            size: 13, color: AppColors.textSecondary));
-  }
+  Widget build(BuildContext context) => Text(
+    text,
+    style: AppTypography.label(size: 13, color: AppColors.textPrimary),
+  );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared text field
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _AppTextField extends StatelessWidget {
   final TextEditingController      controller;
+  final FocusNode?                 focusNode;
   final String                     hint;
   final IconData                   icon;
   final TextInputAction            action;
@@ -424,6 +423,7 @@ class _AppTextField extends StatelessWidget {
   final Widget?                    suffix;
   final String? Function(String?)? validator;
   final void Function(String)?     onSubmitted;
+  final TextInputType?             keyboardType;
 
   const _AppTextField({
     required this.controller,
@@ -434,31 +434,31 @@ class _AppTextField extends StatelessWidget {
     this.suffix,
     this.validator,
     this.onSubmitted,
+    this.keyboardType,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller:       controller,
+      focusNode:        focusNode,
       obscureText:      obscure,
       textInputAction:  action,
+      keyboardType:     keyboardType,
       onFieldSubmitted: onSubmitted,
       validator:        validator,
       style:            AppTypography.bodyMedium(),
-      decoration: InputDecoration(
-        hintText:   hint,
-        hintStyle:  AppTypography.body(color: AppColors.textHint),
-        prefixIcon: Icon(icon,
-            size: AppSpacing.iconSm, color: AppColors.textDisabled),
-        suffixIcon: suffix,
-      ),
+        decoration: InputDecoration(
+          hintText:   hint,
+          hintStyle:  AppTypography.body(color: AppColors.textHint),
+          prefixIcon: Icon(icon,
+              size: AppSpacing.iconSm, color: AppColors.textDisabled),
+          suffixIcon: suffix,
+        ),
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Error banner
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
@@ -468,17 +468,23 @@ class _ErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical:   AppSpacing.sm,
+      ),
       decoration: AppDecorations.errorCard(),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: AppSpacing.iconSm, color: AppColors.error),
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.error_outline_rounded,
+                size: AppSpacing.iconSm, color: AppColors.error),
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(message,
-                style: AppTypography.body(
-                    size: 13, color: AppColors.error)),
+                style: AppTypography.body(size: 13, color: AppColors.error)),
           ),
         ],
       ),

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 //   LIVE_STREAM   UUID 19b10001-e8f2-537e-4f6c-d104768a1214
 //     100 bytes fixed, 10 Hz notify.
 //     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
+//     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
 //
 //   EVENT_CHANNEL UUID 19b10002-e8f2-537e-4f6c-d104768a1214
 //   96 bytes fixed, on-event notify + write.

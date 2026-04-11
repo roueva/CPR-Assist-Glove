@@ -59,7 +59,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
         scrolledUnderElevation: 0,
         toolbarHeight: AppSpacing.headerHeight - AppSpacing.sm,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
           onPressed: context.pop,
         ),
         title: Text('Leaderboard', style: AppTypography.heading(size: 18)),

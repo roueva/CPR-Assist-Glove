@@ -38,7 +38,8 @@ class AppColors {
   static const Color emergencyRed   = Color(0xFFB71C1C); // Emergency call banner
   static const Color emergencyBg    = Color(0xFFFDF0F0); // = errorBg (alias kept for clarity)
   static const Color emergencyDark   = Color(0xFF8B0000); // Dark red — emergency header gradient end
-  static const Color cprGreen       = Color(0xFF2E7D32); // Correct compression
+  static const Color cprGreen       = Color(0xFF2E7D32); // Correct compression (grading, fills)
+  static const Color cprGreenBright = Color(0xFF4CAF50); // Bright green — readable on dark card bg
   static const Color cprOrange      = Color(0xFFF57C00); // Needs improvement
   static const Color cprRed         = Color(0xFFD32F2F); // Incorrect compression
 
@@ -52,12 +53,12 @@ class AppColors {
   static const Color textDisabled   = Color(0xFF9CA3AF); // Disabled
   static const Color textHint       = Color(0xFFBDBDBD); // Placeholder
   static const Color textOnDark     = Color(0xFFFFFFFF); // White text on dark bg
-
+  static const Color pediatric     = Color(0xFF057692); // Teal
+  static const Color pediatricLight = Color(0xFFE0F7FA);
   static const Color vitalsValue  = Color(0xFF4D4A4A); // Vitals reading text
   static const Color statCardBg   = Color(0xFF315FA3); // Small stat card inside dark hub
   static const Color cprStatTileBg = Color(0xFF243357); // Stat tile inside CPR card
-  static const Color cprCardBg = Color(0xFF112244); // CPR metrics card — dark navy, not saturated blue
-
+  static const Color cprCardBg = Color(0xFF1C4582); // CPR metrics card — brand blue
   // ═══════════════════════════════════════════════════════
   // BACKGROUNDS & SURFACES
   // ═══════════════════════════════════════════════════════

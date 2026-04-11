@@ -18,10 +18,6 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('SharedPreferences must be overridden in main()');
 });
 
-final cacheAvailabilityProvider = Provider<bool>((ref) {
-  throw UnimplementedError('cacheAvailabilityProvider must be overridden in main()');
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // SERVICE PROVIDERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,7 +50,9 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
       maxBpm: scenario.targetRateMax,
     );
     final settings = ref.read(settingsProvider);
-    final feedbackOn = settings.hapticFeedback || settings.audioFeedback;
+    // ⚠️ TODO(firmware): when 0xFE SET_FEEDBACK_CHANNELS is implemented, send
+// per-channel bitmask instead of single boolean.
+    final feedbackOn = settings.hapticFeedback || settings.audioFeedback || settings.visualFeedback;
     connection.sendFeedbackSet(enabled: feedbackOn);
   });
   return connection;
@@ -282,33 +280,37 @@ StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 });
 
 class AuthState {
-  final bool    isLoggedIn;
-  final int?    userId;
+  final bool isLoggedIn;
+  final int? userId;
   final String? username;
   final String? email;
-  final bool    isLoading;
+  final String? createdAt;
+  final bool isLoading;
 
   const AuthState({
     required this.isLoggedIn,
     this.userId,
     this.username,
     this.email,
+    this.createdAt,
     this.isLoading = false,
   });
 
   AuthState copyWith({
-    bool?   isLoggedIn,
-    int?    userId,
+    bool? isLoggedIn,
+    int? userId,
     String? username,
     String? email,
-    bool?   isLoading,
+    String? createdAt,
+    bool? isLoading,
   }) =>
       AuthState(
         isLoggedIn: isLoggedIn ?? this.isLoggedIn,
-        userId:     userId     ?? this.userId,
-        username:   username   ?? this.username,
-        email:      email      ?? this.email,
-        isLoading:  isLoading  ?? this.isLoading,
+        userId: userId ?? this.userId,
+        username: username ?? this.username,
+        email: email ?? this.email,
+        createdAt: createdAt ?? this.createdAt,
+        isLoading: isLoading ?? this.isLoading,
       );
 }
 
@@ -327,10 +329,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       userId:     await _network.getUserId(),
       username:   _prefs.getString('username'),
       email:      _prefs.getString('email'),
+      createdAt:  _prefs.getString('created_at'),
       isLoading:  false,
     );
   }
-
+  
   Future<void> login(String token, int userId, String username) async {
     state = state.copyWith(isLoading: true);
     await _network.saveToken(token);
@@ -351,9 +354,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _prefs.remove('isLoggedIn');
     await _prefs.remove('username');
     await _prefs.remove('user_id');
+    await _prefs.remove('email');
+    await _prefs.remove('created_at');
     state = const AuthState(isLoggedIn: false);
   }
-
+  
   Future<void> updateUsername(String newUsername) async {
     await _prefs.setString('username', newUsername);
     state = state.copyWith(username: newUsername);
@@ -368,10 +373,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final response = await _network.get('/auth/profile', requiresAuth: true);
       if (response['success'] == true) {
-        final email = response['data']?['email'] as String?;
+        final data = response['data'];
+        final email     = data?['email']      as String?;
+        final createdAt = data?['created_at'] as String?;
         if (email != null) {
           await _prefs.setString('email', email);
           state = state.copyWith(email: email);
+        }
+        if (createdAt != null) {
+          await _prefs.setString('created_at', createdAt);
+          state = state.copyWith(createdAt: createdAt);
         }
       }
     } catch (_) {}
@@ -534,147 +545,147 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
 class AppSettings {
   final bool   hapticFeedback;
   final bool   audioFeedback;
+  // ⚠️ TODO(firmware): visualFeedback currently maps to the same 0xF2 sendFeedbackSet
+  // as haptic+audio (single boolean). When firmware adds 0xFE SET_FEEDBACK_CHANNELS
+  // bitmask command, update bleConnectionProvider reconnect sync and all sendFeedbackSet
+  // calls to send per-channel bytes instead.
+  final bool   visualFeedback;
+  final bool   showCprMetrics;    // false = hide entire CPR metrics card on live screen
   final bool   keepScreenOn;
   final bool   autoSwitchToCPR;
-  final bool   showDepthGuide;
-  final bool   showRateGuide;
   final bool   notifyOnDisconnect;
-  final String compressionUnit; // 'cm' | 'in'
-  final bool   showChecklist;   // true = show pre-session checklist before training
-  final String defaultScenario; // 'standard_adult' | 'pediatric'
-  final bool   noFeedbackMode;  // true = trainingNoFeedback when entering training
+  final String compressionUnit;
+  final bool   showChecklist;
+  final String defaultScenario;
+  final String defaultMode;       // 'emergency' | 'training'
+  final bool   noFeedbackMode;
+  final bool   trainingReminders;
+  final String reminderFrequency; // 'daily' | 'weekly'
+  final bool   achievementAlerts;
+  final bool   nearbyEmergencyAlerts;
 
   const AppSettings({
-    this.hapticFeedback      = true,
-    this.audioFeedback       = true,
-    this.keepScreenOn        = true,
-    this.autoSwitchToCPR     = true,
-    this.showDepthGuide      = true,
-    this.showRateGuide       = true,
-    this.notifyOnDisconnect  = true,
-    this.compressionUnit     = 'cm',
-    this.showChecklist       = true,
-    this.defaultScenario = 'standard_adult',
-    this.noFeedbackMode = false,
+    this.hapticFeedback        = true,
+    this.audioFeedback         = true,
+    this.visualFeedback        = true,
+    this.showCprMetrics        = true,
+    this.keepScreenOn          = true,
+    this.autoSwitchToCPR       = true,
+    this.notifyOnDisconnect    = true,
+    this.compressionUnit       = 'cm',
+    this.showChecklist         = false,
+    this.defaultScenario       = 'standard_adult',
+    this.defaultMode           = 'emergency',
+    this.noFeedbackMode        = false,
+    this.trainingReminders     = false,
+    this.reminderFrequency     = 'weekly',
+    this.achievementAlerts     = true,
+    this.nearbyEmergencyAlerts = false,
   });
 
   AppSettings copyWith({
     bool?   hapticFeedback,
     bool?   audioFeedback,
+    bool?   visualFeedback,
+    bool?   showCprMetrics,
     bool?   keepScreenOn,
     bool?   autoSwitchToCPR,
-    bool?   showDepthGuide,
-    bool?   showRateGuide,
     bool?   notifyOnDisconnect,
     String? compressionUnit,
     bool?   showChecklist,
     String? defaultScenario,
+    String? defaultMode,
     bool?   noFeedbackMode,
+    bool?   trainingReminders,
+    String? reminderFrequency,
+    bool?   achievementAlerts,
+    bool?   nearbyEmergencyAlerts,
   }) =>
       AppSettings(
-        hapticFeedback:     hapticFeedback     ?? this.hapticFeedback,
-        audioFeedback:      audioFeedback      ?? this.audioFeedback,
-        keepScreenOn:       keepScreenOn       ?? this.keepScreenOn,
-        autoSwitchToCPR:    autoSwitchToCPR    ?? this.autoSwitchToCPR,
-        showDepthGuide:     showDepthGuide     ?? this.showDepthGuide,
-        showRateGuide:      showRateGuide      ?? this.showRateGuide,
-        notifyOnDisconnect: notifyOnDisconnect ?? this.notifyOnDisconnect,
-        compressionUnit:    compressionUnit    ?? this.compressionUnit,
-        showChecklist:      showChecklist      ?? this.showChecklist,
-        defaultScenario:    defaultScenario    ?? this.defaultScenario,
-        noFeedbackMode:     noFeedbackMode     ?? this.noFeedbackMode,
+        hapticFeedback:        hapticFeedback        ?? this.hapticFeedback,
+        audioFeedback:         audioFeedback         ?? this.audioFeedback,
+        visualFeedback:        visualFeedback        ?? this.visualFeedback,
+        showCprMetrics:        showCprMetrics        ?? this.showCprMetrics,
+        keepScreenOn:          keepScreenOn          ?? this.keepScreenOn,
+        autoSwitchToCPR:       autoSwitchToCPR       ?? this.autoSwitchToCPR,
+        notifyOnDisconnect:    notifyOnDisconnect    ?? this.notifyOnDisconnect,
+        compressionUnit:       compressionUnit       ?? this.compressionUnit,
+        showChecklist:         showChecklist         ?? this.showChecklist,
+        defaultScenario:       defaultScenario       ?? this.defaultScenario,
+        defaultMode:           defaultMode           ?? this.defaultMode,
+        noFeedbackMode:        noFeedbackMode        ?? this.noFeedbackMode,
+        trainingReminders:     trainingReminders     ?? this.trainingReminders,
+        reminderFrequency:     reminderFrequency     ?? this.reminderFrequency,
+        achievementAlerts:     achievementAlerts     ?? this.achievementAlerts,
+        nearbyEmergencyAlerts: nearbyEmergencyAlerts ?? this.nearbyEmergencyAlerts,
       );
 }
 
 class SettingsNotifier extends StateNotifier<AppSettings> {
   final SharedPreferences _prefs;
 
-  static const _kHaptic      = 'settings_hapticFeedback';
-  static const _kAudio       = 'settings_audioFeedback';
-  static const _kScreenOn    = 'settings_keepScreenOn';
-  static const _kAutoSwitch  = 'settings_autoSwitchToCPR';
-  static const _kDepthGuide  = 'settings_showDepthGuide';
-  static const _kRateGuide   = 'settings_showRateGuide';
-  static const _kDisconnect  = 'settings_notifyOnDisconnect';
-  static const _kUnit        = 'settings_compressionUnit';
-  static const _kChecklist = 'settings_showChecklist';
+  static const _kHaptic         = 'settings_hapticFeedback';
+  static const _kAudio          = 'settings_audioFeedback';
+  static const _kVisual         = 'settings_visualFeedback';
+  static const _kCprMetrics     = 'settings_showCprMetrics';
+  static const _kScreenOn       = 'settings_keepScreenOn';
+  static const _kAutoSwitch     = 'settings_autoSwitchToCPR';
+  static const _kDisconnect     = 'settings_notifyOnDisconnect';
+  static const _kUnit           = 'settings_compressionUnit';
+  static const _kChecklist      = 'settings_showChecklist';
   static const _kDefaultScenario = 'settings_defaultScenario';
-  static const _kNoFeedback = 'settings_noFeedbackMode';
+  static const _kDefaultMode    = 'settings_defaultMode';
+  static const _kNoFeedback     = 'settings_noFeedbackMode';
+  static const _kTrainReminders = 'settings_trainingReminders';
+  static const _kReminderFreq   = 'settings_reminderFrequency';
+  static const _kAchievAlerts   = 'settings_achievementAlerts';
+  static const _kNearbyAlerts   = 'settings_nearbyEmergencyAlerts';
 
   SettingsNotifier(this._prefs) : super(_load(_prefs));
 
   static AppSettings _load(SharedPreferences p) => AppSettings(
-    hapticFeedback:     p.getBool(_kHaptic)     ?? true,
-    audioFeedback:      p.getBool(_kAudio)      ?? true,
-    keepScreenOn:       p.getBool(_kScreenOn)   ?? true,
-    autoSwitchToCPR:    p.getBool(_kAutoSwitch) ?? true,
-    showDepthGuide:     p.getBool(_kDepthGuide) ?? true,
-    showRateGuide:      p.getBool(_kRateGuide)  ?? true,
-    notifyOnDisconnect: p.getBool(_kDisconnect) ?? true,
-    compressionUnit:    p.getString(_kUnit)     ?? 'cm',
-    showChecklist: p.getBool(_kChecklist) ?? true,
-    defaultScenario: p.getString(_kDefaultScenario) ?? 'standard_adult',
-    noFeedbackMode: p.getBool(_kNoFeedback) ?? false,
+    hapticFeedback:        p.getBool(_kHaptic)         ?? true,
+    audioFeedback:         p.getBool(_kAudio)          ?? true,
+    visualFeedback:        p.getBool(_kVisual)         ?? true,
+    showCprMetrics:        p.getBool(_kCprMetrics)     ?? true,
+    keepScreenOn:          p.getBool(_kScreenOn)       ?? true,
+    autoSwitchToCPR:       p.getBool(_kAutoSwitch)     ?? true,
+    notifyOnDisconnect:    p.getBool(_kDisconnect)     ?? true,
+    compressionUnit:       p.getString(_kUnit)         ?? 'cm',
+    showChecklist:         p.getBool(_kChecklist)      ?? false,
+    defaultScenario:       p.getString(_kDefaultScenario) ?? 'standard_adult',
+    defaultMode:           p.getString(_kDefaultMode)  ?? 'emergency',
+    noFeedbackMode:        p.getBool(_kNoFeedback)     ?? false,
+    trainingReminders:     p.getBool(_kTrainReminders) ?? false,
+    reminderFrequency:     p.getString(_kReminderFreq) ?? 'weekly',
+    achievementAlerts:     p.getBool(_kAchievAlerts)   ?? true,
+    nearbyEmergencyAlerts: p.getBool(_kNearbyAlerts)   ?? false,
   );
 
-  Future<void> setHapticFeedback(bool v)     async {
-    state = state.copyWith(hapticFeedback: v);
-    await _prefs.setBool(_kHaptic, v);
-  }
-  Future<void> setAudioFeedback(bool v)      async {
-    state = state.copyWith(audioFeedback: v);
-    await _prefs.setBool(_kAudio, v);
-  }
-  Future<void> setKeepScreenOn(bool v)       async {
-    state = state.copyWith(keepScreenOn: v);
-    await _prefs.setBool(_kScreenOn, v);
-  }
-  Future<void> setAutoSwitchToCPR(bool v)    async {
-    state = state.copyWith(autoSwitchToCPR: v);
-    await _prefs.setBool(_kAutoSwitch, v);
-  }
-  Future<void> setShowDepthGuide(bool v)     async {
-    state = state.copyWith(showDepthGuide: v);
-    await _prefs.setBool(_kDepthGuide, v);
-  }
-  Future<void> setShowRateGuide(bool v)      async {
-    state = state.copyWith(showRateGuide: v);
-    await _prefs.setBool(_kRateGuide, v);
-  }
-  Future<void> setNotifyOnDisconnect(bool v) async {
-    state = state.copyWith(notifyOnDisconnect: v);
-    await _prefs.setBool(_kDisconnect, v);
-  }
-  Future<void> setCompressionUnit(String v)  async {
-    state = state.copyWith(compressionUnit: v);
-    await _prefs.setString(_kUnit, v);
-  }
-  Future<void> setShowChecklist(bool v) async {
-    state = state.copyWith(showChecklist: v);
-    await _prefs.setBool(_kChecklist, v);
-  }
-  Future<void> setDefaultScenario(String v) async {
-    state = state.copyWith(defaultScenario: v);
-    await _prefs.setString(_kDefaultScenario, v);
-  }
+  Future<void> setHapticFeedback(bool v)     async { state = state.copyWith(hapticFeedback: v);        await _prefs.setBool(_kHaptic, v); }
+  Future<void> setAudioFeedback(bool v)      async { state = state.copyWith(audioFeedback: v);         await _prefs.setBool(_kAudio, v); }
+  Future<void> setVisualFeedback(bool v)     async { state = state.copyWith(visualFeedback: v);        await _prefs.setBool(_kVisual, v); }
+  Future<void> setShowCprMetrics(bool v)     async { state = state.copyWith(showCprMetrics: v);        await _prefs.setBool(_kCprMetrics, v); }
+  Future<void> setKeepScreenOn(bool v)       async { state = state.copyWith(keepScreenOn: v);          await _prefs.setBool(_kScreenOn, v); }
+  Future<void> setAutoSwitchToCPR(bool v)    async { state = state.copyWith(autoSwitchToCPR: v);       await _prefs.setBool(_kAutoSwitch, v); }
+  Future<void> setNotifyOnDisconnect(bool v) async { state = state.copyWith(notifyOnDisconnect: v);    await _prefs.setBool(_kDisconnect, v); }
+  Future<void> setCompressionUnit(String v)  async { state = state.copyWith(compressionUnit: v);       await _prefs.setString(_kUnit, v); }
+  Future<void> setShowChecklist(bool v)      async { state = state.copyWith(showChecklist: v);         await _prefs.setBool(_kChecklist, v); }
+  Future<void> setDefaultScenario(String v)  async { state = state.copyWith(defaultScenario: v);       await _prefs.setString(_kDefaultScenario, v); }
+  Future<void> setDefaultMode(String v)      async { state = state.copyWith(defaultMode: v);           await _prefs.setString(_kDefaultMode, v); }
+  Future<void> setNoFeedbackMode(bool v)     async { state = state.copyWith(noFeedbackMode: v);        await _prefs.setBool(_kNoFeedback, v); }
+  Future<void> setTrainingReminders(bool v)  async { state = state.copyWith(trainingReminders: v);     await _prefs.setBool(_kTrainReminders, v); }
+  Future<void> setReminderFrequency(String v) async { state = state.copyWith(reminderFrequency: v);    await _prefs.setString(_kReminderFreq, v); }
+  Future<void> setAchievementAlerts(bool v)  async { state = state.copyWith(achievementAlerts: v);     await _prefs.setBool(_kAchievAlerts, v); }
+  Future<void> setNearbyEmergencyAlerts(bool v) async { state = state.copyWith(nearbyEmergencyAlerts: v); await _prefs.setBool(_kNearbyAlerts, v); }
 
-  Future<void> setNoFeedbackMode(bool v) async {
-    state = state.copyWith(noFeedbackMode: v);
-    await _prefs.setBool(_kNoFeedback, v);
-  }
   Future<void> resetToDefaults() async {
     state = const AppSettings();
-    await _prefs.remove(_kHaptic);
-    await _prefs.remove(_kAudio);
-    await _prefs.remove(_kScreenOn);
-    await _prefs.remove(_kAutoSwitch);
-    await _prefs.remove(_kDepthGuide);
-    await _prefs.remove(_kRateGuide);
-    await _prefs.remove(_kDisconnect);
-    await _prefs.remove(_kUnit);
-    await _prefs.remove(_kChecklist);
-    await _prefs.remove(_kDefaultScenario);
-    await _prefs.remove(_kNoFeedback);
+    for (final k in [
+      _kHaptic, _kAudio, _kVisual, _kCprMetrics, _kScreenOn, _kAutoSwitch,
+      _kDisconnect, _kUnit, _kChecklist, _kDefaultScenario, _kDefaultMode,
+      _kNoFeedback, _kTrainReminders, _kReminderFreq, _kAchievAlerts, _kNearbyAlerts,
+    ]) { await _prefs.remove(k); }
   }
 }
 
@@ -683,6 +694,13 @@ StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return SettingsNotifier(prefs);
 });
+
+
+/// Set to true once CacheService.initializeAllCaches() completes.
+final cacheInitializedProvider = StateProvider<bool>((ref) => false);
+
+/// Non-null if CacheService.initializeAllCaches() threw an error.
+final cacheErrorProvider = StateProvider<String?>((ref) => null);
 
 /// Set to true by Settings before sending RUN_SELFTEST.
 /// BLEConnection checks this flag when SELFTEST_RESULT arrives and

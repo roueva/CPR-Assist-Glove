@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../../providers/app_providers.dart';
 import '../../../features/account/screens/profile_editor_screen.dart';
@@ -14,6 +15,7 @@ import '../../dev/dev_preview_screen.dart';
 import '../../training/screens/achievements_screen.dart';
 import '../../training/screens/leaderboard_screen.dart';
 import '../../training/screens/session_service.dart';
+import '../../training/services/session_local_storage.dart';
 import '../../training/widgets/session_history.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,26 +128,6 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
     // Panel closes itself, AuthState update rebuilds the panel to show "Log In"
   }
 
-  Future<void> _handleDeleteAccount() async {
-    _close();
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    if (!mounted) return;
-
-    final confirmed = await AppDialogs.confirmDeleteAccount(context);
-    if (confirmed != true || !mounted) return;
-
-    final container = ProviderScope.containerOf(context);
-    final service   = container.read(sessionServiceProvider);
-    final ok        = await service.deleteAccount();
-    if (!mounted) return;
-
-    if (ok) {
-      await container.read(authStateProvider.notifier).logout();
-      if (mounted) UIHelper.showSuccess(context, 'Account deleted');
-    } else {
-      if (mounted) UIHelper.showError(context, 'Failed to delete account. Try again.');
-    }
-  }
 
 
   // ── Mode switch ────────────────────────────────────────────────────────────
@@ -155,41 +137,26 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
   //       No login prompt is shown during an active CPR session.
 
   Future<void> _handleModeSwitch() async {
-    final currentMode    = ref.read(appModeProvider);
-    final isLoggedIn     = ref.read(authStateProvider).isLoggedIn;
-    final goingToTraining = currentMode == AppMode.emergency;
-
-    _close();
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    if (!mounted) return;
+    final currentMode     = ref.read(appModeProvider);
+    final isLoggedIn      = ref.read(authStateProvider).isLoggedIn;
+    final goingToTraining = !currentMode.isTraining;
 
     if (goingToTraining && !isLoggedIn) {
-      // Training requires login — show non-blocking prompt then stop.
-      // User stays in Emergency mode if they dismiss.
-      final ctx = context;
-      final shouldLogin = await AppDialogs.promptLogin(ctx);
+      if (!mounted) return;
+      final shouldLogin = await AppDialogs.promptLogin(context);
       if (shouldLogin != true || !mounted) return;
-      await ctx.push(const LoginScreen());
+      _close();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      if (mounted) await context.push(const LoginScreen());
       return;
     }
 
-    if (!mounted) return;
-    final ctx = context;
-    final confirmed = goingToTraining
-        ? await AppDialogs.confirmSwitchToTraining(ctx)
-        : await AppDialogs.confirmSwitchToEmergency(ctx);
+    // Switch immediately — no confirmation needed
+    ref.read(appModeProvider.notifier).setMode(
+      goingToTraining ? AppMode.training : AppMode.emergency,
+    );
+    HapticFeedback.lightImpact();
 
-    if (confirmed == true && mounted) {
-      ref.read(appModeProvider.notifier).setMode(
-        goingToTraining ? AppMode.training : AppMode.emergency,
-      );
-      HapticFeedback.lightImpact();
-      // Show checklist only when entering Training — once, as a reminder
-      if (goingToTraining && mounted) {
-        await Future.delayed(const Duration(milliseconds: 350));
-        if (mounted) AppDialogs.showTrainingChecklist(context);
-      }
-    }
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -226,11 +193,9 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
               child: FractionalTranslation(
                 translation: Offset(_slideAnim.value, 0),
                 child: _PanelContent(
-                  onClose:         _close,
-                  onModeSwitch:    _handleModeSwitch,
-                  onLogout:        _handleLogout,
-                  onDeleteAccount: _handleDeleteAccount,
-                  onPush:          _push,
+                  onModeSwitch: _handleModeSwitch,
+                  onLogout:     _handleLogout,
+                  onPush:       _push,
                 ),
               ),
             ),
@@ -246,117 +211,85 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PanelContent extends ConsumerWidget {
-  final VoidCallback                  onClose;
   final VoidCallback                  onModeSwitch;
   final VoidCallback                  onLogout;
   final Future<void> Function(Widget) onPush;
-  final VoidCallback onDeleteAccount;
 
   const _PanelContent({
-    required this.onClose,
     required this.onModeSwitch,
     required this.onLogout,
     required this.onPush,
-    required this.onDeleteAccount,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState   = ref.watch(authStateProvider);
+    final authState  = ref.watch(authStateProvider);
     final currentMode = ref.watch(appModeProvider);
-    final isCprActive = ref.watch(cprSessionActiveProvider);
     final isLoggedIn  = authState.isLoggedIn;
     final isTraining  = currentMode.isTraining;
 
     return Container(
-        decoration: AppDecorations.sidePanel(),
+      decoration: AppDecorations.sidePanel(),
       child: SafeArea(
         child: Column(
           children: [
-            // ── Profile header ─────────────────────────────────────────────
-            _ProfileHeader(
-              username:   authState.username,
-              isLoggedIn: isLoggedIn,
-              isTraining: isTraining,
-              onEditTap:  isLoggedIn
-                  ? () => onPush(const ProfileEditorScreen())
-                  : null,
-              onClose: onClose,
-            ),
+            // ── Profile header — tinted bg to separate from nav bar ────────
+          _ProfileHeader(
+          username:      authState.username,
+          isLoggedIn:    isLoggedIn,
+          isTraining:    isTraining,
+          onEditTap:     isLoggedIn
+              ? () => onPush(const ProfileEditorScreen())
+              : () => onPush(const LoginScreen()),
+          onModeSwitchTap: onModeSwitch,
+        ),
 
-            const _PanelDivider(),
-
-            // ── Stats row (logged-in only) ─────────────────────────────────
+            // ── Stats row (logged-in only, no surrounding dividers) ────────
             if (isLoggedIn) ...[
-              const _StatsRow(),
-              const _PanelDivider(),
+              const SizedBox(height: AppSpacing.xs),
+              _StatsRow(onPush: onPush, username: authState.username),
             ],
 
             // ── Pending sync banner ────────────────────────────────────────
             if (isLoggedIn)
-              _SyncPendingRow(onPush: onPush),
+              const _SyncPendingRow(),
 
             // ── Menu items ─────────────────────────────────────────────────
+            const _PanelDivider(),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  // Mode switch
-                  _PanelItem(
-                    icon:      isTraining
-                        ? Icons.emergency_outlined
-                        : Icons.school_outlined,
-                    iconColor: isTraining ? AppColors.primary : AppColors.warning,
-                    label:     isTraining
-                        ? 'Switch to Emergency Mode'
-                        : 'Switch to Training Mode',
-                    labelColor:   isTraining ? AppColors.primary : AppColors.warning,
-                    isDisabled:   isCprActive,
-                    disabledHint: 'CPR active',
-                    onTap: isCprActive ? null : onModeSwitch,
-                  ),
-
-                  const _PanelDivider(),
-
-                  // Leaderboard
-                  if (isLoggedIn)
+                  if (isLoggedIn) ...[
                     _PanelItem(
                       icon:  Icons.leaderboard_outlined,
                       label: 'Leaderboard',
                       onTap: () => onPush(
-                        LeaderboardScreen(currentUsername: authState.username),
-                      ),
+                          LeaderboardScreen(currentUsername: authState.username)),
                     ),
-
-                  // My Sessions: all logged-in users
-                  if (isLoggedIn)
                     _PanelItem(
                       icon:  Icons.history_rounded,
                       label: 'My Sessions',
                       onTap: () => onPush(const SessionHistoryScreen()),
                     ),
-
-                  if (isLoggedIn)
                     _PanelItem(
                       icon:  Icons.emoji_events_outlined,
                       label: 'Achievements',
                       onTap: () => onPush(const AchievementsScreen()),
                     ),
-
+                    const _PanelDivider(),
+                  ],
                   _PanelItem(
                     icon:  Icons.settings_outlined,
                     label: 'Settings',
                     onTap: () => onPush(const SettingsScreen()),
                   ),
-
                   _PanelItem(
                     icon:  Icons.help_outline_rounded,
                     label: 'Help & About',
                     onTap: () => onPush(const HelpAboutScreen()),
                   ),
-
                   const _PanelDivider(),
-
                   if (isLoggedIn)
                     _PanelItem(
                       icon:        Icons.logout_rounded,
@@ -372,26 +305,14 @@ class _PanelContent extends ConsumerWidget {
                       iconColor:  AppColors.primary,
                       label:      'Log In',
                       labelColor: AppColors.primary,
-                      onTap: () => onPush(
-                        const LoginScreen(),
-                      ),
+                      onTap:      () => onPush(const LoginScreen()),
                     ),
-                  if (isLoggedIn)
-                    _PanelItem(
-                      icon:        Icons.delete_forever_rounded,
-                      iconColor:   AppColors.emergencyRed,
-                      label:       'Delete Account',
-                      labelColor:  AppColors.emergencyRed,
-                      showChevron: false,
-                      onTap:       onDeleteAccount,
-                    ),
-                  const _PanelDivider(),
                   _PanelItem(
                     icon:       Icons.developer_mode_rounded,
                     iconColor:  AppColors.textDisabled,
                     label:      'UI Preview',
                     labelColor: AppColors.textDisabled,
-                    onTap: () => onPush(const DevPreviewScreen()),
+                    onTap:      () => onPush(const DevPreviewScreen()),
                   ),
                 ],
               ),
@@ -400,12 +321,7 @@ class _PanelContent extends ConsumerWidget {
             // ── Version footer ─────────────────────────────────────────────
             Padding(
               padding: EdgeInsets.only(
-                bottom: AppSpacing.md + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: Text(
-                'CPR Assist v1.0.0',
-                style: AppTypography.caption(),
-                textAlign: TextAlign.center,
+                bottom: AppSpacing.sm + MediaQuery.paddingOf(context).bottom,
               ),
             ),
           ],
@@ -424,139 +340,148 @@ class _ProfileHeader extends StatelessWidget {
   final bool          isLoggedIn;
   final bool          isTraining;
   final VoidCallback? onEditTap;
-  final VoidCallback  onClose;
+  final VoidCallback? onModeSwitchTap;
 
   const _ProfileHeader({
     required this.username,
     required this.isLoggedIn,
     required this.isTraining,
-    required this.onClose,
     this.onEditTap,
+    this.onModeSwitchTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final modeColor = isTraining ? AppColors.warning  : AppColors.primary;
-    final modeBg    = isTraining ? AppColors.warningBg : AppColors.primaryLight;
+    final modeColor = isTraining ? AppColors.warning : AppColors.primary;
+    final modeLabel = isTraining ? 'Training' : 'Emergency';
 
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.md,
+      ),
       child: Row(
         children: [
-          // ── Avatar ────────────────────────────────────────────────────────
-          Stack(
-            children: [
-              Container(
-                width:  AppSpacing.avatarLg,
-                height: AppSpacing.avatarLg,
-                decoration: BoxDecoration(
-                  shape:  BoxShape.circle,
-                  color:  AppColors.primaryLight,
-                  border: Border.all(
-                    color: AppColors.primaryMid,
-                    width: AppSpacing.xxs,
-                  ),
-                ),
-                child: Center(
-                  child: isLoggedIn
-                      ? Text(
-                    username.initials,
-                    style: AppTypography.heading(
-                      size:  22,
-                      color: AppColors.primary,
-                    ),
-                  )
-                      : const Icon(
-                    Icons.person_outline,
-                    color: AppColors.primary,
-                    size:  AppSpacing.iconLg,
-                  ),
-                ),
-              ),
-              // Edit badge
-              if (onEditTap != null)
-                Positioned(
-                  bottom: 0,
-                  right:  0,
-                  child: GestureDetector(
-                    onTap: onEditTap,
-                    child: Container(
-                      width:  AppSpacing.lg,
-                      height: AppSpacing.lg,
-                      decoration: BoxDecoration(
-                        color:  AppColors.primary,
-                        shape:  BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.surfaceWhite,
-                          width: AppSpacing.xxs,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.edit_rounded,
-                        color: AppColors.textOnDark,
-                        size:  AppSpacing.iconXs,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          const SizedBox(width: AppSpacing.md),
-
-          // ── Name + mode badge ─────────────────────────────────────────────
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Avatar ──────────────────────────────────────────────────────
+          GestureDetector(
+            onTap: onEditTap,
+            child: Stack(
               children: [
-                Text(
-                  isLoggedIn ? (username ?? 'User') : 'Not logged in',
-                  style: AppTypography.heading(size: 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.xs),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.chipPaddingH,
-                    vertical: AppSpacing.xs,
-                  ),
-                  decoration: AppDecorations.chip(color: modeColor, bg: modeBg),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isTraining
-                            ? Icons.school_outlined
-                            : Icons.emergency_outlined,
-                        size:  AppSpacing.iconXs,
-                        color: modeColor,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        isTraining ? 'Training Mode' : 'Emergency Mode',
-                        style: AppTypography.badge(size: 10, color: modeColor),
-                      ),
-                    ],
+                  width:  AppSpacing.avatarLg,
+                  height: AppSpacing.avatarLg,
+                  decoration: AppDecorations.avatarCircle3d(),
+                  child: Center(
+                    child: isLoggedIn
+                        ? Text(
+                      username.initials,
+                      style: AppTypography.heading(
+                          size: 22, color: AppColors.primary),
+                    )
+                        : const Icon(Icons.person_outline,
+                        color: AppColors.primary, size: AppSpacing.iconLg),
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── Close button ──────────────────────────────────────────────────
-          GestureDetector(
-            onTap: onClose,
-            child: Container(
-              width:  AppSpacing.touchTargetMin,
-              height: AppSpacing.touchTargetMin,
-              decoration: AppDecorations.iconCircle(bg: AppColors.screenBgGrey),
-              child: const Icon(
-                Icons.close_rounded,
-                size:  AppSpacing.iconSm,
-                color: AppColors.textSecondary,
+          const SizedBox(width: AppSpacing.md),
+
+          // ── Name + username ─────────────────────────────────────────────
+          Expanded(
+            child: GestureDetector(
+              onTap: onEditTap,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isLoggedIn ? (username ?? 'User') : 'Guest',
+                    style: AppTypography.heading(
+                      size: (username != null && username!.length > 14) ? 13 : 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  if (isLoggedIn && username != null) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      '@${username!.toLowerCase().replaceAll(' ', '_')}',
+                      style: AppTypography.body(
+                          size: 12, color: AppColors.textDisabled),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ] else if (!isLoggedIn) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text('Tap to log in',
+                        style: AppTypography.body(
+                            size: 12, color: AppColors.textDisabled)),
+                  ],
+                ],
               ),
             ),
           ),
+
+          const SizedBox(width: AppSpacing.sm),
+
+          // ── Mode switch button ───────────────────────────────────────────
+          // Icon + label + swap arrow — clearly tappable, no border/fill
+      GestureDetector(
+        onTap: onModeSwitchTap,
+        child: SizedBox(
+          width: AppSpacing.touchTargetMin + AppSpacing.md, // 52px — fits "Emergency"
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Fixed-size box so icon never shifts position
+                SizedBox(
+                  width:  AppSpacing.iconMd + AppSpacing.md,  // 40px
+                  height: AppSpacing.iconMd + AppSpacing.md,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Center(
+                          child: ModeIcon(
+                            isTraining: isTraining,
+                            size:  AppSpacing.iconMd,
+                            color: modeColor,
+                          ),
+                        ),
+                      ),
+                      // Swap arrow in white circle — bottom-right
+                      Positioned(
+                        bottom: 0,
+                        right:  0,
+                        child: Container(
+                          width:  AppSpacing.md,
+                          height: AppSpacing.md,
+                          decoration: const BoxDecoration(
+                            color: AppColors.surfaceWhite,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz_rounded,
+                            size:  AppSpacing.iconXs,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  modeLabel,
+                  style: AppTypography.badge(size: 9, color: AppColors.textDisabled),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
         ],
       ),
     );
@@ -568,17 +493,19 @@ class _ProfileHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsRow extends ConsumerWidget {
-  const _StatsRow();
+  final Future<void> Function(Widget) onPush;
+  final String? username;
+
+  const _StatsRow({required this.onPush, required this.username});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaries = ref.watch(sessionSummariesProvider);
     final stats     = summaries.whenOrNull(data: (s) => UserStats.fromSessions(s));
-    final streak    = ref.watch(currentStreakProvider);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md, 0, AppSpacing.md, AppSpacing.md,
+        AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md,
       ),
       child: Row(
         children: [
@@ -586,6 +513,7 @@ class _StatsRow extends ConsumerWidget {
             icon:  Icons.history_rounded,
             label: 'Sessions',
             value: stats?.sessionCountFormatted ?? '—',
+            onTap: () => onPush(const SessionHistoryScreen()),
           ),
           const SizedBox(width: AppSpacing.sm),
           _StatCard(
@@ -594,20 +522,17 @@ class _StatsRow extends ConsumerWidget {
             value: (stats == null || stats.averageGrade == 0)
                 ? '—'
                 : stats.averageGradeFormatted,
+            onTap: () => onPush(LeaderboardScreen(currentUsername: username)),
           ),
           const SizedBox(width: AppSpacing.sm),
           _StatCard(
-            icon:  Icons.leaderboard_outlined,
-            label: 'Best',
-            value: stats != null && stats.sessionCount > 0
+            icon:      Icons.local_fire_department_rounded,
+            iconColor: AppColors.primary,
+            label:     'Best',
+            value:     stats != null && stats.sessionCount > 0
                 ? '${stats.bestGrade.toStringAsFixed(0)}%'
                 : '—',
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _StatCard(
-            icon:  Icons.local_fire_department_rounded,
-            label: 'Streak',
-            value: streak > 0 ? '$streak 🔥' : '—',
+              onTap: () => onPush(const SessionHistoryScreen()), // TODO: open best session directly
           ),
         ],
       ),
@@ -615,100 +540,152 @@ class _StatsRow extends ConsumerWidget {
   }
 }
 
-class _SyncPendingRow extends ConsumerWidget {
-  final Future<void> Function(Widget) onPush;
-  const _SyncPendingRow({required this.onPush});
+class _SyncPendingRow extends ConsumerStatefulWidget {
+  const _SyncPendingRow();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SyncPendingRow> createState() => _SyncPendingRowState();
+}
+
+class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
+  bool _syncing = false;
+
+  Future<void> _syncNow() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+
+    final container = ProviderScope.containerOf(context);
+    final service   = container.read(sessionServiceProvider);
+    final locals    = await SessionLocalStorage.loadAll();
+    final pending   = locals.where((d) => !d.syncedToBackend).toList();
+
+    int synced = 0;
+    for (final detail in pending) {
+      final ok = await service.saveDetail(detail);
+      final savedId = await service.saveDetail(detail);
+      if (savedId != null) {
+        await SessionLocalStorage.markSynced(detail);
+        synced++;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _syncing = false);
+
+    if (synced > 0) {
+      ref.invalidate(sessionSummariesProvider);
+      UIHelper.showSuccess(context, '$synced session${synced == 1 ? '' : 's'} synced');
+    } else {
+      UIHelper.showWarning(context, 'Sync failed. Check your connection.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final summaries = ref.watch(sessionSummariesProvider);
-    final pending = summaries.valueOrNull
+    final pending   = summaries.valueOrNull
         ?.where((s) => s.id == null)
         .length ?? 0;
 
     if (pending == 0) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        InkWell(
-          onTap: () => ref.invalidate(sessionSummariesProvider),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical:   AppSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width:  AppSpacing.iconBoxSize,
-                  height: AppSpacing.iconBoxSize,
-                  decoration: AppDecorations.iconRounded(
-                    bg:     AppColors.warning.withValues(alpha: 0.1),
-                    radius: AppSpacing.cardRadiusSm + AppSpacing.xxs,
-                  ),
-                  child: const Icon(
-                    Icons.cloud_upload_outlined,
-                    size:  AppSpacing.iconSm,
-                    color: AppColors.warning,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.cardPadding - AppSpacing.xxs),
-                Expanded(
-                  child: Text(
-                    '$pending session${pending == 1 ? '' : 's'} pending sync',
-                    style: AppTypography.bodyMedium(
-                      size:  14,
-                      color: AppColors.warning,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.sync_rounded,
-                  size:  AppSpacing.iconSm,
-                  color: AppColors.warning,
-                ),
-              ],
-            ),
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md, 0, AppSpacing.md, AppSpacing.sm,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical:   AppSpacing.xs,
         ),
-        const _PanelDivider(),
-      ],
+        decoration: AppDecorations.warningCard(),
+        child: Row(
+          children: [
+            _syncing
+                ? const SizedBox(
+              width:  AppSpacing.iconSm,
+              height: AppSpacing.iconSm,
+              child:  CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+              ),
+            )
+                : const Icon(
+              Icons.cloud_upload_outlined,
+              size:  AppSpacing.iconSm,
+              color: AppColors.warning,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                '$pending unsynced session${pending == 1 ? '' : 's'}',
+                style: AppTypography.badge(size: 11, color: AppColors.warning),
+              ),
+            ),
+            GestureDetector(
+              onTap: _syncing ? null : _syncNow,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical:   AppSpacing.xxs + AppSpacing.xxs,
+                ),
+                decoration: AppDecorations.chip(
+                  color: AppColors.warning,
+                  bg:    AppColors.warning.withValues(alpha: 0.15),
+                ),
+                child: Text(
+                  _syncing ? '...' : 'Sync',
+                  style: AppTypography.badge(size: 10, color: AppColors.warning),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final String   value;
+  final IconData      icon;
+  final Color?        iconColor;
+  final String        label;
+  final String        value;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
+    this.iconColor,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          vertical:   AppSpacing.sm + AppSpacing.xs,
-          horizontal: AppSpacing.xs,
-        ),
-        decoration: AppDecorations.tintedCard(),
-        child: Column(
-          children: [
-            Icon(icon, size: AppSpacing.iconSm, color: AppColors.primary),
-            const SizedBox(height: AppSpacing.xs),
-            Text(value, style: AppTypography.subheading(size: 15)),
-            const SizedBox(height: AppSpacing.xxs),
-            Text(
-              label,
-              style: AppTypography.badge(size: 9, color: AppColors.textDisabled),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            vertical:   AppSpacing.sm + AppSpacing.xs,
+            horizontal: AppSpacing.xs,
+          ),
+          decoration: AppDecorations.tintedCard(),
+          child: Column(
+            children: [
+              Icon(icon, size: AppSpacing.iconSm,
+                  color: iconColor ?? AppColors.primary),
+              const SizedBox(height: AppSpacing.xs),
+              Text(value, style: AppTypography.subheading(size: 15)),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                label,
+                style: AppTypography.badge(size: 9, color: AppColors.textDisabled),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -734,10 +711,10 @@ class _PanelItem extends StatelessWidget {
     this.iconColor,
     required this.label,
     this.labelColor,
-    this.isDisabled   = false,
-    this.disabledHint,
     this.showChevron  = true,
     this.onTap,
+    this.isDisabled   = false,
+    this.disabledHint,
   });
 
   @override
@@ -839,30 +816,85 @@ class _PanelDivider extends StatelessWidget {
 class AccountAvatarButton extends ConsumerWidget {
   const AccountAvatarButton({super.key});
 
+
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
+    final authState  = ref.watch(authStateProvider);
+    final isTraining = ref.watch(appModeProvider).isTraining;
 
-    return Container(
-      width:  AppSpacing.iconBoxSize,
-      height: AppSpacing.iconBoxSize,
-      decoration: AppDecorations.iconCircle(bg: AppColors.primaryMid),
-      child: Center(
-        child: authState.isLoggedIn
-            ? Text(
-          authState.username.initials,
-          style: AppTypography.label(size: 13, color: AppColors.primary)
-              .copyWith(
-            fontWeight:    FontWeight.w800,
-            letterSpacing: 0.3,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width:  AppSpacing.iconBoxSize,
+          height: AppSpacing.iconBoxSize,
+          decoration: AppDecorations.iconCircle(bg: AppColors.primaryMid),
+          child: Center(
+            child: authState.isLoggedIn
+                ? Text(
+              authState.username.initials,
+              style: AppTypography.label(size: 13, color: AppColors.primary)
+                  .copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.3),
+            )
+                : const Icon(Icons.person_outline,
+                color: AppColors.primary,
+                size:  AppSpacing.iconSm + AppSpacing.xxs),
           ),
-        )
-            : const Icon(
-          Icons.person_outline,
-          color: AppColors.primary,
-          size:  AppSpacing.iconSm + AppSpacing.xxs,
         ),
-      ),
+        // Mode badge — bottom-right corner
+        Positioned(
+          bottom: -AppSpacing.xxs,
+          right:  -AppSpacing.xxs,
+          child: Container(
+            width:  AppSpacing.md + AppSpacing.xxs,  // 18px
+            height: AppSpacing.md + AppSpacing.xxs,
+            decoration: BoxDecoration(
+              color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
+              shape:  BoxShape.circle,
+              border: Border.all(color: AppColors.headerBg, width: AppSpacing.xxs),
+            ),
+            child: ModeIcon(
+              isTraining: isTraining,
+              size:  1,
+              color: isTraining ? AppColors.warning : AppColors.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ModeIcon
+//
+// Reusable SVG icon for Emergency / Training mode.
+// Uses assets/icons/emergency.svg and assets/icons/training.svg.
+// Color is applied via colorFilter to respect the design token system.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ModeIcon extends StatelessWidget {
+  final bool   isTraining;
+  final double size;
+  final Color  color;
+
+  const ModeIcon({
+    super.key,
+    required this.isTraining,
+    required this.size,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      isTraining
+          ? 'assets/icons/training.svg'
+          : 'assets/icons/emergency.svg',
+      width:       size,
+      height:      size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
   }
 }

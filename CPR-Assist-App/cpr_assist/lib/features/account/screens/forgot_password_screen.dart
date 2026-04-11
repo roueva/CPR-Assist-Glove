@@ -5,8 +5,8 @@ import '../../../providers/app_providers.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ForgotPasswordScreen
-// User enters their email → backend sends a reset link.
-// Also has "Forgot username?" option.
+// User enters their email → backend sends a password reset link OR their
+// username, depending on which button they tap.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
@@ -21,9 +21,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     with SingleTickerProviderStateMixin {
   final _formKey         = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  final _emailFocus      = FocusNode();
 
-  bool    _isLoading    = false;
-  bool    _submitted    = false; // true after successful send — shows confirmation
+  bool    _isLoading      = false;
+  bool    _submitted      = false;   // true after a successful send
+  bool    _emailTouched   = false;
+  bool    _submitAttempted = false;
   String? _errorMessage;
 
   late final AnimationController _fadeController;
@@ -32,22 +35,36 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   @override
   void initState() {
     super.initState();
+
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+
+    _emailFocus.addListener(() {
+      if (!_emailFocus.hasFocus && _emailController.text.isNotEmpty) {
+        setState(() => _emailTouched = true);
+      }
+    });
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
     _emailController.dispose();
+    _emailFocus.dispose();
     super.dispose();
   }
 
+  // ── Submit ─────────────────────────────────────────────────────────────────
+
   Future<void> _submit(String endpoint) async {
     UIHelper.unfocus(context);
+    setState(() {
+      _submitAttempted = true;
+      _emailTouched    = true;
+    });
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -64,10 +81,25 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().contains('SocketException') ||
-              e.toString().contains('timed out')
-              ? 'Network error. Please check your connection.'
-              : e.toString().replaceFirst('Exception: ', '');
+          final raw = e.toString().toLowerCase();
+          if (raw.contains('socketexception') ||
+              raw.contains('failed host lookup') ||
+              raw.contains('connection refused')) {
+            _errorMessage =
+            'No internet connection. Please check your network and try again.';
+          } else if (raw.contains('timed out')) {
+            _errorMessage =
+            'Request timed out. Please check your connection and try again.';
+          } else if (raw.contains('429')) {
+            _errorMessage =
+            'Too many attempts. Please wait a moment and try again.';
+          } else if (raw.contains('500') ||
+              raw.contains('502') ||
+              raw.contains('503')) {
+            _errorMessage = 'Server error. Please try again later.';
+          } else {
+            _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          }
         });
       }
     } finally {
@@ -75,91 +107,124 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     }
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => UIHelper.unfocus(context),
       child: Scaffold(
         backgroundColor: AppColors.screenBgGrey,
-        body: FadeTransition(
+        body: Stack(
+          children: [
+          FadeTransition(
           opacity: _fadeAnim,
           child: CustomScrollView(
             slivers: [
-              // ── Hero header ──────────────────────────────────────────────
-              SliverToBoxAdapter(child: _buildHeader()),
+              // ── Logo block ─────────────
+              SliverToBoxAdapter(
+                child:
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        context.padding.top + AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                width:  72,
+                                height: 72,
+                                decoration: AppDecorations.card(
+                                    radius: AppSpacing.cardRadiusLg),
+                                child: const Icon(
+                                  Icons.lock_reset_rounded,
+                                  color: AppColors.primary,
+                                  size:  AppSpacing.iconLg + AppSpacing.sm,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                'Account Recovery',
+                                style: AppTypography.heading(
+                                    size: 24, color: AppColors.textPrimary),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                ),
+              ),
 
-              // ── Body ─────────────────────────────────────────────────────
+              // ── Form card or Confirmation ──────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.lg,
-                    AppSpacing.md,
-                    AppSpacing.md,
+                    AppSpacing.md, AppSpacing.md,
+                    AppSpacing.md, AppSpacing.md,
                   ),
                   child: _submitted ? _buildConfirmation() : _buildForm(),
                 ),
               ),
+
+              // ── "Back to Login" text link ──────────────────────────────────
+              if (!_submitted)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                          bottom: AppSpacing.xl + context.safeBottom),
+                      child: TextButton(
+                        onPressed: () => context.pop(),
+                        child: RichText(
+                          text: TextSpan(
+                            style: AppTypography.body(
+                                color: AppColors.textSecondary),
+                            children: [
+                              const TextSpan(
+                                  text: 'Remembered it? '),
+                              TextSpan(
+                                text: 'Back to Login',
+                                style: AppTypography.bodyBold(
+                                    color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              if (_submitted)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                      height: AppSpacing.xl + context.safeBottom),
+                ),
             ],
           ),
+          ),
+            // ── Fixed back arrow ───────────────────────────────────────────
+            Positioned(
+              top:  context.padding.top + AppSpacing.xs,
+              left: AppSpacing.xs,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.textSecondary,
+                  size:  AppSpacing.iconMd,
+                ),
+                onPressed: () => context.pop(),
+                tooltip: 'Back',
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-
-  // ── Hero header ────────────────────────────────────────────────────────────
-
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        context.padding.top + AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
-      ),
-      decoration: AppDecorations.primaryGradientCard(radius: 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              width:  AppSpacing.touchTargetMin,
-              height: AppSpacing.touchTargetMin,
-              decoration: AppDecorations.iconCircle(
-                bg: AppColors.textOnDark.withValues(alpha: 0.15),
-              ),
-              child: const Icon(
-                Icons.arrow_back_rounded,
-                color: AppColors.textOnDark,
-                size:  AppSpacing.iconMd,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Container(
-            width:  AppSpacing.iconXl + AppSpacing.lg,
-            height: AppSpacing.iconXl + AppSpacing.lg,
-            decoration: AppDecorations.iconCircle(
-              bg: AppColors.textOnDark.withValues(alpha: 0.15),
-            ),
-            child: const Icon(
-              Icons.lock_reset_rounded,
-              color: AppColors.textOnDark,
-              size:  AppSpacing.iconLg + AppSpacing.sm,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('Account Recovery',
-              style: AppTypography.displayLg(color: AppColors.textOnDark)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Enter your email to recover your\npassword or username.',
-            style: AppTypography.body(
-                color: AppColors.textOnDark.withValues(alpha: 0.75)),
-          ),
-        ],
       ),
     );
   }
@@ -172,7 +237,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Form(
         key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
+        autovalidateMode: AutovalidateMode.disabled,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -185,53 +250,44 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Email field
-            Text('Email',
-                style: AppTypography.label(
-                    size: 13, color: AppColors.textSecondary)),
+            // ── Email ────────────────────────────────────────────────────────
+            const _FieldLabel('Email'),
             const SizedBox(height: AppSpacing.xs),
             TextFormField(
               controller:      _emailController,
+              focusNode:       _emailFocus,
               keyboardType:    TextInputType.emailAddress,
               textInputAction: TextInputAction.done,
-              style:           AppTypography.bodyMedium(),
-              decoration: InputDecoration(
-                hintText:   'Enter your email address',
-                hintStyle:  AppTypography.body(color: AppColors.textHint),
-                prefixIcon: const Icon(Icons.mail_outline_rounded,
-                    size: AppSpacing.iconSm, color: AppColors.textDisabled),
-              ),
+              onFieldSubmitted: (_) =>
+                  _submit('/auth/password-reset-request'),
+              autovalidateMode: (_emailTouched || _submitAttempted)
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Please enter your email';
-                if (!v.trim().isValidEmail) return 'Enter a valid email address';
+                if (v == null || v.trim().isEmpty) {
+                  return 'Please enter your email';
+                }
+                if (!v.trim().isValidEmail) {
+                  return 'Enter a valid email address';
+                }
                 return null;
               },
+              style:      AppTypography.bodyMedium(),
+              decoration: _inputDecoration(
+                hint: 'name@example.com',
+                icon: Icons.mail_outline_rounded,
+              ),
             ),
 
+            // ── Error banner ─────────────────────────────────────────────────
             if (_errorMessage != null) ...[
               const SizedBox(height: AppSpacing.md),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: AppDecorations.errorCard(),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline_rounded,
-                        size: AppSpacing.iconSm, color: AppColors.error),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(_errorMessage!,
-                          style: AppTypography.body(
-                              size: 13, color: AppColors.error)),
-                    ),
-                  ],
-                ),
-              ),
+              _ErrorBanner(message: _errorMessage!),
             ],
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Reset password button
+            // ── Send Reset Link button ────────────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: _isLoading
@@ -247,34 +303,53 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                 ),
               )
                   : ElevatedButton(
-                onPressed: () => _submit('/auth/password-reset-request'),
+                onPressed: () =>
+                    _submit('/auth/password-reset-request'),
+                style: ElevatedButton.styleFrom(
+                  elevation:   4,
+                  shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                ),
                 child: const Text('Send Reset Link'),
               ),
             ),
 
             const SizedBox(height: AppSpacing.md),
 
-            // Divider
+            // ── "or" divider ─────────────────────────────────────────────────
             Row(children: [
-              const Expanded(child: Divider()),
+              const Expanded(
+                  child: Divider(
+                      thickness: 0.5, color: AppColors.textDisabled)),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm),
                 child: Text('or',
-                    style: AppTypography.caption()),
+                    style: AppTypography.body(
+                        size: 13, color: AppColors.textDisabled)),
               ),
-              const Expanded(child: Divider()),
+              const Expanded(
+                  child: Divider(
+                      thickness: 0.5, color: AppColors.textDisabled)),
             ]),
 
             const SizedBox(height: AppSpacing.md),
 
-            // Forgot username button
+            // ── Email my Username button ──────────────────────────────────────
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
                 onPressed: _isLoading
                     ? null
                     : () => _submit('/auth/forgot-username'),
-                child: const Text('Email me my Username'),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: AppColors.primary.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Text(
+                  'Email me my Username',
+                  style: AppTypography.buttonSecondary(),
+                ),
               ),
             ),
           ],
@@ -283,7 +358,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     );
   }
 
-  // ── Confirmation state (after submit) ─────────────────────────────────────
+  // ── Confirmation state ─────────────────────────────────────────────────────
 
   Widget _buildConfirmation() {
     return Container(
@@ -319,8 +394,72 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => context.pop(),
+              style: ElevatedButton.styleFrom(
+                elevation:   4,
+                shadowColor: AppColors.primary.withValues(alpha: 0.4),
+              ),
               child: const Text('Back to Login'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers (duplicated locally — same as registration_screen.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+InputDecoration _inputDecoration({
+  required String   hint,
+  required IconData icon,
+  Widget?           suffix,
+}) =>
+    InputDecoration(
+      hintText:   hint,
+      hintStyle:  AppTypography.body(color: AppColors.textHint),
+      prefixIcon: Icon(icon,
+          size: AppSpacing.iconSm, color: AppColors.textDisabled),
+      suffixIcon: suffix,
+    );
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: AppTypography.label(size: 13, color: AppColors.textPrimary),
+  );
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical:   AppSpacing.sm,
+      ),
+      decoration: AppDecorations.errorCard(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.error_outline_rounded,
+                size: AppSpacing.iconSm, color: AppColors.error),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(message,
+                style: AppTypography.body(size: 13, color: AppColors.error)),
           ),
         ],
       ),
