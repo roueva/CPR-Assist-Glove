@@ -117,8 +117,8 @@ module.exports = function (pool) {
     router.get('/summaries', authenticate, async (req, res) => {
         try {
             const userId = req.user.id;
-            const limit = Math.min(parseInt(req.query.limit) || 50, 200);  // ADD
-            const offset = parseInt(req.query.offset) || 0;                   // ADD
+            const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+            const offset = parseInt(req.query.offset) || 0;
             const result = await pool.query(
                 `SELECT id, mode, scenario,
             compression_count, correct_depth, correct_frequency,
@@ -134,7 +134,7 @@ module.exports = function (pool) {
             patient_temperature, ambient_temp_start, ambient_temp_end,
             session_duration, total_grade,
             session_start, session_end, note,
-            ROW_NUMBER() OVER (ORDER BY session_start ASC) AS session_number
+            ROW_NUMBER() OVER (ORDER BY session_start ASC)::int AS session_number
      FROM cpr_sessions
      WHERE user_id = $1
      ORDER BY session_start DESC
@@ -551,7 +551,7 @@ module.exports = function (pool) {
             patient_temperature, ambient_temp_start, ambient_temp_end,
             session_duration, total_grade,
             session_start, session_end, note,
-            ROW_NUMBER() OVER (ORDER BY session_start ASC) AS session_number
+            ROW_NUMBER() OVER (ORDER BY session_start ASC)::int AS session_number
      FROM cpr_sessions
      WHERE user_id = $1
      ORDER BY session_start DESC

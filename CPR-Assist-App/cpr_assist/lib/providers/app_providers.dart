@@ -39,7 +39,8 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
     final mode     = ref.read(appModeProvider);
     final scenario = ref.read(scenarioProvider);
     connection.sendSyncTime();
-    connection.sendModeSet(mode.bleValue);
+    // Only sync mode if non-default — avoids overwriting glove state on first connect
+    if (mode != AppMode.emergency) connection.sendModeSet(mode.bleValue);
     connection.sendSetScenario(scenario.bleValue);
     connection.sendSetTargetDepth(
       minMm: scenario.targetDepthMinMm,

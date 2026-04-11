@@ -45,7 +45,8 @@ _BLEState _classifyStatus(String status) {
   if (status == 'Scanning for Glove...'       ||
       status == 'Connecting…'                 ||
       status == 'Bluetooth ON — Connecting…'  ||
-      status.contains('Reconnecting')) {
+      status.contains('Reconnecting')         ||
+      status.contains('Retrying')) {
     return _BLEState.scanning;
   }
 
@@ -77,6 +78,7 @@ class BLEStatusIndicator extends StatefulWidget {
 
 class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   StreamSubscription<BluetoothAdapterState>? _adapterStateSub;
+  bool _wasConnected = false;
 
   @override
   void initState() {
@@ -95,13 +97,34 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   }
 
   void _rebuild() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final status = widget.connectionStatusNotifier.value;
+    final bleState = _classifyStatus(status);
+
+    // Detect drop: was connected, now isn't
+    if (_wasConnected && bleState != _BLEState.connected) {
+      _wasConnected = false;
+      // Don't show glove-lost dialog if BT itself turned off — that has its own dialog
+      if (bleState != _BLEState.bluetoothOff) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showGloveLostDialog();
+        });
+      }
+    }
+
+    if (bleState == _BLEState.connected) _wasConnected = true;
+
+    setState(() {});
   }
 
   void _onAdapterState(BluetoothAdapterState state) {
-    // Just rebuild the icon — don't show a dialog automatically.
-    // The user can tap the BT icon to get guidance.
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (state == BluetoothAdapterState.off) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _enableBluetooth();
+      });
+    }
   }
 
   // ── Icon ─────────────────────────────────────────────────────────────────
@@ -145,76 +168,47 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
     switch (state) {
       case _BLEState.connected:
       case _BLEState.scanning:
-        return; // no action while connected or auto-scanning
-
+        return;
       case _BLEState.bluetoothOff:
-        _showBluetoothDialog();
+        await _enableBluetooth();
         return;
-
       case _BLEState.tapToRetry:
-        _showRetryDialog(status);
+        await widget.bleConnection.manualRetry();
         return;
-
       case _BLEState.disconnected:
         await widget.bleConnection.manualRetry();
         return;
     }
   }
 
-  void _showBluetoothDialog() {
+  // ── Bluetooth enable (native prompt first, explanation on denial) ─────────
+  Future<void> _enableBluetooth() async {
+    try {
+      await FlutterBluePlus.turnOn();
+    } on FlutterBluePlusException {
+      if (mounted) {
+        AppDialogs.showAlert(
+          context,
+          icon:      Icons.bluetooth_disabled_rounded,
+          iconColor: AppColors.emergencyRed,
+          iconBg:    AppColors.emergencyBg,
+          title:     'Bluetooth Required',
+          message:   'The CPR Assist glove requires Bluetooth. Please enable it to connect.',
+        );
+      }
+    } catch (_) {}
+  }
+
+// ── Glove lost dialog ─────────────────────────────────────────────────────
+  void _showGloveLostDialog() {
     AppDialogs.showAlert(
       context,
-      icon:      Icons.bluetooth_disabled_rounded,
-      iconColor: AppColors.emergencyRed,
-      iconBg:    AppColors.emergencyBg,
-      title:     'Bluetooth Required',
-      message:   'Bluetooth must be enabled to connect to the CPR Assist glove.',
-    ).then((_) async {
-      // After dialog dismissed, attempt to enable
-      if (mounted) {
-        await widget.bleConnection.enableBluetooth(prompt: true);
-      }
-    });
-  }
-
-  void _showRetryDialog(String status) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        icon: const Icon(
-          Icons.bluetooth_searching_rounded,
-          color: AppColors.warning,
-          size:  32,
-        ),
-        title:   const Text('Glove Not Found'),
-        content: Text(
-          _retryMessage(status),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:     const Text('Dismiss'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              widget.bleConnection.manualRetry();
-            },
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+      icon:      Icons.bluetooth_searching_rounded,
+      iconColor: AppColors.warning,
+      iconBg:    AppColors.warningBg,
+      title:     'Glove Connection Lost',
+      message:   'The CPR Assist glove disconnected unexpectedly. Attempting to reconnect automatically.',
     );
-  }
-
-  String _retryMessage(String status) {
-    if (status.contains('Connection Lost') || status.contains('Connection Failed')) {
-      return 'The connection to the glove was lost. Make sure the glove is powered on and nearby.';
-    }
-    if (status.contains('Setup Failed')) {
-      return 'Connected to the glove but service setup failed. Try restarting the glove.';
-    }
-    return 'Could not find the CPR Assist glove. Make sure it is powered on and nearby.';
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -254,21 +248,6 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
                     valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                  ),
-                ),
-              ),
-
-            // Tap-to-retry dot — small red badge when action available
-            if (isTappable && bleState != _BLEState.disconnected)
-              Positioned(
-                top:   AppSpacing.xxs,
-                right: AppSpacing.xxs,
-                child: Container(
-                  width:  AppSpacing.xs,
-                  height: AppSpacing.xs,
-                  decoration: const BoxDecoration(
-                    color:  AppColors.emergencyRed,
-                    shape:  BoxShape.circle,
                   ),
                 ),
               ),

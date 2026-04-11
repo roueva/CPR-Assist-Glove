@@ -162,8 +162,26 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
     if (status == 'Connected') {
       _syncLocalSessions();
-      // Trigger automatic selftest on connect — result handled in _updateDisplayValues
       ref.read(bleConnectionProvider).sendRunSelftest();
+      return;
+    }
+
+    if (!mounted) return;
+    final notify = ref.read(settingsProvider).notifyOnDisconnect;
+    if (!notify) return;
+
+    if (status.contains('Reconnecting') || status.contains('Disconnected')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_isSessionActive) {
+          UIHelper.showWarning(
+            context,
+            'Glove disconnected — reconnecting. Keep performing CPR.',
+          );
+        } else {
+          UIHelper.showWarning(context, 'Glove disconnected.');
+        }
+      });
     }
   }
 
@@ -177,6 +195,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     bool anySynced = false;
     for (final detail in pending) {
       final savedId = await service.saveDetail(detail);
+      debugPrint('🔵 saveDetail returned: $savedId');
+
       if (savedId != null) {
         await SessionLocalStorage.markSynced(detail);
         anySynced = true;
@@ -543,23 +563,29 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   // ── Session end ────────────────────────────────────────────────────────────
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
-    final isLoggedIn  = ref.read(authStateProvider).isLoggedIn;
-    final service     = ref.read(sessionServiceProvider);
-    final bleConn     = ref.read(bleConnectionProvider);
+    final isLoggedIn = ref
+        .read(authStateProvider)
+        .isLoggedIn;
+    final service = ref.read(sessionServiceProvider);
+    final bleConn = ref.read(bleConnectionProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+
 
     var detail = service.assembleDetail(
-      summaryPacket:         data,
-      events:                List.from(bleConn.compressionEvents),
-      ventilationEvents:     List.from(bleConn.ventilationEvents),
-      pulseCheckEvents:      List.from(bleConn.pulseCheckEvents),
+      summaryPacket: data,
+      events: List.from(bleConn.compressionEvents),
+      ventilationEvents: List.from(bleConn.ventilationEvents),
+      pulseCheckEvents: List.from(bleConn.pulseCheckEvents),
       rescuerVitalSnapshots: List.from(bleConn.rescuerVitalSnapshots),
-      sessionStart:          _sessionStartTime ?? DateTime.now(),
-      sessionDurationSecs:   _displaySessionDuration.inSeconds,
-      mode:     currentMode.sessionModeString,
-      scenario: ref.read(scenarioProvider).sessionScenarioString,
+      sessionStart: _sessionStartTime ?? DateTime.now(),
+      sessionDurationSecs: _displaySessionDuration.inSeconds,
+      mode: currentMode.sessionModeString,
+      scenario: ref
+          .read(scenarioProvider)
+          .sessionScenarioString,
     );
 
-    // ── Emergency + not logged in: offer login once, non-blocking ─────────────
+    // Emergency + not logged in: offer login once, non-blocking
     if (currentMode == AppMode.emergency && !isLoggedIn) {
       if (!mounted) return;
       final shouldLogin = await AppDialogs.promptLogin(
@@ -569,13 +595,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (shouldLogin == true && mounted) {
         await context.push(const LoginScreen());
       }
-
-      final nowLoggedIn = ref.read(authStateProvider).isLoggedIn;
+      final nowLoggedIn = ref
+          .read(authStateProvider)
+          .isLoggedIn;
       if (!nowLoggedIn) {
-        // Not logged in — save locally and go to results
         await service.saveLocalOnly(detail);
+        container.invalidate(sessionSummariesProvider);  // ← add this
         if (mounted) {
-          ref.invalidate(sessionSummariesProvider);
           context.push(SessionResultsScreen.fromDetail(detail: detail));
         }
         return;
@@ -583,29 +609,23 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     }
 
     if (!mounted) return;
-
-    // ── Attempt backend save ───────────────────────────────────────────────────
     final savedId = await service.saveDetail(detail);
     if (!mounted) return;
 
     if (savedId != null) {
-      // Stamp the backend id onto the detail so the results screen can edit note/delete
       detail = detail.withId(savedId);
-      ref.invalidate(sessionSummariesProvider);
-    } else {
-      // Backend save failed — always save locally as fallback
+    }
+    container.invalidate(sessionSummariesProvider);
+
+    if (savedId == null) {
       await service.saveLocalOnly(detail);
-      ref.invalidate(sessionSummariesProvider);
       if (mounted) {
         UIHelper.showWarning(
           context, 'Could not sync to server — session saved locally.',
         );
       }
     }
-
-    if (mounted) {
-      context.push(SessionResultsScreen.fromDetail(detail: detail));
-    }
+    if (mounted) context.push(SessionResultsScreen.fromDetail(detail: detail));
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────

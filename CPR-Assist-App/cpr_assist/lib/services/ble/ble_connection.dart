@@ -76,6 +76,8 @@ class BLEConnection {
   bool _userDisconnected = false;
   bool _bluetoothWasOff  = false;
   int  _reconnectAttempts = 0;
+  int _scanAttempts = 0;
+  static const int _maxScanAttempts = 8; // 8 × 15s ≈ 2 min
 
   BluetoothDevice?                        _connectedDevice;
   BluetoothConnectionState                _connectionState =
@@ -207,33 +209,63 @@ class BLEConnection {
 
       await FlutterBluePlus.startScan(
         timeout: AppConstants.bleScanTimeout,
-        withServices: [Guid(_kServiceUuid)],
       );
 
-      _scanSub = FlutterBluePlus.scanResults.listen(
-            (results) {
-          for (final r in results) {
-            if (r.advertisementData.serviceUuids
-                .any((u) => u.toString().toLowerCase() == _kServiceUuid)) {
-              debugPrint('BLE: found ${r.device.platformName}');
-              _stopScanAndConnect(r.device);
-              return;
-            }
+      _scanSub = FlutterBluePlus.scanResults.listen((results) {
+        for (final r in results) {
+          final matchByService = r.advertisementData.serviceUuids
+              .any((u) => u.toString().toLowerCase() == _kServiceUuid);
+          final matchByName = r.device.platformName == AppConstants.bleDeviceName;
+          if (matchByService || matchByName) {
+            debugPrint('BLE: found ${r.device.platformName}');
+            _stopScanAndConnect(r.device);
+            return;
           }
-        },
-        onDone: () {
-          if (_isScanning) {
-            _isScanning = false;
+        }
+      });
+
+      // flutter_blue_plus 1.x never calls onDone on timeout — handle it manually
+      await Future.delayed(AppConstants.bleScanTimeout + const Duration(milliseconds: 500));
+
+      if (_isScanning && !isConnected && !_isConnecting) {
+        _isScanning = false;
+        _scanSub?.cancel();
+        _scanSub = null;
+
+        if (!_userDisconnected) {
+          _scanAttempts++;
+          _reconnectAttempts = 0;
+
+          if (_scanAttempts >= _maxScanAttempts) {
+            // 2 minutes elapsed — stop and wait for manual retry
+            _scanAttempts = 0;
             _updateStatus('Glove Not Found — Tap to Retry');
+          } else {
+            _updateStatus('Glove Not Found — Retrying…');
+            _reconnectTimer?.cancel();
+            _reconnectTimer = Timer(AppConstants.bleReconnectInterval, () {
+              if (!_userDisconnected && !isConnected) _performSingleScan();
+            });
           }
-        },
-      );
+        } else {
+          _updateStatus('Glove Not Found — Tap to Retry');
+        }
+      }
+
     } catch (e) {
       debugPrint('BLE scan error: $e');
       _scanSub?.cancel();
       _scanSub = null;
       _isScanning = false;
-      _updateStatus('Scan Failed — Tap to Retry');
+      if (!_userDisconnected) {
+        _updateStatus('Glove Not Found — Retrying…');
+        _reconnectTimer?.cancel();
+        _reconnectTimer = Timer(AppConstants.bleReconnectInterval, () {
+          if (!_userDisconnected && !isConnected) _performSingleScan();
+        });
+      } else {
+        _updateStatus('Scan Failed — Tap to Retry');
+      }
     }
   }
 
@@ -258,6 +290,11 @@ class BLEConnection {
       _connectedDevice = device;
       _updateStatus('Connecting…');
 
+      await device.connect().timeout(
+        AppConstants.bleConnectTimeout,
+        onTimeout: () => throw TimeoutException('Connection timed out'),
+      );
+
       _connStateSub?.cancel();
       _connStateSub = device.connectionState.listen((s) {
         _connectionState = s;
@@ -265,11 +302,6 @@ class BLEConnection {
           _handleDisconnection();
         }
       });
-
-      await device.connect().timeout(
-        AppConstants.bleConnectTimeout,
-        onTimeout: () => throw TimeoutException('Connection timed out'),
-      );
 
       // ── MTU negotiation — required by spec v3.0 Section 2.2 ───────────────
       // Must negotiate before service discovery.
@@ -286,7 +318,12 @@ class BLEConnection {
     } catch (e) {
       debugPrint('BLE connect error: $e');
       _isConnecting = false;
-      _updateStatus('Connection Failed — Tap to Retry');
+      if (!_userDisconnected) {
+        _updateStatus('Connection Failed — Retrying…');
+        _autoReconnect();
+      } else {
+        _updateStatus('Connection Failed — Tap to Retry');
+      }
     }
   }
 
@@ -364,6 +401,7 @@ class BLEConnection {
       _isConnecting     = false;
       _userDisconnected = false;
       _reconnectAttempts = 0;
+      _scanAttempts      = 0;
       _updateStatus('Connected');
       // Sync wall-clock time so offline sessions have correct timestamps
       unawaited(sendSyncTime());
@@ -375,7 +413,13 @@ class BLEConnection {
     } catch (e) {
       debugPrint('BLE notification setup failed: $e');
       _isConnecting = false;
-      _updateStatus('Setup Failed — Tap to Retry');
+      if (!_userDisconnected) {
+        _updateStatus('Setup Failed — Retrying…');
+        _cleanupConnection();
+        _autoReconnect();
+      } else {
+        _updateStatus('Setup Failed — Tap to Retry');
+      }
     }
   }
 
@@ -877,6 +921,7 @@ class BLEConnection {
     if (isConnected) return;
     debugPrint('BLE: manual retry');
     _reconnectAttempts = 0;
+    _scanAttempts      = 0;
     _userDisconnected  = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;

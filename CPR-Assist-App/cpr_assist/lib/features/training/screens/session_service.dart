@@ -70,6 +70,7 @@ class SessionService {
 
   /// Saves a completed SessionDetail to the backend.
   /// Returns the backend session id on success, null on failure.
+  /// Returns the backend session id on success, null on failure.
   Future<int?> saveDetail(SessionDetail detail) async {
     try {
       final response = await _network.post(
@@ -83,6 +84,7 @@ class SessionService {
       return null;
     }
   }
+
   /// Save a session locally only, without hitting the backend.
   /// Used when Emergency mode ends and the user declines to log in.
   Future<void> saveLocalOnly(SessionDetail detail) async {

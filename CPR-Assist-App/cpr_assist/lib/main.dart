@@ -20,7 +20,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final networkService = NetworkService();
-  networkService.initialize(prefs); // drop the await — it's just _prefs = prefs
+  networkService.initialize(prefs);
+  await dotenv.load(fileName: '.env');  // ← moved here
   _filterLogs();
 
   final wakelockPref = prefs.getBool('settings_keepScreenOn') ?? true;
@@ -31,7 +32,6 @@ void main() async {
     overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
   );
 
-  // Show the app NOW — don't block on network or disk I/O
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -39,22 +39,15 @@ void main() async {
     ),
   );
 
-  // Deferred: runs after first frame is painted
   WidgetsBinding.instance.addPostFrameCallback((_) async {
-    // ADD these two at the top:
-    await dotenv.load(fileName: '.env');
-    NetworkService.startConnectivityMonitoring(
+    NetworkService.startConnectivityMonitoring(  // dotenv gone, this stays
       interval: AppConstants.connectivityCheckInterval,
     );
-    // Heavy rendering work — doesn't need to block UI
     unawaited(CustomIcons.loadIcons());
     unawaited(AEDClusterManager.prewarmIconCache());
     unawaited(AvailabilityParser.loadRules());
-
-    // Auth check — may do HTTP, must not block launch
     unawaited(container.read(authStateProvider.notifier).checkAuthStatus());
 
-    // Cache init — disk reads
     try {
       await CacheService.initializeAllCaches();
       container.read(cacheInitializedProvider.notifier).state = true;

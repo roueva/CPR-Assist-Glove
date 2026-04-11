@@ -29,7 +29,7 @@ module.exports = function (pool) {
      ORDER BY avg_grade DESC
      LIMIT 50`,
                 [scenario]
-            ); currentUsername
+            ); 
 
             // Inject rank and flag current user's row
             const userId = req.user.id;
