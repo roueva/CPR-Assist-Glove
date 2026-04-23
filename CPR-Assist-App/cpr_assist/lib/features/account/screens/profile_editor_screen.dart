@@ -40,7 +40,7 @@ class ProfileEditorScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.surfaceWhite,
+      backgroundColor: AppColors.white,
       appBar: _buildAppBar(context),
       body: ListView(
         padding: EdgeInsets.fromLTRB(
@@ -71,10 +71,10 @@ class ProfileEditorScreen extends ConsumerWidget {
             const _Divider(),
             _AccountRow(
               icon:       Icons.person_remove_outlined,
-              iconColor:  AppColors.emergencyRed,
+              iconColor:  AppColors.emergency,
               label:      'Delete Account',
               subtitle:   'Permanently removes your account and all data',
-              labelColor: AppColors.emergencyRed,
+              labelColor: AppColors.emergency,
               onTap:      () => _confirmDeleteAccount(context, ref),
             ),
           ]),
@@ -86,7 +86,7 @@ class ProfileEditorScreen extends ConsumerWidget {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor:           AppColors.surfaceWhite,
+      backgroundColor:           AppColors.white,
       foregroundColor:           AppColors.textPrimary,
       elevation:                 0,
       scrolledUnderElevation:    0,
@@ -247,7 +247,7 @@ class _AccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color:        AppColors.surfaceWhite,
+        color:        AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         border:       Border.all(color: AppColors.divider),
       ),

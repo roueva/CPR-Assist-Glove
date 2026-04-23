@@ -532,8 +532,9 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
     navigation: state.navigation.copyWith(transportMode: mode),
   );
 
-  void cancelNavigation() =>
-      state = state.copyWith(navigation: const NavigationState());
+  void cancelNavigation() => state = state.copyWith(
+    navigation: NavigationState(transportMode: state.navigation.transportMode),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

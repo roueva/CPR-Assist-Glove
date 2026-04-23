@@ -24,13 +24,13 @@ class AppDialogs {
       context,
       dialog: const _ConfirmDialog(
         icon: Icons.logout_rounded,
-        iconColor: AppColors.emergencyRed,
-        iconBg: AppColors.emergencyBg,
+        iconColor: AppColors.emergency,
+        iconBg: AppColors.errorBg,
         title: 'Log Out',
         message:
         'You\'ll be returned to the login screen. Any active session data will be saved.',
         confirmLabel: 'Log Out',
-        confirmColor: AppColors.emergencyRed,
+        confirmColor: AppColors.emergency,
         cancelLabel: 'Cancel',
       ),
     );
@@ -41,13 +41,13 @@ class AppDialogs {
       context,
       dialog: const _ConfirmDialog(
         icon:         Icons.delete_forever_rounded,
-        iconColor:    AppColors.emergencyRed,
-        iconBg:       AppColors.emergencyBg,
+        iconColor:    AppColors.emergency,
+        iconBg:       AppColors.errorBg,
         title:        'Delete Account?',
         message:      'This permanently deletes your account, all sessions, and scores. '
             'This cannot be undone.',
         confirmLabel: 'Delete Account',
-        confirmColor: AppColors.emergencyRed,
+        confirmColor: AppColors.emergency,
         cancelLabel:  'Cancel',
       ),
     );
@@ -192,7 +192,7 @@ class AppDialogs {
         title:        'Discard changes?',
         message:      'Your unsaved changes will be lost.',
         confirmLabel: 'Discard',
-        confirmColor: AppColors.emergencyRed,
+        confirmColor: AppColors.emergency,
         cancelLabel:  'Keep editing',
       ),
     );
@@ -677,7 +677,7 @@ class _AEDShareDialog extends StatelessWidget {
                     data: _mapsUrl,
                     version: QrVersions.auto,
                     size: AppConstants.qrCodeSize,
-                    backgroundColor: AppColors.surfaceWhite,
+                    backgroundColor: AppColors.white,
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(

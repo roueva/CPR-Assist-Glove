@@ -196,7 +196,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
           behavior: HitTestBehavior.translucent,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: AppColors.surfaceWhite,
+              color: AppColors.white,
               boxShadow: _hasScrolledUnderHeader
                   ? [
                 const BoxShadow(
@@ -597,7 +597,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
               },
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceWhite,
+                  color: AppColors.white,
                   boxShadow: _hasScrolledUnderHeader
                       ? [
                     const BoxShadow(
@@ -1105,7 +1105,7 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                     },
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceWhite,
+                        color: AppColors.white,
                         boxShadow: _hasScrolledUnderHeader
                             ? [
                           const BoxShadow(
@@ -1251,7 +1251,7 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                         horizontal: AppSpacing.sm + AppSpacing.xs,
                         vertical: AppSpacing.sm),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceWhite,
+                      color: AppColors.white,
                       borderRadius: BorderRadius.circular(
                           AppSpacing.buttonRadiusLg),
                     ),
@@ -1470,7 +1470,7 @@ class _PanelContainer extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.surfaceWhite,
+        color: AppColors.white,
         borderRadius: borderRadius,
         boxShadow: const [
           BoxShadow(
@@ -1571,7 +1571,7 @@ class _ExpandableAvailabilityState extends State<_ExpandableAvailability> {
       statusColor = AppColors.textSecondary;
       icon = Icons.schedule;
     } else if (status.isOpen) {
-      statusColor = AppColors.clusterGreen;
+      statusColor = AppColors.aedOpen;
       icon = Icons.check_circle_outline;
     } else {
       statusColor = AppColors.error;

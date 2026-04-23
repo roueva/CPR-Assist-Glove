@@ -134,7 +134,7 @@ class _VentilationOverlayState extends State<VentilationOverlay>
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 decoration: AppDecorations.card(
-                  color:  AppColors.surfaceWhite,
+                  color:  AppColors.white,
                   radius: AppSpacing.cardRadiusLg,
                 ),
                 child: Column(

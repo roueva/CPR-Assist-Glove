@@ -37,13 +37,12 @@ class AppColorsProxy {
   Color get success        => AppColors.success;
   Color get warning        => AppColors.warning;
   Color get error          => AppColors.error;
-  Color get emergencyRed   => AppColors.emergencyRed;
+  Color get emergency   => AppColors.emergency;
   Color get textPrimary    => AppColors.textPrimary;
   Color get textSecondary  => AppColors.textSecondary;
   Color get textDisabled   => AppColors.textDisabled;
   Color get divider        => AppColors.divider;
-  Color get screenBg       => AppColors.screenBg;
-  Color get cardBg         => AppColors.cardBg;
+  Color get screenBg       => AppColors.white;
 }
 
 // ─── Proxy so context.typography.xxx works without static calls ──────────────

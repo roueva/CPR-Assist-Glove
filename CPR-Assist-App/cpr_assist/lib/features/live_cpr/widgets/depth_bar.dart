@@ -59,20 +59,29 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
       upperBound: 1.0,
     )..repeat(reverse: true);
     _anim = const AlwaysStoppedAnimation(0.0);
+
+    // Set _hasData immediately if widget starts with depth already > 0
+    if (widget.depth > 0.05) {
+      _hasData = true;
+      _displayed = widget.depth.clamp(0.0, widget.maxDepthCm);
+      _anim = AlwaysStoppedAnimation(_displayed);
+    }
   }
 
   @override
   void didUpdateWidget(covariant AnimatedDepthBar old) {
     super.didUpdateWidget(old);
+    if (!_hasData && widget.depth > 0.05) {
+      setState(() => _hasData = true);
+    }
     final double target = widget.recoilAchieved
         ? 0.0
         : widget.depth.clamp(0.0, widget.maxDepthCm);
     if ((target - _displayed).abs() < 0.01) return;
     _anim = Tween<double>(begin: _displayed, end: target)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _displayed = target;   // ← moved AFTER creating the tween
     _ctrl.forward(from: 0);
-    _displayed = target;
-    if (!_hasData && widget.depth > 0.05) setState(() => _hasData = true);
   }
 
   @override
@@ -127,30 +136,30 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
 
           return CustomPaint(
             size: Size(W, H),
-              painter: _DepthBarPainter(
-                pulseValue: _pillPulse.value,
-                W:               W,
-                H:               H,
-                pillW:           _pillW,
-                pillH:           _pillH,
-                relPillTop:      relPillTop,
-                relPillBot:      relPillBot,
-                depthPillTop:    depthPillTop,
-                depthPillBot:    depthPillBot,
-                trackTop:        trackTop,
-                fillBottom:      fillBottom,
-                overflowTop:     overflowTop,
-                overflowFillBot: overflowFillBot,
-                lineY:           lineY,
-                hasData:         _hasData,
-                releaseActive:   releaseActive,
-                depthActive:     depthActive,
-                isExcessive:     isExcessive,
-                depth:           v,
-                trackW:          trackW,
-                targetDepthCm:   widget.targetDepthCm,
-                targetDepthMaxCm: widget.targetDepthMaxCm,
-              ),
+            painter: _DepthBarPainter(
+              pulseValue: _pillPulse.value,
+              W:               W,
+              H:               H,
+              pillW:           _pillW,
+              pillH:           _pillH,
+              relPillTop:      relPillTop,
+              relPillBot:      relPillBot,
+              depthPillTop:    depthPillTop,
+              depthPillBot:    depthPillBot,
+              trackTop:        trackTop,
+              fillBottom:      fillBottom,
+              overflowTop:     overflowTop,
+              overflowFillBot: overflowFillBot,
+              lineY:           lineY,
+              hasData:         _hasData,
+              releaseActive:   releaseActive,
+              depthActive:     depthActive,
+              isExcessive:     isExcessive,
+              depth:           v,
+              trackW:          trackW,
+              targetDepthCm:   widget.targetDepthCm,
+              targetDepthMaxCm: widget.targetDepthMaxCm,
+            ),
           );
         },
       );
@@ -208,11 +217,10 @@ class _DepthBarPainter extends CustomPainter {
 
   Radius get rTrack => const Radius.circular(10);
 
-  // ── Colors ───────────────────────────────────────────────────────────────
-  static const Color _trackBg = Color(0x15FFFFFF); // depth track bg — 15% white, slightly lighter than header blocks
-  static const Color _fillBlue = Color(0xFFF57C00); // mid-blue fill — lighter than pill
-  static const Color _pillBg = Color(0xFF0D3270); // darker blue pill — clearly different
-  static const Color _borderInactive = Color(0xFF2E7D32); // cprGreen always
+  // ── Colors — all from AppColors, no raw values ───────────────────────────
+  static const Color _trackBg       = AppColors.depthBarTrack;
+  static const Color _pillBg        = AppColors.depthBarPillBg;
+  static const Color _borderInactive = AppColors.success;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -225,9 +233,9 @@ class _DepthBarPainter extends CustomPainter {
         bottomLeft: rTrack, bottomRight: rTrack,
       ),
       Paint()..color = isExcessive
-          ? AppColors.cprRed.withValues(alpha: 0.18)
+          ? AppColors.depthFillBad.withValues(alpha: 0.18)
           : (hasData && depth > 0.05 && depth < targetDepthCm)
-          ? AppColors.cprOrange.withValues(alpha: 0.12)
+          ? AppColors.depthFillWarn.withValues(alpha: 0.12)
           : _trackBg,
     );
 
@@ -238,38 +246,38 @@ class _DepthBarPainter extends CustomPainter {
     //   6–7 cm  → red (and the 0–6 portion stays green)
     if (hasData && depth > 0.05) {
       if (!isExcessive && depth < targetDepthCm) {
-        // Orange fill — too shallow, needs more effort
+        // Too shallow — amber fill
         canvas.drawRRect(
           RRect.fromLTRBAndCorners(
             trackLeft, relPillTop, trackRight, lineY,
             bottomLeft: rTrack, bottomRight: rTrack,
           ),
-          Paint()..color = AppColors.cprOrange.withValues(alpha: 0.65),
+          Paint()..color = AppColors.depthFillWarn.withValues(alpha: 0.65),
         );
       } else if (!isExcessive && depth >= targetDepthCm) {
-        // Upper green portion — sharp bottom (depth pill segment continues below)
+        // Upper green portion — sharp bottom
         canvas.drawRect(
           Rect.fromLTRB(trackLeft, relPillTop, trackRight, depthPillTop),
-          Paint()..color = AppColors.cprGreen.withValues(alpha: 0.6),
+          Paint()..color = AppColors.depthFillGood.withValues(alpha: 0.6),
         );
-        // Lower green portion — round only bottom (last segment)
+        // Lower green portion — round bottom
         canvas.drawRRect(
           RRect.fromLTRBAndCorners(
             trackLeft, depthPillTop, trackRight,
             lineY.clamp(depthPillTop, depthPillBot),
             bottomLeft: rTrack, bottomRight: rTrack,
           ),
-          Paint()..color = AppColors.cprGreen.withValues(alpha: 0.85),
+          Paint()..color = AppColors.depthFillGood.withValues(alpha: 0.85),
         );
       } else {
-        // Excessive: entire fill column is red from top to line
+        // Excessive — coral red fill
         canvas.drawRRect(
           RRect.fromLTRBAndCorners(
             trackLeft, relPillTop, trackRight,
             lineY.clamp(relPillTop, H),
             bottomLeft: rTrack, bottomRight: rTrack,
           ),
-          Paint()..color = AppColors.cprRed.withValues(alpha: 0.65),
+          Paint()..color = AppColors.depthFillBad.withValues(alpha: 0.65),
         );
       }
     }
@@ -281,7 +289,7 @@ class _DepthBarPainter extends CustomPainter {
       bot: relPillBot,
       label: 'RELEASE',
       active: releaseActive,
-      color: AppColors.cprGreen,
+      color: AppColors.feedbackGood,
     );
 
     // ── 4. DEPTH pill — always on top of fill ─────────────────────────────
@@ -291,11 +299,10 @@ class _DepthBarPainter extends CustomPainter {
       bot: depthPillBot,
       label: 'DEPTH',
       active: depthActive,
-      color: isExcessive ? AppColors.cprRed : AppColors.cprGreen,
+      color: isExcessive ? AppColors.feedbackBad : AppColors.feedbackGood,
     );
 
     // ── 4b. Depth range labels — beside the DEPTH pill ────────────────────
-    // Min label just above the pill, max label just below
     _drawSideLabel(canvas, text: '${targetDepthCm.toStringAsFixed(0)} cm',    y: depthPillTop - 8.0);
     _drawSideLabel(canvas, text: '${targetDepthMaxCm.toStringAsFixed(0)} cm', y: depthPillBot + 8.0);
 
@@ -306,10 +313,10 @@ class _DepthBarPainter extends CustomPainter {
 
       if (!insideRelease && !insideDepth) {
         final Color lineColor = isExcessive
-            ? AppColors.cprRed
+            ? AppColors.feedbackBad
             : depth >= targetDepthCm
-            ? AppColors.cprGreen
-            : AppColors.cprOrange;
+            ? AppColors.feedbackGood
+            : AppColors.feedbackWarn;
 
         final double lineHalfW = pillW * 0.45; // wider than track, narrower than pill
         canvas.drawRRect(
@@ -509,7 +516,7 @@ class _AnimatedPillState extends State<AnimatedPill>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isCorrect ? AppColors.cprGreen : AppColors.primary;
+    final color = widget.isCorrect ? AppColors.success : AppColors.primary;
     return ScaleTransition(
       scale: _pulseCtrl,
       child: Container(
@@ -519,12 +526,12 @@ class _AnimatedPillState extends State<AnimatedPill>
           color:        color,
           borderRadius: BorderRadius.circular(widget.height / 2),
           border: Border.all(
-            color: widget.isCorrect ? AppColors.primary : AppColors.cprGreen,
+            color: widget.isCorrect ? AppColors.primary : AppColors.success,
             width: 3,
           ),
           boxShadow: widget.isCorrect ? [
             BoxShadow(
-              color:        AppColors.cprGreen.withValues(alpha: 0.6),
+              color:        AppColors.success.withValues(alpha: 0.6),
               blurRadius:   AppSpacing.sm,
               spreadRadius: AppSpacing.xxs,
             ),

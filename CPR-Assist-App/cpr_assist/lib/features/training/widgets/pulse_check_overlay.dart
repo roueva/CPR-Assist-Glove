@@ -140,7 +140,7 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
     if (_isPending)                     return AppColors.primary;
     if (widget.classification == 2)     return AppColors.success;
     if (widget.classification == 1)     return AppColors.warning;
-    return AppColors.emergencyRed;
+    return AppColors.emergency;
   }
 
   String get _resultLabel {
@@ -173,7 +173,7 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
                 maxHeight: MediaQuery.sizeOf(context).height * 0.85,
               ),
               decoration: AppDecorations.card(
-                color:  AppColors.surfaceWhite,
+                color:  AppColors.white,
                 radius: AppSpacing.cardRadiusLg,
               ),
               child: ClipRRect(
@@ -450,7 +450,7 @@ class _CountdownRing extends StatelessWidget {
       arcColor   = AppColors.warning;
       trackColor = AppColors.warningBg;
     } else {
-      arcColor   = AppColors.emergencyRed;
+      arcColor   = AppColors.emergency;
       trackColor = AppColors.errorBg;
     }
 

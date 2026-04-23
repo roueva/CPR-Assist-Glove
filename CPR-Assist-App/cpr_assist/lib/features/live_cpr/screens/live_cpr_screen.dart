@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
+import '../../../main.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../../account/screens/login_screen.dart';
@@ -103,10 +104,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       ref.read(bleConnectionProvider).connectionStatusNotifier.addListener(_onBleStatusChange);
     });
 
-    // Prompt Bluetooth on when screen first loads
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _promptBluetoothIfNeeded();
-    });
+    liveCprTabActivationNotifier.addListener(_onTabActivated);
 
     // Warn user if old sessions are silently evicted
     SessionLocalStorage.onEviction = (count) {
@@ -129,13 +127,22 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     });
   }
 
+  void _onTabActivated() {
+    debugPrint('🔵 Live CPR tab activated — checking BT');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _promptBluetoothIfNeeded();
+    });
+  }
+
   Future<void> _promptBluetoothIfNeeded() async {
+    debugPrint('🔵 _promptBluetoothIfNeeded called');
     final ble = ref.read(bleConnectionProvider);
     final status = ble.connectionStatusNotifier.value;
-    if (status == 'Connected') return;
+    debugPrint('🔵 BLE status: $status');
+    if (status == 'Connected') { debugPrint('🔵 returning — already connected'); return; }
 
-    // Check if BT is already on — if so, nothing to do
     final adapterState = await FlutterBluePlus.adapterState.first;
+    // Check if BT is already on — if so, nothing to do
     if (adapterState == BluetoothAdapterState.on) return;
 
     // Try the system prompt silently (no custom dialog before)
@@ -147,8 +154,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         await AppDialogs.showAlert(
           context,
           icon:      Icons.bluetooth_disabled_rounded,
-          iconColor: AppColors.emergencyRed,
-          iconBg:    AppColors.emergencyBg,
+          iconColor: AppColors.emergency,
+          iconBg:    AppColors.errorBg,
           title:     'Bluetooth Required',
           message:   'The CPR Assist glove connects via Bluetooth. '
               'Please enable Bluetooth to use the glove.',
@@ -161,6 +168,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   void _onBleStatusChange() {
     final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
     if (status == 'Connected') {
+      ref.read(bleConnectionProvider).markPermissionsGranted();
       _syncLocalSessions();
       ref.read(bleConnectionProvider).sendRunSelftest();
       return;
@@ -228,6 +236,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     _bleDataSubscription?.cancel();
     _pulseResultTimer?.cancel();
     _swapCountdownTimer?.cancel();
+    liveCprTabActivationNotifier.addListener(_onTabActivated);
     SessionLocalStorage.onEviction = null;
     super.dispose();
   }
@@ -639,7 +648,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final sessionLocked = ref.watch(cprSessionActiveProvider);
 
     return ColoredBox(
-      color: AppColors.screenBgGrey,
+      color: AppColors.headerSurface,
       child: Stack(
         children: [
           Column(

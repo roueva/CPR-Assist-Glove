@@ -29,7 +29,7 @@ import 'session_results.dart';
 
 Color gradeColor(double grade) {
   if (grade >= 90) return AppColors.success;
-  if (grade >= 75) return AppColors.info;
+  if (grade >= 75) return AppColors.primaryAlt;
   if (grade >= 55) return AppColors.warning;
   return AppColors.error;
 }
@@ -128,12 +128,12 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
     final confirmed = await AppDialogs.showDestructiveConfirm(
       context,
       icon:         Icons.delete_outline_rounded,
-      iconColor:    AppColors.emergencyRed,
-      iconBg:       AppColors.emergencyBg,
+      iconColor:    AppColors.emergency,
+      iconBg:       AppColors.errorBg,
       title:        'Delete ${_selectedIds.length} sessions?',
       message:      'This permanently removes the selected sessions.',
       confirmLabel: 'Delete',
-      confirmColor: AppColors.emergencyRed,
+      confirmColor: AppColors.emergency,
       cancelLabel:  'Cancel',
     );
     if (confirmed != true || !mounted) return;
@@ -321,21 +321,21 @@ class _SessionsList extends StatelessWidget {
                     padding:   const EdgeInsets.only(right: AppSpacing.lg),
                     margin:    const EdgeInsets.only(bottom: AppSpacing.sm),
                     decoration: BoxDecoration(
-                      color:        AppColors.emergencyBg,
+                      color:        AppColors.errorBg,
                       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                     ),
                     child: const Icon(Icons.delete_outline_rounded,
-                        color: AppColors.emergencyRed, size: AppSpacing.iconMd),
+                        color: AppColors.emergency, size: AppSpacing.iconMd),
                   ),
                   confirmDismiss: (_) => AppDialogs.showDestructiveConfirm(
                     context,
                     icon:         Icons.delete_outline_rounded,
-                    iconColor:    AppColors.emergencyRed,
-                    iconBg:       AppColors.emergencyBg,
+                    iconColor:    AppColors.emergency,
+                    iconBg:       AppColors.errorBg,
                     title:        'Delete Session?',
                     message:      'This permanently deletes this session.',
                     confirmLabel: 'Delete',
-                    confirmColor: AppColors.emergencyRed,
+                    confirmColor: AppColors.emergency,
                     cancelLabel:  'Cancel',
                   ),
                   onDismissed: (_) async {
@@ -433,11 +433,11 @@ Future<void> _showContextMenu(
           ListTile(
             leading: const Icon(
               Icons.delete_outline_rounded,
-              color: AppColors.emergencyRed,
+              color: AppColors.emergency,
             ),
             title: const Text(
               'Delete',
-              style: TextStyle(color: AppColors.emergencyRed),
+              style: TextStyle(color: AppColors.emergency),
             ),
             onTap: () async {
               final container = ProviderScope.containerOf(context);
@@ -445,12 +445,12 @@ Future<void> _showContextMenu(
               final confirmed = await AppDialogs.showDestructiveConfirm(
                 context,
                 icon:         Icons.delete_outline_rounded,
-                iconColor:    AppColors.emergencyRed,
-                iconBg:       AppColors.emergencyBg,
+                iconColor:    AppColors.emergency,
+                iconBg:       AppColors.errorBg,
                 title:        'Delete Session?',
                 message:      'This permanently removes Session $sessionNumber.',
                 confirmLabel: 'Delete',
-                confirmColor: AppColors.emergencyRed,
+                confirmColor: AppColors.emergency,
                 cancelLabel:  'Cancel',
               );
               if (confirmed != true) return;
@@ -491,7 +491,7 @@ class _StatsHeader extends StatelessWidget {
     return Container(
       margin:  const EdgeInsets.all(AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppDecorations.primaryDarkCard(),
+      decoration: AppDecorations.primaryAltCard(),
       child: Row(
         children: [
           Expanded(child: _StatItem('Total Sessions', '${sessions.length}')),
@@ -561,7 +561,7 @@ class _FilterBar extends StatelessWidget {
               label:           Text(f),
               selected:        isSelected,
               onSelected:      (_) => onSelect(f),
-              backgroundColor: AppColors.surfaceWhite,
+              backgroundColor: AppColors.white,
               selectedColor:   AppColors.primary,
               labelStyle: isSelected
                   ? AppTypography.label(color: AppColors.textOnDark)
@@ -736,7 +736,7 @@ class SessionCard extends ConsumerWidget {
       )
           : AppDecorations.card(),
       child: Material(
-        color:        AppColors.surfaceWhite,
+        color:        AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -797,12 +797,12 @@ class SessionCard extends ConsumerWidget {
                         vertical:   AppSpacing.chipPaddingV,
                       ),
                       decoration: AppDecorations.chip(
-                        color: AppColors.emergencyRed,
-                        bg:    AppColors.emergencyBg,
+                        color: AppColors.emergency,
+                        bg:    AppColors.errorBg,
                       ),
                       child: Text(
                         'EMERGENCY',
-                        style: AppTypography.label(color: AppColors.emergencyRed),
+                        style: AppTypography.label(color: AppColors.emergency),
                       ),
                     )
                         : Row(
@@ -919,12 +919,12 @@ class SessionCard extends ConsumerWidget {
         return await AppDialogs.showDestructiveConfirm(
           context,
           icon:         Icons.delete_outline_rounded,
-          iconColor:    AppColors.emergencyRed,
-          iconBg:       AppColors.emergencyBg,
+          iconColor:    AppColors.emergency,
+          iconBg:       AppColors.errorBg,
           title:        'Delete Session?',
           message:      'This will permanently remove Session $sessionNumber from your history.',
           confirmLabel: 'Delete',
-          confirmColor: AppColors.emergencyRed,
+          confirmColor: AppColors.emergency,
           cancelLabel:  'Cancel',
         ) == true;
       },

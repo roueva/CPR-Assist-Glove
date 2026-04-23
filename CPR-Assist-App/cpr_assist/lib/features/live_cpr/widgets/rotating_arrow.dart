@@ -151,7 +151,7 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
                 decoration: const BoxDecoration(
                   boxShadow: [
                     BoxShadow(
-                      color:      Color(0x44000000),
+                      color:      AppColors.needleShadow,
                       blurRadius: 9,
                       offset:     Offset(0, 3),
                     ),
@@ -172,21 +172,21 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
             child: Container(
               width:  dotR * 2,
               height: dotR * 2,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFFACC9F6),
-                  border: Border.all(
-                    color: const Color(0xFFDDEAFF),
-                    width: 3.5,
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color:      Color(0x44000000),
-                      blurRadius: 6,
-                      offset:     Offset(0, 2),
-                    ),
-                  ],
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.needleFill,
+                border: Border.all(
+                  color: AppColors.needleTip,
+                  width: 3.5,
                 ),
+                boxShadow: const [
+                  BoxShadow(
+                    color:      AppColors.needleShadow,
+                    blurRadius: 6,
+                    offset:     Offset(0, 2),
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -203,7 +203,7 @@ class _TrianglePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFDDEAFF)
+      ..color =  AppColors.needleTip
       ..style = PaintingStyle.fill;
 
     final path = Path()
@@ -296,15 +296,15 @@ class _ArcPainter extends CustomPainter {
     final double redAlpha   = isIdle ? 0.75 : (inGreen ? 0.30 : 0.75);
     // Left red arc
     canvas.drawArc(rect, leftRedStart, leftRedSweep, false,
-        arcPaint..color = AppColors.cprRed.withValues(alpha: redAlpha));
+        arcPaint..color = AppColors.arcBad.withValues(alpha: redAlpha));
 
     // Green arc
     canvas.drawArc(rect, greenStart, greenSweep, false,
-        arcPaint..color = AppColors.cprGreen.withValues(alpha: greenAlpha));
+        arcPaint..color = AppColors.arcGood.withValues(alpha: greenAlpha));
 
     // Right red arc
     canvas.drawArc(rect, rightRedStart, rightRedSweep, false,
-        arcPaint..color = AppColors.cprRed.withValues(alpha: redAlpha));
+        arcPaint..color = AppColors.arcBad.withValues(alpha: redAlpha));
 
     // ── Glow on green zone when active ────────────────────────────────────
     if (inGreen) {
@@ -312,7 +312,7 @@ class _ArcPainter extends CustomPainter {
         ..style       = PaintingStyle.stroke
         ..strokeCap   = StrokeCap.round
         ..strokeWidth = strokeW + 4 + pulseValue * 6
-        ..color       = AppColors.cprGreen.withValues(alpha: 0.15 + pulseValue * 0.15)
+        ..color       = AppColors.arcGood.withValues(alpha: 0.15 + pulseValue * 0.15)
         ..maskFilter  = MaskFilter.blur(BlurStyle.normal, 6 + pulseValue * 4);
       canvas.drawArc(rect, greenStart, greenSweep, false, glowPaint);
     }
@@ -327,7 +327,7 @@ class _ArcPainter extends CustomPainter {
         Offset(cx + inner * cos(a), cy + inner * sin(a)),
         Offset(cx + outer * cos(a), cy + outer * sin(a)),
         Paint()
-          ..color       = Colors.white.withValues(alpha: isBoundary ? 0.70 : 0.35)
+          ..color       = AppColors.textOnDark.withValues(alpha: isBoundary ? 0.70 : 0.35)
           ..strokeWidth = isBoundary ? 2.0 : 1.2,
       );
     }
@@ -350,7 +350,7 @@ class _ArcPainter extends CustomPainter {
         style: TextStyle(
           fontSize:   11,
           fontWeight: FontWeight.w600,
-          color:      Colors.white.withValues(alpha: 0.75),
+          color:      AppColors.textOnDark.withValues(alpha: 0.75),
         ),
       ),
       textDirection: TextDirection.ltr,

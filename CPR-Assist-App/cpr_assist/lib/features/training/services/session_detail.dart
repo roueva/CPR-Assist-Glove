@@ -179,6 +179,32 @@ class SessionDetail {
   /// "85%"
   String get handsOnPct => '${(handsOnRatio * 100).round()}%';
 
+  /// True unplanned pauses — gaps >2s NOT overlapping a ventilation window
+  /// or pulse check prompt.
+  int get unplannedPauseCount {
+    if (compressions.isEmpty) return 0;
+    int count = 0;
+
+    void checkGap(double gapStart, double gapEnd) {
+      if (gapEnd - gapStart <= 2.0) return;
+      final inVent = ventilations.any((v) {
+        final vs = v.timestampSec;
+        return gapStart < (vs + v.durationSec) && gapEnd > vs;
+      });
+      final inPulse = pulseChecks.any((p) {
+        return gapStart < (p.timestampSec + 10.0) && gapEnd > p.timestampSec;
+      });
+      if (!inVent && !inPulse) count++;
+    }
+
+    checkGap(0, compressions.first.timestampSec);
+    for (int i = 1; i < compressions.length; i++) {
+      checkGap(compressions[i - 1].timestampSec, compressions[i].timestampSec);
+    }
+    checkGap(compressions.last.timestampSec, sessionDuration.toDouble());
+    return count;
+  }
+
   // ── Factory: assemble from live BLE session ───────────────────────────────
   //
   // Called by SessionService.assembleDetail() when SESSION_END arrives.

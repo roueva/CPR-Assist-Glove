@@ -293,9 +293,9 @@ class _PanelContent extends ConsumerWidget {
                   if (isLoggedIn)
                     _PanelItem(
                       icon:        Icons.logout_rounded,
-                      iconColor:   AppColors.emergencyRed,
+                      iconColor:   AppColors.emergency,
                       label:       'Log Out',
-                      labelColor:  AppColors.emergencyRed,
+                      labelColor:  AppColors.emergency,
                       onTap:       onLogout,
                       showChevron: false,
                     )
@@ -458,7 +458,7 @@ class _ProfileHeader extends StatelessWidget {
                           width:  AppSpacing.md,
                           height: AppSpacing.md,
                           decoration: const BoxDecoration(
-                            color: AppColors.surfaceWhite,
+                            color: AppColors.white,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -814,7 +814,8 @@ class _PanelDivider extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AccountAvatarButton extends ConsumerWidget {
-  const AccountAvatarButton({super.key});
+  final Color? bgColor;
+  const AccountAvatarButton({super.key, this.bgColor});
 
 
 
@@ -829,7 +830,7 @@ class AccountAvatarButton extends ConsumerWidget {
         Container(
           width:  AppSpacing.iconBoxSize,
           height: AppSpacing.iconBoxSize,
-          decoration: AppDecorations.iconCircle(bg: AppColors.primaryMid),
+          decoration: AppDecorations.iconCircle(bg: bgColor ?? AppColors.primaryLight),
           child: Center(
             child: authState.isLoggedIn
                 ? Text(
@@ -852,7 +853,7 @@ class AccountAvatarButton extends ConsumerWidget {
             decoration: BoxDecoration(
               color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
               shape:  BoxShape.circle,
-              border: Border.all(color: AppColors.headerBg, width: AppSpacing.xxs),
+              border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
             ),
             child: ModeIcon(
               isTraining: isTraining,

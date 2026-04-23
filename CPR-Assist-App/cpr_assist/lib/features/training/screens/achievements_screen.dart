@@ -19,7 +19,7 @@ class AchievementsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:        AppColors.headerBg,
+        backgroundColor:        AppColors.white,
         elevation:              0,
         scrolledUnderElevation: 0,
         toolbarHeight:          AppSpacing.headerHeight,
@@ -39,7 +39,7 @@ class AchievementsScreen extends ConsumerWidget {
             Container(
               margin:     const EdgeInsets.all(AppSpacing.md),
               padding:    const EdgeInsets.all(AppSpacing.lg),
-              decoration: AppDecorations.primaryDarkCard(),
+              decoration: AppDecorations.primaryAltCard(),
               child: Row(
                 children: [
                   const Text('🏆', style: TextStyle(fontSize: 32)),
@@ -61,7 +61,7 @@ class AchievementsScreen extends ConsumerWidget {
                             backgroundColor:
                             AppColors.textOnDark.withValues(alpha: 0.2),
                             valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.cprGreen),
+                                AppColors.success),
                             minHeight: 6,
                           ),
                         ),

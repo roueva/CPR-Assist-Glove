@@ -77,7 +77,7 @@ class _AedMapScreenState extends ConsumerState<AedMapScreen>
           ? AppSpacing.emergencyBannerH - AppSpacing.cardSpacing  // 50
           : AppSpacing.emergencyBannerH,                          // 56
       child: Material(
-        color: AppColors.emergencyRed,
+        color: AppColors.emergency,
         child: InkWell(
           onTap: isTraining ? _showSimulation112Dialog : _makeEmergencyCall,
           child: SizedBox.expand(

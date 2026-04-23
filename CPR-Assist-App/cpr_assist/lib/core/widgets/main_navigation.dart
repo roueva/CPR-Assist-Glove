@@ -44,6 +44,9 @@ class _MainNavigationScreenState
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
     _pageController.jumpToPage(index);
+    if (index == 1) {
+      liveCprTabActivationNotifier.value++;
+    }
   }
 
   @override
@@ -67,7 +70,8 @@ class _MainNavigationScreenState
     return Scaffold(
       key: _scaffoldKey,
       appBar: UniversalHeader.forMainScreens(
-        onAccountTap: _panelController.toggle,  // ← was openEndDrawer
+        onAccountTap: _panelController.toggle,
+        isLiveCprTab: _currentIndex == 1,
       ),
       body: Stack(
         children: [
@@ -110,7 +114,7 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.surfaceWhite,
+        color: AppColors.white,
         border: Border(
           top: BorderSide(color: AppColors.divider, width: AppSpacing.dividerThickness),
         ),

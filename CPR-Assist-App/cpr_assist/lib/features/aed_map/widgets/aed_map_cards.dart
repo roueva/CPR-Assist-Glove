@@ -77,23 +77,23 @@ class AEDCard extends StatelessWidget {
       isRealData = true;
     }
 
-    // 3. Cached real distance
+    // 3. Cached distance (real road distance if marked as such)
     if (!isRealData && userLocation != null) {
-      final cached = CacheService.getDistance('aed_${aed.id}_$selectedMode');
+      final cacheKey = 'aed_${aed.id}_$selectedMode';
+      final cached = CacheService.getDistance(cacheKey);
       if (cached != null) {
         displayDistance = LocationService.formatDistance(cached);
         displayTime     = LocationService.calculateOfflineETA(cached, selectedMode);
-        isRealData      = false;
+        isRealData      = CacheService.isRoadDistance(cacheKey);
       }
     }
 
-    // 4. Straight-line estimate
+    // 4. Straight-line estimate — always recalculate, never use stale cache
     if (displayDistance == null && userLocation != null) {
-      final est = CacheService.getDistance('aed_${aed.id}') ??
-          (LocationService.distanceBetween(userLocation, aed.location) *
-              AEDService.getTransportModeMultiplier(selectedMode));
+      final est = LocationService.distanceBetween(userLocation, aed.location) *
+          AEDService.getTransportModeMultiplier(selectedMode);
       displayDistance = LocationService.formatDistance(est);
-      displayTime = LocationService.calculateOfflineETA(est, selectedMode);
+      displayTime     = LocationService.calculateOfflineETA(est, selectedMode);
     }
 
 
@@ -178,18 +178,18 @@ class _AEDCardInternal extends StatelessWidget {
         ),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm + AppSpacing.xs,
-          vertical: AppSpacing.sm + AppSpacing.xs,
+          vertical: AppSpacing.md,
         ),
         decoration: AppDecorations.tintedCard(
           radius: AEDMapUIConstants.aedCardBorderRadius,
         ).copyWith(
           border: isOpenNow
-              ? Border.all(color: AppColors.aedOpenBorder)
+              ? Border.all(color: AppColors.aedOpen)
               : null,
           boxShadow: isOpenNow
               ? [
             BoxShadow(
-              color: AppColors.aedOpenBorder.withValues(alpha: 0.15),
+              color: AppColors.aedOpen.withValues(alpha: 0.15),
               blurRadius: AppSpacing.xs,
             ),
           ]

@@ -53,7 +53,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:        AppColors.surfaceWhite,
+        backgroundColor:        AppColors.white,
         foregroundColor:        AppColors.textPrimary,
         elevation:              0,
         scrolledUnderElevation: 0,
@@ -521,7 +521,7 @@ class _LeaderRow extends StatelessWidget {
                 backgroundColor:  AppColors.divider,
                 valueColor:       AlwaysStoppedAnimation<Color>(
                   entry.avgGrade >= 90 ? AppColors.success
-                      : entry.avgGrade >= 75 ? AppColors.info
+                      : entry.avgGrade >= 75 ? AppColors.primaryAlt
                       : entry.avgGrade >= 55 ? AppColors.warning
                       : AppColors.error,
                 ),
@@ -548,7 +548,7 @@ class _MyRankFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.surfaceWhite,
+        color: AppColors.white,
         border: Border(top: BorderSide(color: AppColors.divider)),
         boxShadow: [
           BoxShadow(
@@ -597,7 +597,7 @@ class _MyRankFooter extends StatelessWidget {
                   backgroundColor: AppColors.divider,
                   valueColor: AlwaysStoppedAnimation<Color>(
                     entry.avgGrade >= 90 ? AppColors.success
-                        : entry.avgGrade >= 75 ? AppColors.info
+                        : entry.avgGrade >= 75 ? AppColors.primaryAlt
                         : entry.avgGrade >= 55 ? AppColors.warning
                         : AppColors.error,
                   ),
@@ -788,7 +788,7 @@ class _MyStatsTab extends ConsumerWidget {
             // ── Summary stat tiles ─────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: AppDecorations.primaryDarkCard(),
+              decoration: AppDecorations.primaryAltCard(),
               child: Row(
                 children: [
                   Expanded(
@@ -1010,7 +1010,7 @@ class _GradeSparklinePainter extends CustomPainter {
       canvas.drawCircle(Offset(xOf(i), yOf(grades[i])), 3.5, dotPaint);
       canvas.drawCircle(
         Offset(xOf(i), yOf(grades[i])), 3.5,
-        Paint()..color = AppColors.surfaceWhite..style = PaintingStyle.stroke..strokeWidth = 1.5,
+        Paint()..color = AppColors.white..style = PaintingStyle.stroke..strokeWidth = 1.5,
       );
     }
   }

@@ -51,7 +51,7 @@ class GuideScreen extends StatelessWidget {
                   // ── 2. Emergency steps ──────────────────────────────────
                   const _SectionHeader(
                     icon:  Icons.emergency_rounded,
-                    color: AppColors.emergencyRed,
+                    color: AppColors.emergency,
                     title: 'Emergency Action Steps',
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -81,7 +81,7 @@ class GuideScreen extends StatelessWidget {
                   // ── 6. Rescue breaths ────────────────────────────────────
                   const _SectionHeader(
                     icon:  Icons.air_rounded,
-                    color: AppColors.info,
+                    color: AppColors.primaryAlt,
                     title: 'Rescue Breaths',
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -110,7 +110,7 @@ class GuideScreen extends StatelessWidget {
                   // ── 8b. Pediatric CPR ────────────────────────────────────
                   const _SectionHeader(
                     icon:  Icons.child_care_rounded,
-                    color: AppColors.cprOrange,
+                    color: AppColors.warning ,
                     title: 'Pediatric CPR',
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -332,7 +332,7 @@ class _EmergencySteps extends StatelessWidget {
     ),
     _StepData(
       icon:  Icons.phone_in_talk_rounded,
-      color: AppColors.emergencyRed,
+      color: AppColors.emergency,
       title: 'Call 112 Immediately',
       body:  'Call emergency services. Give your exact location. '
           'Stay on the line — the dispatcher will guide you.',
@@ -443,14 +443,14 @@ class _EmergencyStepCard extends StatelessWidget {
                           vertical:   AppSpacing.xxs,
                         ),
                         decoration: AppDecorations.chip(
-                          color: AppColors.emergencyRed,
-                          bg:   AppColors.emergencyBg,
+                          color: AppColors.emergency,
+                          bg:   AppColors.errorBg,
                         ),
                         child: Text(
                           'PRIORITY',
                           style: AppTypography.badge(
                             size:  10,
-                            color: AppColors.emergencyRed,
+                            color: AppColors.emergency,
                           ),
                         ),
                       ),
@@ -524,7 +524,7 @@ class _CompressionSpecRow extends StatelessWidget {
         Expanded(
           child: _SpecChip(
             icon:    Icons.expand_rounded,
-            color:   AppColors.info,
+            color:   AppColors.primaryAlt,
             value:   'Full',
             unit:    'recoil',
             caption: 'Let chest rise',
@@ -804,7 +804,7 @@ class _ChestSchematicPainter extends CustomPainter {
 
     // ── Sternum line ──────────────────────────────────────────────────────
     final sternumPaint = Paint()
-      ..color = AppColors.primaryDark.withValues(alpha: 0.4)
+      ..color = AppColors.primaryAlt.withValues(alpha: 0.4)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
     canvas.drawLine(
@@ -815,7 +815,7 @@ class _ChestSchematicPainter extends CustomPainter {
 
     // ── Ribs (3 pairs) ─────────────────────────────────────────────────────
     final ribPaint = Paint()
-      ..color = AppColors.primaryDark.withValues(alpha: 0.25)
+      ..color = AppColors.primaryAlt.withValues(alpha: 0.25)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -985,7 +985,7 @@ class _RatioVisual extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color:        AppColors.primaryDark,
+        color:        AppColors.primaryAlt,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
       child: Row(
@@ -1033,7 +1033,7 @@ class _RatioVisual extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
-                color:        AppColors.info.withValues(alpha: 0.8),
+                color:        AppColors.primaryAlt.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
               ),
               child: Column(
@@ -1274,7 +1274,7 @@ class _AedSteps extends StatelessWidget {
     ),
     _AedStepData(
       icon:  Icons.do_not_touch_rounded,
-      color: AppColors.emergencyRed,
+      color: AppColors.emergency,
       title: 'Stand clear — let the AED analyse',
       body:  'Do not touch the patient. '
           'Announce loudly: "Stand clear!" '
@@ -1282,7 +1282,7 @@ class _AedSteps extends StatelessWidget {
     ),
     _AedStepData(
       icon:  Icons.electric_bolt_rounded,
-      color: AppColors.emergencyRed,
+      color: AppColors.emergency,
       title: 'Deliver shock (if advised)',
       body:  'Press the flashing shock button ONLY when prompted. '
           'Ensure nobody is touching the patient. '
@@ -1404,19 +1404,19 @@ class _CriticalRemindersCard extends StatelessWidget {
             children: [
               const Icon(
                 Icons.warning_amber_rounded,
-                color: AppColors.emergencyRed,
+                color: AppColors.emergency,
                 size:  AppSpacing.iconMd,
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 'Critical Reminders',
-                style: AppTypography.subheading(color: AppColors.emergencyRed),
+                style: AppTypography.subheading(color: AppColors.emergency),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           const _BulletList(
-            bulletColor: AppColors.emergencyRed,
+            bulletColor: AppColors.emergency,
             items: [
               'Continue CPR until emergency services take over or the person shows clear signs of life',
               'Minimise any pause in compressions — keep interruptions under 10 seconds',
@@ -1518,7 +1518,7 @@ class _PediatricCprCard extends StatelessWidget {
             width:   double.infinity,
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
-              color:        AppColors.cprOrange.withValues(alpha: 0.10),
+              color:        AppColors.warning .withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
             ),
             child: Text(
@@ -1527,7 +1527,7 @@ class _PediatricCprCard extends StatelessWidget {
                   'for adjusted feedback thresholds.',
               style: AppTypography.body(
                 size:  13,
-                color: AppColors.cprOrange,
+                color: AppColors.warning ,
               ),
             ),
           ),
@@ -1554,7 +1554,7 @@ class _PediatricCprCard extends StatelessWidget {
                   'Pediatric',
                   style: AppTypography.label(
                     size:  11,
-                    color: AppColors.cprOrange,
+                    color: AppColors.warning ,
                   ),
                 ),
               ),
@@ -1613,7 +1613,7 @@ class _PediatricCprCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           const _BulletList(
-            bulletColor: AppColors.cprOrange,
+            bulletColor: AppColors.warning ,
             items: [
               'For infants (under 1 year): use two fingers on the centre of the chest, just below the nipple line.',
               'For children (1–8 years): use one or two hands depending on the child\'s size.',
@@ -1663,7 +1663,7 @@ class _PediatricSpecRow extends StatelessWidget {
             pediatric,
             style: AppTypography.bodyMedium(
               size:  13,
-              color: highlight ? AppColors.cprOrange : AppColors.textPrimary,
+              color: highlight ? AppColors.warning  : AppColors.textPrimary,
             ),
           ),
         ),

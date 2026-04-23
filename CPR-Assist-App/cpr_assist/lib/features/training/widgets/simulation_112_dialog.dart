@@ -85,10 +85,10 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: AppDecorations.iconCircle(bg: AppColors.emergencyBg),
+                  decoration: AppDecorations.iconCircle(bg: AppColors.errorBg),
                   child: const Icon(
                     Icons.phone_rounded,
-                    color: AppColors.emergencyRed,
+                    color: AppColors.emergency,
                     size: AppSpacing.iconMd,
                   ),
                 ),
@@ -124,7 +124,7 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
                     margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
                     decoration: BoxDecoration(
                       color: i <= _step
-                          ? AppColors.emergencyRed
+                          ? AppColors.emergency
                           : AppColors.divider,
                       borderRadius: BorderRadius.circular(AppSpacing.xxs),
                     ),
@@ -145,7 +145,7 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.headset_mic_rounded,
-                      color: AppColors.emergencyRed,
+                      color: AppColors.emergency,
                       size: AppSpacing.iconSm + AppSpacing.xxs), // 20
                   const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
                   Expanded(
@@ -153,7 +153,7 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
                       current.question,
                       style: AppTypography.bodyMedium(
                         size: 13,
-                        color: AppColors.emergencyRed,
+                        color: AppColors.emergency,
                       ),
                     ),
                   ),
@@ -208,7 +208,7 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
                   child: ElevatedButton(
                     onPressed: _next,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.emergencyRed,
+                      backgroundColor: AppColors.emergency,
                       foregroundColor: AppColors.textOnDark,
                     ),
                     child: Text(

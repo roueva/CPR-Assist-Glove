@@ -174,6 +174,7 @@ class AEDRoutingCoordinator {
         CacheService.setDistance(
           'aed_${aed.id}_${currentState.navigation.transportMode}',
           routeResult!.actualDistance!,
+          isRoad: true,
         );
       }
     }
@@ -844,7 +845,8 @@ class AEDRoutingCoordinator {
               preloadedRoutes[routeKey] = route;
               _limitPreloadedRoutesSize();
               CacheService.setDistance(
-                  'aed_${originalAed.id}_$mode', route.actualDistance!);
+                  'aed_${originalAed.id}_$mode', route.actualDistance!,
+                  isRoad: true);
             }
           },
         );
@@ -884,7 +886,7 @@ class AEDRoutingCoordinator {
               a.location.longitude == aedLocation.longitude,
           orElse: () => currentState.aedList.first,
         );
-        CacheService.setDistance('aed_${aed.id}_$mode', route!.actualDistance!);
+        CacheService.setDistance('aed_${aed.id}_$mode', route!.actualDistance!, isRoad: true);
       }
 
       await Future.delayed(AppConstants.apiCallDelay);
@@ -1108,8 +1110,8 @@ class AEDRoutingCoordinator {
         polylineId: route.polyline.polylineId,
         points:     route.polyline.points,
         color: transportMode == 'walking'
-            ? AppColors.cprGreen
-            : AppColors.info,
+            ? AppColors.success
+            : AppColors.primaryAlt,
         patterns: transportMode == 'walking'
             ? [PatternItem.dash(15), PatternItem.gap(8)]
             : [],
@@ -1136,7 +1138,7 @@ class AEDRoutingCoordinator {
     return Polyline(
       polylineId: route.polyline.polylineId,
       points:     route.polyline.points,
-      color: transportMode == 'walking' ? AppColors.cprGreen : AppColors.info,
+      color: transportMode == 'walking' ? AppColors.success : AppColors.primaryAlt,
       patterns: transportMode == 'walking'
           ? [PatternItem.dash(15), PatternItem.gap(8)]
           : [],

@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart' as cluster_pkg;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../core/theme/app_colors.dart';
 import '../widgets/availability_parser.dart';
 import '../../../models/aed_models.dart';
 import '../widgets/aed_markers.dart';
@@ -52,8 +53,8 @@ class AEDClusterManager {
       _     => const Size(72, 72),
     };
 
-    const centerColor = Color(0xFF006636);
-    const ringColor   = Color(0xFF93C01F);
+    const centerColor = AppColors.aedNavGreen;
+    const ringColor   = AppColors.aedClusterRing;
 
     final recorder = ui.PictureRecorder();
     final canvas    = Canvas(recorder);

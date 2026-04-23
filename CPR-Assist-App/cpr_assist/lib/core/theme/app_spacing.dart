@@ -106,4 +106,6 @@ class AppSpacing {
   static const double depthBarHeight   = 200.0;
 
   static const double vitalsItemHeight = 44.0; // Divider height in VitalsCard
+
+  static const double scrollEndPad = 100.0;
 }

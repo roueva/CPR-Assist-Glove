@@ -263,7 +263,13 @@ class AvailabilityParser {
 
     for (final rule in rules) {
       // Day check
-      final List<dynamic> days = rule['days'] as List<dynamic>? ?? [];
+      final List<dynamic> rawDays = rule['days'] as List<dynamic>? ?? [];
+      // Guard against LLM outputting [12345] instead of [1,2,3,4,5]
+      final List<int> days = rawDays.expand((d) {
+        final s = d.toString();
+        if (s.length > 1) return s.split('').map(int.parse);
+        return [int.parse(s)];
+      }).toList();
       if (!days.contains(currentDay)) continue;
 
       // Season check

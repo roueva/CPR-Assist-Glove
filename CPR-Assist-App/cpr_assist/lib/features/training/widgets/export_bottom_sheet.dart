@@ -212,8 +212,8 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                             ? 'Analytical report\nwith metrics & charts'
                             : 'Summary report\nwith table & grade trend',
                         selected:    _format == _ExportFormat.pdf,
-                        accent:      AppColors.emergencyRed,
-                        accentBg:    AppColors.emergencyBg,
+                        accent:      AppColors.emergency,
+                        accentBg:    AppColors.errorBg,
                         onTap:       () => setState(() => _format = _ExportFormat.pdf),
                       ),
                     ),
@@ -325,7 +325,7 @@ class _FormatTile extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding:  const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color:        selected ? accentBg : AppColors.surfaceWhite,
+          color:        selected ? accentBg : AppColors.white,
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           border: Border.all(
             color: selected ? accent : AppColors.divider,

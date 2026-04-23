@@ -61,6 +61,8 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// Exposes tab switching to NFC and deep link handlers outside the widget tree.
 final ValueNotifier<int> nfcTabNotifier = ValueNotifier<int>(-1);
+final ValueNotifier<int> liveCprTabActivationNotifier = ValueNotifier<int>(0);
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root widget

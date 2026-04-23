@@ -186,24 +186,24 @@ class SessionService {
   // Formula weights differ per scenario per BLE Spec v3.0 Section 7.
   //
   // Standard Adult weights:
-  //   Depth consistency       20%
-  //   Frequency consistency   18%
-  //   Correct recoil          15%
-  //   Depth + rate combo      12%
-  //   Hands-on ratio (CCF)    10%
-  //   Ventilation compliance  10%
-  //   Posture consistency      5%
-  //   Force safety             5%
-  //   Time to first comp       5%
-  //   Fatigue penalty         −5 pts  (if fatigueOnsetIndex > 0)
+  //   Depth consistency       25%
+  //   Rate consistency        20%
+  //   Full recoil             20%
+  //   Depth + rate combo       8%
+  //   Ventilation compliance  12%
+  //   Posture consistency      8%
+  //   Hands-on ratio           5%
+  //   Time to first comp       2%
   //
   // Pediatric adjustments:
-  //   Depth consistency       25%  (+5 — harder to maintain narrower target)
-  //   Force safety            10%  (+5 — smaller chest, higher injury risk)
-  //   Time to first comp      10%  (+5 — pediatric urgency)
-  //   Frequency consistency   13%  (−5)
-  //   Hands-on ratio          5%   (−5)
-  //   Correct recoil          10%  (−5 — reduced to balance total to 100%)
+  //   Depth consistency       28%  (narrower 4–5 cm target)
+  //   Rate consistency        18%
+  //   Full recoil             18%
+  //   Depth + rate combo       8%
+  //   Ventilation compliance  12%
+  //   Posture consistency      8%
+  //   Hands-on ratio           4%
+  //   Time to first comp       4%  (pediatric urgency)
 
   double calculateGradeFromDetail(SessionDetail s) {
     // Emergency sessions never have a grade
@@ -222,7 +222,6 @@ class SessionService {
         ? s.ventilationCompliance
         : 100.0;
     final postureScore     = s.correctPosture   / n * 100;
-    final forceSafetyScore = (1 - s.overForceCount / n) * 100;
     final double timeScore;
     if      (s.timeToFirstCompression < 5)  { timeScore = 100; }
     else if (s.timeToFirstCompression < 10) { timeScore = 80;  }
@@ -232,47 +231,32 @@ class SessionService {
 
     switch (s.scenario) {
       case 'pediatric':
-      // Depth and safety weighted higher; time to first comp increased;
-      // freq and CCF slightly reduced to make room.
+
         grade =
-            (depthScore       * 0.25) +
-                (freqScore        * 0.13) +
-                (recoilScore      * 0.10) +
-                (comboScore       * 0.12) +
-                (handsOnScore     * 0.05) +
-                (ventScore        * 0.10) +
-                (postureScore     * 0.05) +
-                (forceSafetyScore * 0.10) +
-                (timeScore        * 0.10) -
-                (s.fatigueOnsetIndex > 0 ? 5.0 : 0.0);
+            (depthScore   * 0.28) +
+                (freqScore    * 0.18) +
+                (recoilScore  * 0.18) +
+                (comboScore   * 0.08) +
+                (handsOnScore * 0.04) +
+                (ventScore    * 0.12) +
+                (postureScore * 0.08) +
+                (timeScore    * 0.04);
       default:
       // standard_adult (default)
         grade =
-            (depthScore       * 0.20) +
-                (freqScore        * 0.18) +
-                (recoilScore      * 0.15) +
-                (comboScore       * 0.12) +
-                (handsOnScore     * 0.10) +
-                (ventScore        * 0.10) +
-                (postureScore     * 0.05) +
-                (forceSafetyScore * 0.05) +
-                (timeScore        * 0.05) -
-                (s.fatigueOnsetIndex > 0 ? 5.0 : 0.0);
+            (depthScore   * 0.25) +
+                (freqScore    * 0.20) +
+                (recoilScore  * 0.20) +
+                (comboScore   * 0.08) +
+                (handsOnScore * 0.05) +
+                (ventScore    * 0.12) +
+                (postureScore * 0.08) +
+                (timeScore    * 0.02);
     }
 
     return grade.clamp(0.0, 100.0);
   }
 
-  /// Legacy grade calc from a [SessionSummary] — kept for backward compat.
-  double calculateGrade(SessionSummary session) {
-    if (session.isEmergency) return 0.0;
-    if (session.compressionCount == 0) return 0.0;
-    final d = session.correctDepth     / session.compressionCount;
-    final f = session.correctFrequency / session.compressionCount;
-    final r = session.correctRecoil    / session.compressionCount;
-    final c = session.depthRateCombo   / session.compressionCount;
-    return ((d * 35) + (f * 30) + (r * 20) + (c * 15)).clamp(0.0, 100.0);
-  }
 
   // ── Assemble SessionDetail from BLE data ───────────────────────────────────
   //

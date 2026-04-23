@@ -517,7 +517,7 @@ class DevPreviewScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:        AppColors.headerBg,
+        backgroundColor:        AppColors.white,
         foregroundColor:        AppColors.textPrimary,
         elevation:              0,
         scrolledUnderElevation: 0,
@@ -631,7 +631,7 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:      Icons.thumb_up_outlined,
-              iconColor: AppColors.info,
+              iconColor: AppColors.primaryAlt,
               label:     'Good — Adult, With Feedback (76%)',
               subtitle:  'Standard adult · 130 compressions · 2:20',
               onTap: () => context.push(SessionResultsScreen.fromDetail(
@@ -689,7 +689,7 @@ class DevPreviewScreen extends StatelessWidget {
           _PreviewCard(children: [
             _NavTile(
               icon:      Icons.emergency_rounded,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Emergency — Adult, Pulse Detected',
               subtitle:  'ROSC · 187 compressions · 4:12 · pulse checks',
               onTap: () => context.push(SessionResultsScreen.fromDetail(
@@ -716,7 +716,7 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:      Icons.child_care_rounded,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Emergency — Pediatric',
               subtitle:  'Pediatric · 4–5 cm · 95 compressions · 2:30',
               onTap: () => context.push(SessionResultsScreen.fromDetail(
@@ -807,7 +807,7 @@ class DevPreviewScreen extends StatelessWidget {
           _PreviewCard(children: [
             _NavTile(
               icon:      Icons.logout_rounded,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Confirm Logout',
               onTap:     () => AppDialogs.confirmLogout(context),
             ),
@@ -840,17 +840,17 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:      Icons.delete_outline_rounded,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Destructive Confirm (Delete)',
               onTap: () => AppDialogs.showDestructiveConfirm(
                 context,
                 icon:         Icons.delete_outline_rounded,
-                iconColor:    AppColors.emergencyRed,
-                iconBg:       AppColors.emergencyBg,
+                iconColor:    AppColors.emergency,
+                iconBg:       AppColors.errorBg,
                 title:        'Delete All Data?',
                 message:      'This will permanently delete all your training sessions. This cannot be undone.',
                 confirmLabel: 'Delete',
-                confirmColor: AppColors.emergencyRed,
+                confirmColor: AppColors.emergency,
                 cancelLabel:  'Cancel',
               ),
             ),
@@ -909,7 +909,7 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:      Icons.phone_outlined,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Simulation 112 Call',
               onTap: () => showDialog<void>(
                 context: context,
@@ -984,7 +984,7 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:      Icons.heart_broken_rounded,
-              iconColor: AppColors.emergencyRed,
+              iconColor: AppColors.emergency,
               label:     'Pulse Check Overlay — No Pulse',
               subtitle:  'Continue CPR button',
               onTap:     () => context.push(const _PulseCheckOverlayPreview(classification: 0)),
@@ -1138,8 +1138,8 @@ class _FullLiveCprSimulatorState extends State<_FullLiveCprSimulator> {
   final Duration _cprTime         = const Duration(minutes: 1, seconds: 22);
 
   // ── Posture flags ──────────────────────────────────────────────────────────
-  final bool        _recoilAchieved     = true;
-  final bool        _leaningDetected    = false;
+  bool _recoilAchieved = false;
+  final bool        _leaningDetectd    = false;
   final bool        _postureOk          = true;
   final bool        _wristDropped       = false;
   double      _wristAngle         = 8.0;
@@ -1812,11 +1812,17 @@ class _DepthBarPreviewState extends State<_DepthBarPreview> {
           Container(
           height: 260,
           decoration: BoxDecoration(
-            color: AppColors.cprCardBg,
+            color: AppColors.cprCardBg ,
             borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
           ),
           padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Center(child: AnimatedDepthBar(depth: _depth)),
+            child: Center(
+              child: SizedBox(
+                width:  AppSpacing.depthBarWidth,
+                height: 200,
+                child: AnimatedDepthBar(depth: _depth),
+              ),
+            ),
         ),
             const SizedBox(height: AppSpacing.xl),
             Text(
@@ -1876,7 +1882,7 @@ class _RotatingArrowPreviewState extends State<_RotatingArrowPreview> {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: AppColors.cprCardBg,
+                color: AppColors.cprCardBg ,
                 borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
               ),
               padding: const EdgeInsets.fromLTRB(
@@ -2074,7 +2080,7 @@ class _BleStatusPreview extends StatelessWidget {
                           bg: s == 'Connected'
                               ? AppColors.successBg
                               : s == 'Error'
-                              ? AppColors.emergencyBg
+                              ? AppColors.errorBg
                               : AppColors.primaryLight,
                         ),
                         child: Icon(
@@ -2084,7 +2090,7 @@ class _BleStatusPreview extends StatelessWidget {
                               : Icons.bluetooth_rounded,
                           size:  AppSpacing.iconSm,
                           color: s == 'Connected' ? AppColors.success
-                              : s == 'Error'      ? AppColors.emergencyRed
+                              : s == 'Error'      ? AppColors.emergency
                               : AppColors.primary,
                         ),
                       ),
@@ -2220,7 +2226,7 @@ class _PulseCheckOverlayPreviewState
     // Use a normal white scaffold so the dark scrim overlay renders correctly
     // on top — exactly as it will appear over live_cpr_screen in production.
     return Scaffold(
-      backgroundColor: AppColors.screenBg,
+      backgroundColor: AppColors.white,
       appBar: const _PreviewAppBar(title: 'Pulse Check Overlay'),
       body: Stack(
         children: [
@@ -2276,7 +2282,7 @@ class _PreviewAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor:        AppColors.headerBg,
+      backgroundColor:        AppColors.white,
       elevation:              0,
       scrolledUnderElevation: 0,
       toolbarHeight:          AppSpacing.headerHeight,

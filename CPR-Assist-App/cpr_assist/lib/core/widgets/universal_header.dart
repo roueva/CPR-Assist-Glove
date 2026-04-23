@@ -22,6 +22,7 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
   final bool          showBackButton;
   final VoidCallback? onBackPressed;
   final String?       customTitle;
+  final bool isLiveCprTab;
 
   /// Called when the account avatar is tapped — hook this to
   /// [AccountPanelController.open].
@@ -33,15 +34,18 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
     this.onBackPressed,
     this.customTitle,
     this.onAccountTap,
+    this.isLiveCprTab = false,
   }) : _isMainScreen = isMainScreen;
 
   /// Header for the three main tab screens (AED Map, Live CPR, Guide).
   factory UniversalHeader.forMainScreens({
     VoidCallback? onAccountTap,
+    bool isLiveCprTab = false,
   }) =>
       UniversalHeader._(
         isMainScreen: true,
         onAccountTap: onAccountTap,
+        isLiveCprTab: isLiveCprTab,
       );
 
   /// Header for secondary screens (settings, session detail, etc.).
@@ -59,8 +63,15 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
 
   // Main screens: white bg → blue-tinted pills.
   // Other screens: light-blue bg → white pills.
-  Color get _headerBg => _isMainScreen ? AppColors.headerBg : AppColors.primaryLight;
-  Color get _pillBg   => _isMainScreen ? AppColors.primaryMid : AppColors.surfaceWhite;
+  Color get _headerBg {
+    if (!_isMainScreen) return AppColors.headerSurface;
+    return isLiveCprTab ? AppColors.headerSurface : AppColors.white;
+  }
+
+  Color get _pillBg {
+    if (!_isMainScreen) return AppColors.white;
+    return isLiveCprTab ? AppColors.white : AppColors.headerSurface;
+  }
 
   @override
   Size get preferredSize => const Size.fromHeight(AppSpacing.headerHeight);
@@ -112,7 +123,7 @@ class UniversalHeader extends ConsumerWidget implements PreferredSizeWidget {
             width:  AppSpacing.touchTargetMin - AppSpacing.sm, // 36
             height: AppSpacing.touchTargetMin - AppSpacing.sm,
             decoration: AppDecorations.iconCircle(bg: _pillBg),
-            child: const Center(child: AccountAvatarButton()),
+            child: Center(child: AccountAvatarButton(bgColor: _pillBg)),
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
@@ -162,7 +173,7 @@ class _BleAndBatteryPill extends ConsumerWidget {
                         : 'Battery: $battery%',
                     triggerMode: TooltipTriggerMode.tap,
                     decoration: AppDecorations.card(
-                      color: AppColors.surfaceWhite,
+                      color: AppColors.white,
                     ),
                     textStyle: AppTypography.label(color: AppColors.textPrimary),
                     padding: const EdgeInsets.symmetric(

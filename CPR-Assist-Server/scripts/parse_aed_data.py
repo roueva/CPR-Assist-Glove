@@ -51,6 +51,10 @@ Field Definitions & Logic Rules:
   - Wrap-around (e.g., "October to May"): start_month: 10, end_month: 5.
   - "School months": start_month: 9, end_month: 6.
 
+- "Ωράριο λειτουργίας Σχολείων - Υπηρεσιών" with NO explicit times means: Mon-Fri [1,2,3,4,5], 08:00-14:00, school months (start_month: 9, end_month: 6), status: "parsed".
+  - Any "Ωράριο Σχολείων" string with no explicit times defaults to 08:00-14:00 Mon-Fri school months.
+  - IMPORTANT: days must always be a JSON array of separate integers [1,2,3,4,5] — NEVER a single concatenated number like [12345].
+
 - SCHOOL ("σχολεί", "σχολει", "ΣΧΟΛΕΙ", "χώρο του σχολείου", "μήνες λειτουργίας σχολείων"):
   - Always status="uncertain" (may also be used afternoons/weekends for sports clubs).
   - Always add rule: days=[1,2,3,4,5], open_time="08:00", close_time="14:00", start_month=9, end_month=6.

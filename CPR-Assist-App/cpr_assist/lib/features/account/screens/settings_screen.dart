@@ -271,7 +271,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor:        AppColors.headerBg,
+      backgroundColor:        AppColors.white,
       foregroundColor:        AppColors.textPrimary,
       elevation:              0,
       scrolledUnderElevation: 0,
@@ -389,8 +389,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AppDialogs.showAlert(
       context,
       icon:      allPassed ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded,
-      iconColor: allPassed ? AppColors.success : AppColors.emergencyRed,
-      iconBg:    allPassed ? AppColors.successBg : AppColors.emergencyBg,
+      iconColor: allPassed ? AppColors.success : AppColors.emergency,
+      iconBg:    allPassed ? AppColors.successBg : AppColors.errorBg,
       title:     allPassed ? 'Glove Ready' : 'Sensor Issue Detected',
       message:   allPassed ? 'All sensors passed. Battery: $battery%.' : parts.join('\n'),
     );

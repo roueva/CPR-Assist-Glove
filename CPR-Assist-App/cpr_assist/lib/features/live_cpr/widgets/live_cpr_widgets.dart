@@ -216,7 +216,7 @@ class _VitalItem extends StatelessWidget {
                 style: AppTypography.poppins(
                   size:   22,
                   weight: FontWeight.w700,
-                  color:  AppColors.vitalsValue,
+                  color:  AppColors.textSecondary,
                 ),
               ),
               if (unit.isNotEmpty)
@@ -368,24 +368,24 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
     final rateMax = widget.scenario.targetRateMax;
 
     String? message;
-    Color   color = AppColors.cprOrange;
+    Color   color = AppColors.warning ;
 
     // Only show after threshold consecutive bad compressions
     if (_consecutiveTooShallow >= _kCoachingThreshold) {
       message = 'Push deeper — aim for $depthTarget';
-      color   = AppColors.cprOrange;
+      color   = AppColors.warning ;
     } else if (_consecutiveTooDeep >= _kCoachingThreshold) {
       message = 'Ease up — you\'re going too deep';
-      color   = AppColors.cprRed;
+      color   = AppColors.feedbackBad;
     } else if (_consecutiveTooSlow >= _kCoachingThreshold) {
       message = 'Speed up — aim for $rateMin–$rateMax per min';
-      color   = AppColors.cprOrange;
+      color   = AppColors.warning ;
     } else if (_consecutiveTooFast >= _kCoachingThreshold) {
       message = 'Slow down — above $rateMax per min';
-      color   = AppColors.cprRed;
+      color   = AppColors.feedbackBad;
     } else if (_consecutiveGood >= _kCoachingThreshold) {
       message = 'Great technique — keep it up!';
-      color   = AppColors.cprGreenBright;
+      color   = AppColors.feedbackGood;
     }
 
     if (message == null) return const SizedBox.shrink();
@@ -520,7 +520,7 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                             style: AppTypography.badge(
                               size:  9,
                               color: widget.compressionInCycle >= 26
-                                  ? AppColors.cprOrange
+                                  ? AppColors.warning 
                                   : AppColors.textOnDark.withValues(alpha: 0.55),
                             ),
                           ),
@@ -535,8 +535,8 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                                 backgroundColor: AppColors.textOnDark.withValues(alpha: 0.15),
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                   widget.compressionInCycle >= 26
-                                      ? AppColors.cprOrange
-                                      : AppColors.cprGreenBright,
+                                      ? AppColors.warning 
+                                      : AppColors.feedbackGood,
                                 ),
                               ),
                             ),
@@ -572,13 +572,13 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                     height: AppSpacing.iconSm,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.feedbackWarn),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     'Calibrating...',
-                    style: AppTypography.label(size: 11, color: AppColors.warning),
+                    style: AppTypography.label(size: 11, color: AppColors.feedbackWarn),
                   ),
                 ],
               ),
@@ -728,7 +728,7 @@ class _SessionDotState extends State<_SessionDot>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isActive ? AppColors.cprGreenBright : AppColors.textDisabled;
+    final color = widget.isActive ? AppColors.feedbackGood : AppColors.textDisabled;
     return ScaleTransition(
       scale: _scale,
       child: Container(
@@ -754,9 +754,9 @@ extension _FeedbackStateX on _FeedbackState {
   // tooMuch   = red    (dangerous — back off)
   Color get color {
     switch (this) {
-      case _FeedbackState.good:      return AppColors.cprGreenBright;
-      case _FeedbackState.tooLittle: return AppColors.cprOrange;
-      case _FeedbackState.tooMuch:   return AppColors.cprRed;
+      case _FeedbackState.good:      return AppColors.feedbackGood;
+      case _FeedbackState.tooLittle: return AppColors.warning ;
+      case _FeedbackState.tooMuch:   return AppColors.feedbackBad;
       case _FeedbackState.idle:      return AppColors.textOnDark;
     }
   }

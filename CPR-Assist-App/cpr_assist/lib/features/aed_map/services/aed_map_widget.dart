@@ -55,15 +55,15 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   bool _isLocationAvailable = true;
 
   // ── App state flags ───────────────────────────────────────────────────────
-  bool _isInitializingApp      = false;
+  bool _isInitializingApp = false;
   bool _hasPerformedInitialZoom = false;
-  bool _hasFetchedFreshAEDs    = false;
-  bool _freshDataLoaded        = false;
-  bool _isLoadingAEDs          = false;
-  bool _wasOffline             = false;
+  bool _hasFetchedFreshAEDs = false;
+  bool _freshDataLoaded = false;
+  bool _isLoadingAEDs = false;
+  bool _wasOffline = false;
 
   // ── Timers ────────────────────────────────────────────────────────────────
-  Timer?    _transportModeDebouncer;
+  Timer? _transportModeDebouncer;
   DateTime? _lastResumeTime;
   DateTime? _lastBackgroundTime;
   DateTime? _lastProgrammaticCameraMove;
@@ -87,11 +87,13 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     _routingCoordinator = AEDRoutingCoordinator(
       ref: ref,
       callbacks: AEDRoutingCallbacks(
-        onStateChanged:       () { if (mounted) setState(() {}); },
-        onArrived:            _onArrived,
-        onOffRoute:           _showOffRouteBanner,
-        onCloserAEDFound:     _showCloserAEDSnackbar,
-        onStopNavigationGPS:  () => _locationController.stopGPSTracking(),
+        onStateChanged: () {
+          if (mounted) setState(() {});
+        },
+        onArrived: _onArrived,
+        onOffRoute: _showOffRouteBanner,
+        onCloserAEDFound: _showCloserAEDSnackbar,
+        onStopNavigationGPS: () => _locationController.stopGPSTracking(),
         onStartNavigationGPS: () =>
             _locationController.startGPSTracking(isNavigating: true),
       ),
@@ -112,7 +114,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
           if (available) _locationController.setupLocationAfterEnable();
         },
         onZoomRequested: ({bool force = false, LatLng? knownLocation}) =>
-            _zoomToUserAndAEDsIfReady(force: force, knownLocation: knownLocation),
+            _zoomToUserAndAEDsIfReady(
+                force: force, knownLocation: knownLocation),
         onResortRequested: _resortAEDs,
       ),
     );
@@ -154,7 +157,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     _mapController?.dispose();
     _mapViewController = null;
-    _clusterManager   = null;
+    _clusterManager = null;
 
     if (!_mapReadyCompleter.isCompleted) {
       _mapReadyCompleter.completeError('Widget disposed');
@@ -188,7 +191,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         levels: const [1, 4.25, 6.75, 8.25, 11.5, 14.5, 16.0, 16.5, 20.0],
       );
 
-      final result = await AppInitializationManager.initializeApp(aedRepository);
+      final result = await AppInitializationManager.initializeApp(
+          aedRepository);
 
       // Capture context-dependent objects before the async gap.
       final capturedContext = context;
@@ -211,7 +215,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
           aedListForStartup = aedRepository.sortAEDsByDistance(
             result.aedList,
             result.userLocation,
-            ref.read(mapStateProvider).navigation.transportMode,
+            ref
+                .read(mapStateProvider)
+                .navigation
+                .transportMode,
           );
         }
         if (aedListForStartup.isNotEmpty) {
@@ -234,7 +241,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         }
 
         // Step 5: GPS.
-        final hasPermission  = await _locationService.hasPermission;
+        final hasPermission = await _locationService.hasPermission;
         final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
 
         if (!mounted) return;
@@ -245,9 +252,9 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
             !_locationController.hasRequestedPermission) {
           if (!mounted) return;
           await _locationController.requestLocationPermission(
-            mapReadyFuture:    _mapReadyCompleter.future,
+            mapReadyFuture: _mapReadyCompleter.future,
             mapViewController: _mapViewController,
-            context:           capturedContext,
+            context: capturedContext,
           );
         } else if (hasPermission && !isServiceEnabled) {
           if (!mounted) return;
@@ -305,10 +312,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
   Future<void> _handleLocationUpdate(LatLng location,
       {bool fromCache = false}) async {
-    final mapNotifier     = ref.read(mapStateProvider.notifier);
-    final currentState    = ref.read(mapStateProvider);
+    final mapNotifier = ref.read(mapStateProvider.notifier);
+    final currentState = ref.read(mapStateProvider);
     final LatLng? previousLocation = currentState.userLocation;
-    final bool wasLocationNull     = previousLocation == null;
+    final bool wasLocationNull = previousLocation == null;
 
     mapNotifier.updateUserLocation(location);
 
@@ -353,16 +360,17 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   }
 
   Future<void> _handleFirstRealGPSFix(LatLng location) async {
-    debugPrint('🛰️ First real GPS fix — clearing stale distances and resorting');
+    debugPrint(
+        '🛰️ First real GPS fix — clearing stale distances and resorting');
     CacheService.clearDistanceCache();
 
     // Wait one frame so the location written by onLocationUpdate is visible in state
     await Future.delayed(const Duration(milliseconds: 50));
     if (!mounted) return;
 
-    final currentState  = ref.read(mapStateProvider);
+    final currentState = ref.read(mapStateProvider);
     final aedRepository = ref.read(aedServiceProvider);
-    final freshSorted   = aedRepository.sortAEDsByDistance(
+    final freshSorted = aedRepository.sortAEDsByDistance(
       currentState.aedList,
       location,
       currentState.navigation.transportMode,
@@ -429,13 +437,15 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     try {
       final aedRepository = ref.read(aedServiceProvider);
-      final currentState  = ref.read(mapStateProvider);
       final mapNotifier   = ref.read(mapStateProvider.notifier);
 
       final freshAEDs = await aedRepository.fetchAEDs(forceRefresh: true);
       if (freshAEDs.isEmpty || !mounted) return;
 
-      if (!aedRepository.haveAEDsChanged(currentState.aedList, freshAEDs)) {
+      // Re-read state after async gap — user may have moved during the fetch.
+      final latestState = ref.read(mapStateProvider);
+
+      if (!aedRepository.haveAEDsChanged(latestState.aedList, freshAEDs)) {
         debugPrint('✅ AED data unchanged');
         if (mounted && _locationController.isUsingCachedLocation) {
           setState(() {});
@@ -452,8 +462,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
       final sorted = aedRepository.sortAEDsByDistance(
         freshAEDs,
-        currentState.userLocation,
-        currentState.navigation.transportMode,
+        latestState.userLocation,
+        latestState.navigation.transportMode,
       );
 
       _freshDataLoaded = true;
@@ -470,22 +480,19 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   }
 
   void _loadAEDsProgressively(List<AED> allAEDs) {
+    // State already has the full sorted list — don't replace it with partial batches.
+    // Only load markers incrementally since building cluster items is expensive.
     _isLoadingAEDs = true;
-    const firstBatch = 50;
     const batchSize  = 200;
     const batchDelay = Duration(milliseconds: 50);
 
-    ref.read(mapStateProvider.notifier).setAEDs(allAEDs.take(firstBatch).toList());
-
     Future(() async {
-      int loaded = firstBatch;
+      int loaded = 0;
       while (loaded < allAEDs.length) {
         await Future.delayed(batchDelay);
         if (!mounted) return;
-        if (_freshDataLoaded && loaded > firstBatch) break;
-        final end = (loaded + batchSize).clamp(0, allAEDs.length);
-        ref.read(mapStateProvider.notifier).setAEDs(allAEDs.sublist(0, end));
-        loaded += batchSize;
+        if (_freshDataLoaded) break;
+        loaded = (loaded + batchSize).clamp(0, allAEDs.length);
       }
       if (!mounted) return;
       _isLoadingAEDs = false;
@@ -493,10 +500,12 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     });
   }
 
+
   void _addMarkersToMap(List<AED> aeds) {
     final items = aeds
-        .map((aed) => AEDClusterItem(
-        aed, _routingCoordinator.showNavigationPreviewForAED))
+        .map((aed) =>
+        AEDClusterItem(
+            aed, _routingCoordinator.showNavigationPreviewForAED))
         .toList();
 
     if (_mapController == null) {
@@ -510,7 +519,9 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       _clusterUpdateDebounce?.cancel();
       _clusterUpdateDebounce = Timer(
         const Duration(milliseconds: 150),
-            () { _clusterManager?.updateMap(); },
+            () {
+          _clusterManager?.updateMap();
+        },
       );
     });
   }
@@ -521,7 +532,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
   void _resortAEDs() {
     final currentState = ref.read(mapStateProvider);
-    if (currentState.userLocation == null || currentState.aedList.isEmpty) return;
+    if (currentState.userLocation == null || currentState.aedList.isEmpty)
+      return;
 
     final aedRepository = ref.read(aedServiceProvider);
     final newSorted = aedRepository.sortAEDsByDistance(
@@ -530,31 +542,39 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       currentState.navigation.transportMode,
     );
 
-    final checkCount = newSorted.length < 10 ? newSorted.length : 10;
-    bool topChanged = false;
-    for (int i = 0; i < checkCount; i++) {
-      if (currentState.aedList[i].id != newSorted[i].id) {
-        topChanged = true;
-        break;
-      }
-    }
+    ref.read(mapStateProvider.notifier).updateAEDs(newSorted);
+    _addMarkersToMap(newSorted);
 
-    if (topChanged) {
-      ref.read(mapStateProvider.notifier).updateAEDs(newSorted);
-      _addMarkersToMap(newSorted);
+    final top10Changed = newSorted.length >= 10 &&
+        currentState.aedList.length >= 10 &&
+        !newSorted
+            .take(10)
+            .map((a) => a.id)
+            .toSet()
+            .containsAll(
+            currentState.aedList.take(10).map((a) => a.id).toSet());
 
-      final top10Changed = newSorted.length >= 10 &&
-          currentState.aedList.length >= 10 &&
-          !newSorted
-              .take(10)
-              .map((a) => a.id)
-              .toSet()
-              .containsAll(
-              currentState.aedList.take(10).map((a) => a.id).toSet());
+    if (top10Changed) _routingCoordinator.scheduleRoutePreloading();
 
-      if (top10Changed) _routingCoordinator.scheduleRoutePreloading();
+    // Re-fetch real road distances for the new top AEDs after a significant move
+    final apiKey = NetworkService.googleMapsApiKey;
+    if (apiKey != null && currentState.userLocation != null) {
+      final aedRepository = ref.read(aedServiceProvider);
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        aedRepository.improveDistanceAccuracyInBackground(
+          newSorted,
+          currentState.userLocation!,
+          currentState.navigation.transportMode,
+          apiKey,
+              (updated) {
+            if (mounted) ref.read(mapStateProvider.notifier).updateAEDs(updated);
+          },
+        );
+      });
     }
   }
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // CONNECTIVITY
@@ -857,7 +877,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     if (shouldCheckUpdates && isConnected) {
       final aedRepository = ref.read(aedServiceProvider);
       try {
-        final newAEDs   = await aedRepository.fetchAEDs(forceRefresh: false);
+        final newAEDs   = await aedRepository.fetchAEDs(forceRefresh: true);
         if (!mounted) return;
 
         final changed = aedRepository.haveAEDsChanged(currentState.aedList, newAEDs);

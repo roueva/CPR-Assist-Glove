@@ -11,7 +11,7 @@ class AppDecorations {
 
   /// Standard white card with a soft drop shadow.
   static BoxDecoration card({
-    Color color = AppColors.surfaceWhite,
+    Color color = AppColors.white,
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
@@ -31,7 +31,7 @@ class AppDecorations {
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
-        color: AppColors.cardBg,
+        color: AppColors.headerSurface,
         borderRadius: BorderRadius.circular(radius),
       );
 
@@ -44,7 +44,7 @@ class AppDecorations {
   /// Card with a colored left accent border.
   static BoxDecoration accentCard({
     required Color accentColor,
-    Color bg = AppColors.surfaceWhite,
+    Color bg = AppColors.white,
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
@@ -68,9 +68,9 @@ class AppDecorations {
 
   static BoxDecoration emergencyCard({double radius = AppSpacing.cardRadius}) =>
       BoxDecoration(
-        color: AppColors.emergencyBg,
+        color: AppColors.errorBg,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.emergencyRed.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.emergency.withValues(alpha: 0.3)),
       );
 
   static BoxDecoration successCard({double radius = AppSpacing.cardRadius}) =>
@@ -156,11 +156,11 @@ class AppDecorations {
       );
 
   /// Solid dark-blue card — stats header, session detail grade panel.
-  static BoxDecoration primaryDarkCard({
+  static BoxDecoration primaryAltCard({
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
-        color: AppColors.primaryDark,
+        color: AppColors.primaryAlt,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: const [
           BoxShadow(
@@ -189,7 +189,7 @@ class AppDecorations {
   // ═══════════════════════════════════════════════════════
 
   static BoxDecoration dialog() => BoxDecoration(
-    color: AppColors.surfaceWhite,
+    color: AppColors.white,
     borderRadius: BorderRadius.circular(AppSpacing.dialogRadius),
     boxShadow: const [
       BoxShadow(
@@ -201,7 +201,7 @@ class AppDecorations {
   );
 
   static BoxDecoration bottomSheet() => const BoxDecoration(
-    color: AppColors.surfaceWhite,
+    color: AppColors.white,
     borderRadius: BorderRadius.vertical(
       top: Radius.circular(AppSpacing.sheetRadius),
     ),
@@ -218,7 +218,7 @@ class AppDecorations {
   );
 
   static BoxDecoration inputFocused() => BoxDecoration(
-    color: AppColors.surfaceWhite,
+    color: AppColors.white,
     borderRadius: BorderRadius.circular(AppSpacing.inputRadius),
     border: Border.all(color: AppColors.primary, width: 1.5),
   );
@@ -292,7 +292,7 @@ class AppDecorations {
 
   /// Map control buttons (recenter, map type toggle)
   static BoxDecoration mapControl() => const BoxDecoration(
-    color: AppColors.surfaceWhite,
+    color: AppColors.white,
     shape: BoxShape.circle,
     boxShadow: [
       BoxShadow(
@@ -312,7 +312,7 @@ class AppDecorations {
 
   /// Account panel — right-to-left slide-in panel with rounded left corners.
   static BoxDecoration sidePanel() => const BoxDecoration(
-    color: AppColors.surfaceWhite,
+    color: AppColors.white,
     borderRadius: BorderRadius.only(
       topLeft:    Radius.circular(AppSpacing.cardRadiusLg),
       bottomLeft: Radius.circular(AppSpacing.cardRadiusLg),
@@ -434,13 +434,43 @@ class AppDecorations {
   static BoxDecoration avatarEditBadge() => BoxDecoration(
     color:  AppColors.primary,
     shape:  BoxShape.circle,
-    border: Border.all(color: AppColors.surfaceWhite, width: AppSpacing.xxs),
+    border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
   );
 
   /// Corner mode badge on the account avatar button.
   static BoxDecoration avatarModeBadge({required bool isTraining}) => BoxDecoration(
     color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
     shape:  BoxShape.circle,
-    border: Border.all(color: AppColors.headerBg, width: AppSpacing.xxs),
+    border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
+  );
+  /// Emergency red gradient — used in EmergencyHeader.
+  static BoxDecoration emergencyGradient() => const BoxDecoration(
+    gradient: LinearGradient(
+      colors: [AppColors.emergency, AppColors.emergencyDark],
+      begin:  Alignment.topLeft,
+      end:    Alignment.bottomRight,
+    ),
+  );
+
+  /// Thin coloured accent bar — used in chart card titles.
+  static BoxDecoration accentBar({required Color color}) => BoxDecoration(
+    color: color,
+    borderRadius: BorderRadius.circular(AppSpacing.xxs),
+  );
+
+  /// Semi-transparent overlay tile — used inside dark gradient cards.
+  static BoxDecoration darkOverlayTile({
+    double radius = AppSpacing.cardRadius,
+  }) => BoxDecoration(
+    color: AppColors.textOnDark.withValues(alpha: 0.10),
+    borderRadius: BorderRadius.circular(radius),
+  );
+
+  /// Grade card on session results — blue-brand card background.
+  static BoxDecoration gradeCard({
+    double radius = AppSpacing.cardRadiusLg,
+  }) => BoxDecoration(
+    color: AppColors.cprCardBg,
+    borderRadius: BorderRadius.circular(radius),
   );
 }

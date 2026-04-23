@@ -34,7 +34,7 @@ class AEDMapStatusBar extends StatelessWidget {
         height: AEDMapUIConstants.connectivityIconSize,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(AppColors.info),
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryAlt),
         ),
       );
     } else if (config.isOffline) {
@@ -116,7 +116,7 @@ class _UserLocationChip extends StatelessWidget {
             vertical: AppSpacing.sm,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surfaceWhite.withValues(alpha: 0.95),
+            color: AppColors.white.withValues(alpha: 0.95),
             borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
             boxShadow: const [
               BoxShadow(

@@ -79,14 +79,18 @@ class BLEStatusIndicator extends StatefulWidget {
 class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   StreamSubscription<BluetoothAdapterState>? _adapterStateSub;
   bool _wasConnected = false;
+  bool _startupGracePeriodDone = false;
 
   @override
   void initState() {
     super.initState();
     widget.connectionStatusNotifier.addListener(_rebuild);
-    // Listen for BT adapter going off so we can prompt the user
     _adapterStateSub = widget.bleConnection.adapterStateStream
         .listen(_onAdapterState);
+    // Don't react to adapter state for the first 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _startupGracePeriodDone = true);
+    });
   }
 
   @override
@@ -120,6 +124,7 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   void _onAdapterState(BluetoothAdapterState state) {
     if (!mounted) return;
     setState(() {});
+    if (!_startupGracePeriodDone) return; // ignore all state during startup
     if (state == BluetoothAdapterState.off) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _enableBluetooth();
@@ -190,8 +195,8 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
         AppDialogs.showAlert(
           context,
           icon:      Icons.bluetooth_disabled_rounded,
-          iconColor: AppColors.emergencyRed,
-          iconBg:    AppColors.emergencyBg,
+          iconColor: AppColors.emergency,
+          iconBg:    AppColors.errorBg,
           title:     'Bluetooth Required',
           message:   'The CPR Assist glove requires Bluetooth. Please enable it to connect.',
         );

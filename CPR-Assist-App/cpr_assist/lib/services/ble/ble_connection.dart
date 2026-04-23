@@ -170,10 +170,18 @@ class BLEConnection {
   Future<void> _performInitialConnection() async {
     if (_userDisconnected) return;
     final state = await FlutterBluePlus.adapterState.first;
-    if (state == BluetoothAdapterState.on) {
+    if (state != BluetoothAdapterState.on) {
+      _updateStatus('Bluetooth OFF');
+      return;
+    }
+    // Only scan silently at startup if BT permissions were already granted
+    // during a previous session. On first install they haven't been granted yet —
+    // scanning would trigger the OS permission dialog unexpectedly.
+    // The Live CPR tab handles first-time permission via _promptBluetoothIfNeeded.
+    if (prefs.getBool('ble_permissions_granted') == true) {
       _performSingleScan();
     } else {
-      _updateStatus('Bluetooth OFF');
+      _updateStatus('Ready');
     }
   }
 
@@ -943,6 +951,12 @@ class BLEConnection {
     }
 
     _performSingleScan();
+  }
+
+  /// Call once after first successful BLE connection to enable silent
+  /// startup scanning on future app launches.
+  void markPermissionsGranted() {
+    prefs.setBool('ble_permissions_granted', true);
   }
 
   /// Manually disconnect — suppresses all auto-reconnect logic.

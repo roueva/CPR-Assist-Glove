@@ -21,7 +21,7 @@ class AppTheme {
     fontFamily: 'Inter',
     colorScheme: _colorScheme,
     textTheme: AppTypography.textTheme,
-    scaffoldBackgroundColor: AppColors.screenBg,
+    scaffoldBackgroundColor: AppColors.white,
     appBarTheme: _appBarTheme,
     cardTheme: _cardTheme,
     elevatedButtonTheme: _elevatedButtonTheme,
@@ -42,9 +42,9 @@ class AppTheme {
   static const ColorScheme _colorScheme = ColorScheme.light(
     primary:          AppColors.primary,
     primaryContainer: AppColors.primaryLight,
-    secondary:        AppColors.info,
+    secondary:        AppColors.primaryAlt,
     error:            AppColors.error,
-    surface:          AppColors.surfaceWhite,
+    surface:          AppColors.white,
     onPrimary:        AppColors.textOnDark,
     onSecondary:      AppColors.textOnDark,
     onSurface:        AppColors.textPrimary,
@@ -57,7 +57,7 @@ class AppTheme {
   // ═══════════════════════════════════════════════════════
 
   static const AppBarTheme _appBarTheme = AppBarTheme(
-    backgroundColor:  AppColors.headerBg,
+    backgroundColor:  AppColors.white,
     foregroundColor:  AppColors.textPrimary,
     elevation:        0,
     scrolledUnderElevation: 0,
@@ -74,7 +74,7 @@ class AppTheme {
   // ═══════════════════════════════════════════════════════
 
   static final CardThemeData _cardTheme = CardThemeData(
-    color:     AppColors.surfaceWhite,
+    color:     AppColors.white,
     elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
@@ -194,7 +194,7 @@ class AppTheme {
 
   static const BottomNavigationBarThemeData _bottomNavTheme =
   BottomNavigationBarThemeData(
-    backgroundColor:       AppColors.surfaceWhite,
+    backgroundColor:       AppColors.white,
     selectedItemColor:     AppColors.primary,
     unselectedItemColor:   AppColors.textDisabled,
     elevation:             0,
@@ -208,7 +208,7 @@ class AppTheme {
   // ═══════════════════════════════════════════════════════
 
   static final DialogThemeData _dialogTheme = DialogThemeData(
-    backgroundColor:  AppColors.surfaceWhite,
+    backgroundColor:  AppColors.white,
     elevation:        0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppSpacing.dialogRadius),

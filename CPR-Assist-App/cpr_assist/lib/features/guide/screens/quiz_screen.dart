@@ -145,7 +145,7 @@ class _QuizScreenState extends State<QuizScreen> {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: AppBar(
-        backgroundColor:        AppColors.headerBg,
+        backgroundColor:        AppColors.white,
         elevation:              0,
         scrolledUnderElevation: 0,
         toolbarHeight:          AppSpacing.headerHeight,
@@ -224,7 +224,7 @@ class _QuizScreenState extends State<QuizScreen> {
           Container(
             width:   double.infinity,
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: AppDecorations.primaryDarkCard(),
+            decoration: AppDecorations.primaryAltCard(),
             child: Text(
               q.question,
               style: AppTypography.subheading(
@@ -240,7 +240,7 @@ class _QuizScreenState extends State<QuizScreen> {
             final isCorrect  = q.correct == i;
             final showResult = answered;
 
-            Color bgColor     = AppColors.surfaceWhite;
+            Color bgColor     = AppColors.white;
             Color borderColor = AppColors.divider;
             Color textColor   = AppColors.textPrimary;
             IconData? icon;
@@ -379,7 +379,7 @@ class _QuizScreenState extends State<QuizScreen> {
     final color   = pct >= 0.9
         ? AppColors.success
         : pct >= 0.7
-        ? AppColors.info
+        ? AppColors.primaryAlt
         : pct >= 0.5
         ? AppColors.warning
         : AppColors.error;
@@ -403,7 +403,7 @@ class _QuizScreenState extends State<QuizScreen> {
           Container(
             width:   double.infinity,
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-            decoration: AppDecorations.primaryDarkCard(),
+            decoration: AppDecorations.primaryAltCard(),
             child: Column(
               children: [
                 Stack(

@@ -11,8 +11,6 @@ import 'route_service.dart';
 
 class AEDService {
   final NetworkService _networkService;
-  final Map<String, double> _pendingDistanceUpdates = {};
-  Timer? _flushTimer;
 
   static String _getDistanceCacheKey(int aedId, String transportMode) {
     return 'aed_${aedId}_$transportMode';
@@ -134,14 +132,14 @@ class AEDService {
       final cacheKey = _getDistanceCacheKey(aed.id, transportMode);
       final cachedDistance = CacheService.getDistance(cacheKey);
 
-      if (cachedDistance != null) {
+      if (cachedDistance != null && CacheService.isRoadDistance(cacheKey)) {
+        // Only reuse cached distances that came from real road API calls.
         distances[aed.id] = cachedDistance;
       } else {
+        // Always recalculate straight-line estimates from current position.
         final straightDist =
         LocationService.distanceBetween(referenceLocation, aed.location);
-        final estimated = straightDist * getTransportModeMultiplier(transportMode);
-        distances[aed.id] = estimated;
-        _queueDistanceUpdate(cacheKey, estimated);
+        distances[aed.id] = straightDist * getTransportModeMultiplier(transportMode);
       }
     }
 
@@ -200,7 +198,7 @@ class AEDService {
         CacheService.getCachedRoute(userLocation, aed.location, transportMode);
         if (cachedRoute != null && cachedRoute.actualDistance != null) {
           aedsWithRoadDistance[aed] = cachedRoute.actualDistance!;
-          CacheService.setDistance(cacheKey, cachedRoute.actualDistance!);
+          CacheService.setDistance(cacheKey, cachedRoute.actualDistance!, isRoad: true);
           continue;
         }
 
@@ -295,20 +293,5 @@ class AEDService {
       }
     }
     return false;
-  }
-
-  void _queueDistanceUpdate(String key, double distance) {
-    _pendingDistanceUpdates[key] = distance;
-    _flushTimer?.cancel();
-    _flushTimer = Timer(const Duration(seconds: 3), _flushDistanceUpdates);
-  }
-
-  Future<void> _flushDistanceUpdates() async {
-    if (_pendingDistanceUpdates.isEmpty) return;
-
-    for (final entry in _pendingDistanceUpdates.entries) {
-      CacheService.setDistance(entry.key, entry.value);
-    }
-    _pendingDistanceUpdates.clear();
   }
 }

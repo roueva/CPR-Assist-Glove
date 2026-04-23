@@ -122,7 +122,7 @@ class _HelpAboutScreenState extends State<HelpAboutScreen> {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor:        AppColors.headerBg,
+      backgroundColor:        AppColors.white,
       foregroundColor:        AppColors.textPrimary,
       elevation:              0,
       scrolledUnderElevation: 0,

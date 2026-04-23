@@ -26,6 +26,7 @@ class CacheService {
   static final Map<String, RouteResult> _memoryRouteCache      = {};
   static final Map<String, DateTime>    _routeCacheTimestamps   = {};
   static final Map<String, double>      _distanceCache          = {};
+  static final Set<String>              _roadDistanceKeys        = {};
   static final Map<String, List<String>> _routesSpatialIndex   = {};
 
   static bool   _isLoadingDistanceCache = false;
@@ -85,8 +86,9 @@ class CacheService {
 
   // ── Distance cache ─────────────────────────────────────────────────────────
 
-  static void setDistance(String key, double distance) {
+  static void setDistance(String key, double distance, {bool isRoad = false}) {
     _distanceCache[key] = distance;
+    if (isRoad) _roadDistanceKeys.add(key);
 
     if (_distanceCache.length > _maxDistanceCache) {
       _evictOldDistanceEntries();
@@ -108,9 +110,12 @@ class CacheService {
 
   static void clearDistanceCache() {
     _distanceCache.clear();
+    _roadDistanceKeys.clear();
     _saveTimer?.cancel();
     debugPrint('🗑️ Distance cache cleared (location changed)');
   }
+
+  static bool isRoadDistance(String key) => _roadDistanceKeys.contains(key);
 
   static double? getDistance(String key) => _distanceCache[key];
 
