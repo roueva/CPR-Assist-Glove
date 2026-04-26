@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 //   LIVE_STREAM   UUID 19b10001-e8f2-537e-4f6c-d104768a1214
 //     100 bytes fixed, 10 Hz notify.
 //     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
-//     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
 //
 //   EVENT_CHANNEL UUID 19b10002-e8f2-537e-4f6c-d104768a1214
 //   96 bytes fixed, on-event notify + write.
@@ -87,7 +86,8 @@ class BLEDataProcessor {
   //  49     uint8    rescuerFatigueScore 0–100
   //  50     uint8    imuCalibrated       0/1
   //  51     uint8    wristDropped        0/1
-  //  52–55  uint8[4] reserved
+  //  52–55  float32  valleyDepth         cm
+  //  53–55  uint8[4] reserved
   //  56–59  float32  heartRatePatient    BPM (pulse check only)
   //  60–63  float32  spO2Patient         % (pulse check only)
   //  64–67  float32  ppgRaw              0–1 (pulse check only)
@@ -154,7 +154,8 @@ class BLEDataProcessor {
       final rescuerFatigueScore = b.getUint8(49);
       final imuCalibrated       = b.getUint8(50) == 1;
       final wristDropped        = b.getUint8(51) == 1;
-      // bytes 52–55 reserved
+      final valleyDepth = b.getFloat32(52, Endian.little);
+      // bytes 53–55 reserved
 
       // ── PATIENT VITALS ────────────────────────────────────────────────────
       final heartRatePatient  = b.getFloat32(56, Endian.little);
@@ -217,6 +218,7 @@ class BLEDataProcessor {
         wristFlexionAngle:        wristFlexionAngle,
         compressionAxisDeviation: compressionAxisDeviation,
         depthTrend:               depthTrend,
+        valleyDepth:              valleyDepth,
         effectiveDepth:           effectiveDepth,
         // Flags
         recoilAchieved:      recoilAchieved,
@@ -514,6 +516,7 @@ class ParsedBLEData {
   final double wristFlexionAngle;
   final double compressionAxisDeviation;
   final double depthTrend;          // 5-comp rolling avg depth
+  final double valleyDepth;         // minimum depth after last peak (recoil quality)
   final double effectiveDepth;      // depth × cos(axisDeviation)
 
   // ── LIVE_STREAM: per-compression flags ───────────────────────────────────
@@ -643,6 +646,7 @@ class ParsedBLEData {
     this.wristFlexionAngle     = 0,
     this.compressionAxisDeviation = 0,
     this.depthTrend            = 0,
+    this.valleyDepth           = 0,
     this.effectiveDepth        = 0,
     this.recoilAchieved        = false,
     this.leaningDetected       = false,

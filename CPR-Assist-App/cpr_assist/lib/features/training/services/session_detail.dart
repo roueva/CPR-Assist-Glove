@@ -205,6 +205,40 @@ class SessionDetail {
     return count;
   }
 
+  /// App-computed fatigue score 0–100.
+  /// Returns 0 if insufficient data (< 2 vital snapshots).
+  static int computeFatigueScore(
+      List<RescuerVitalSnapshot> vitals,
+      List<CompressionEvent> compressions,
+      ) {
+    if (vitals.length < 2) return 0;
+
+    // ── 1. HR trend ───────────────────────────────────────────────
+    final firstHR = vitals.first.heartRate;
+    final lastHR  = vitals.last.heartRate;
+    final hrScore = ((lastHR - firstHR) / 40.0).clamp(0.0, 1.0) * 100;
+
+    // ── 2. RMSSD decline ─────────────────────────────────────────
+    final firstRMSSD = vitals.first.rmssd.toDouble();
+    final lastRMSSD  = vitals.last.rmssd.toDouble();
+    final rmssdScore = firstRMSSD > 0
+        ? ((firstRMSSD - lastRMSSD) / firstRMSSD).clamp(0.0, 1.0) * 100
+        : 0.0;
+
+    // ── 3. Depth trend ────────────────────────────────────────────
+    double depthScore = 0.0;
+    if (compressions.length >= 5) {
+      final peakDepth = compressions
+          .map((c) => c.depth)
+          .reduce((a, b) => a > b ? a : b);
+      final lastFive = compressions.sublist(compressions.length - 5);
+      final lastAvg  = lastFive.map((c) => c.depth).reduce((a, b) => a + b) / 5;
+      depthScore = ((peakDepth - lastAvg) / 2.0).clamp(0.0, 1.0) * 100;
+    }
+
+    return (hrScore * 0.40 + rmssdScore * 0.35 + depthScore * 0.25).round();
+  }
+
   // ── Factory: assemble from live BLE session ───────────────────────────────
   //
   // Called by SessionService.assembleDetail() when SESSION_END arrives.

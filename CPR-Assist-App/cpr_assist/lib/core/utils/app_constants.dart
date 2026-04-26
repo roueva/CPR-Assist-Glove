@@ -97,7 +97,7 @@ class AppConstants {
   static const Duration zoomAnimationDelay = Duration(milliseconds: 500);
 
   static const int navigationRecenterDurationMs = 600;
-  static const int programmaticMoveDurationMs   = 500;
+  static const int programmaticMoveDurationMs   = 800;
   static const int compassDebounceDurationMs    = 50;
   static const int userTouchTimeoutMs           = 3000;
 

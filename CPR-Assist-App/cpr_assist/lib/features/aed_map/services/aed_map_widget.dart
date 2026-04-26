@@ -877,17 +877,27 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     if (shouldCheckUpdates && isConnected) {
       final aedRepository = ref.read(aedServiceProvider);
       try {
-        final newAEDs   = await aedRepository.fetchAEDs(forceRefresh: true);
+        final newAEDs = await aedRepository.fetchAEDs(forceRefresh: true);
         if (!mounted) return;
 
-        final changed = aedRepository.haveAEDsChanged(currentState.aedList, newAEDs);
+        // Re-read state after async gap — GPS may have updated while fetching
+        final freshState = ref.read(mapStateProvider);
+        final changed = aedRepository.haveAEDsChanged(freshState.aedList, newAEDs);
         if (changed) {
           final sortedAEDs = aedRepository.sortAEDsByDistance(
             newAEDs,
-            currentState.userLocation,
-            currentState.navigation.transportMode,
+            freshState.userLocation,
+            freshState.navigation.transportMode,
           );
           ref.read(mapStateProvider.notifier).updateAEDs(sortedAEDs);
+        } else {
+          // AED data unchanged but re-sort by updated location anyway
+          final resorted = aedRepository.sortAEDsByDistance(
+            freshState.aedList,
+            freshState.userLocation,
+            freshState.navigation.transportMode,
+          );
+          ref.read(mapStateProvider.notifier).updateAEDs(resorted);
         }
       } catch (e) {
         debugPrint('⚠️ Error checking AED updates: $e');

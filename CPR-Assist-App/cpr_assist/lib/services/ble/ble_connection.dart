@@ -449,31 +449,38 @@ class BLEConnection {
       isChargingNotifier.value = parsed.isCharging!;
     }
 
-    // Accumulate compression events when session is active and a new
-    // compression has just been confirmed (compressionCount incremented).
-    // We detect this by checking compressionCount vs last known value.
+    // Track peak depth between compression count increments.
+    // We accumulate the maximum depth seen across all 10 Hz packets so that
+    // when compressionCount increments we have the real peak, not whatever
+    // the instantaneous depth happens to be at that exact packet.
+    if (_sessionActive && parsed.isContinuousData &&
+        parsed.depth > _pendingPeakDepth) {
+      _pendingPeakDepth = parsed.depth;
+    }
+
+    // Accumulate compression events when a new compression is confirmed.
     if (_sessionActive && parsed.isContinuousData &&
         parsed.compressionCount > _lastCompressionCount) {
       _lastCompressionCount = parsed.compressionCount;
-      // Use depthTrend as the per-compression depth record (5-comp rolling avg peak)
-      // since instantaneous depth may be 0 at the moment the count increments.
-      final recordDepth = parsed.depthTrend > 0
-          ? parsed.depthTrend
-          : (parsed.depth > 0 ? parsed.depth : 0.1);
+      final recordDepth = _pendingPeakDepth > 0
+          ? _pendingPeakDepth
+          : (parsed.depthTrend > 0 ? parsed.depthTrend : 0.1);
+      _pendingPeakDepth = 0.0; // reset for next compression
       _compressionEvents.add(CompressionEvent(
-        timestampMs:          now - _sessionStartMs,
-        depth: recordDepth,
-        instantaneousRate:    parsed.instantaneousRate,
-        frequency:            parsed.frequency,
-        force:                parsed.force,
-        recoilAchieved:       parsed.recoilAchieved,
-        overForce:            parsed.overForceFlag,
-        postureOk:            parsed.postureOk,
-        leaningDetected:      parsed.leaningDetected,
-        wristAlignmentAngle:  parsed.wristAlignmentAngle,
-        wristFlexionAngle:    parsed.wristFlexionAngle,
-        compressionAxisDev:   parsed.compressionAxisDeviation,
-        effectiveDepth:       parsed.effectiveDepth,
+        timestampMs:         now - _sessionStartMs,
+        depth:               recordDepth,
+        valleyDepth:         parsed.valleyDepth,
+        instantaneousRate:   parsed.instantaneousRate,
+        frequency:           parsed.frequency,
+        force:               parsed.force,
+        recoilAchieved:      parsed.recoilAchieved,
+        overForce:           parsed.overForceFlag,
+        postureOk:           parsed.postureOk,
+        leaningDetected:     parsed.leaningDetected,
+        wristAlignmentAngle: parsed.wristAlignmentAngle,
+        wristFlexionAngle:   parsed.wristFlexionAngle,
+        compressionAxisDev:  parsed.compressionAxisDeviation,
+        effectiveDepth:      parsed.effectiveDepth,
       ));
     }
 
@@ -518,6 +525,7 @@ class BLEConnection {
       'wristFlexionAngle':        parsed.wristFlexionAngle,
       'compressionAxisDeviation': parsed.compressionAxisDeviation,
       'depthTrend':               parsed.depthTrend,
+      'valleyDepth':              parsed.valleyDepth,
       'effectiveDepth':           parsed.effectiveDepth,
       // Flags
       'recoilAchieved':      parsed.recoilAchieved,
@@ -556,6 +564,7 @@ class BLEConnection {
   // Track last compression count to detect new compressions in live stream
   int _lastCompressionCount = 0;
   int _lastVentilationCount = 0;
+  double _pendingPeakDepth = 0.0;
 
   // ── EVENT_CHANNEL packet handler ──────────────────────────────────────────
   void _handleEventPacket(List<int> packet) {
@@ -575,6 +584,7 @@ class BLEConnection {
       _sessionActive          = true;
       _pulseCheckOpen         = false;
       _lastCompressionCount   = 0;
+      _pendingPeakDepth       = 0.0;
       _lastVentilationCount   = 0;
       _lastVitalSnapshotMs    = 0;
       debugPrint('BLE: SESSION_START mode=${parsed.currentMode}');

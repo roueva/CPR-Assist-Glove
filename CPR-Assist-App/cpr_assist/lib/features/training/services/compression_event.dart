@@ -43,6 +43,11 @@ class CompressionEvent {
   /// Peak depth of this compression (cm).
   final double depth;
 
+  /// Minimum depth reached after this compression's peak before next downstroke.
+  /// ~0–0.5 cm = full recoil. > 0.5 cm = incomplete recoil.
+  /// 0.0 when not available (older firmware or history without valley data).
+  final double valleyDepth;
+
   /// Instantaneous rate from last two IBIs (BPM).
   /// Used for per-compression grading — more reactive than [frequency].
   final double instantaneousRate;
@@ -95,6 +100,7 @@ class CompressionEvent {
     required this.instantaneousRate,
     this.frequency         = 0.0,
     this.force             = 0.0,
+    this.valleyDepth       = 0.0,
     required this.recoilAchieved,
     this.overForce         = false,
     this.postureOk         = false,
@@ -148,6 +154,7 @@ class CompressionEvent {
       instantaneousRate:    instRate,
       frequency:            (packet['frequency']             as num?)?.toDouble() ?? 0.0,
       force:                (packet['force']                 as num?)?.toDouble() ?? 0.0,
+      valleyDepth:          (packet['valleyDepth']           as num?)?.toDouble() ?? 0.0,
       recoilAchieved:        packet['recoilAchieved']        as bool?             ?? false,
       overForce:             packet['overForceFlag']         as bool?             ?? false,
       postureOk:             packet['postureOk']             as bool?             ?? false,
@@ -175,6 +182,7 @@ class CompressionEvent {
       instantaneousRate:   (json['instantaneous_rate']   as num?)?.toDouble() ?? 0.0,
       frequency:           (json['freq']                 as num?)?.toDouble() ?? 0.0,
       force:               (json['force']                as num?)?.toDouble() ?? 0.0,
+      valleyDepth:         (json['valley_depth']          as num?)?.toDouble() ?? 0.0,
       recoilAchieved:       json['recoil']               as bool?             ?? false,
       overForce:            json['over_force']           as bool?             ?? false,
       postureOk:            json['posture_ok']           as bool?             ?? false,
@@ -198,6 +206,7 @@ class CompressionEvent {
     'instantaneous_rate':  instantaneousRate,
     'freq':                frequency,
     'force':               force,
+    'valley_depth':        valleyDepth,
     'recoil':              recoilAchieved,
     'over_force':          overForce,
     'posture_ok':          postureOk,

@@ -26,6 +26,7 @@ class AEDCard extends StatelessWidget {
   final VoidCallback onStart;
   final bool showButton;
   final bool isFirst;
+  final bool isUsingCachedLocation;
 
   const AEDCard({
     super.key,
@@ -37,6 +38,7 @@ class AEDCard extends StatelessWidget {
     required this.onStart,
     this.showButton = false,
     this.isFirst = false,
+    this.isUsingCachedLocation = false,
   });
 
   // ── Distance / time resolution ───────────────────────────────────────────
@@ -107,7 +109,7 @@ class AEDCard extends StatelessWidget {
       aed: aed,
       displayDistance: r.distance,
       displayTime: r.time,
-      isRealData: r.isRealData,
+      isRealData: isUsingCachedLocation ? false : r.isRealData,
       selectedMode: config.selectedMode,
       userLocationAvailable: userLocationAvailable,
       onTap: onTap,

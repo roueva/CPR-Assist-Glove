@@ -142,46 +142,20 @@ class NavigationController {
 
   /// Handle camera move started events.
   void onCameraMoveStarted() {
-    if (_isRecenterInProgress) {
-      debugPrint('📷 Camera move STARTED (recenter in progress - ignoring)');
-      return;
-    }
-
-    if (_navigationState == NavigationState.inactive || _isRecentProgrammaticMove) {
-      final isCompassMove =
-          _navigationState == NavigationState.compassTracking && _isRecentProgrammaticMove;
-
-      if (!isCompassMove && _wasRecentUserTouch()) {
-        _lastUserTouchTime = DateTime.now();
-        debugPrint('📱 User manual camera control detected (camera move started)');
-        _handleUserInteraction();
-      }
-      return;
-    }
+    if (_isRecenterInProgress) return;
+    if (_navigationState == NavigationState.inactive) return;
+    if (_isRecentProgrammaticMove) return;
 
     _lastUserTouchTime = DateTime.now();
-    debugPrint('📱 User manual camera control detected');
     _handleUserInteraction();
   }
 
-  /// Handle camera moved events.
   void onCameraMoved() {
     if (_isRecenterInProgress) return;
-
-    if (_navigationState != NavigationState.compassTracking || _isRecentProgrammaticMove) {
-      final isCompassMove =
-          _navigationState == NavigationState.compassTracking && _isRecentProgrammaticMove;
-
-      if (!isCompassMove && _wasRecentUserTouch()) {
-        _lastUserTouchTime = DateTime.now();
-        debugPrint('📱 User manual camera control detected (camera moved)');
-        _handleUserInteraction();
-      }
-      return;
-    }
+    if (_navigationState == NavigationState.inactive) return;
+    if (_isRecentProgrammaticMove) return;
 
     _lastUserTouchTime = DateTime.now();
-    debugPrint('📱 User manual camera control detected (camera moved)');
     _handleUserInteraction();
   }
 

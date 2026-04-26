@@ -177,8 +177,13 @@ async function ensureSessionTables() {
                 compression_axis_dev  FLOAT   DEFAULT 0,
                 effective_depth       FLOAT   DEFAULT 0,
                 peak_force            FLOAT   DEFAULT 0,
-                downstroke_time_ms    INT     DEFAULT 0
+              downstroke_time_ms    INT     DEFAULT 0
             );
+        `);
+
+        await client.query(`
+            ALTER TABLE session_compressions 
+            ADD COLUMN IF NOT EXISTS valley_depth REAL DEFAULT 0;
         `);
 
         await client.query(`
@@ -328,6 +333,8 @@ END $$`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS rmssd         FLOAT DEFAULT 0`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS rescuer_pi    INT   DEFAULT 0`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS fatigue_score INT   DEFAULT 0`,
+            // valley_depth — added for depth+recoil chart (v3.1)
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_depth REAL DEFAULT 0`,
         ];
 
         for (const sql of migrations) {

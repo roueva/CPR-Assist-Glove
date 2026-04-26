@@ -153,6 +153,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
             config: widget.config,
             userLocationAvailable: widget.userLocationAvailable,
             distanceCache: widget.distanceCache,
+            isUsingCachedLocation: widget.config.isUsingCachedLocation,
             onTap: () => widget.onSmallMapTap(aed.location),
             onStart: () => widget.onStartNavigation(aed.location),
             showButton: true,
@@ -277,6 +278,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
                             config: widget.config,
                             userLocationAvailable: widget.userLocationAvailable,
                             distanceCache: widget.distanceCache,
+                            isUsingCachedLocation: widget.config.isUsingCachedLocation,
                             onTap: () =>
                                 widget.onSmallMapTap(nearestAED!.location),
                             onStart: () =>
@@ -330,6 +332,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
                                 userLocationAvailable:
                                 widget.userLocationAvailable,
                                 distanceCache: widget.distanceCache,
+                                isUsingCachedLocation: widget.config.isUsingCachedLocation,
                                 onTap: () => widget.onPreviewNavigation
                                     ?.call(entry.aed.location),
                                 onStart: () => widget
@@ -487,6 +490,7 @@ class AEDSideListPanel extends StatelessWidget {
               config: config,
               userLocationAvailable: userLocationAvailable,
               distanceCache: distanceCache,
+              isUsingCachedLocation: config.isUsingCachedLocation,
               onTap: () => onSmallMapTap(aed.location),
               onStart: () => onStartNavigation(aed.location),
               showButton: true,

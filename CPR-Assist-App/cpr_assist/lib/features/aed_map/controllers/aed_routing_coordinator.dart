@@ -845,17 +845,35 @@ class AEDRoutingCoordinator {
               preloadedRoutes[routeKey] = route;
               _limitPreloadedRoutesSize();
               CacheService.setDistance(
-                  'aed_${originalAed.id}_$mode', route.actualDistance!,
-                  isRoad: true);
+                'aed_${originalAed.id}_$mode',
+                route.actualDistance!,
+                isRoad: true,
+              );
             }
           },
         );
       }
+
       await CacheService.saveDistanceCache();
+
+      // Re-sort now that real road distances are in the cache
+      final latestState = _ref.read(mapStateProvider);
+      if (latestState.userLocation != null && latestState.aedList.isNotEmpty) {
+        final aedRepo = _ref.read(aedServiceProvider);
+        final resorted = aedRepo.sortAEDsByDistance(
+          latestState.aedList,
+          latestState.userLocation!,
+          latestState.navigation.transportMode,  // always use latest mode
+        );
+        _ref.read(mapStateProvider.notifier).updateAEDs(resorted);
+        _callbacks.onStateChanged();
+        debugPrint('✅ Re-sorted AEDs after route preloading with real road distances');
+      }
     } catch (e) {
       debugPrint('❌ Error preloading routes: $e');
     }
   }
+
 
   Future<void> preloadBothTransportModes(
       LatLng userLocation, LatLng aedLocation) async {

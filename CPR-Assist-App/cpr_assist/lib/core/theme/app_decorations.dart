@@ -31,7 +31,7 @@ class AppDecorations {
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
-        color: AppColors.headerSurface,
+        color: AppColors.screenBgGrey,
         borderRadius: BorderRadius.circular(radius),
       );
 
@@ -77,7 +77,6 @@ class AppDecorations {
       BoxDecoration(
         color: AppColors.successBg,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       );
 
   static BoxDecoration warningCard({double radius = AppSpacing.cardRadius}) =>

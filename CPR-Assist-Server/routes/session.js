@@ -423,8 +423,8 @@ module.exports = function (pool) {
                      (session_id, timestamp_ms, depth, frequency, instantaneous_rate,
                       force, recoil_achieved, over_force, posture_ok, leaning_detected,
                       wrist_alignment_angle, wrist_flexion_angle, compression_axis_dev,
-                      effective_depth, peak_force, downstroke_time_ms)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+                      effective_depth, peak_force, downstroke_time_ms, valley_depth)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
                     [
                         sessionId,
                         c.ts,
@@ -442,6 +442,7 @@ module.exports = function (pool) {
                         c.effective_depth ?? 0,
                         c.peak_force ?? 0,
                         c.downstroke_time_ms ?? 0,
+                        c.valley_depth ?? 0,
                     ]
                 );
             }
@@ -618,7 +619,8 @@ module.exports = function (pool) {
                             compression_axis_dev  AS axis_dev,
                             effective_depth,
                             peak_force,
-                            downstroke_time_ms
+                            downstroke_time_ms,
+                            valley_depth
                      FROM session_compressions
                      WHERE session_id = $1
                      ORDER BY timestamp_ms`,
