@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -73,6 +75,7 @@ class ExportBottomSheet extends ConsumerStatefulWidget {
 
 class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
   _ExportFormat _format = _ExportFormat.pdf;
+  _ExportAction _action = _ExportAction.download;
   bool          _isExporting = false;
 
   bool get _isSingleSession => widget.summary != null;
@@ -91,41 +94,58 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
 
     try {
       bool ok;
+      final download = _action == _ExportAction.download;
+
       switch (_format) {
         case _ExportFormat.pdf:
           if (_isSingleSession && widget.detail != null) {
-            ok = await ExportService.exportSingleSessionPdf(
-              widget.detail!,
-              username: auth.username,
-            );
+            ok = download
+                ? await ExportService.downloadSingleSessionPdf(
+                widget.detail!, username: auth.username)
+                : await ExportService.exportSingleSessionPdf(
+                widget.detail!, username: auth.username);
           } else if (_isSingleSession) {
-            // No detail — fall back to single-row CSV
-            ok = await ExportService.exportSingleSessionCsv(widget.summary!);
-            if (mounted) {
-              UIHelper.showSnackbar(
-                context,
+            ok = download
+                ? await ExportService.downloadSingleSessionCsv(widget.summary!)
+                : await ExportService.exportSingleSessionCsv(widget.summary!);
+            if (mounted) UIHelper.showSnackbar(context,
                 message: 'Full detail not available — exported as CSV',
-                icon:    Icons.info_outline_rounded,
-              );
-            }
+                icon: Icons.info_outline_rounded);
           } else {
-            ok = await ExportService.exportMultiSessionPdf(
-              widget.sessions,
-              username: auth.username,
-            );
+            ok = download
+                ? await ExportService.downloadMultiSessionPdf(
+                widget.sessions, username: auth.username)
+                : await ExportService.exportMultiSessionPdf(
+                widget.sessions, username: auth.username);
           }
 
         case _ExportFormat.csv:
           if (_isSingleSession) {
-            ok = await ExportService.exportSingleSessionCsv(widget.summary!);
+            ok = download
+                ? await ExportService.downloadSingleSessionCsv(widget.summary!)
+                : await ExportService.exportSingleSessionCsv(widget.summary!);
           } else {
-            ok = await ExportService.exportSessionsAsCsv(widget.sessions);
+            ok = download
+                ? await ExportService.downloadSessionsAsCsv(widget.sessions)
+                : await ExportService.exportSessionsAsCsv(widget.sessions);
           }
+
+        case _ExportFormat.rawCsv:
+        // rawCsv sub-format is handled via the raw data buttons directly
+          ok = false;
       }
 
       if (mounted) {
         context.pop();
-        if (!ok) {
+        if (ok) {
+          UIHelper.showSnackbar(
+            context,
+            message: Platform.isAndroid
+                ? 'Saved to Downloads'
+                : 'Choose Save to Files in the share sheet',
+            icon: Icons.check_circle_rounded,
+          );
+        } else {
           UIHelper.showError(context, 'Export failed. Please try again.');
         }
       }
@@ -141,152 +161,260 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: AppDecorations.bottomSheet(),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.lg,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Drag handle ─────────────────────────────────────────────────────
+          // ── Drag handle — always visible, outside scroll ─────────────────
           const _DragHandle(),
           const SizedBox(height: AppSpacing.md),
 
-          // ── Title ───────────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Row(
-              children: [
-                Container(
-                  width:  AppSpacing.iconXl,
-                  height: AppSpacing.iconXl,
-                  decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
-                  child: const Icon(
-                    Icons.download_rounded,
-                    color: AppColors.primary,
-                    size:  AppSpacing.iconMd,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Export Sessions',
-                          style: AppTypography.heading(size: 17)),
-                      Text(
-                        _sessionCountLabel,
-                        style: AppTypography.caption(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // ── Scrollable content ───────────────────────────────────────────
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(context).bottom + AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
 
-          const SizedBox(height: AppSpacing.lg),
-          const Divider(height: 1, color: AppColors.divider),
-          const SizedBox(height: AppSpacing.lg),
-
-          // ── Format picker ────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'FORMAT',
-                  style: AppTypography.badge(
-                    size:  10,
-                    color: AppColors.textDisabled,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _FormatTile(
-                        icon:        Icons.picture_as_pdf_rounded,
-                        label:       'PDF',
-                        description: _isSingleSession
-                            ? 'Analytical report\nwith metrics & charts'
-                            : 'Summary report\nwith table & grade trend',
-                        selected:    _format == _ExportFormat.pdf,
-                        accent:      AppColors.emergency,
-                        accentBg:    AppColors.errorBg,
-                        onTap:       () => setState(() => _format = _ExportFormat.pdf),
-                      ),
+                  // ── Title ──────────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Row(
+                      children: [
+                        Container(
+                          width:  AppSpacing.iconXl,
+                          height: AppSpacing.iconXl,
+                          decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
+                          child: const Icon(
+                            Icons.download_rounded,
+                            color: AppColors.primary,
+                            size:  AppSpacing.iconMd,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Export Sessions',
+                                  style: AppTypography.heading(size: 17)),
+                              Text(
+                                _sessionCountLabel,
+                                style: AppTypography.caption(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: _FormatTile(
-                        icon:        Icons.table_chart_outlined,
-                        label:       'CSV',
-                        description: 'Flat data table\nfor Excel / SPSS / R',
-                        selected:    _format == _ExportFormat.csv,
-                        accent:      AppColors.success,
-                        accentBg:    AppColors.successBg,
-                        onTap:       () => setState(() => _format = _ExportFormat.csv),
+                  ),
+
+                  const SizedBox(height: AppSpacing.lg),
+                  const Divider(height: 1, color: AppColors.divider),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Format picker ──────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'FORMAT',
+                          style: AppTypography.badge(size: 10, color: AppColors.textDisabled),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _FormatTile(
+                                icon:        Icons.picture_as_pdf_rounded,
+                                label:       'PDF Report',
+                                description: _isSingleSession
+                                    ? 'Analytical report\nwith metrics & charts'
+                                    : 'Summary report\nwith table & grade trend',
+                                selected:    _format == _ExportFormat.pdf,
+                                accent:      AppColors.emergency,
+                                accentBg:    AppColors.errorBg,
+                                onTap:       () => setState(() => _format = _ExportFormat.pdf),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: _FormatTile(
+                                icon:        Icons.table_chart_outlined,
+                                label:       'CSV Summary',
+                                description: 'Session metrics\nfor Excel / SPSS / R',
+                                selected:    _format == _ExportFormat.csv,
+                                accent:      AppColors.success,
+                                accentBg:    AppColors.successBg,
+                                onTap:       () => setState(() => _format = _ExportFormat.csv),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_isSingleSession && widget.detail != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          _FormatTile(
+                            icon:        Icons.data_object_rounded,
+                            label:       'Raw Data (CSV)',
+                            description: 'Per-event data streams — compressions, vitals, ventilations, pulse checks',
+                            selected:    _format == _ExportFormat.rawCsv,
+                            accent:      AppColors.pediatric,
+                            accentBg:    AppColors.pediatricLight,
+                            onTap:       () => setState(() => _format = _ExportFormat.rawCsv),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Format description ─────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: _FormatDescription(
+                      format:          _format,
+                      isSingleSession: _isSingleSession,
+                      hasDetail:       widget.detail != null,
+                    ),
+                  ),
+
+                  // ── Raw data stream buttons ────────────────────────────
+                  if (_format == _ExportFormat.rawCsv && widget.detail != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      child: _RawDataButtons(
+                        detail:      widget.detail!,
+                        isExporting: _isExporting,
+                        onStart:     () => setState(() => _isExporting = true),
+                        onDone: (ok) {
+                          if (mounted) {
+                            setState(() => _isExporting = false);
+                            context.pop();
+                            if (ok) {
+                              UIHelper.showSnackbar(
+                                context,
+                                message: Platform.isAndroid
+                                    ? 'Saved to Downloads'
+                                    : 'Choose Save to Files in the share sheet',
+                                icon: Icons.check_circle_rounded,
+                              );
+                            } else {
+                              UIHelper.showError(context, 'Export failed. Please try again.');
+                            }
+                          }
+                        },
                       ),
                     ),
                   ],
-                ),
-              ],
-            ),
-          ),
 
-          const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.lg),
 
-          // ── Format description ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: _FormatDescription(
-              format:          _format,
-              isSingleSession: _isSingleSession,
-              hasDetail:       widget.detail != null,
-            ),
-          ),
+                  // ── Action buttons — hidden when rawCsv selected ───────
+                  if (_format != _ExportFormat.rawCsv)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      child: Column(
+                        children: [
+                          // Primary — Download
+                          SizedBox(
+                            width:  double.infinity,
+                            height: AppSpacing.touchTargetLarge,
+                            child: ElevatedButton.icon(
+                              onPressed: _isExporting
+                                  ? null
+                                  : () {
+                                setState(() => _action = _ExportAction.download);
+                                _doExport();
+                              },
+                              icon: _isExporting && _action == _ExportAction.download
+                                  ? const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppColors.textOnDark),
+                                  ))
+                                  : const Icon(Icons.download_rounded),
+                              label: Text(
+                                _isExporting && _action == _ExportAction.download
+                                    ? 'Saving…'
+                                    : 'Download ${_format == _ExportFormat.pdf ? 'PDF' : 'CSV'}',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: AppColors.textOnDark,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                  BorderRadius.circular(AppSpacing.buttonRadius),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          // Secondary — Share
+                          SizedBox(
+                            width:  double.infinity,
+                            height: AppSpacing.touchTargetLarge,
+                            child: OutlinedButton.icon(
+                              onPressed: _isExporting
+                                  ? null
+                                  : () {
+                                setState(() => _action = _ExportAction.share);
+                                _doExport();
+                              },
+                              icon: _isExporting && _action == _ExportAction.share
+                                  ? const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppColors.primary),
+                                  ))
+                                  : const Icon(Icons.share_rounded),
+                              label: Text(
+                                _isExporting && _action == _ExportAction.share
+                                    ? 'Sharing…'
+                                    : 'Share ${_format == _ExportFormat.pdf ? 'PDF' : 'CSV'}',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                  BorderRadius.circular(AppSpacing.buttonRadius),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
-          const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.sm),
 
-          // ── Action button ────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: SizedBox(
-              width: double.infinity,
-              height: AppSpacing.touchTargetLarge,
-              child: ElevatedButton.icon(
-                onPressed: _isExporting ? null : _doExport,
-                icon: _isExporting
-                    ? const SizedBox(
-                  width:  18,
-                  height: 18,
-                  child:  CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnDark),
+                  // ── Cancel ─────────────────────────────────────────────
+                  TextButton(
+                    onPressed: () => context.pop(),
+                    style: TextButton.styleFrom(
+                      minimumSize:
+                      const Size(double.infinity, AppSpacing.touchTargetMin),
+                    ),
+                    child: Text('Cancel',
+                        style: AppTypography.body(color: AppColors.textSecondary)
+                            .copyWith(fontWeight: FontWeight.w600)),
                   ),
-                )
-                    : const Icon(Icons.download_rounded),
-                label: Text(
-                  _isExporting
-                      ? 'Preparing…'
-                      : 'Export as ${_format == _ExportFormat.pdf ? 'PDF' : 'CSV'}',
-                ),
+                ],
               ),
             ),
-          ),
-
-          const SizedBox(height: AppSpacing.sm),
-
-          // ── Cancel ───────────────────────────────────────────────────────────
-          TextButton(
-            onPressed: () => context.pop(),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(double.infinity, AppSpacing.touchTargetMin),
-            ),
-            child: Text('Cancel',
-                style: AppTypography.body(color: AppColors.textSecondary)
-                    .copyWith(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -387,6 +515,226 @@ class _FormatTile extends StatelessWidget {
   }
 }
 
+class _RawDataButtons extends ConsumerStatefulWidget {
+  final SessionDetail detail;
+  final bool          isExporting;
+  final VoidCallback  onStart;
+  final void Function(bool) onDone;
+
+  const _RawDataButtons({
+    required this.detail,
+    required this.isExporting,
+    required this.onStart,
+    required this.onDone,
+  });
+
+  @override
+  ConsumerState<_RawDataButtons> createState() => _RawDataButtonsState();
+}
+
+class _RawDataButtonsState extends ConsumerState<_RawDataButtons> {
+  String? _active; // key of the stream currently saving/sharing
+
+  Future<void> _run(String key, Future<bool> Function() fn) async {
+    if (_active != null) return;
+    setState(() => _active = key);
+    widget.onStart();
+    final ok = await fn();
+    if (mounted) setState(() => _active = null);
+    widget.onDone(ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.detail;
+
+    final streams = [
+      if (d.compressions.isNotEmpty)
+        _RawStream(
+          key:   'compressions',
+          label: 'Compressions',
+          count: '${d.compressions.length} rows · 25 columns',
+          icon:  Icons.compress_rounded,
+          color: AppColors.primary,
+          downloadFn: () => ExportService.downloadRawCompressionsCsv(d),
+          shareFn:    () => ExportService.exportRawCompressionsCsv(d),
+        ),
+      if (d.rescuerVitals.isNotEmpty)
+        _RawStream(
+          key:   'vitals',
+          label: 'Rescuer Vitals',
+          count: '${d.rescuerVitals.length} rows · 13 columns',
+          icon:  Icons.monitor_heart_rounded,
+          color: AppColors.success,
+          downloadFn: () => ExportService.downloadRawRescuerVitalsCsv(d),
+          shareFn:    () => ExportService.exportRawRescuerVitalsCsv(d),
+        ),
+      if (d.ventilations.isNotEmpty)
+        _RawStream(
+          key:   'ventilations',
+          label: 'Ventilations',
+          count: '${d.ventilations.length} rows · 9 columns',
+          icon:  Icons.air_rounded,
+          color: AppColors.warning,
+          downloadFn: () => ExportService.downloadRawVentilationsCsv(d),
+          shareFn:    () => ExportService.exportRawVentilationsCsv(d),
+        ),
+      if (d.pulseChecks.isNotEmpty)
+        _RawStream(
+          key:   'pulse',
+          label: 'Pulse Checks',
+          count: '${d.pulseChecks.length} rows · 17 columns · PPG waveform',
+          icon:  Icons.favorite_rounded,
+          color: AppColors.emergency,
+          downloadFn: () => ExportService.downloadRawPulseChecksCsv(d),
+          shareFn:    () => ExportService.exportRawPulseChecksCsv(d),
+        ),
+    ];
+
+    if (streams.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Text('No raw data available for this session.',
+            style: AppTypography.caption(color: AppColors.textDisabled)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── ZIP — all streams in one file ──────────────────────────────────
+        _ZipExportTile(
+          detail:     d,
+          isDisabled: _active != null,
+          onDownload: () => _run('zip_dl', () => ExportService.downloadRawDataZip(d)),
+          onShare:    () => _run('zip_sh', () => ExportService.exportRawDataZip(d)),
+          isDownloading: _active == 'zip_dl',
+          isSharing:     _active == 'zip_sh',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text('OR DOWNLOAD INDIVIDUALLY',
+            style: AppTypography.badge(size: 10, color: AppColors.textDisabled)),
+        const SizedBox(height: AppSpacing.sm),
+        ...streams.map((s) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+          child: _RawStreamTile(
+            stream:        s,
+            isDownloading: _active == '${s.key}_dl',
+            isSharing:     _active == '${s.key}_sh',
+            isDisabled:    _active != null,
+            onDownload:    () => _run('${s.key}_dl', s.downloadFn),
+            onShare:       () => _run('${s.key}_sh', s.shareFn),
+          ),
+        )),
+      ],
+    );
+  }
+}
+
+class _RawStream {
+  final String key;
+  final String label;
+  final String count;
+  final IconData icon;
+  final Color  color;
+  final Future<bool> Function() downloadFn;
+  final Future<bool> Function() shareFn;
+  const _RawStream({
+    required this.key, required this.label, required this.count,
+    required this.icon, required this.color,
+    required this.downloadFn, required this.shareFn,
+  });
+}
+
+class _RawStreamTile extends StatelessWidget {
+  final _RawStream   stream;
+  final bool         isDownloading;
+  final bool         isSharing;
+  final bool         isDisabled;
+  final VoidCallback onDownload;
+  final VoidCallback onShare;
+
+  const _RawStreamTile({
+    required this.stream,
+    required this.isDownloading,
+    required this.isSharing,
+    required this.isDisabled,
+    required this.onDownload,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: AppDecorations.card(),
+      child: ListTile(
+        dense: true,
+        leading: Container(
+          width:  AppSpacing.iconBoxSize,
+          height: AppSpacing.iconBoxSize,
+          decoration: AppDecorations.iconRounded(
+            bg:     stream.color.withValues(alpha: 0.1),
+            radius: AppSpacing.cardRadiusSm,
+          ),
+          child: Icon(stream.icon, color: stream.color, size: AppSpacing.iconSm),
+        ),
+        title: Text(stream.label,
+            style: AppTypography.label(color: AppColors.textPrimary)),
+        subtitle: Text(stream.count,
+            style: AppTypography.caption(color: AppColors.textDisabled)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Share
+            _iconBtn(
+              icon: Icons.share_rounded,
+              color: stream.color,
+              loading: isSharing,
+              disabled: isDisabled,
+              onTap: onShare,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            // Download
+            _iconBtn(
+              icon: Icons.download_rounded,
+              color: stream.color,
+              loading: isDownloading,
+              disabled: isDisabled,
+              onTap: onDownload,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconBtn({
+    required IconData icon,
+    required Color color,
+    required bool loading,
+    required bool disabled,
+    required VoidCallback onTap,
+  }) {
+    if (loading) {
+      return SizedBox(
+        width: 20, height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      );
+    }
+    return IconButton(
+      icon: Icon(icon,
+          color: disabled ? AppColors.textDisabled : color,
+          size: AppSpacing.iconMd),
+      onPressed: disabled ? null : onTap,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Format description — what's included
 // ─────────────────────────────────────────────────────────────────────────────
@@ -445,36 +793,149 @@ class _FormatDescription extends StatelessWidget {
   }
 
   List<String> _getItems() {
-    if (format == _ExportFormat.pdf) {
-      if (isSingleSession) {
+    switch (format) {
+      case _ExportFormat.pdf:
+        if (isSingleSession) {
+          return [
+            if (hasDetail) 'Charts: depth, rate, force, posture, rescuer vitals over time',
+            'Grade hero with progress bar (training) or ROSC outcome (emergency)',
+            'Two-column metrics: depth/force group + rate/timing group',
+            'Ventilation cycle table with compliance per cycle',
+            if (hasDetail) 'Pulse check table with ABSENT/UNCERTAIN/PRESENT classification',
+            if (hasDetail) 'Biometrics: rescuer HR, SpO₂, RMSSD, fatigue — patient temp, SpO₂, ambient temp',
+            'Session note (if any) · Session ID for traceability',
+          ];
+        } else {
+          return [
+            'Grade trend sparkline with colored band zones and trend delta',
+            '2×2 metric trend charts: depth, rate, CCF, recoil across sessions',
+            'Average metrics grid: depth, rate, consistency, CCF, recoil',
+            'Emergency session summary: ROSC rate and total compressions',
+            'Full session table with scenario, CCF column, mode badges',
+          ];
+        }
+      case _ExportFormat.csv:
         return [
-          if (hasDetail) 'Compression depth chart over time',
-          'Grade circle with motivational label (training)',
-          'Quality breakdown: depth, rate, recoil, posture, ventilation',
-          'Detailed metrics table with all sub-scores',
-          if (hasDetail) 'Biometrics: rescuer HR, SpO₂, patient temperature',
-          'Session note (if any)',
-          'Branded header with session date and mode badge',
+          '${isSingleSession ? '1 row' : 'All session rows'} · 44 columns',
+          'Identity: session ID, date/time UTC, mode, scenario, depth targets',
+          'Compression quality: counts + computed percentages for depth, rate, recoil, posture',
+          'Metrics: avg depth, effective depth, peak depth, SD, CCF, no-flow time',
+          'Ventilation + pulse check results, biometrics, ambient temperature',
+          'UTF-8 encoded · compatible with Excel, SPSS, R, Python pandas',
         ];
-      } else {
+      case _ExportFormat.rawCsv:
         return [
-          'Aggregate stats: total sessions, compressions, avg & best grade',
-          'Grade trend sparkline across all training sessions',
-          'Full session table: date, mode, duration, depth, rate, grade',
-          'Branded header with your username',
+          'ZIP containing all raw data streams for this session',
+          'compressions.csv — 1 row per compression · 25 columns',
+          'rescuer_vitals.csv — HR, SpO₂, RMSSD, fatigue over time',
+          'ventilations.csv — one row per 30:2 cycle',
+          'pulse_checks.csv — classification, PPG waveform data',
+          'Includes session_id + elapsed_sec in every file for easy merging',
+          'Ideal for signal processing, SPSS, and research analysis',
         ];
-      }
-    } else {
-      return [
-        '${isSingleSession ? '1 row' : 'All session rows'} with 32 columns',
-        'Session number, date, mode, scenario, duration',
-        'All compression quality counts and percentages',
-        'Average depth, frequency, effective depth, peak depth, SD',
-        'Ventilation count and compliance, pulse check results',
-        'Rescuer and patient biometrics',
-        'Compatible with Excel, SPSS, R, Python pandas',
-      ];
     }
+  }
+}
+
+class _ZipExportTile extends StatelessWidget {
+  final SessionDetail detail;
+  final bool         isDisabled;
+  final bool         isDownloading;
+  final bool         isSharing;
+  final VoidCallback onDownload;
+  final VoidCallback onShare;
+
+  const _ZipExportTile({
+    required this.detail,
+    required this.isDisabled,
+    required this.isDownloading,
+    required this.isSharing,
+    required this.onDownload,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final d           = detail;
+    final streamCount = (d.compressions.isNotEmpty ? 1 : 0) +
+        (d.rescuerVitals.isNotEmpty ? 1 : 0) +
+        (d.ventilations.isNotEmpty ? 1 : 0) +
+        (d.pulseChecks.isNotEmpty  ? 1 : 0);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryAlt],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width:  AppSpacing.iconBoxSize,
+            height: AppSpacing.iconBoxSize,
+            decoration: BoxDecoration(
+              color:        AppColors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+            ),
+            child: const Icon(Icons.folder_zip_rounded,
+                color: AppColors.textOnDark, size: AppSpacing.iconMd),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('All Raw Data (ZIP)',
+                    style: AppTypography.subheading(color: AppColors.textOnDark)),
+                Text('$streamCount data streams · compressions, vitals, ventilations, pulse checks',
+                    style: AppTypography.caption(
+                        color: AppColors.textOnDark.withValues(alpha: 0.75))),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          // Share
+          _zipBtn(
+            icon: Icons.share_rounded,
+            loading: isSharing,
+            disabled: isDisabled,
+            onTap: onShare,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          // Download
+          _zipBtn(
+            icon: Icons.download_rounded,
+            loading: isDownloading,
+            disabled: isDisabled,
+            onTap: onDownload,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _zipBtn({
+    required IconData      icon,
+    required bool          loading,
+    required bool          disabled,
+    required VoidCallback  onTap,
+  }) {
+    if (loading) {
+      return const SizedBox(width: 22, height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnDark)));
+    }
+    return IconButton(
+      icon: Icon(icon,
+          color: disabled ? AppColors.textOnDark.withValues(alpha: 0.4) : AppColors.textOnDark,
+          size: AppSpacing.iconMd),
+      onPressed: disabled ? null : onTap,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+    );
   }
 }
 
@@ -507,4 +968,5 @@ class _DragHandle extends StatelessWidget {
 // Format enum
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _ExportFormat { pdf, csv }
+enum _ExportFormat { pdf, csv, rawCsv }
+enum _ExportAction { download, share }

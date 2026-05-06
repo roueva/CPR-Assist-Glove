@@ -352,6 +352,7 @@ class SessionSummary {
   final double depthSD;
   final double depthConsistency;
   final double frequencyConsistency;
+  final double handsOnRatio;        // 0.0–1.0
 
   // ── Ventilation ───────────────────────────────────────────────────────────
   final int    ventilationCount;
@@ -397,6 +398,7 @@ class SessionSummary {
     this.depthSD              = 0.0,
     this.depthConsistency     = 0.0,
     this.frequencyConsistency = 0.0,
+    this.handsOnRatio         = 0.0,
     this.ventilationCount     = 0,
     this.ventilationCompliance = 0.0,
     this.pulseDetectedFinal   = false,
@@ -463,6 +465,7 @@ class SessionSummary {
       averageDepth:     (data['depth']               as num?)?.toDouble() ?? 0.0,
       averageFrequency: (data['frequency']           as num?)?.toDouble() ?? 0.0,
       peakDepth:        (data['peakDepth']           as num?)?.toDouble() ?? 0.0,
+      handsOnRatio:     (data['handsOnRatio'] as num?)?.toDouble() ?? 0.0,
       rescuerHRLastPause:   (data['rescuerHRLastPause']   as num?)?.toDouble(),
       rescuerSpO2LastPause: (data['rescuerSpO2LastPause'] as num?)?.toDouble(),
       sessionDuration:  sessionDuration,
@@ -495,6 +498,7 @@ class SessionSummary {
     depthSD:               d.depthSD,
     depthConsistency:      d.depthConsistency,
     frequencyConsistency:  d.frequencyConsistency,
+    handsOnRatio:          d.handsOnRatio,
     ventilationCount:      d.ventilationCount,
     ventilationCompliance: d.ventilationCompliance,
     pulseDetectedFinal:    d.pulseDetectedFinal,
@@ -536,6 +540,7 @@ class SessionSummary {
       depthSD:               (json['depth_sd']                as num?)?.toDouble() ?? 0.0,
       depthConsistency:      (json['depth_consistency']   as num?)?.toDouble() ?? 0.0,
       frequencyConsistency:  (json['freq_consistency']    as num?)?.toDouble() ?? 0.0,
+      handsOnRatio:          (json['hands_on_ratio'] as num?)?.toDouble() ?? 0.0,
       ventilationCount:      (json['ventilation_count']       as num?)?.toInt()    ?? 0,
       ventilationCompliance: (json['ventilation_compliance']  as num?)?.toDouble() ?? 0.0,
       pulseDetectedFinal:     json['pulse_detected_final']    as bool?             ?? false,
@@ -577,6 +582,7 @@ class SessionSummary {
     'depth_sd':               depthSD,
     'depth_consistency':      depthConsistency,
     'freq_consistency':       frequencyConsistency,
+    'hands_on_ratio':         handsOnRatio,
     'ventilation_count':      ventilationCount,
     'ventilation_compliance': ventilationCompliance,
     'pulse_detected_final':   pulseDetectedFinal,

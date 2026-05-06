@@ -153,6 +153,8 @@ class AppConstants {
   /// Set to 3 × larger packet size to absorb one full burst without losing data.
   static const int bleBufferOverflowThreshold = 500;
 
+  static const Duration bleDisconnectDebounce = Duration(milliseconds: 300);
+
   // ═══════════════════════════════════════════════════════
   // BATTERY THRESHOLDS (percentage)
   // ═══════════════════════════════════════════════════════

@@ -234,12 +234,17 @@ class LocationService {
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy:       LocationAccuracy.low,
+        accuracy: LocationAccuracy.low,
         distanceFilter: 5,
       ),
-    ).listen((position) {
-      onLocationUpdate(LatLng(position.latitude, position.longitude));
-    });
+    ).listen(
+          (position) {
+        onLocationUpdate(LatLng(position.latitude, position.longitude));
+      },
+      onError: (Object error) {
+        debugPrint('❌ Phase 1 GPS stream error: $error');
+      },
+    );
 
     _improvementTimer = Timer(AppConstants.locationSettleTime, () {
       if (!hasUpgraded) {

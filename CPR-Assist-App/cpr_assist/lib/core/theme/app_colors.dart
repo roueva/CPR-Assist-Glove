@@ -82,6 +82,16 @@ class AppColors {
   /// Gradient end for emergency header — deeper dark red.
   static const Color emergencyDark = Color(0xFF8B0000);
 
+  // ── MODE COLORS ──────────────────────────────────────────────────────────
+  /// Emergency mode accent — forest green, same visual weight as primary blue.
+  static const Color emergencyMode     = Color(0xFF1B7A3F);
+
+  /// Emergency mode light tint — card backgrounds, badges.
+  static const Color emergencyModeBg   = Color(0xFFE6F4EC);
+
+  /// Emergency mode dark — header gradient end stop.
+  static const Color emergencyModeDark = Color(0xFF145C30);
+
   // ═══════════════════════════════════════════════════════
   // FEEDBACK — dark-surface only (on cprCardBg / blue900)
   //
@@ -144,6 +154,34 @@ class AppColors {
   static const Color pbGoldLight = Color(0xFFFFD700);
   /// Dark brown text on gold — high contrast.
   static const Color pbGoldText  = Color(0xFF3D2000);
+
+// ── Session Trend Banner ─────────────────────────────────────────────────────
+  /// Trend improving — line, dots, accent text.
+  static const Color trendImproving     = Color(0xFF4CD966);   // reuses feedbackGood
+  /// Trend improving — dark badge background (deep green).
+  static const Color trendImprovingDark = Color(0xFF1A6B38);
+  /// Trend improving — pill/callout background.
+  static const Color trendImprovingBg   = Color(0x334CD966);   // 20% feedbackGood
+
+  /// Trend declining — line, dots, accent text.
+  static const Color trendDeclining     = Color(0xFFFF6B6B);   // reuses feedbackBad
+  /// Trend declining — dark badge background (deep red).
+  static const Color trendDecliningDark = Color(0xFF8B2020);
+  /// Trend declining — pill/callout background.
+  static const Color trendDecliningBg   = Color(0x33FF6B6B);   // 20% feedbackBad
+
+  /// Trend neutral/inconsistent — line, dots, accent text.
+  static const Color trendNeutral       = Color(0xFFFFB347);   // reuses feedbackWarn
+  /// Trend neutral — dark badge background (deep amber).
+  static const Color trendNeutralDark   = Color(0xFF7A4800);
+  /// Trend neutral — pill/callout background.
+  static const Color trendNeutralBg     = Color(0x33FFB347);   // 20% feedbackWarn
+
+  // ── Session Compare Slot Colors ──────────────────────────────────────────────
+  /// Compare slot 1 — brand blue (same as primary).
+  static const Color compareSlot2 = Color(0xFFE65100);   // deep orange
+  static const Color compareSlot3 = Color(0xFF00897B);   // teal-green
+  static const Color compareSlot4 = Color(0xFFF9A825);   // amber
 
   // ═══════════════════════════════════════════════════════
   // TEXT HIERARCHY

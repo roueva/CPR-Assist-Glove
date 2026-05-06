@@ -349,6 +349,7 @@ class CacheService {
 
   static Future<void> initializeAllCaches() async {
     await loadDistanceCache();
+    await Future<void>.delayed(Duration.zero); // yield to allow first frame to render
     await loadRouteCacheFromPersistent();
     debugPrint('🚀 All caches initialized');
   }

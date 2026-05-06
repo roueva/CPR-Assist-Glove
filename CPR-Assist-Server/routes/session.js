@@ -281,13 +281,6 @@ module.exports = function (pool) {
                 );
             }
 
-            // ── Ensure unique index exists (idempotent) ────────────────────────
-            // Done here rather than in db.js to ensure it exists even on fresh deploys.
-            await client.query(`
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_user_session_start
-                ON cpr_sessions (user_id, session_start)
-            `);
-
             // ── Upsert the session row ─────────────────────────────────────────
             const upsertResult = await client.query(
                 `INSERT INTO cpr_sessions (

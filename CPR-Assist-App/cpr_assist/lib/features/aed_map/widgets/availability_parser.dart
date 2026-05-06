@@ -86,7 +86,7 @@ class AvailabilityParser {
       final url = Uri.parse('${NetworkService.baseUrl}/aed/availability');
       final response = await http
           .get(url)
-          .timeout(AppConstants.apiTimeout);
+          .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;

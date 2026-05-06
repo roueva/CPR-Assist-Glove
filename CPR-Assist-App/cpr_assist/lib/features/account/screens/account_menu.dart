@@ -352,7 +352,7 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final modeColor = isTraining ? AppColors.warning : AppColors.primary;
+    final modeColor = isTraining ? AppColors.primary : AppColors.emergencyMode;
     final modeLabel = isTraining ? 'Training' : 'Emergency';
 
     return Padding(
@@ -851,14 +851,14 @@ class AccountAvatarButton extends ConsumerWidget {
             width:  AppSpacing.md + AppSpacing.xxs,  // 18px
             height: AppSpacing.md + AppSpacing.xxs,
             decoration: BoxDecoration(
-              color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
+              color: isTraining ? AppColors.primaryLight : AppColors.emergencyModeBg,
               shape:  BoxShape.circle,
               border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
             ),
             child: ModeIcon(
               isTraining: isTraining,
               size:  1,
-              color: isTraining ? AppColors.warning : AppColors.primary,
+              color: isTraining ? AppColors.primary : AppColors.emergencyMode,
             ),
           ),
         ),

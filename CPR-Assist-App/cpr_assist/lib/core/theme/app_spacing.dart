@@ -108,4 +108,7 @@ class AppSpacing {
   static const double vitalsItemHeight = 44.0; // Divider height in VitalsCard
 
   static const double scrollEndPad = 100.0;
+
+  static const double statusBarHeight = 32.0; // Live CPR mode/scenario status bar
+  static const double iconButtonMin   = 32.0; // Minimum size for small icon buttons
 }

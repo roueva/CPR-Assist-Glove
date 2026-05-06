@@ -22,6 +22,11 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"
         tools:targetApi="eclair" />
 
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+
     <application
         android:label="CPR Assist"
         android:icon="@mipmap/ic_launcher"

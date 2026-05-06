@@ -68,8 +68,8 @@ class BLEDataProcessor {
   //
   // Byte layout per spec v3.0 Section 3:
   //   0– 3  float32  depth               cm
-  //   4– 7  float32  frequency           BPM (5-comp rolling avg)
-  //   8–11  float32  force               N (internal)
+//   4– 7  float32  frequency           BPM (instantaneous, last 2 compressions)
+//   8–11  float32  force               N (internal)
   //  12–15  float32  instantaneousRate   BPM (last 2 compressions)
   //  16–19  int32    compressionCount
   //  20–23  int32    compressionInCycle  0–30
@@ -87,7 +87,6 @@ class BLEDataProcessor {
   //  50     uint8    imuCalibrated       0/1
   //  51     uint8    wristDropped        0/1
   //  52–55  float32  valleyDepth         cm
-  //  53–55  uint8[4] reserved
   //  56–59  float32  heartRatePatient    BPM (pulse check only)
   //  60–63  float32  spO2Patient         % (pulse check only)
   //  64–67  float32  ppgRaw              0–1 (pulse check only)
@@ -133,8 +132,8 @@ class BLEDataProcessor {
       final frequency          = b.getFloat32(4,  Endian.little);
       final force              = b.getFloat32(8,  Endian.little);
       final instantaneousRate  = b.getFloat32(12, Endian.little);
-      final compressionCount   = b.getInt32  (16, Endian.little);
-      final compressionInCycle = b.getInt32  (20, Endian.little);
+      final compressionCount   = b.getUint32(16, Endian.little);
+      final compressionInCycle = b.getUint32(20, Endian.little);
 
       // ── POSTURE & ALIGNMENT ───────────────────────────────────────────────
       final wristAlignmentAngle     = b.getFloat32(24, Endian.little);
@@ -313,7 +312,9 @@ class BLEDataProcessor {
       //  90      uint8   pulseDetected
       //  91      uint8   noFlowIntervals
       //  92      uint8   rescuerSwapCount
-      //  93–95   reserved
+      //  93–94   uint16  timeToFirstCompressionMs  (ms, little-endian)
+      //  95      reserved
+
         case kPacketSessionEnd:
           final patTempEnd  = b.getFloat32(66, Endian.little);
           final resTempEnd  = b.getFloat32(70, Endian.little);
@@ -347,6 +348,7 @@ class BLEDataProcessor {
             pulseDetected:       b.getUint8(90),
             noFlowIntervalsEnd:  b.getUint8(91),
             rescuerSwapCountEnd: b.getUint8(92),
+            timeToFirstCompressionMs: b.getUint16(93, Endian.little),
           );
 
       // ── 0x03 VENTILATION_WINDOW ──────────────────────────────────────────
@@ -505,7 +507,7 @@ class ParsedBLEData {
 
   // ── LIVE_STREAM: core compression ────────────────────────────────────────
   final double depth;
-  final double frequency;           // 5-comp rolling avg (for display)
+  final double frequency;           // instantaneous per-compression rate
   final double force;               // Newtons (internal)
   final double instantaneousRate;   // per-compression rate (for grading)
   final int    compressionCount;
@@ -574,6 +576,7 @@ class ParsedBLEData {
   final int?   pulseDetected;       // 1 = pulse present at last check
   final int    noFlowIntervalsEnd;  // count of unplanned pauses > 2 s
   final int    rescuerSwapCountEnd; // TWO_MIN_ALERT events fired
+  final int    timeToFirstCompressionMs; // ms from SESSION_START to first compression peak
   // Rescuer vitals captured at last pause
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
@@ -694,6 +697,7 @@ class ParsedBLEData {
     this.pulseDetected,
     this.noFlowIntervalsEnd    = 0,
     this.rescuerSwapCountEnd   = 0,
+    this.timeToFirstCompressionMs = 0,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
     this.rescuerTemperatureEnd,
@@ -759,6 +763,7 @@ class ParsedBLEData {
     int?   pulseDetected,
     int    noFlowIntervalsEnd    = 0,
     int    rescuerSwapCountEnd   = 0,
+    int timeToFirstCompressionMs = 0,
     double? patientTemperature,
     double? rescuerTemperatureEnd,
     double? rescuerHRLastPause,
@@ -820,6 +825,7 @@ class ParsedBLEData {
     pulseDetected:         pulseDetected,
     noFlowIntervalsEnd:    noFlowIntervalsEnd,
     rescuerSwapCountEnd:   rescuerSwapCountEnd,
+    timeToFirstCompressionMs: timeToFirstCompressionMs,
     patientTemperature:    patientTemperature,
     rescuerTemperatureEnd: rescuerTemperatureEnd,
     rescuerHRLastPause:    rescuerHRLastPause,

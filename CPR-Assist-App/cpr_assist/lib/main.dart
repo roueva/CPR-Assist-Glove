@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:cpr_assist/providers/session_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,8 +44,17 @@ void main() async {
     NetworkService.startConnectivityMonitoring(  // dotenv gone, this stays
       interval: AppConstants.connectivityCheckInterval,
     );
-    unawaited(CustomIcons.loadIcons());
-    unawaited(AEDClusterManager.prewarmIconCache());
+    NetworkService.addConnectivityListener((isConnected) {
+      // Update the connectivity provider so sessionSummariesProvider re-runs
+      container.read(connectivityProvider.notifier).state = isConnected;
+
+      // Also re-check auth when coming back online — token may need refreshing
+      if (isConnected) {
+        container.read(authStateProvider.notifier).checkAuthStatus();
+      }
+    });
+    Future.delayed(const Duration(milliseconds: 500), CustomIcons.loadIcons);
+    Future.delayed(const Duration(seconds: 2), AEDClusterManager.prewarmIconCache);
     unawaited(AvailabilityParser.loadRules());
     unawaited(container.read(authStateProvider.notifier).checkAuthStatus());
 

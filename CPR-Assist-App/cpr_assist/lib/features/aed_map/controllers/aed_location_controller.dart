@@ -86,6 +86,15 @@ class AEDLocationController {
     return DateTime.now().difference(_locationLastUpdated!).inHours >= 5;
   }
 
+  /// Called when a one-shot GPS fix is obtained outside the normal stream
+  /// (e.g. recenter button). Updates internal freshness flags.
+  void markRealGPSFix(LatLng location) {
+    _hasRealGPSFix = true;
+    _isUsingCachedLocation = false;
+    _locationLastUpdated = DateTime.now();
+    cacheUserRegion(location);
+  }
+
   AEDLocationController({
     required LocationService locationService,
     required WidgetRef ref,
@@ -151,10 +160,7 @@ class AEDLocationController {
 
   /// Full location setup after GPS is enabled (permission + cached position + stream).
   Future<void> setupLocationAfterEnable() async {
-    if (_isSettingUpLocation) {
-      debugPrint('⏭️ Location setup already in progress, skipping');
-      return;
-    }
+    if (_isSettingUpLocation) return;
     _isSettingUpLocation = true;
 
     try {
@@ -163,27 +169,6 @@ class AEDLocationController {
       if (!await _locationService.hasPermission) {
         debugPrint('❌ No permission after enable');
         return;
-      }
-
-      final cachedAppState = await CacheService.getLastAppState();
-      if (cachedAppState != null) {
-        final cachedLat = cachedAppState['latitude'] as double?;
-        final cachedLng = cachedAppState['longitude'] as double?;
-
-        if (cachedLat != null && cachedLng != null) {
-          final cachedLocation = LatLng(cachedLat, cachedLng);
-          final timestamp = cachedAppState['timestamp'] as int?;
-
-          if (timestamp != null) {
-            _locationLastUpdated =
-                DateTime.fromMillisecondsSinceEpoch(timestamp);
-            _isUsingCachedLocation = true;
-          }
-
-          debugPrint('📍 [GPS ON] Using cached location: $cachedLocation');
-          await _callbacks.onLocationUpdate(cachedLocation, fromCache: true);
-          await _callbacks.onZoomRequested();
-        }
       }
 
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -249,22 +234,24 @@ class AEDLocationController {
         const Duration(seconds: 30),
         onTimeout: (sink) => sink.close(),
       )
-          .listen(
-            (position) {
-          final location = LatLng(position.latitude, position.longitude);
-          _callbacks.onLocationUpdate(location);
+          .listen((position) async {
+        final location = LatLng(position.latitude, position.longitude);
 
-          _isManuallySearchingGPS = false;
-          _gpsSearchSuccess = true;
+        // Route through the full pipeline so _hasRealGPSFix is set,
+        // the cached-location banner clears, and onFirstRealGPSFix fires if needed.
+        await processLocationUpdate(location, fromCache: false);
+
+        _isManuallySearchingGPS = false;
+        _gpsSearchSuccess = true;
+        onStateChanged();
+
+        Future.delayed(const Duration(seconds: 2), () {
+          _gpsSearchSuccess = false;
           onStateChanged();
+        });
 
-          Future.delayed(const Duration(seconds: 2), () {
-            _gpsSearchSuccess = false;
-            onStateChanged();
-          });
-
-          _manualGPSSubscription?.cancel();
-        },
+        _manualGPSSubscription?.cancel();
+      },
         onError: (error) {
           debugPrint('GPS search error: $error');
           _isManuallySearchingGPS = false;

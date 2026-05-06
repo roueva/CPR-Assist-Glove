@@ -182,98 +182,59 @@ class AEDService {
       ) async {
     if (aeds.isEmpty || apiKey == null || apiKey.isEmpty) return;
 
-    final closestAEDs =
-    aeds.take(AppConstants.maxDistanceCalculations).toList();
-    final aedsWithRoadDistance = <AED, double>{};
-    bool anyUpdated = false;
+    final closestAEDs = aeds.take(AppConstants.maxDistanceCalculations).toList();
+    debugPrint('🔄 Improving distance accuracy for ${closestAEDs.length} AEDs in parallel (mode: $transportMode)');
 
-    debugPrint(
-        '🔄 Improving distance accuracy for ${closestAEDs.length} AEDs (mode: $transportMode)');
-
-    for (final aed in closestAEDs) {
+    // Fetch all routes in parallel.
+    await Future.wait(closestAEDs.map((aed) async {
       try {
         final cacheKey = _getDistanceCacheKey(aed.id, transportMode);
 
-        final cachedRoute =
-        CacheService.getCachedRoute(userLocation, aed.location, transportMode);
+        // 1. Check in-memory route cache first.
+        final cachedRoute = CacheService.getCachedRoute(userLocation, aed.location, transportMode);
         if (cachedRoute != null && cachedRoute.actualDistance != null) {
-          aedsWithRoadDistance[aed] = cachedRoute.actualDistance!;
           CacheService.setDistance(cacheKey, cachedRoute.actualDistance!, isRoad: true);
-          continue;
+          debugPrint('✅ Road distance from route cache for AED ${aed.id}');
+          return;
         }
 
-        final cachedDistance = CacheService.getDistance(cacheKey);
+        // 2. Check distance-only cache (road-flagged).
+        if (CacheService.isRoadDistance(cacheKey) && CacheService.getDistance(cacheKey) != null) {
+          debugPrint('✅ Road distance from distance cache for AED ${aed.id}');
+          return;
+        }
 
-        if (cachedDistance != null) {
-          aedsWithRoadDistance[aed] = cachedDistance;
-          anyUpdated = true;
+        // 3. Fetch from Directions API.
+        final routeService = RouteService(apiKey);
+        final routeResult = await routeService.fetchRoute(userLocation, aed.location, transportMode);
+
+        if (routeResult?.actualDistance != null) {
+          CacheService.setCachedRoute(userLocation, aed.location, transportMode, routeResult!);
+          CacheService.setDistance(cacheKey, routeResult.actualDistance!, isRoad: true);
+          debugPrint('✅ Fetched & cached road distance for AED ${aed.id}: ${routeResult.distanceText}');
         } else {
-          final routeService = RouteService(apiKey);
-          final routeResult = await routeService.fetchRoute(
-              userLocation, aed.location, transportMode);
-
-          if (routeResult?.actualDistance != null) {
-            CacheService.setCachedRoute(
-                userLocation, aed.location, transportMode, routeResult!);
-            CacheService.setDistance(cacheKey, routeResult.actualDistance!);
-            aedsWithRoadDistance[aed] = routeResult.actualDistance!;
-            anyUpdated = true;
-            debugPrint(
-                '✅ Cached route & distance for AED ${aed.id}: ${routeResult.distanceText}');
-            await Future.delayed(AppConstants.apiCallDelay);
-          } else {
-            final straightDistance =
-            LocationService.distanceBetween(userLocation, aed.location);
-            final adjustedDistance =
-                straightDistance * getTransportModeMultiplier(transportMode);
-            aedsWithRoadDistance[aed] = adjustedDistance;
-            CacheService.setDistance(cacheKey, adjustedDistance);
-          }
+          // API failed — fall back to straight-line estimate.
+          final straightDistance = LocationService.distanceBetween(userLocation, aed.location);
+          final adjustedDistance = straightDistance * getTransportModeMultiplier(transportMode);
+          CacheService.setDistance(cacheKey, adjustedDistance);
+          debugPrint('⚠️ API failed for AED ${aed.id}, using straight-line estimate');
         }
       } catch (e) {
         debugPrint('❌ Error improving distance for AED ${aed.id}: $e');
         final cacheKey = _getDistanceCacheKey(aed.id, transportMode);
-        final straightDistance =
-        LocationService.distanceBetween(userLocation, aed.location);
-        final adjustedDistance =
-            straightDistance * getTransportModeMultiplier(transportMode);
-        aedsWithRoadDistance[aed] = adjustedDistance;
-        CacheService.setDistance(cacheKey, adjustedDistance);
+        final straightDistance = LocationService.distanceBetween(userLocation, aed.location);
+        CacheService.setDistance(cacheKey, straightDistance * getTransportModeMultiplier(transportMode));
       }
-    }
+    }));
 
-    if (anyUpdated) {
-      await CacheService.saveDistanceCache();
-
-      final roadSorted = aedsWithRoadDistance.entries.toList()
-        ..sort((a, b) => a.value.compareTo(b.value));
-
-      final roadSortedIds = roadSorted.map((e) => e.key.id).toSet();
-      final remaining = aeds
-          .where((a) => !roadSortedIds.contains(a.id))
-          .toList()
-        ..sort((a, b) {
-          final distA = CacheService.getDistance(
-              _getDistanceCacheKey(a.id, transportMode)) ??
-              (LocationService.distanceBetween(userLocation, a.location) *
-                  getTransportModeMultiplier(transportMode));
-          final distB = CacheService.getDistance(
-              _getDistanceCacheKey(b.id, transportMode)) ??
-              (LocationService.distanceBetween(userLocation, b.location) *
-                  getTransportModeMultiplier(transportMode));
-          return distA.compareTo(distB);
-        });
-
-      final newOrder = [
-        ...roadSorted.map((e) => e.key.copyWithDistance(e.value)),
-        ...remaining,
-      ];
-
-      onUpdated(newOrder);
-      debugPrint(
-          '🔄 Resorted AEDs by actual road distance (${roadSorted.length} accurate + ${remaining.length} estimated)');
-    }
+    // All distances are now in cache. Re-sort the full list using sortAEDsByDistance
+    // so the open-AED promotion is applied correctly on top of road distances.
+    await CacheService.saveDistanceCache();
+    final resorted = sortAEDsByDistance(aeds, userLocation, transportMode);
+    onUpdated(resorted);
+    debugPrint('🔄 Final re-sort complete after road distance fetch');
   }
+
 
   bool haveAEDsChanged(List<AED> oldList, List<AED> newList) {
     if (oldList.length != newList.length) return true;

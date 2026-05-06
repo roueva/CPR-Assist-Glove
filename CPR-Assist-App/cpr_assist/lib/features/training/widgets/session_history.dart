@@ -10,6 +10,7 @@ import '../screens/session_service.dart';
 import '../services/export_service.dart';
 import 'export_bottom_sheet.dart';
 import 'session_results.dart';
+import 'session_compare_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // session_history.dart
@@ -106,23 +107,10 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
         .where((s) => s.id != null && _selectedIds.contains(s.id.toString()))
         .toList();
     if (selected.isEmpty) return;
-
-    UIHelper.showSnackbar(context,
-        message: 'Preparing export…', icon: Icons.download_outlined);
-
-    bool ok = false;
-    try {
-      ok = await ExportService.exportSessionsAsCsv(selected);
-    } catch (_) {}
-
-    if (!mounted) return;
-    if (ok) {
-      UIHelper.showSuccess(context, 'Export ready');
-    } else {
-      UIHelper.showError(context, 'Export failed. Please try again.');
-    }
     _clearSelection();
+    await ExportBottomSheet.showForMultipleSessions(context, sessions: selected);
   }
+
 
   Future<void> _deleteSelected(BuildContext context) async {
     final confirmed = await AppDialogs.showDestructiveConfirm(
@@ -142,6 +130,32 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
       await service.deleteSession(int.parse(id));
     }
     ref.invalidate(sessionSummariesProvider);
+    _clearSelection();
+  }
+
+  void _compareSelected() {
+    final all      = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+    final selected = all
+        .where((s) => s.id != null && _selectedIds.contains(s.id.toString()))
+        .toList();
+    if (selected.length < 2) return;
+
+    // All sessions must share the same mode and scenario
+    final firstMode     = selected.first.mode;
+    final firstScenario = selected.first.scenario;
+    final mismatch = selected.any(
+          (s) => s.mode != firstMode || s.scenario != firstScenario,
+    );
+    if (mismatch) {
+      UIHelper.showSnackbar(
+        context,
+        message: 'Sessions must be the same mode and scenario to compare.',
+        icon: Icons.warning_amber_rounded,
+      );
+      return;
+    }
+
+    context.push(SessionCompareScreen(sessions: selected));
     _clearSelection();
   }
 
@@ -175,6 +189,12 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
                   _selectAll(all);
                 },
               ),
+              if (_selectedIds.length >= 2 && _selectedIds.length <= 4)
+                IconButton(
+                  icon:    const Icon(Icons.compare_arrows_rounded, color: AppColors.textOnDark),
+                  tooltip: 'Compare sessions',
+                  onPressed: _compareSelected,
+                ),
               IconButton(
                 icon:    const Icon(Icons.download_outlined, color: AppColors.textOnDark),
                 tooltip: 'Export selected',
@@ -221,12 +241,27 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
           message: e.toString(),
           onRetry: () => ref.invalidate(sessionSummariesProvider),
         ),
-          data: (all) {
-            if (all.isEmpty) {
-              final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
-              return _EmptyState(isLoggedIn: isLoggedIn);
-            }
-            return _SessionsList(
+        data: (all) {
+          if (all.isEmpty) {
+            final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
+            return RefreshIndicator(
+              onRefresh: () async => ref.invalidate(sessionSummariesProvider),
+              color: AppColors.primary,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: context.screenHeight * 0.7,
+                    child: _EmptyState(
+                      isLoggedIn: isLoggedIn,
+                      onRefresh: () => ref.invalidate(sessionSummariesProvider),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return _SessionsList(
               all:           all,
               filtered:      _apply(all),
               filter:        _filter,
@@ -236,6 +271,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
               selectedIds:   _selectedIds,
               onLongPress:   _enterSelectionMode,
               onToggle:      _toggleSelection,
+              onRefresh: () => ref.invalidate(sessionSummariesProvider),
             );
           },
       ),
@@ -251,7 +287,7 @@ class _SessionsList extends StatelessWidget {
   final String                  filter;
   final List<String>            filters;
   final void Function(String)   onFilter;
-  // ADD these:
+  final VoidCallback onRefresh;
   final bool                    selectionMode;
   final Set<String>             selectedIds;
   final void Function(String)   onLongPress;
@@ -267,6 +303,7 @@ class _SessionsList extends StatelessWidget {
     required this.selectedIds,
     required this.onLongPress,
     required this.onToggle,
+    required this.onRefresh,
   });
 
   @override
@@ -276,9 +313,12 @@ class _SessionsList extends StatelessWidget {
         _EvictionWarningBanner(sessionCount: all.length),
         _StatsHeader(sessions: all),
         _FilterBar(filters: filters, selected: filter, onSelect: onFilter),
-        Expanded(
-          child: ListView.builder(
-            padding:   const EdgeInsets.all(AppSpacing.md),
+    Expanded(
+    child: RefreshIndicator(
+      onRefresh: () async => onRefresh(),
+      color: AppColors.primary,
+    child: ListView.builder(
+    padding:   const EdgeInsets.all(AppSpacing.md),
             itemCount: filtered.length,
             itemBuilder: (context, i) {
               final session   = filtered[i];
@@ -298,62 +338,16 @@ class _SessionsList extends StatelessWidget {
                 selectionMode: selectionMode,
                 isSelected:    isSelected,
                 onLongPress:   session.id != null
-                    ? () => _showContextMenu(
-                  context,
-                  session:       session,
-                  sessionNumber: sessionNumber,
-                  onSelect:      () => onLongPress(idStr),
-                )
+                    ? () => onLongPress(idStr)
                     : null,
                 onToggle:      session.id != null
                     ? () => onToggle(idStr)
                     : null,
               );
-
-              // Don't wrap in Dismissible during selection mode
-              if (selectionMode || session.id == null) return card;
-
-              return Dismissible(
-                key:       ValueKey(session.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding:   const EdgeInsets.only(right: AppSpacing.lg),
-                    margin:    const EdgeInsets.only(bottom: AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color:        AppColors.errorBg,
-                      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-                    ),
-                    child: const Icon(Icons.delete_outline_rounded,
-                        color: AppColors.emergency, size: AppSpacing.iconMd),
-                  ),
-                  confirmDismiss: (_) => AppDialogs.showDestructiveConfirm(
-                    context,
-                    icon:         Icons.delete_outline_rounded,
-                    iconColor:    AppColors.emergency,
-                    iconBg:       AppColors.errorBg,
-                    title:        'Delete Session?',
-                    message:      'This permanently deletes this session.',
-                    confirmLabel: 'Delete',
-                    confirmColor: AppColors.emergency,
-                    cancelLabel:  'Cancel',
-                  ),
-                  onDismissed: (_) async {
-                    final c       = ProviderScope.containerOf(context);
-                    final service = c.read(sessionServiceProvider);
-                    final ok = await service.deleteSession(session.id!);
-                    if (ok) {
-                      c.invalidate(sessionSummariesProvider);
-                    } else {
-                      if (context.mounted) {
-                        UIHelper.showError(context, 'Failed to delete. Check your connection.');
-                      }
-                    }
-                  },
-                  child: card,
-                );
-              },
+              return card;
+            },
           ),
+    ),
         ),
       ],
     );
@@ -578,7 +572,8 @@ class _FilterBar extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final bool isLoggedIn;
-  const _EmptyState({required this.isLoggedIn});
+  final VoidCallback onRefresh;   // ← add this
+  const _EmptyState({required this.isLoggedIn, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -646,6 +641,14 @@ class _EmptyState extends StatelessWidget {
               'Complete your first training or emergency session\nto see your performance data here.',
               textAlign: TextAlign.center,
               style: AppTypography.body(color: AppColors.textDisabled),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded,
+                  size: AppSpacing.iconSm, color: AppColors.primary),
+              label: Text('Refresh',
+                  style: AppTypography.label(color: AppColors.primary)),
             ),
           ],
         ),
@@ -731,38 +734,20 @@ class SessionCard extends ConsumerWidget {
       duration: const Duration(milliseconds: 150),
       margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: isSelected
-          ? AppDecorations.card().copyWith(
+          ? AppDecorations.card(shadowOpacity: 0.10).copyWith(
         border: Border.all(color: AppColors.primary, width: 2),
       )
-          : AppDecorations.card(),
+          : AppDecorations.card(shadowOpacity: 0.10),
       child: Material(
         color:        AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           onLongPress: onLongPress,
-          onTap: selectionMode
-              ? onToggle   // in selection mode, tap toggles
-              : () async {
-            if (session.id == null) {
-              context.push(SessionResultsScreen.fromSummary(
-                  summary: session, sessionNumber: sessionNumber));
-              return;
-            }
-            // Show loading, then fetch full detail for graph
-            final service = ProviderScope.containerOf(context).read(sessionServiceProvider);
-            try {
-              final detail = await service.fetchDetail(session.id!);
-              if (context.mounted) {
-                context.push(SessionResultsScreen.fromDetail(detail: detail));
-              }
-            } catch (_) {
-              if (context.mounted) {
-                context.push(SessionResultsScreen.fromSummary(
-                    summary: session, sessionNumber: sessionNumber));
-              }
-            }
-          },
+            onTap: selectionMode
+                ? onToggle
+                : () => context.push(SessionResultsScreen.fromSummary(
+                summary: session, sessionNumber: sessionNumber)),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
@@ -797,13 +782,10 @@ class SessionCard extends ConsumerWidget {
                         vertical:   AppSpacing.chipPaddingV,
                       ),
                       decoration: AppDecorations.chip(
-                        color: AppColors.emergency,
-                        bg:    AppColors.errorBg,
+                        color: AppColors.emergencyMode,
+                        bg:    AppColors.emergencyModeBg,
                       ),
-                      child: Text(
-                        'EMERGENCY',
-                        style: AppTypography.label(color: AppColors.emergency),
-                      ),
+                      child: Text('EMERGENCY', style: AppTypography.label(color: AppColors.emergencyMode)),
                     )
                         : Row(
                       mainAxisSize: MainAxisSize.min,

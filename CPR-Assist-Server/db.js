@@ -335,6 +335,9 @@ END $$`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS fatigue_score INT   DEFAULT 0`,
             // valley_depth — added for depth+recoil chart (v3.1)
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_depth REAL DEFAULT 0`,
+            // Unique index required for ON CONFLICT upsert in POST /sessions/detail
+            `CREATE UNIQUE INDEX IF NOT EXISTS uq_user_session_start
+             ON cpr_sessions (user_id, session_start)`,
         ];
 
         for (const sql of migrations) {

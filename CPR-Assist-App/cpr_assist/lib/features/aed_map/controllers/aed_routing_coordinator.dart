@@ -911,6 +911,11 @@ class AEDRoutingCoordinator {
     }
   }
 
+  void clearPreloadedRoutes() {
+    preloadedRoutes.clear();
+    debugPrint('🗑️ Preloaded routes cleared (recenter)');
+  }
+
   void scheduleRoutePreloading() {
     final currentState = _ref.read(mapStateProvider);
     if (currentState.userLocation != null &&

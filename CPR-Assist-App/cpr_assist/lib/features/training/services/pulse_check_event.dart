@@ -45,7 +45,16 @@ class PulseCheckEvent {
   /// "continue" or "stop_cpr" — set by the user's button tap.
   final String? userDecision;
 
-  const PulseCheckEvent({
+  /// PPG waveform samples captured during this pulse check window.
+  /// Normalised 0.0–1.0, sampled at ~10 Hz from fingertip MAX30102 ppgRaw.
+  /// Empty if session was loaded from storage without waveform data.
+  final List<double> ppgSamples;
+
+  /// Best patient SpO₂ reading during this pulse check window (%).
+  /// 0.0 if not available.
+  final double patientSpO2;
+
+  PulseCheckEvent({
     required this.timestampMs,
     required this.intervalNumber,
     this.classification  = 0,
@@ -55,6 +64,8 @@ class PulseCheckEvent {
     this.confidence      = 0,
     this.perfusionIndex  = 0,
     this.userDecision,
+    this.ppgSamples = const [],
+    this.patientSpO2 = 0.0,
   });
 
   double get timestampSec => timestampMs / 1000.0;
@@ -72,6 +83,9 @@ class PulseCheckEvent {
       confidence:     (json['confidence']       as num?)?.toInt()    ?? 0,
       perfusionIndex: (json['perfusion_index']  as num?)?.toInt()    ?? 0,
       userDecision:    json['user_decision']    as String?,
+      patientSpO2: (json['patient_spo2'] as num?)?.toDouble() ?? 0.0,
+      ppgSamples: (json['ppg_samples'] as List<dynamic>?)
+          ?.map((v) => (v as num).toDouble()).toList() ?? const [],
     );
   }
 
@@ -86,5 +100,7 @@ class PulseCheckEvent {
     'detector_a_count': detectorACount,
     'detector_b_count': detectorBCount,
     if (userDecision != null) 'user_decision': userDecision,
+    if (patientSpO2 > 0) 'patient_spo2': patientSpO2,
+    if (ppgSamples.isNotEmpty) 'ppg_samples': ppgSamples,
   };
 }

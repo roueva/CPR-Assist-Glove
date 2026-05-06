@@ -63,7 +63,7 @@ List<VentilationEvent> _mockVentilations({int count = 4}) =>
 // ── Mock pulse check events ───────────────────────────────────────────────
 
 List<PulseCheckEvent> _mockPulseChecks({bool pulseDetected = false}) => [
-  const PulseCheckEvent(
+   PulseCheckEvent(
     timestampMs:    120000,
     intervalNumber: 1,
     classification: 0,   // ABSENT
@@ -80,8 +80,42 @@ List<PulseCheckEvent> _mockPulseChecks({bool pulseDetected = false}) => [
     confidence:     pulseDetected ? 85 : 38,
     perfusionIndex: pulseDetected ? 42 : 12,
     userDecision:   pulseDetected ? 'stop_cpr' : 'continue',
+    ppgSamples:     _mockPpgSamples(detected: pulseDetected),
   ),
 ];
+
+// ── Mock PPG waveform samples (realistic pulse waveform, 0.0–1.0 normalised) ─
+
+List<double> _mockPpgSamples({bool detected = true, int cycles = 5}) {
+  final samples = <double>[];
+  const samplesPerCycle = 20;
+  for (int c = 0; c < cycles; c++) {
+    for (int i = 0; i < samplesPerCycle; i++) {
+      final t = i / samplesPerCycle;
+      double v;
+      if (!detected) {
+        // Flat noisy baseline — no pulse
+        v = 0.05 + (math.sin(t * 80 + c) * 0.03);
+      } else {
+        // PPG: rapid systolic upstroke, dicrotic notch, diastolic decay
+        if (t < 0.18) {
+          v = t / 0.18; // upstroke
+        } else if (t < 0.28) {
+          v = 1.0 - ((t - 0.18) / 0.10) * 0.35; // systolic peak decay
+        } else if (t < 0.38) {
+          v = 0.65 + math.sin((t - 0.28) / 0.10 * math.pi) * 0.10; // dicrotic notch
+        } else {
+          v = 0.55 * math.exp(-(t - 0.38) * 4.0); // diastolic runoff
+        }
+        // Add tiny noise
+        v += (math.sin(t * 300 + c * 7.3) * 0.015);
+        v = v.clamp(0.0, 1.0);
+      }
+      samples.add(v);
+    }
+  }
+  return samples;
+}
 
 // ── Mock rescuer vitals ───────────────────────────────────────────────────
 
@@ -385,6 +419,130 @@ SessionDetail _mockEmergencyPediatric() => SessionDetail(
   compressions:          _mockCompressionsPediatric(),
   ventilations:          _mockVentilations(count: 3),
   pulseChecks: _mockPulseChecks(pulseDetected: false),
+  rescuerVitals:         _mockRescuerVitals(),
+  syncedToBackend:       true,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMERGENCY — NO PULSE CHECK (noCheck state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockEmergencyNoCheck() => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(hours: 1)),
+  mode:                  'emergency',
+  scenario:              'standard_adult',
+  compressionCount:      120,
+  correctDepth:          100,
+  correctFrequency:      108,
+  correctRecoil:         95,
+  depthRateCombo:        88,
+  correctPosture:        105,
+  leaningCount:          3,
+  overForceCount:        1,
+  tooDeepCount:          2,
+  correctVentilations:   5,
+  averageDepth:          5.3,
+  averageFrequency:      111.0,
+  averageEffectiveDepth: 5.1,
+  peakDepth:             6.2,
+  depthSD:               0.30,
+  depthConsistency:      83.3,
+  frequencyConsistency:  90.0,
+  handsOnRatio:          0.84,
+  noFlowTime:            5.1,
+  noFlowIntervals:       3,
+  rateVariability:       80.0,
+  timeToFirstCompression: 3.8,
+  consecutiveGoodPeak:   12,
+  fatigueOnsetIndex:     0,
+  rescuerSwapCount:      1,
+  ventilationCount:      4,
+  ventilationCompliance: 75.0,
+  pulseChecksPrompted:   0,
+  pulseChecksComplied:   0,
+  pulseDetectedFinal:    false,
+  patientTemperature:    35.5,
+  rescuerHRLastPause:    110.0,
+  rescuerSpO2LastPause:  96.0,
+  ambientTempStart:      21.0,
+  ambientTempEnd:        21.8,
+  sessionDuration:       190,
+  totalGrade:            0,
+  compressions:          _mockCompressionsAdult(count: 80),
+  ventilations:          _mockVentilations(count: 4),
+  pulseChecks:           [],   // ← no checks performed
+  rescuerVitals:         _mockRescuerVitals(),
+  syncedToBackend:       false,
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMERGENCY — UNCERTAIN PULSE (weak signal state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+SessionDetail _mockEmergencyUncertain() => SessionDetail(
+  sessionStart:          DateTime.now().subtract(const Duration(hours: 3)),
+  mode:                  'emergency',
+  scenario:              'standard_adult',
+  compressionCount:      155,
+  correctDepth:          130,
+  correctFrequency:      142,
+  correctRecoil:         120,
+  depthRateCombo:        115,
+  correctPosture:        140,
+  leaningCount:          4,
+  overForceCount:        2,
+  tooDeepCount:          3,
+  correctVentilations:   8,
+  averageDepth:          5.4,
+  averageFrequency:      112.0,
+  averageEffectiveDepth: 5.2,
+  peakDepth:             6.7,
+  depthSD:               0.34,
+  depthConsistency:      83.9,
+  frequencyConsistency:  91.6,
+  handsOnRatio:          0.86,
+  noFlowTime:            6.2,
+  noFlowIntervals:       3,
+  rateVariability:       85.0,
+  timeToFirstCompression: 3.2,
+  consecutiveGoodPeak:   16,
+  fatigueOnsetIndex:     110,
+  rescuerSwapCount:      1,
+  ventilationCount:      5,
+  ventilationCompliance: 80.0,
+  pulseChecksPrompted:   2,
+  pulseChecksComplied:   2,
+  pulseDetectedFinal:    false,
+  patientTemperature:    35.6,
+  rescuerHRLastPause:    114.0,
+  rescuerSpO2LastPause:  95.0,
+  ambientTempStart:      20.5,
+  ambientTempEnd:        21.2,
+  sessionDuration:       218,
+  totalGrade:            0,
+  compressions:          _mockCompressionsAdult(count: 100),
+  ventilations:          _mockVentilations(count: 5),
+  pulseChecks: [
+    PulseCheckEvent(
+      timestampMs:    120000,
+      intervalNumber: 1,
+      classification: 0,   // ABSENT
+      detectedBpm:    0.0,
+      confidence:     65,
+      perfusionIndex: 15,
+      userDecision:   'continue',
+    ),
+    PulseCheckEvent(
+      timestampMs:    240000,
+      intervalNumber: 2,
+      classification: 1,   // UNCERTAIN
+      detectedBpm:    0.0,
+      confidence:     31,
+      perfusionIndex: 10,
+      userDecision:   'continue',
+      ppgSamples:     _mockPpgSamples(detected: false),
+    ),
+  ],
   rescuerVitals:         _mockRescuerVitals(),
   syncedToBackend:       true,
 );
@@ -733,6 +891,46 @@ class DevPreviewScreen extends StatelessWidget {
               onTap: () => context.push(SessionResultsScreen.fromSummary(
                 summary:       _mockSummaryEmergency(),
                 sessionNumber: 3,
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.monitor_heart_rounded,
+              iconColor: AppColors.success,
+              label:     'Emergency — Pulse Detected + Real PPG Wave',
+              subtitle:  'Detected 64 bpm · ppgSamples populated · with waveform',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyAdult(pulseDetected: true),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.heart_broken_rounded,
+              iconColor: AppColors.warning,
+              label:     'Emergency — No Pulse (no waveform shown)',
+              subtitle:  'No detection · waveform section hidden',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyAdult(pulseDetected: false),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.help_outline_rounded,
+              iconColor: AppColors.warning,
+              label:     'Emergency — No Pulse Check Performed',
+              subtitle:  'Empty pulseChecks list · noCheck state',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyNoCheck(),
+              )),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.sensors_rounded,
+              iconColor: AppColors.feedbackWarn,
+              label:     'Emergency — Uncertain / Weak Signal',
+              subtitle:  'classification=1 · uncertain state',
+              onTap: () => context.push(SessionResultsScreen.fromDetail(
+                detail: _mockEmergencyUncertain(),
               )),
             ),
           ]),

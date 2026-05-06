@@ -172,9 +172,14 @@ class _AEDMapDisplayState extends State<AEDMapDisplay>
         widget.config.userLocation!,
         oldWidget.config.userLocation!,
       );
-      if (moved > AppConstants.cacheInvalidationDistance) {
+      // Clear on ANY movement so card distances always reflect the current position.
+      if (moved > 0) {
         setState(() => _distanceCache.clear());
       }
+    } else if (widget.config.userLocation != null &&
+        oldWidget.config.userLocation == null) {
+      // Location just became available.
+      setState(() => _distanceCache.clear());
     }
   }
 

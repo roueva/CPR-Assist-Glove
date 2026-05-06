@@ -323,6 +323,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       : super(const AuthState(isLoggedIn: false));
 
   Future<void> checkAuthStatus() async {
+    final token = await _network.getToken();
+    if (token == null) {
+      // No token stored — definitely not logged in, no need to hit network
+      state = const AuthState(isLoggedIn: false);
+      return;
+    }
     state = state.copyWith(isLoading: true);
     final authenticated = await _network.ensureAuthenticated();
     state = state.copyWith(
@@ -334,7 +340,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isLoading:  false,
     );
   }
-  
+
+
   Future<void> login(String token, int userId, String username) async {
     state = state.copyWith(isLoading: true);
     await _network.saveToken(token);

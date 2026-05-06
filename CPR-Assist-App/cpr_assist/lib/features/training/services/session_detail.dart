@@ -80,6 +80,13 @@ class SessionDetail {
   final int  pulseChecksComplied;
   final bool pulseDetectedFinal;
 
+  /// Best patient SpO₂ from any pulse check window. Null if never captured.
+  double? get patientSpO2LastCheck {
+    final checks = pulseChecks.where((p) => p.patientSpO2 > 0);
+    if (checks.isEmpty) return null;
+    return checks.map((p) => p.patientSpO2).reduce((a, b) => a > b ? a : b);
+  }
+
   // ── Patient biometrics ────────────────────────────────────────────────────
   final double? patientTemperature;
 
@@ -282,7 +289,10 @@ class SessionDetail {
       frequencyConsistency = inFreq  / n * 100;
 
       // Time to first compression
-      timeToFirst = events.first.timestampSec;
+      final firmwareTTF = summaryPacket['timeToFirstCompressionMs'] as int? ?? 0;
+      timeToFirst = firmwareTTF > 0
+          ? firmwareTTF / 1000.0
+          : (events.isNotEmpty ? events.first.timestampSec : 0.0);
 
       // No-flow time + interval count (gaps > 2 s between consecutive compressions)
       const noFlowThreshold = 2.0;

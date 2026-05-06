@@ -13,15 +13,16 @@ class AppDecorations {
   static BoxDecoration card({
     Color color = AppColors.white,
     double radius = AppSpacing.cardRadius,
+    double shadowOpacity = 0.05,  // ← add this
   }) =>
       BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadowDefault,
+            color: Color.fromRGBO(0, 0, 0, shadowOpacity),
             blurRadius: 10,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       );
@@ -34,6 +35,36 @@ class AppDecorations {
         color: AppColors.screenBgGrey,
         borderRadius: BorderRadius.circular(radius),
       );
+
+
+  /// Bordered info box — used inside dialogs for reference tables and explanatory blocks.
+  static BoxDecoration infoBox({
+    double radius = AppSpacing.cardRadiusMd,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border:       Border.all(color: AppColors.divider),
+      );
+
+  /// Grey info box — subdued background block inside dialogs (no border).
+  static BoxDecoration greyInfoBox({
+    double radius = AppSpacing.cardRadiusMd,
+  }) =>
+      BoxDecoration(
+        color:        AppColors.screenBgGrey,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+
+  /// Chart plot area — rounded top corners only, screenBgGrey fill.
+  static BoxDecoration chartArea() => BoxDecoration(
+    color: AppColors.screenBgGrey.withValues(alpha: 0.5),
+    borderRadius: const BorderRadius.only(
+      topLeft:     Radius.circular(AppSpacing.cardRadiusMd),
+      topRight:    Radius.circular(AppSpacing.cardRadiusMd),
+    ),
+  );
 
   /// Inline success banner — soft green background, no border.
   static BoxDecoration successBanner() => BoxDecoration(
@@ -438,14 +469,15 @@ class AppDecorations {
 
   /// Corner mode badge on the account avatar button.
   static BoxDecoration avatarModeBadge({required bool isTraining}) => BoxDecoration(
-    color:  isTraining ? AppColors.warningBg : AppColors.primaryLight,
+    color:  isTraining ? AppColors.primaryLight : AppColors.emergencyModeBg,
     shape:  BoxShape.circle,
     border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
   );
-  /// Emergency red gradient — used in EmergencyHeader.
+
+  /// Emergency mode green gradient — used in EmergencyHeader.
   static BoxDecoration emergencyGradient() => const BoxDecoration(
     gradient: LinearGradient(
-      colors: [AppColors.emergency, AppColors.emergencyDark],
+      colors: [AppColors.emergencyMode, AppColors.emergencyModeDark],
       begin:  Alignment.topLeft,
       end:    Alignment.bottomRight,
     ),
@@ -471,5 +503,29 @@ class AppDecorations {
   }) => BoxDecoration(
     color: AppColors.cprCardBg,
     borderRadius: BorderRadius.circular(radius),
+  );
+  /// Legend card with a colored top accent bar — used in session compare screen.
+  static BoxDecoration legendCard({required Color topColor}) => BoxDecoration(
+    color: AppColors.white,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    boxShadow: const [
+      BoxShadow(
+        color: AppColors.shadowDefault,
+        blurRadius: 10,
+        offset: Offset(0, 2),
+      ),
+    ],
+  );
+
+  /// Highlighted best-value cell — used in metrics comparison rows.
+  static BoxDecoration bestValueHighlight() => BoxDecoration(
+    color: AppColors.primaryLight,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+  );
+
+  /// Pill badge — dynamically colored background, fully rounded.
+  static BoxDecoration trendPill(Color bg) => BoxDecoration(
+    color: bg,
+    borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
   );
 }

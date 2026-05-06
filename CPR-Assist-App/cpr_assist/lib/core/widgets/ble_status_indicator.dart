@@ -79,7 +79,6 @@ class BLEStatusIndicator extends StatefulWidget {
 class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   StreamSubscription<BluetoothAdapterState>? _adapterStateSub;
   bool _wasConnected = false;
-  bool _startupGracePeriodDone = false;
 
   @override
   void initState() {
@@ -87,10 +86,6 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
     widget.connectionStatusNotifier.addListener(_rebuild);
     _adapterStateSub = widget.bleConnection.adapterStateStream
         .listen(_onAdapterState);
-    // Don't react to adapter state for the first 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _startupGracePeriodDone = true);
-    });
   }
 
   @override
@@ -124,12 +119,6 @@ class _BLEStatusIndicatorState extends State<BLEStatusIndicator> {
   void _onAdapterState(BluetoothAdapterState state) {
     if (!mounted) return;
     setState(() {});
-    if (!_startupGracePeriodDone) return; // ignore all state during startup
-    if (state == BluetoothAdapterState.off) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _enableBluetooth();
-      });
-    }
   }
 
   // ── Icon ─────────────────────────────────────────────────────────────────

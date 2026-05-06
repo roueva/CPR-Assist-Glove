@@ -104,7 +104,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       ref.read(bleConnectionProvider).connectionStatusNotifier.addListener(_onBleStatusChange);
     });
 
-    liveCprTabActivationNotifier.addListener(_onTabActivated);
+    liveCprTabActivationNotifier.removeListener(_onTabActivated);
 
     // Warn user if old sessions are silently evicted
     SessionLocalStorage.onEviction = (count) {
@@ -128,11 +128,17 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   }
 
   void _onTabActivated() {
-    debugPrint('🔵 Live CPR tab activated — checking BT');
+    // Only auto-prompt for Bluetooth if the user has already granted
+    // BLE permissions in a previous session. First-time permission
+    // is handled by the BLE icon tap in the header.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _promptBluetoothIfNeeded();
+      if (!mounted) return;
+      final ble = ref.read(bleConnectionProvider);
+      if (ble.connectionStatusNotifier.value == 'Ready') return; // never granted yet
+      _promptBluetoothIfNeeded();
     });
   }
+
 
   Future<void> _promptBluetoothIfNeeded() async {
     debugPrint('🔵 _promptBluetoothIfNeeded called');
@@ -954,8 +960,8 @@ class _StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isEmergency  = mode.isEmergency;
     final isNoFeedback = mode.isNoFeedback;
-    final modeColor    = isEmergency ? AppColors.primary : AppColors.warning;
-    final modeBg       = isEmergency ? AppColors.primaryLight : AppColors.warningBg;
+    final modeColor = isEmergency ? AppColors.emergencyMode : AppColors.primary;
+    const modeBg    =  AppColors.primaryLight;
     final modeLabel    = isEmergency ? 'Emergency' : 'Training';
     final scenarioColor = scenario == CprScenario.pediatric
         ? AppColors.pediatric
@@ -963,7 +969,7 @@ class _StatusBar extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      height: 32.0,   // or use AppSpacing — add statusBarHeight = 32.0 to AppSpacing
+      height: AppSpacing.statusBarHeight,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       color: modeBg,
       child: Row(

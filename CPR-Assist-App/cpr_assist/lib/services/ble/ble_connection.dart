@@ -66,6 +66,9 @@ class BLEConnection {
   bool   _pulseCheckOpen     = false;
   int _connectTimestampMs = 0;
 
+  final List<double> _ppgBuffer = [];   // accumulates ppgRaw during pulse check window
+  double _bestPatientSpO2 = 0.0;        // best spO2Patient reading during pulse check
+
   // ── Rescuer vital sampling state ──────────────────────────────────────────
   int _lastVitalSnapshotMs = 0;
   static const int _vitalSnapshotIntervalMs = 5000; // sample every 5 s
@@ -507,6 +510,16 @@ class BLEConnection {
 
     _lastVentilationCount = parsed.ventilationCount;
 
+    // Accumulate PPG samples during pulse check window for post-session replay
+    if (_sessionActive && _pulseCheckOpen && parsed.ppgRaw > 0) {
+      _ppgBuffer.add(parsed.ppgRaw);
+      if (_ppgBuffer.length > 200) _ppgBuffer.removeAt(0);
+    }
+    if (_sessionActive && _pulseCheckOpen &&
+        parsed.spO2Patient > 0 && parsed.spO2Patient > _bestPatientSpO2) {
+      _bestPatientSpO2 = parsed.spO2Patient;
+    }
+
     // Broadcast everything to UI screens
     _dataController.add({
       // Source
@@ -525,7 +538,6 @@ class BLEConnection {
       'wristFlexionAngle':        parsed.wristFlexionAngle,
       'compressionAxisDeviation': parsed.compressionAxisDeviation,
       'depthTrend':               parsed.depthTrend,
-      'valleyDepth':              parsed.valleyDepth,
       'effectiveDepth':           parsed.effectiveDepth,
       // Flags
       'recoilAchieved':      parsed.recoilAchieved,
@@ -540,6 +552,7 @@ class BLEConnection {
       // Patient vitals
       'heartRatePatient':   parsed.heartRatePatient,
       'spO2Patient':        parsed.spO2Patient,
+
       'ppgRaw':             parsed.ppgRaw,
       'ppgSignalQuality':   parsed.ppgSignalQuality,
       'perfusionIndex':     parsed.perfusionIndex,
@@ -584,10 +597,13 @@ class BLEConnection {
       _sessionActive          = true;
       _pulseCheckOpen         = false;
       _lastCompressionCount   = 0;
+      _ppgBuffer.clear();
+      _bestPatientSpO2 = 0.0;
       _pendingPeakDepth       = 0.0;
       _lastVentilationCount   = 0;
       _lastVitalSnapshotMs    = 0;
       debugPrint('BLE: SESSION_START mode=${parsed.currentMode}');
+
       _dataController.add({
         'isStartPing':  true,
         'isEndPing':    false,
@@ -623,6 +639,7 @@ class BLEConnection {
         'compressionDepthSD':  parsed.compressionDepthSD,
         'noFlowIntervals':     parsed.noFlowIntervalsEnd,
         'rescuerSwapCount':    parsed.rescuerSwapCountEnd,
+        'timeToFirstCompressionMs': parsed.timeToFirstCompressionMs,
         'pulseDetected':       parsed.pulseDetected,
         // Biometrics
         'patientTemperature':  parsed.patientTemperature,
@@ -687,7 +704,11 @@ class BLEConnection {
         confidence:     parsed.confidencePct ?? 0,
         detectorACount: parsed.detectorACount ?? 0,
         detectorBCount: parsed.detectorBCount ?? 0,
+        ppgSamples:     List<double>.from(_ppgBuffer),
+        patientSpO2:    _bestPatientSpO2,
       ));
+      _ppgBuffer.clear();
+      _bestPatientSpO2 = 0.0;
       debugPrint(
         'BLE: PULSE_CHECK_RESULT classification=${parsed.pulseClassification} '
             'bpm=${parsed.detectedBPM}',
@@ -839,13 +860,17 @@ class BLEConnection {
 
   /// 0xFA — Sync wall-clock time so offline sessions have correct timestamps.
   Future<bool> sendSyncTime() {
-    final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000; // Unix seconds
+    final ts = DateTime.now().millisecondsSinceEpoch; // ms since epoch, NOT seconds
     return _writeCommand([
       kCmdSyncTime,
-      (ts >> 24) & 0xFF,
-      (ts >> 16) & 0xFF,
+      ts         & 0xFF,   // little-endian LSB first
       (ts >> 8)  & 0xFF,
-      ts        & 0xFF,
+      (ts >> 16) & 0xFF,
+      (ts >> 24) & 0xFF,
+      (ts >> 32) & 0xFF,
+      (ts >> 40) & 0xFF,
+      (ts >> 48) & 0xFF,
+      (ts >> 56) & 0xFF,
     ]);
   }
 
@@ -870,7 +895,7 @@ class BLEConnection {
     if (_connectionState == BluetoothConnectionState.connected) return;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(
-      AppConstants.mapAnimationDelay,
+      AppConstants.bleDisconnectDebounce,
       _processDisconnection,
     );
   }

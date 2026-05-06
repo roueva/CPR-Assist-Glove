@@ -5,6 +5,7 @@ import '../features/training/screens/session_service.dart';
 import '../features/training/services/achievement_service.dart';
 import '../features/training/services/certificate_service.dart';
 import '../features/training/services/session_local_storage.dart';
+import '../services/network/network_service.dart';
 import 'app_providers.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,29 +18,40 @@ final sessionServiceProvider = Provider<SessionService>((ref) {
   return SessionService(network);
 });
 
+/// Tracks real internet connectivity — updates whenever NetworkService detects a change.
+/// Used to trigger re-fetches when coming back online.
+final connectivityProvider = StateProvider<bool>((ref) {
+  // Initial value from last known state
+  return NetworkService.lastKnownConnectivityState;
+});
+
 /// Async provider — fetches session summaries from the backend.
 /// Returns an empty list when the user is not logged in.
 /// Automatically re-fetches whenever login state changes.
 final sessionSummariesProvider =
 FutureProvider<List<SessionSummary>>((ref) async {
   final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
+  ref.watch(connectivityProvider); // re-run when connectivity changes
 
-  // Always load local sessions (available even when not logged in)
-  final localDetails = await SessionLocalStorage.loadAll();
+  // ── Always load local sessions first — never gated on auth or network ──
+  final localDetails  = await SessionLocalStorage.loadAll();
   final localSummaries = localDetails
       .map((d) => SessionSummary.fromDetail(d))
       .toList();
 
-  if (!isLoggedIn) return localSummaries;
+  // ── If not logged in or no connectivity, return local only ─────────────
+  final isOnline = NetworkService.lastKnownConnectivityState;
+  if (!isLoggedIn || !isOnline) return localSummaries;
 
-  // Merge with backend
+  // ── Merge with backend ─────────────────────────────────────────────────
   final service = ref.read(sessionServiceProvider);
   List<SessionSummary> backendSessions;
   try {
     backendSessions = await service.fetchSummaries();
   } catch (e) {
     debugPrint('sessionSummariesProvider: fetch error — $e');
-    backendSessions = [];
+    // Network failed mid-run — return local so we don't wipe the list
+    return localSummaries;
   }
 
   // Deduplicate: prefer backend version (has id) over local
@@ -61,6 +73,7 @@ FutureProvider<List<SessionSummary>>((ref) async {
   return merged;
 });
 
+
 /// Global leaderboard for a given scenario.
 /// Key is the scenario string: 'standard_adult' or 'pediatric'.
 /// Re-fetches when auth state changes.
@@ -76,7 +89,7 @@ FutureProvider.family<_LeaderboardData, String>((ref, scenario) async {
 
 final currentStreakProvider = Provider<int>((ref) {
   final summaries = ref.watch(sessionSummariesProvider).valueOrNull ?? [];
-  final training = summaries.where((s) => s.isTraining && s.totalGrade > 0).toList();
+  final training = summaries.where((s) => s.isTraining).toList();
   int streak = 0;
   for (final s in training) {
     if (s.totalGrade >= 75) {

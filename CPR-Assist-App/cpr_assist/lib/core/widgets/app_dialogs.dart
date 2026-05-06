@@ -106,20 +106,19 @@ class AppDialogs {
     return _show(
       context,
       dialog: const _ConfirmDialog(
-        icon: Icons.emergency_outlined,
-        iconColor: AppColors.primary,
-        iconBg: AppColors.primaryLight,
+        icon: Icons.monitor_heart_rounded,
+        iconColor: AppColors.emergencyMode,
+        iconBg: AppColors.emergencyModeBg,
         title: 'Switch to Emergency Mode',
         message:
         'For real cardiac arrest situations only. Sessions are not recorded or graded.',
         confirmLabel: 'Switch to Emergency',
-        confirmColor: AppColors.primary,
-        cancelLabel: 'Cancel',
+        confirmColor: AppColors.emergencyMode,
         badge: _ModeBadge(
-          label: 'LIVE',
-          color: AppColors.primary,
-          bg: AppColors.primaryLight,
+            label: 'LIVE', color: AppColors.emergencyMode,
+            bg: AppColors.emergencyModeBg
         ),
+        cancelLabel: 'Cancel',
       ),
     );
   }
