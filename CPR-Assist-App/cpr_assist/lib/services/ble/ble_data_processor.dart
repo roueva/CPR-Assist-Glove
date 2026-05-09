@@ -24,7 +24,7 @@ import 'package:flutter/foundation.dart';
 
 // ── Packet sizes ──────────────────────────────────────────────────────────────
 
-const int kLiveStreamSize   = 100;
+const int kLiveStreamSize   = 108;
 const int kEventChannelSize = 96;
 
 // ── EVENT_CHANNEL glove→app packet type bytes ────────────────────────────────
@@ -106,7 +106,9 @@ class BLEDataProcessor {
   //  91     uint8    feedbackEnabled     0/1
   //  92     uint8    batteryPercentage   0–100
   //  93     uint8    isCharging          0/1
-  //  94–99  uint8[4] reserved
+  //  94–97  uint32   peakTimestampMs     ms since session start when peak locked
+//  98–101 uint32   valleyTimestampMs   ms since session start when valley confirmed
+//  102–107 uint8[6] reserved
   //
   // NOTE on temperature encoding (bytes 70–71 and 82–83):
   //   Both temperatures are sent as uint16 fixed-point: value = celsius × 100.
@@ -185,7 +187,9 @@ class BLEDataProcessor {
       final feedbackEnabled   = b.getUint8(91) == 1;
       final batteryPercentage = b.getUint8(92);
       final isCharging        = b.getUint8(93) == 1;
-      // bytes 94–99 reserved
+      // COMPRESSION TIMESTAMPS (94–101)
+      final peakTimestampMs   = b.getUint32(94, Endian.little);
+      final valleyTimestampMs = b.getUint32(98, Endian.little);
 
       // ── Derived: effective depth ──────────────────────────────────────────
       final axisRad    = compressionAxisDeviation * 3.141592653589793 / 180.0;
@@ -250,6 +254,8 @@ class BLEDataProcessor {
         feedbackEnabled:    feedbackEnabled,
         batteryPercentage:  battPct,
         isCharging:         battPct != null ? isCharging : null,
+        peakTimestampMs:   peakTimestampMs,
+        valleyTimestampMs: valleyTimestampMs,
       );
     } catch (e) {
       debugPrint('BLEDataProcessor: LIVE_STREAM parse error — $e');
@@ -556,6 +562,9 @@ class ParsedBLEData {
   final int?  batteryPercentage;
   final bool? isCharging;
 
+  final int peakTimestampMs;
+  final int valleyTimestampMs;
+
   // ── SESSION_END summary fields ────────────────────────────────────────────
   final int    totalCompressions;
   final int    correctDepth;
@@ -678,6 +687,8 @@ class ParsedBLEData {
     this.feedbackEnabled       = true,
     this.batteryPercentage,
     this.isCharging,
+    this.peakTimestampMs   = 0,
+    this.valleyTimestampMs = 0,
     this.totalCompressions     = 0,
     this.correctDepth          = 0,
     this.correctFrequency      = 0,

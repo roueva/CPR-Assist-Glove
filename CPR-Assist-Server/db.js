@@ -177,7 +177,9 @@ async function ensureSessionTables() {
                 compression_axis_dev  FLOAT   DEFAULT 0,
                 effective_depth       FLOAT   DEFAULT 0,
                 peak_force            FLOAT   DEFAULT 0,
-              downstroke_time_ms    INT     DEFAULT 0
+              downstroke_time_ms    INT     DEFAULT 0,
+              peak_ts           INTEGER DEFAULT 0,
+                valley_ts         INTEGER DEFAULT 0
             );
         `);
 
@@ -223,7 +225,9 @@ async function ensureSessionTables() {
                 perfusion_index  INT     DEFAULT 0,
                 detector_a_count INT     DEFAULT 0,
                 detector_b_count INT     DEFAULT 0,
-                user_decision    VARCHAR(20)
+                user_decision    VARCHAR(20),
+                patient_spo2     FLOAT   DEFAULT 0,
+                ppg_samples      JSONB
             );
         `);
 
@@ -291,6 +295,8 @@ async function ensureSessionTables() {
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_time            FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS depth_consistency       FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS freq_consistency        FLOAT        DEFAULT 0`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS patient_spo2  FLOAT DEFAULT 0`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS ppg_samples   JSONB`,
 
             // Add FK from cpr_sessions.user_id → users.id with cascade delete
             // DO $$ wrapping makes it safe to re-run — it only adds the constraint if it doesn't already exist
@@ -335,6 +341,8 @@ END $$`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS fatigue_score INT   DEFAULT 0`,
             // valley_depth — added for depth+recoil chart (v3.1)
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_depth REAL DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS peak_ts  INTEGER DEFAULT 0`,
+            `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_ts INTEGER DEFAULT 0`,
             // Unique index required for ON CONFLICT upsert in POST /sessions/detail
             `CREATE UNIQUE INDEX IF NOT EXISTS uq_user_session_start
              ON cpr_sessions (user_id, session_start)`,

@@ -209,6 +209,9 @@ class AppColors {
   /// Pediatric mode accent — teal.
   static const Color pediatric = Color(0xFF057692);
 
+  /// Teal — Competent level accent, readable on dark surfaces.
+  static const Color feedbackTeal = Color(0xFF40C4C4);
+
   /// Pediatric mode background tint.
   static const Color pediatricLight = Color(0xFFE0F7FA);
 

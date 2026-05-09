@@ -94,6 +94,15 @@ class CompressionEvent {
   /// 0 when not available (Emergency mode or older firmware).
   final int downstrokeTimeMs;
 
+  /// Session ms when peak depth was locked by the IMU (firmware peakTimestampMs).
+  /// Absolute timestamp from session start. Use with valleyTimestampMs to
+  /// compute exact compression phase durations.
+  final int peakTimestampMs;
+
+  /// Session ms when valley (full recoil point) was confirmed.
+  /// Difference from next peakTimestampMs = relaxation phase duration.
+  final int valleyTimestampMs;
+
   const CompressionEvent({
     required this.timestampMs,
     required this.depth,
@@ -110,6 +119,8 @@ class CompressionEvent {
     this.compressionAxisDev  = 0.0,
     this.effectiveDepth      = 0.0,
     this.downstrokeTimeMs    = 0,
+    this.peakTimestampMs   = 0,
+    this.valleyTimestampMs = 0,
   });
 
   // ── Derived quality checks ────────────────────────────────────────────────
@@ -133,6 +144,15 @@ class CompressionEvent {
       isDepthInTarget && isFrequencyInTarget && recoilAchieved && postureOk;
 
   double get timestampSec => timestampMs / 1000.0;
+
+  /// Duration of downstroke phase: session start → peak (ms).
+  /// Use peakTimestampMs - timestampMs to get time-within-compression.
+  int get downstrokePhaseDurationMs =>
+      peakTimestampMs > timestampMs ? peakTimestampMs - timestampMs : 0;
+
+  /// Duration of recoil phase: peak → valley (ms).
+  int get recoilPhaseDurationMs =>
+      valleyTimestampMs > peakTimestampMs ? valleyTimestampMs - peakTimestampMs : 0;
 
   // ── BLE factory — called in BLEConnection._handleLiveStream() ─────────────
   //
@@ -164,6 +184,8 @@ class CompressionEvent {
       compressionAxisDev:   axisDevDeg,
       effectiveDepth:       rawDepth * cos(axisDevDeg * pi / 180.0),
       downstrokeTimeMs:     (packet['downstrokeTimeMs']      as num?)?.toInt()    ?? 0,
+      peakTimestampMs:   (packet['peakTimestampMs']   as num?)?.toInt() ?? 0,
+      valleyTimestampMs: (packet['valleyTimestampMs'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -193,6 +215,8 @@ class CompressionEvent {
       effectiveDepth:      (json['effective_depth']      as num?)?.toDouble()
           ?? rawDepth * cos(axisDevDeg * pi / 180.0),
       downstrokeTimeMs:    (json['downstroke_time_ms']   as num?)?.toInt()    ?? 0,
+      peakTimestampMs:   (json['peak_ts']   as num?)?.toInt() ?? 0,
+      valleyTimestampMs: (json['valley_ts'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -217,5 +241,7 @@ class CompressionEvent {
     'effective_depth':     effectiveDepth,
     'peak_force':          force,        // reuse force as peak_force — glove sends peak
     'downstroke_time_ms':  downstrokeTimeMs,
+    'peak_ts':   peakTimestampMs,
+    'valley_ts': valleyTimestampMs,
   };
 }

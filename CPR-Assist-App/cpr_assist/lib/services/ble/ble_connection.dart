@@ -177,15 +177,11 @@ class BLEConnection {
       _updateStatus('Bluetooth OFF');
       return;
     }
-    // Only scan silently at startup if BT permissions were already granted
-    // during a previous session. On first install they haven't been granted yet —
-    // scanning would trigger the OS permission dialog unexpectedly.
-    // The Live CPR tab handles first-time permission via _promptBluetoothIfNeeded.
-    if (prefs.getBool('ble_permissions_granted') == true) {
-      _performSingleScan();
-    } else {
-      _updateStatus('Ready');
-    }
+    // BT is already on → permissions are already granted (system wouldn't
+    // have turned BT on without them). Record this so future launches
+    // also auto-scan, then scan immediately.
+    await prefs.setBool('ble_permissions_granted', true);
+    _performSingleScan();
   }
 
   Future<bool> requestEnableBluetooth() async {
@@ -484,6 +480,8 @@ class BLEConnection {
         wristFlexionAngle:   parsed.wristFlexionAngle,
         compressionAxisDev:  parsed.compressionAxisDeviation,
         effectiveDepth:      parsed.effectiveDepth,
+        peakTimestampMs:   parsed.peakTimestampMs,
+        valleyTimestampMs: parsed.valleyTimestampMs,
       ));
     }
 
@@ -571,6 +569,8 @@ class BLEConnection {
       'feedbackEnabled':    parsed.feedbackEnabled,
       'batteryPercentage':  parsed.batteryPercentage,
       'isCharging':         parsed.isCharging,
+      'peakTimestampMs':   parsed.peakTimestampMs,
+      'valleyTimestampMs': parsed.valleyTimestampMs,
     });
   }
 
@@ -581,6 +581,9 @@ class BLEConnection {
 
   // ── EVENT_CHANNEL packet handler ──────────────────────────────────────────
   void _handleEventPacket(List<int> packet) {
+    if (packet.isEmpty) return;
+    // Ignore echo of outgoing app→glove commands (0xF0–0xFF)
+    if (packet[0] >= 0xF0) return;
     final parsed = _processor.parseEventChannel(packet);
     if (parsed == null) return;
 

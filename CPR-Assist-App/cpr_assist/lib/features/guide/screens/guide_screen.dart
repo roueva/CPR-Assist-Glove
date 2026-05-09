@@ -34,7 +34,7 @@ class GuideScreen extends StatelessWidget {
     return ColoredBox(
       color: AppColors.screenBgGrey,
       child: SingleChildScrollView(
-        padding: EdgeInsets.zero,
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

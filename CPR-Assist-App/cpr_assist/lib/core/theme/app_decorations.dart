@@ -528,4 +528,82 @@ class AppDecorations {
     color: bg,
     borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
   );
+
+  /// Achievement unlock banner — green tint with border.
+  static BoxDecoration achievementUnlockBanner() => BoxDecoration(
+    color: AppColors.successBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+  );
+
+  /// Certificate card footer — earned warm amber tint.
+  static BoxDecoration certFooterEarned() => BoxDecoration(
+    color: AppColors.warningBg,
+    borderRadius: const BorderRadius.only(
+      bottomLeft:  Radius.circular(AppSpacing.cardRadius),
+      bottomRight: Radius.circular(AppSpacing.cardRadius),
+    ),
+    border: Border(
+      top:   BorderSide(color: AppColors.warning.withValues(alpha: 0.35)),
+    ),
+  );
+
+  /// Certificate card footer — locked grey tint.
+  static BoxDecoration certFooterLocked() => BoxDecoration(
+    color: AppColors.screenBgGrey,
+    borderRadius: const BorderRadius.only(
+      bottomLeft:  Radius.circular(AppSpacing.cardRadius),
+      bottomRight: Radius.circular(AppSpacing.cardRadius),
+    ),
+    border: Border(
+      top: BorderSide(color: AppColors.divider),
+    ),
+  );
+
+  /// Certificate card — earned has gold border, locked is plain.
+  static BoxDecoration certificateCardV2({required bool earned}) => earned
+      ? BoxDecoration(
+    color:        AppColors.white,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.warning.withValues(alpha: 0.6), width: 1),
+    boxShadow: [
+      BoxShadow(
+        color:      AppColors.warning.withValues(alpha: 0.08),
+        blurRadius: 10,
+        offset:     const Offset(0, 2),
+      ),
+    ],
+  )
+      : BoxDecoration(
+    color:        AppColors.white,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.divider),
+  );
+
+  /// Achievement list item — earned green tint.
+  static BoxDecoration achievementItemEarned({bool isStreak = false}) =>
+      BoxDecoration(
+        color:        isStreak ? AppColors.warningBg : AppColors.successBg,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        border: Border.all(
+          color: isStreak
+              ? AppColors.warning.withValues(alpha: 0.35)
+              : AppColors.success.withValues(alpha: 0.35),
+        ),
+      );
+
+  /// Achievement list item — locked state.
+  static BoxDecoration achievementItemLocked() => BoxDecoration(
+    color:        AppColors.white,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+    border:       Border.all(color: AppColors.divider),
+  );
+
+  /// Dark-surface trend pill — used on cprCardBg / primaryAlt cards.
+  static BoxDecoration darkTrendPill(Color c) => BoxDecoration(
+    color:        c.withValues(alpha: 0.18),
+    borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+    border:       Border.all(color: c.withValues(alpha: 0.35)),
+  );
+
 }

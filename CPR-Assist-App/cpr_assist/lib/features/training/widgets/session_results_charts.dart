@@ -143,7 +143,7 @@ class _DepthRecoilChartCardState extends State<_DepthRecoilChartCard> {
 
   @override
   Widget build(BuildContext context) {
-    return _ChartCard(
+    return CprChartCard(
       title:    'Compression Depth',
       subtitle: 'Green band = target depth \nAmber band = recoil achieved',
       lineColor: AppColors.primary,
@@ -466,7 +466,7 @@ class _RateScrollChartCardState extends State<_RateScrollChartCard> {
       widget.events.isEmpty ? 0 : widget.events.last.timestampSec;
   @override
   Widget build(BuildContext context) {
-    return _ChartCard(
+    return CprChartCard(
       title:    'Compression Rate',
       subtitle: 'Green band = 100–120 BPM',
       lineColor: AppColors.success,
@@ -518,7 +518,7 @@ class _DepthTrendChartCardState extends State<_DepthTrendChartCard> {
       widget.events.isEmpty ? 0 : widget.events.last.timestampSec;
   @override
   Widget build(BuildContext context) {
-    return _ChartCard(
+    return CprChartCard(
       title:    'Depth Trend',
       subtitle: '5-compression rolling average',
       lineColor: AppColors.warning,
@@ -567,7 +567,7 @@ class _HeartRateChartCardState extends State<_HeartRateChartCard> {
       widget.vitals.isEmpty ? 0 : widget.sessionLengthSecs;
   @override
   Widget build(BuildContext context) {
-    return _ChartCard(
+    return CprChartCard(
       title:    'Rescuer Heart Rate',
       subtitle: 'Rising trend = increasing physical load',
       lineColor: AppColors.warning,
@@ -1324,143 +1324,6 @@ class _HeartRateFullChartState extends State<_HeartRateFullChart> {
           ),
         ),
       ],
-    );
-  }
-}
-
-
-class _ChartCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Color lineColor;
-  final Widget  child;
-  final Widget? dropdown;
-
-  const _ChartCard({
-    required this.title,
-    required this.subtitle,
-    required this.lineColor,
-    required this.child,
-    this.dropdown,
-  });
-
-  void _showExpanded(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => Dialog(
-        insetPadding: EdgeInsets.all(AppSpacing.md),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        ),
-        child: SizedBox(
-          height: context.isLandscape
-              ? context.screenHeight * 0.90
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              mainAxisSize: context.isLandscape ? MainAxisSize.max : MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Row(
-            children: [
-            Container(
-            width: 4,
-              height: AppSpacing.md,
-              decoration: AppDecorations.accentBar(color: lineColor),
-            ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTypography.subheading(size: 13)),
-                    Text(subtitle,
-                        style: AppTypography.caption(), maxLines: 2),
-                  ],
-                ),
-              ),
-              if (dropdown != null) ...[
-            const SizedBox(width: AppSpacing.xs),
-          dropdown!,
-          ],
-          const SizedBox(width: AppSpacing.xs),
-      IconButton(
-        icon: const Icon(Icons.close_rounded, size: 20),
-        color: AppColors.textSecondary,
-        onPressed: () => context.pop(),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(),
-      ),
-      ],
-    ),
-                const SizedBox(height: AppSpacing.md),
-                context.isLandscape
-                    ? Expanded(child: child)
-                    : child,
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: AppDecorations.card(),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Title row: accent bar | title+subtitle | dropdown | expand ──
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 4,
-                height: AppSpacing.md,
-                decoration: AppDecorations.accentBar(color: lineColor),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTypography.subheading(size: 13)),
-                    Text(subtitle,
-                        style: AppTypography.caption(), maxLines: 2),
-                  ],
-                ),
-              ),
-              if (dropdown != null) ...[
-                const SizedBox(width: AppSpacing.xs),
-                dropdown!,
-              ],
-              const SizedBox(width: AppSpacing.xs),
-              GestureDetector(
-                onTap: () => _showExpanded(context),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius:
-                    BorderRadius.circular(AppSpacing.cardRadiusSm),
-                  ),
-                  child: const Icon(
-                    Icons.open_in_full_rounded,
-                    size: 14,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          child,
-        ],
-      ),
     );
   }
 }

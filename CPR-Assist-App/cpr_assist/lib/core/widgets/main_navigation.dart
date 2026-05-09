@@ -53,8 +53,8 @@ class _MainNavigationScreenState
   void dispose() {
     _pageController.dispose();
     _panelController.dispose();
-    super.dispose();
     nfcTabNotifier.removeListener(_onNfcTab);
+    super.dispose();
   }
 
   void _onNfcTab() {

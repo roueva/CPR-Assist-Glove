@@ -1,5 +1,7 @@
 import 'package:cpr_assist/features/training/screens/session_service.dart';
 
+import 'package:cpr_assist/core/core.dart';
+import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Achievement model + service
 // Computed entirely client-side from sessionSummariesProvider.
@@ -135,5 +137,51 @@ class AchievementService {
         unlocked:    hasAdult && hasPediatric && hasNoFeedback,
       ),
     ];
+  }
+// ── Level helpers ─────────────────────────────────────────────────────────
+
+  static String gradeLevel(double avg) {
+    if (avg >= 95) return 'Expert';
+    if (avg >= 85) return 'Advanced';
+    if (avg >= 75) return 'Proficient';
+    if (avg >= 65) return 'Competent';
+    if (avg >= 50) return 'Developing';
+    return 'Beginner';
+  }
+
+  static String? nextLevelName(double avg) {
+    if (avg >= 95) return null;
+    if (avg >= 85) return 'Expert';
+    if (avg >= 75) return 'Advanced';
+    if (avg >= 65) return 'Proficient';
+    if (avg >= 50) return 'Competent';
+    return 'Developing';
+  }
+
+  static double nextLevelThreshold(double avg) {
+    if (avg >= 95) return 100;
+    if (avg >= 85) return 95;
+    if (avg >= 75) return 85;
+    if (avg >= 65) return 75;
+    if (avg >= 50) return 65;
+    return 50;
+  }
+
+  static Color gradeLevelColor(double avg) {
+    if (avg >= 95) return AppColors.pbGoldDark;
+    if (avg >= 85) return AppColors.success;
+    if (avg >= 75) return AppColors.primaryAlt;
+    if (avg >= 65) return AppColors.pediatric;
+    if (avg >= 50) return AppColors.warning;
+    return AppColors.error;
+  }
+
+  static Color gradeLevelColorDark(double avg) {
+    if (avg >= 95) return AppColors.pbGoldLight;
+    if (avg >= 85) return AppColors.feedbackGood;
+    if (avg >= 75) return AppColors.feedbackInfo;
+    if (avg >= 65) return AppColors.feedbackTeal;
+    if (avg >= 50) return AppColors.feedbackWarn;
+    return AppColors.feedbackBad;
   }
 }

@@ -4,6 +4,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cpr_assist/core/core.dart';
 
+import '../../features/training/services/achievement_service.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // APP DIALOGS
 // All confirmation / alert dialogs used across the app.
@@ -141,6 +143,29 @@ class AppDialogs {
         confirmLabel: 'Log In',
         confirmColor: AppColors.primary,
         cancelLabel: 'Not Now',
+      ),
+    );
+  }
+
+  // ── Post-emergency session save prompt ───────────────────────────────────────
+//
+// Shown once after an emergency session ends when user is not logged in.
+// This is an invitation, not a gate — dismiss keeps the session local only.
+
+  static Future<bool?> promptSaveEmergencySession(BuildContext context) {
+    return _show(
+      context,
+      dialog: const _ConfirmDialog(
+        icon:         Icons.favorite_border_rounded,
+        iconColor:    AppColors.emergencyMode,
+        iconBg:       AppColors.emergencyModeBg,
+        title:        'Save Your Session',
+        message:
+        'Log in or create a free account to save this session, '
+            'track your progress, and earn certificates.',
+        confirmLabel: 'Log In / Sign Up',
+        confirmColor: AppColors.emergencyMode,
+        cancelLabel:  'Skip',
       ),
     );
   }
@@ -286,6 +311,20 @@ class AppDialogs {
       barrierDismissible: true,
       barrierColor: AppColors.overlayDark,
       builder: (_) => _KSLInfoDialog(onVisitWebsite: onVisitWebsite),
+    );
+  }
+
+  // ── Level info ─────────────────────────────────────────────────────────────
+
+  static Future<void> showLevelInfo(
+      BuildContext context, {
+        required double avgGrade,
+      }) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: AppColors.overlayDark,
+      barrierDismissible: true,
+      builder: (_) => _LevelInfoDialog(avgGrade: avgGrade),
     );
   }
 
@@ -1004,6 +1043,172 @@ class _NoteEditorDialogState extends State<_NoteEditorDialog> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LevelInfoDialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LevelInfoDialog extends StatelessWidget {
+  final double avgGrade;
+  const _LevelInfoDialog({required this.avgGrade});
+
+  static const _levels = [
+    (label: 'Expert',     min: 95.0),
+    (label: 'Advanced',   min: 85.0),
+    (label: 'Proficient', min: 75.0),
+    (label: 'Competent',  min: 65.0),
+    (label: 'Developing', min: 50.0),
+    (label: 'Beginner',   min:  0.0),
+  ];
+
+  String _range(double min, int i) {
+    if (min == 0.0) return '< 50%';
+    final max = i == 0 ? 100 : (_levels[i - 1].min - 1).toInt();
+    return '${min.toInt()}–$max%';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentLabel = AchievementService.gradeLevel(avgGrade);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.dialogInsetH,
+        vertical:   AppSpacing.dialogInsetV,
+      ),
+      child: Container(
+        decoration: AppDecorations.dialog(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Title ────────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.dialogPaddingH, AppSpacing.dialogPaddingTop,
+                AppSpacing.dialogPaddingH, AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Skill Levels',
+                            style: AppTypography.heading(size: 17)),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text('Average session grade',
+                            style: AppTypography.caption(
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  // Current grade badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical:   AppSpacing.xxs + AppSpacing.xxs,
+                    ),
+                    decoration: AppDecorations.gradeCard(
+                        radius: AppSpacing.cardRadiusMd),
+                    child: Text(
+                      '${avgGrade.toStringAsFixed(1)}%',
+                      style: AppTypography.numericDisplay(
+                          size: 15, color: AppColors.textOnDark),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.divider),
+            // ── Level rows ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Column(
+                children: List.generate(_levels.length, (i) {
+                  final lvl      = _levels[i];
+                  final isCurrent = lvl.label == currentLabel;
+                  final color    = AchievementService.gradeLevelColor(
+                      lvl.min == 0.0 ? 0.0 : lvl.min);
+                  return Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical:   AppSpacing.xxs,
+                    ),
+                    decoration: isCurrent
+                        ? BoxDecoration(
+                      color: color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(
+                          AppSpacing.cardRadiusMd),
+                    )
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical:   AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          // Color accent bar
+                          Container(
+                            width:  AppSpacing.xxs + AppSpacing.xxs,  // 4px
+                            height: AppSpacing.iconSm,
+                            decoration: BoxDecoration(
+                              color:        isCurrent ? color : color.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(AppSpacing.xxs),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              lvl.label,
+                              style: isCurrent
+                                  ? AppTypography.bodyBold(
+                                  size: 14, color: color)
+                                  : AppTypography.body(
+                                  size: 14,
+                                  color: AppColors.textSecondary),
+                            ),
+                          ),
+                          Text(
+                            _range(lvl.min, i),
+                            style: AppTypography.caption(
+                              color: isCurrent
+                                  ? color
+                                  : AppColors.textDisabled,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            // ── Close ────────────────────────────────────────────────────────
+            const Divider(height: 1, color: AppColors.divider),
+            TextButton(
+              onPressed: () => context.pop(),
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(
+                    AppSpacing.xxl + AppSpacing.xs),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    bottomLeft:  Radius.circular(AppSpacing.dialogRadius),
+                    bottomRight: Radius.circular(AppSpacing.dialogRadius),
+                  ),
+                ),
+              ),
+              child: Text('Got it',
+                  style: AppTypography.bodyBold(
+                      size: 15, color: AppColors.primary)),
             ),
           ],
         ),

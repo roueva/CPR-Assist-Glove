@@ -58,12 +58,13 @@ void main() async {
     unawaited(AvailabilityParser.loadRules());
     unawaited(container.read(authStateProvider.notifier).checkAuthStatus());
 
-    try {
-      await CacheService.initializeAllCaches();
-      container.read(cacheInitializedProvider.notifier).state = true;
-    } catch (e) {
-      container.read(cacheErrorProvider.notifier).state = e.toString();
-    }
+    unawaited(
+      CacheService.initializeAllCaches().then((_) {
+        container.read(cacheInitializedProvider.notifier).state = true;
+      }).catchError((Object e) {
+        container.read(cacheErrorProvider.notifier).state = e.toString();
+      }),
+    );
   });
 }
 

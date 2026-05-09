@@ -174,7 +174,10 @@ class _QuizScreenState extends State<QuizScreen> {
     final progress    = (_current + 1) / _questions.length;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md, AppSpacing.md, AppSpacing.md,
+        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -393,7 +396,10 @@ class _QuizScreenState extends State<QuizScreen> {
         : 'Keep practicing!';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md, AppSpacing.md, AppSpacing.md,
+        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         children: [
 

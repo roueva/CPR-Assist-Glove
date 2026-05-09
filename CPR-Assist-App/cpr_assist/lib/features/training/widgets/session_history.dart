@@ -8,6 +8,7 @@ import '../../account/screens/login_screen.dart';
 import '../../account/screens/registration_screen.dart';
 import '../screens/session_service.dart';
 import '../services/export_service.dart';
+import '../services/session_detail.dart';
 import 'export_bottom_sheet.dart';
 import 'session_results.dart';
 import 'session_compare_screen.dart';
@@ -108,6 +109,26 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
         .toList();
     if (selected.isEmpty) return;
     _clearSelection();
+
+    // Single session — fetch full detail so Raw CSV tab is available
+    if (selected.length == 1) {
+      final summary = selected.first;
+      SessionDetail? detail;
+      try {
+        detail = await ref.read(sessionServiceProvider).fetchDetail(summary.id!);
+      } catch (_) {
+        // detail stays null — sheet gracefully hides Raw CSV
+      }
+      if (!mounted) return;
+      await ExportBottomSheet.showForSingleSession(
+        context,
+        summary: summary,
+        detail:  detail,
+      );
+      return;
+    }
+
+    // Multiple sessions — summary PDF + CSV only
     await ExportBottomSheet.showForMultipleSessions(context, sessions: selected);
   }
 
@@ -229,6 +250,32 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
                 ExportBottomSheet.showForMultipleSessions(context, sessions: all);
               },
             ),
+
+            IconButton(
+              icon:    const Icon(Icons.delete_outline_rounded, color: AppColors.primary),
+              tooltip: 'Delete all sessions',
+              onPressed: () async {
+                final all = summaries.valueOrNull ?? [];
+                if (all.isEmpty) return;
+                final confirmed = await AppDialogs.showDestructiveConfirm(
+                  context,
+                  icon:         Icons.delete_outline_rounded,
+                  iconColor:    AppColors.emergency,
+                  iconBg:       AppColors.errorBg,
+                  title:        'Delete all sessions?',
+                  message:      'This permanently removes all ${all.length} sessions.',
+                  confirmLabel: 'Delete All',
+                  confirmColor: AppColors.emergency,
+                  cancelLabel:  'Cancel',
+                );
+                if (confirmed != true || !mounted) return;
+                final service = ref.read(sessionServiceProvider);
+                for (final s in all) {
+                  if (s.id != null) await service.deleteSession(s.id!);
+                }
+                ref.invalidate(sessionSummariesProvider);
+              },
+            ),
           ],
         ),
       body: summaries.when(
@@ -318,8 +365,11 @@ class _SessionsList extends StatelessWidget {
       onRefresh: () async => onRefresh(),
       color: AppColors.primary,
     child: ListView.builder(
-    padding:   const EdgeInsets.all(AppSpacing.md),
-            itemCount: filtered.length,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md, AppSpacing.md, AppSpacing.md,
+        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
+      ),
+      itemCount: filtered.length,
             itemBuilder: (context, i) {
               final session   = filtered[i];
               final idStr     = session.id?.toString() ?? '';
@@ -728,7 +778,6 @@ class SessionCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final color = gradeColor(session.totalGrade);
-    final canDelete = session.id != null;
 
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 150),
@@ -891,56 +940,7 @@ class SessionCard extends ConsumerWidget {
         ),
       ),
     );
-
-    if (!canDelete) return card;
-
-    return Dismissible(
-      key:       ValueKey('session_${session.id}'),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) async {
-        return await AppDialogs.showDestructiveConfirm(
-          context,
-          icon:         Icons.delete_outline_rounded,
-          iconColor:    AppColors.emergency,
-          iconBg:       AppColors.errorBg,
-          title:        'Delete Session?',
-          message:      'This will permanently remove Session $sessionNumber from your history.',
-          confirmLabel: 'Delete',
-          confirmColor: AppColors.emergency,
-          cancelLabel:  'Cancel',
-        ) == true;
-      },
-      onDismissed: (_) async {
-        final service = ref.read(sessionServiceProvider);
-        try {
-          await service.deleteSession(session.id!);
-          ref.invalidate(sessionSummariesProvider);
-        } catch (_) {
-          if (context.mounted) {
-            UIHelper.showError(context, 'Failed to delete session');
-          }
-        }
-      },
-      background: Container(
-        margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
-        decoration: BoxDecoration(
-          color:        AppColors.error,
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        ),
-        alignment: Alignment.centerRight,
-        padding:   const EdgeInsets.only(right: AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.delete_outline_rounded,
-                color: AppColors.textOnDark, size: AppSpacing.iconMd),
-            const SizedBox(height: AppSpacing.xxs),
-            Text('Delete', style: AppTypography.label(size: 11, color: AppColors.textOnDark))
-          ],
-        ),
-      ),
-      child: card,
-    );
+    return card;
   }
 }
 

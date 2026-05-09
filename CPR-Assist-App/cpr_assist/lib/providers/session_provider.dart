@@ -30,6 +30,7 @@ final connectivityProvider = StateProvider<bool>((ref) {
 /// Automatically re-fetches whenever login state changes.
 final sessionSummariesProvider =
 FutureProvider<List<SessionSummary>>((ref) async {
+  ref.keepAlive();
   final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
   ref.watch(connectivityProvider); // re-run when connectivity changes
 

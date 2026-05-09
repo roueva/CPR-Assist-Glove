@@ -104,7 +104,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       ref.read(bleConnectionProvider).connectionStatusNotifier.addListener(_onBleStatusChange);
     });
 
-    liveCprTabActivationNotifier.removeListener(_onTabActivated);
+    liveCprTabActivationNotifier.addListener(_onTabActivated);
 
     // Warn user if old sessions are silently evicted
     SessionLocalStorage.onEviction = (count) {
@@ -242,7 +242,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     _bleDataSubscription?.cancel();
     _pulseResultTimer?.cancel();
     _swapCountdownTimer?.cancel();
-    liveCprTabActivationNotifier.addListener(_onTabActivated);
+    liveCprTabActivationNotifier.removeListener(_onTabActivated);
     SessionLocalStorage.onEviction = null;
     super.dispose();
   }
@@ -510,7 +510,22 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _wristAngle = (data['wristAlignmentAngle'] as num?)?.toDouble();
       }
 
-      if (data['isContinuousData'] == true) _isSessionActive = true;
+      if (data['isContinuousData'] == true) {
+        _isSessionActive = true;
+        // Start timer if SESSION_START was missed
+        if (_sessionTimer == null || !_sessionTimer!.isActive) {
+          _sessionStartTime ??= DateTime.now();
+          _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (mounted && _isSessionActive) {
+              setState(() {
+                _displaySessionDuration = Duration(
+                  seconds: DateTime.now().difference(_sessionStartTime!).inSeconds,
+                );
+              });
+            }
+          });
+        }
+      }
 
       if (data.containsKey('compressionCount')) {
         _displayCompressionCount = data['compressionCount'] as int;
@@ -928,7 +943,10 @@ class _SwapBannerState extends State<_SwapBanner>
                   ),
                   onPressed: widget.onDismiss,
                   padding:     EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth:  AppSpacing.statusBarHeight,
+                    minHeight: AppSpacing.statusBarHeight,
+                  ),
                 ),
               ],
             ),
@@ -1006,7 +1024,7 @@ class _StatusBar extends StatelessWidget {
                         : modeColor,
                   ),
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: AppSpacing.xxs),
                 Icon(
                   Icons.swap_horiz_rounded,
                   size:  12,
@@ -1085,7 +1103,7 @@ class _StatusBar extends StatelessWidget {
                         : scenarioColor,
                   ),
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: AppSpacing.xxs),
                 Icon(
                   Icons.swap_horiz_rounded,
                   size:  12,

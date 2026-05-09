@@ -451,3 +451,143 @@ LineTouchTooltipData buildCprTooltip({
     },
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CprChartCard — shared chart card wrapper used by session results,
+// compare screen, and leaderboard stats tab.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CprChartCard extends StatelessWidget {
+  final String  title;
+  final String  subtitle;
+  final Color   lineColor;
+  final Widget  child;
+  final Widget? dropdown;
+
+  const CprChartCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.lineColor,
+    required this.child,
+    this.dropdown,
+  });
+
+  void _showExpanded(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: EdgeInsets.all(AppSpacing.md),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+        ),
+        child: SizedBox(
+          height: context.isLandscape ? context.screenHeight * 0.90 : null,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              mainAxisSize: context.isLandscape
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: AppSpacing.xs,
+                      height: AppSpacing.iconMd,
+                      decoration: AppDecorations.accentBar(color: lineColor),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title,
+                              style: AppTypography.subheading(size: 13)),
+                          Text(subtitle,
+                              style: AppTypography.caption(), maxLines: 2),
+                        ],
+                      ),
+                    ),
+                    if (dropdown != null) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      dropdown!,
+                    ],
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      color: AppColors.textSecondary,
+                      onPressed: () => context.pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                context.isLandscape ? Expanded(child: child) : child,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: AppDecorations.card(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: AppSpacing.xs,
+                height: AppSpacing.iconMd,
+                decoration: AppDecorations.accentBar(color: lineColor),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.subheading(size: 13)),
+                    Text(subtitle,
+                        style: AppTypography.caption(), maxLines: 2),
+                  ],
+                ),
+              ),
+              if (dropdown != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                dropdown!,
+              ],
+              const SizedBox(width: AppSpacing.xs),
+              GestureDetector(
+                onTap: () => _showExpanded(context),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius:
+                    BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  ),
+                  child: const Icon(
+                    Icons.open_in_full_rounded,
+                    size: 14,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          child,
+        ],
+      ),
+    );
+  }
+}

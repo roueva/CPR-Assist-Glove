@@ -414,10 +414,11 @@ module.exports = function (pool) {
                 await client.query(
                     `INSERT INTO session_compressions
                      (session_id, timestamp_ms, depth, frequency, instantaneous_rate,
-                      force, recoil_achieved, over_force, posture_ok, leaning_detected,
-                      wrist_alignment_angle, wrist_flexion_angle, compression_axis_dev,
-                      effective_depth, peak_force, downstroke_time_ms, valley_depth)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+ force, recoil_achieved, over_force, posture_ok, leaning_detected,
+ wrist_alignment_angle, wrist_flexion_angle, compression_axis_dev,
+ effective_depth, peak_force, downstroke_time_ms, valley_depth,
+ peak_ts, valley_ts)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
                     [
                         sessionId,
                         c.ts,
@@ -436,6 +437,9 @@ module.exports = function (pool) {
                         c.peak_force ?? 0,
                         c.downstroke_time_ms ?? 0,
                         c.valley_depth ?? 0,
+                        c.peak_ts ?? 0,   // $18
+                        c.valley_ts ?? 0,   // $19
+
                     ]
                 );
             }
@@ -464,11 +468,11 @@ module.exports = function (pool) {
             for (const p of pulseChecks) {
                 await client.query(
                     `INSERT INTO session_pulse_checks
-                     (session_id, timestamp_ms, interval_number,
-                      classification, detected, detected_bpm, confidence,
-                      perfusion_index, detector_a_count, detector_b_count,
-                      user_decision)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+                    (session_id, timestamp_ms, interval_number,
+ classification, detected, detected_bpm, confidence,
+ perfusion_index, detector_a_count, detector_b_count,
+ user_decision, patient_spo2, ppg_samples)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
                     [
                         sessionId,
                         p.ts,
@@ -481,6 +485,8 @@ module.exports = function (pool) {
                         p.detector_a_count ?? 0,
                         p.detector_b_count ?? 0,
                         p.user_decision ?? null,
+                        p.patient_spo2 ?? 0,                          // $12
+                        p.ppg_samples ? JSON.stringify(p.ppg_samples) : null,  // $13
                     ]
                 );
             }
@@ -600,7 +606,7 @@ module.exports = function (pool) {
                 pool.query(
                     `SELECT timestamp_ms        AS ts,
                             depth,
-                            frequency,
+                            frequency           AS freq,
                             instantaneous_rate,
                             force,
                             recoil_achieved     AS recoil,
@@ -613,7 +619,9 @@ module.exports = function (pool) {
                             effective_depth,
                             peak_force,
                             downstroke_time_ms,
-                            valley_depth
+valley_depth,
+peak_ts,
+valley_ts
                      FROM session_compressions
                      WHERE session_id = $1
                      ORDER BY timestamp_ms`,
@@ -638,9 +646,11 @@ module.exports = function (pool) {
                             detected_bpm,
                             confidence,
                             perfusion_index,
-                            detector_a_count,
+                            detector_a_count,frequency
                             detector_b_count,
-                            user_decision
+                            user_decision,
+patient_spo2,
+ppg_samples
                      FROM session_pulse_checks
                      WHERE session_id = $1
                      ORDER BY timestamp_ms`,

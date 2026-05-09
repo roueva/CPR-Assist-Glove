@@ -947,9 +947,16 @@ class DevPreviewScreen extends StatelessWidget {
             const _Divider(),
             _NavTile(
               icon:     Icons.leaderboard_rounded,
-              label:    'Leaderboard Screen',
-              subtitle: 'Global · Friends · My Sessions tabs',
+              label:    'Leaderboard (real data)',
+              subtitle: 'Opens with your actual sessions',
               onTap:    () => context.push(const LeaderboardScreen()),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:     Icons.leaderboard_outlined,
+              label:    'Leaderboard (simulated)',
+              subtitle: 'Podium + rankings list with fake users',
+              onTap: () => context.push(const SimulatedLeaderboardPreview()),
             ),
 
             const _Divider(),
@@ -1029,6 +1036,14 @@ class DevPreviewScreen extends StatelessWidget {
               icon:  Icons.lock_outline_rounded,
               label: 'Login Required Prompt',
               onTap: () => AppDialogs.promptLogin(context),
+            ),
+            const _Divider(),
+            _NavTile(
+              icon:      Icons.favorite_border_rounded,
+              iconColor: AppColors.emergencyMode,
+              label:     'Save Emergency Session Prompt',
+              subtitle:  'Shown after emergency session ends (not logged in)',
+              onTap:     () => AppDialogs.promptSaveEmergencySession(context),
             ),
             const _Divider(),
             _NavTile(

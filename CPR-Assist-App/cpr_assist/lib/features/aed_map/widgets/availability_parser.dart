@@ -83,7 +83,13 @@ class AvailabilityParser {
 
   static Future<Map<String, dynamic>?> _fetchFromBackend() async {
     try {
-      final url = Uri.parse('${NetworkService.baseUrl}/aed/availability');
+      final String baseUrl;
+      try {
+        baseUrl = NetworkService.baseUrl;
+      } catch (_) {
+        return null; // .env not ready yet
+      }
+      final url = Uri.parse('$baseUrl/aed/availability');
       final response = await http
           .get(url)
           .timeout(const Duration(seconds: 4));

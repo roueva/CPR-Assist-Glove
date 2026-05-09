@@ -884,7 +884,10 @@ class _TrendBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final grades = sessions.map((s) => s.totalGrade).toList();
+    final sortedSessions = [...sessions]
+      ..sort((a, b) => (a.sessionStart ?? DateTime(0))
+          .compareTo(b.sessionStart ?? DateTime(0)));
+    final grades = sortedSessions.map((s) => s.totalGrade).toList();
     final first  = grades.first;
     final last   = grades.last;
     final diff   = last - first;
@@ -907,9 +910,17 @@ class _TrendBanner extends StatelessWidget {
         : declined ? AppColors.trendDecliningBg
         : AppColors.trendNeutralBg;
 
-    // ── Copy ───────────────────────────────────────────────────────────────
-    final String icon       = improved ? '↑' : declined ? '↓' : '↕';
-    final String stateLabel = improved ? 'IMPROVING' : declined ? 'NEEDS WORK' : 'INCONSISTENT';
+    final IconData icon     = improved ? Icons.trending_up_rounded
+        : declined ? Icons.trending_down_rounded
+        : Icons.remove_rounded;
+    final spread = grades.reduce((a, b) => a > b ? a : b) -
+        grades.reduce((a, b) => a < b ? a : b);
+
+    final String stateLabel = improved ? 'IMPROVING'
+        : declined ? 'NEEDS WORK'
+        : spread < 5 ? 'STABLE'
+        : 'FLUCTUATING';
+
     final String deltaStr   = improved
         ? '+${diff.toStringAsFixed(0)} pts'
         : declined
@@ -960,11 +971,7 @@ class _TrendBanner extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            icon,
-                            style: AppTypography.numericDisplay(
-                                size: 22, color: lineColor),
-                          ),
+                          Icon(icon, size: 26, color: lineColor),
                           const SizedBox(width: AppSpacing.xs),
                           Text(
                             deltaStr,
@@ -1377,10 +1384,11 @@ class _RadarCardState extends State<_RadarCard> {
                 tickCount:       4,
                 ticksTextStyle:  const TextStyle(
                     color: AppColors.transparent, fontSize: 0),
-                gridBorderData:  const BorderSide(
-                    color: AppColors.divider, width: 1),
+                tickBorderData: const BorderSide(color: AppColors.textSecondary, width: 0.5),
+                gridBorderData: const BorderSide(color: AppColors.textSecondary, width: 0.5),
                 radarBorderData: const BorderSide(
-                    color: AppColors.divider, width: 1),
+                    color: AppColors.textSecondary, width: 0.5),
+                radarBackgroundColor: AppColors.transparent,
                 titleTextStyle:  AppTypography.caption(
                     color: AppColors.textSecondary),
                 getTitle: (i, _) => RadarChartTitle(

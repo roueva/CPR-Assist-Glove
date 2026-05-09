@@ -54,6 +54,12 @@ class AppSpacing {
   static const double chipPaddingH     = 12.0;
   static const double chipPaddingV     = 4.0;
 
+  static const double chipPaddingHSm = 6.0;
+  static const double chipPaddingVSm = 2.0;
+  static const double iconTiny        = 10.0;
+  static const double iconXxs         = 12.0;
+  static const double xxxs            = 3.0;
+
   // Inputs
   static const double inputRadius      = 12.0;
   static const double inputPaddingH    = 16.0;
@@ -86,6 +92,7 @@ class AppSpacing {
   static const double avatarSm = 32.0;
   static const double avatarMd = 44.0;
   static const double avatarLg = 64.0;
+  static const double avatarXl = 88.0;  // Hero stats ring
   static const double iconBoxSize   = 36.0;  // Icon container (touchTargetMin − sm)
 
   // Live CPR widget dimensions

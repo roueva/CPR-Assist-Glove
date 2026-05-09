@@ -428,22 +428,27 @@ class ExportService {
     sb.writeln(',');
     sb.writeln('Session ID,${d.id ?? "local"}');
     sb.writeln('Date & Time,${_fmtDt(d.sessionStart)}');
-    sb.writeln('Mode,${d.mode=="emergency"?"Emergency":d.mode=="training_no_feedback"?"Training (No Feedback)":"Training"}');
-    sb.writeln('Scenario,${isPediatric?"Pediatric":"Standard Adult"}');
-    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
-    if (d.note != null && d.note!.isNotEmpty) sb.writeln('Note,${_esc(d.note!)}');
+    sb.writeln('Mode,${d.mode == "emergency" ? "Emergency" : d.mode == "training_no_feedback" ? "Training (No Feedback)" : "Training"}');
+    sb.writeln(
+      'Scenario,${isPediatric ? "Pediatric" : "Standard Adult"},'
+          'Correct Depth Target,${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm',
+    );
+    if (d.note != null && d.note!.isNotEmpty) {
+      sb.writeln('Note,${_esc(d.note!)}');
+    }
     sb.writeln(',');
+
     sb.writeln('SUMMARY');
+    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
     sb.writeln('Total Compressions,$nc');
-    if (d.timeToFirstCompression > 0) sb.writeln('Time to First Compression (s),${d.timeToFirstCompression.toStringAsFixed(2)}');
-    sb.writeln('Depth in Target (n),$inDepthN');
-    sb.writeln('Rate in Target (n),$inRateN');
-    sb.writeln('All Criteria Met (n),$allOkN');
+    sb.writeln('Time to First Compression (s),${d.timeToFirstCompression.toStringAsFixed(2)}');
+    sb.writeln('Correct Depth Compressions,$inDepthN');
+    sb.writeln('Correct Rate Compressions,$inRateN');
+    sb.writeln('Correct Recoil Compressions,${d.correctRecoil}');
     sb.writeln('Avg Depth (cm),${avgDepth.toStringAsFixed(2)}');
     sb.writeln('Avg Rate (BPM),${avgRate.toStringAsFixed(1)}');
-    sb.writeln('CCF (%),${(d.handsOnRatio*100).toStringAsFixed(1)}');
-    sb.writeln('Unplanned Pauses (n),$unpN');
-    if (unpN > 0) sb.writeln('Unplanned Pauses total (s),${unpTot.toStringAsFixed(1)}');
+    sb.writeln('CCF (%),${(d.handsOnRatio * 100).toStringAsFixed(1)}');
+    if (unpN > 0) sb.writeln('Total Unplanned Pauses (s),${unpTot.toStringAsFixed(1)}');
     if (d.rescuerSwapCount > 0) sb.writeln('Rescuer Swaps,${d.rescuerSwapCount}');
     if (isEmergency && d.pulseChecks.isNotEmpty) {
       sb.writeln('Pulse Checks,${d.pulseChecks.length}');

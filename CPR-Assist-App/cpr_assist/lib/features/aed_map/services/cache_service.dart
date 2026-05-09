@@ -347,7 +347,7 @@ class CacheService {
 
   // ── Initialization ─────────────────────────────────────────────────────────
 
-  static Future<void> initializeAllCaches() async {
+  static Future<void> initializeAllCaches({SharedPreferences? prefs}) async {
     await loadDistanceCache();
     await Future<void>.delayed(Duration.zero); // yield to allow first frame to render
     await loadRouteCacheFromPersistent();
