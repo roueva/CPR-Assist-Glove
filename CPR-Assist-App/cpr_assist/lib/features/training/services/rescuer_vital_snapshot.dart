@@ -34,6 +34,10 @@ class RescuerVitalSnapshot {
   /// Dropping PI during session indicates vasoconstriction/fatigue.
   final int rescuerPi;
 
+  /// Skin humidity % from GXHT30 (0–100). Null if invalid.
+  /// Within-session rising humidity = sweating = fatigue indicator.
+  final int? humidity;
+
   /// Composite physiological fatigue score 0–100 at time of snapshot.
   final int fatigueScore;
 
@@ -46,6 +50,7 @@ class RescuerVitalSnapshot {
     this.pauseType     = 'active',
     this.rmssd        = 0,
     this.rescuerPi    = 0,
+    this.humidity,
     this.fatigueScore = 0,
   });
 
@@ -61,6 +66,7 @@ class RescuerVitalSnapshot {
       pauseType:      json['pause_type']     as String?           ?? 'active',
       rmssd:        (json['rmssd']         as num?)?.toInt() ?? 0,
       rescuerPi:    (json['rescuer_pi']    as num?)?.toInt() ?? 0,
+      humidity:     (json['humidity']      as num?)?.toInt(),
       fatigueScore: (json['fatigue_score'] as num?)?.toInt() ?? 0,
     );
   }
@@ -74,6 +80,7 @@ class RescuerVitalSnapshot {
     'pause_type':     pauseType,
     'rmssd':        rmssd,
     'rescuer_pi':   rescuerPi,
+    if (humidity != null) 'humidity': humidity,
     'fatigue_score': fatigueScore,
   };
 }

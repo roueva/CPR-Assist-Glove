@@ -53,11 +53,10 @@ import '../training/widgets/ventilation_overlay.dart';
 
 List<VentilationEvent> _mockVentilations({int count = 4}) =>
     List.generate(count, (i) => VentilationEvent(
-      timestampMs:       (i + 1) * 29000,
-      cycleNumber:       i + 1,
-      ventilationsGiven: i % 3 == 0 ? 1 : 2,
-      durationSec:       3.2 + (i * 0.4),
-      compliant:         i % 3 != 0,
+      timestampMs:  (i + 1) * 29000,
+      cycleNumber:  i + 1,
+      durationSec:  3.2 + (i * 0.4),
+      compliant:    i % 3 != 0,
     ));
 
 // ── Mock pulse check events ───────────────────────────────────────────────
@@ -218,8 +217,8 @@ SessionDetail _mockTrainingAdult({
   patientTemperature:    36.8,
   rescuerHRLastPause:    102.0,
   rescuerSpO2LastPause:  97.0,
-  ambientTempStart:      22.1,
-  ambientTempEnd:        23.4,
+  rescuerWristTempStart:      22.1,
+  rescuerWristTempEnd:        23.4,
   syncedToBackend:       true,
 );
 
@@ -266,8 +265,8 @@ SessionDetail _mockTrainingPediatric({double grade = 91}) => SessionDetail(
   patientTemperature:    36.5,
   rescuerHRLastPause:    94.0,
   rescuerSpO2LastPause:  98.0,
-  ambientTempStart:      21.8,
-  ambientTempEnd:        22.0,
+  rescuerWristTempStart:      21.8,
+  rescuerWristTempEnd:        22.0,
   syncedToBackend:       true,
 );
 
@@ -314,8 +313,8 @@ SessionDetail _mockTrainingNoFeedback({double grade = 88}) => SessionDetail(
   patientTemperature:    36.9,
   rescuerHRLastPause:    108.0,
   rescuerSpO2LastPause:  96.0,
-  ambientTempStart:      22.5,
-  ambientTempEnd:        23.1,
+  rescuerWristTempStart:      22.5,
+  rescuerWristTempEnd:        23.1,
   syncedToBackend:       true,
 );
 
@@ -360,8 +359,8 @@ SessionDetail _mockEmergencyAdult({required bool pulseDetected}) => SessionDetai
   patientTemperature:    35.2,
   rescuerHRLastPause:    118.0,
   rescuerSpO2LastPause:  95.0,
-  ambientTempStart:      20.3,
-  ambientTempEnd:        21.8,
+  rescuerWristTempStart:      20.3,
+  rescuerWristTempEnd:        21.8,
   sessionDuration:       252,
   totalGrade:            0,  // Emergency always 0
   compressions:          _mockCompressionsAdult(count: 120),
@@ -412,8 +411,8 @@ SessionDetail _mockEmergencyPediatric() => SessionDetail(
   patientTemperature:    35.8,
   rescuerHRLastPause:    111.0,
   rescuerSpO2LastPause:  96.0,
-  ambientTempStart:      21.0,
-  ambientTempEnd:        21.5,
+  rescuerWristTempStart:      21.0,
+  rescuerWristTempEnd:        21.5,
   sessionDuration:       153,
   totalGrade:            0,
   compressions:          _mockCompressionsPediatric(),
@@ -464,8 +463,8 @@ SessionDetail _mockEmergencyNoCheck() => SessionDetail(
   patientTemperature:    35.5,
   rescuerHRLastPause:    110.0,
   rescuerSpO2LastPause:  96.0,
-  ambientTempStart:      21.0,
-  ambientTempEnd:        21.8,
+  rescuerWristTempStart:      21.0,
+  rescuerWristTempEnd:        21.8,
   sessionDuration:       190,
   totalGrade:            0,
   compressions:          _mockCompressionsAdult(count: 80),
@@ -516,8 +515,8 @@ SessionDetail _mockEmergencyUncertain() => SessionDetail(
   patientTemperature:    35.6,
   rescuerHRLastPause:    114.0,
   rescuerSpO2LastPause:  95.0,
-  ambientTempStart:      20.5,
-  ambientTempEnd:        21.2,
+  rescuerWristTempStart:      20.5,
+  rescuerWristTempEnd:        21.2,
   sessionDuration:       218,
   totalGrade:            0,
   compressions:          _mockCompressionsAdult(count: 100),
@@ -550,76 +549,6 @@ SessionDetail _mockEmergencyUncertain() => SessionDetail(
 // ─────────────────────────────────────────────────────────────────────────────
 // SUMMARY MOCKS — for fromSummary path
 // ─────────────────────────────────────────────────────────────────────────────
-
-SessionSummary _mockSummaryTraining({double grade = 81}) => SessionSummary(
-  id:                    42,
-  mode:                  'training',
-  scenario:              'standard_adult',
-  compressionCount:      138,
-  correctDepth:          110,
-  correctFrequency:      126,
-  correctRecoil:         118,
-  depthRateCombo:        104,
-  correctPosture:        128,
-  leaningCount:          5,
-  overForceCount:        2,
-  noFlowIntervals:       2,
-  rescuerSwapCount:      1,
-  fatigueOnsetIndex:     0,
-  averageDepth:          5.3,
-  averageFrequency:      110.0,
-  averageEffectiveDepth: 5.1,
-  peakDepth:             6.4,
-  depthSD:               0.33,
-  depthConsistency:      79.7,
-  frequencyConsistency:  91.3,
-  ventilationCount:      4,
-  ventilationCompliance: 75.0,
-  pulseDetectedFinal:    false,
-  pulseChecksPrompted:   0,
-  pulseChecksComplied:   0,
-  patientTemperature:    36.7,
-  rescuerHRLastPause:    99.0,
-  rescuerSpO2LastPause:  97.0,
-  sessionDuration:       168,
-  totalGrade:            grade,
-  sessionStart:          DateTime.now().subtract(const Duration(days: 4)),
-);
-
-SessionSummary _mockSummaryEmergency() => SessionSummary(
-  id:                    17,
-  mode:                  'emergency',
-  scenario:              'standard_adult',
-  compressionCount:      203,
-  correctDepth:          174,
-  correctFrequency:      185,
-  correctRecoil:         162,
-  depthRateCombo:        158,
-  correctPosture:        190,
-  leaningCount:          8,
-  overForceCount:        4,
-  noFlowIntervals:       5,
-  rescuerSwapCount:      2,
-  fatigueOnsetIndex:     160,
-  averageDepth:          5.5,
-  averageFrequency:      112.0,
-  averageEffectiveDepth: 5.3,
-  peakDepth:             7.2,
-  depthSD:               0.41,
-  depthConsistency:      85.7,
-  frequencyConsistency:  91.1,
-  ventilationCount:      6,
-  ventilationCompliance: 83.3,
-  pulseDetectedFinal:    true,
-  pulseChecksPrompted:   2,
-  pulseChecksComplied:   2,
-  patientTemperature:    35.1,
-  rescuerHRLastPause:    122.0,
-  rescuerSpO2LastPause:  94.0,
-  sessionDuration:       295,
-  totalGrade:            0,
-  sessionStart:          DateTime.now().subtract(const Duration(days: 5)),
-);
 
 
 // ── Mock SessionSummary ───────────────────────────────────────────────────
@@ -784,7 +713,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.success,
               label:     'Excellent — Adult, With Feedback (94%)',
               subtitle:  'Standard adult · 160 compressions · 3:05 · graphs',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockTrainingAdult(grade: 94),
               )),
             ),
@@ -794,7 +723,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.primaryAlt,
               label:     'Good — Adult, With Feedback (76%)',
               subtitle:  'Standard adult · 130 compressions · 2:20',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockTrainingAdult(grade: 76,
                     compressions: 130, correctDepth: 95, correctFrequency: 105,
                     avgDepth: 5.1, avgFrequency: 108, durationSecs: 140),
@@ -806,7 +735,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.warning,
               label:     'Needs Work — Adult (48%)',
               subtitle:  'Standard adult · 80 compressions · 1:30',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockTrainingAdult(grade: 48,
                     compressions: 80, correctDepth: 32, correctFrequency: 40,
                     avgDepth: 4.2, avgFrequency: 95, durationSecs: 90),
@@ -818,7 +747,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.primary,
               label:     'Pediatric — Excellent (91%)',
               subtitle:  'Pediatric scenario · 4–5 cm target · graphs',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockTrainingPediatric(grade: 91),
               )),
             ),
@@ -828,18 +757,8 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.textSecondary,
               label:     'No-Feedback Mode — Adult (88%)',
               subtitle:  'training_no_feedback · blind assessment',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockTrainingNoFeedback(grade: 88),
-              )),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.bar_chart_rounded,
-              label:    'From Summary (no graphs)',
-              subtitle: 'History-view path — no compression stream',
-              onTap: () => context.push(SessionResultsScreen.fromSummary(
-                summary:       _mockSummaryTraining(grade: 81),
-                sessionNumber: 7,
               )),
             ),
           ]),
@@ -852,7 +771,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.emergency,
               label:     'Emergency — Adult, Pulse Detected',
               subtitle:  'ROSC · 187 compressions · 4:12 · pulse checks',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyAdult(pulseDetected: true),
               )),
             ),
@@ -869,7 +788,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.warning,
               label:     'Emergency — Adult, No Pulse',
               subtitle:  'No ROSC · 210 compressions · 5:00',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyAdult(pulseDetected: false),
               )),
             ),
@@ -879,18 +798,8 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.emergency,
               label:     'Emergency — Pediatric',
               subtitle:  'Pediatric · 4–5 cm · 95 compressions · 2:30',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyPediatric(),
-              )),
-            ),
-            const _Divider(),
-            _NavTile(
-              icon:     Icons.summarize_outlined,
-              label:    'Emergency — From Summary (no graphs)',
-              subtitle: 'History-view path',
-              onTap: () => context.push(SessionResultsScreen.fromSummary(
-                summary:       _mockSummaryEmergency(),
-                sessionNumber: 3,
               )),
             ),
             const _Divider(),
@@ -899,7 +808,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.success,
               label:     'Emergency — Pulse Detected + Real PPG Wave',
               subtitle:  'Detected 64 bpm · ppgSamples populated · with waveform',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyAdult(pulseDetected: true),
               )),
             ),
@@ -909,7 +818,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.warning,
               label:     'Emergency — No Pulse (no waveform shown)',
               subtitle:  'No detection · waveform section hidden',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyAdult(pulseDetected: false),
               )),
             ),
@@ -919,7 +828,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.warning,
               label:     'Emergency — No Pulse Check Performed',
               subtitle:  'Empty pulseChecks list · noCheck state',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyNoCheck(),
               )),
             ),
@@ -929,7 +838,7 @@ class DevPreviewScreen extends StatelessWidget {
               iconColor: AppColors.feedbackWarn,
               label:     'Emergency — Uncertain / Weak Signal',
               subtitle:  'classification=1 · uncertain state',
-              onTap: () => context.push(SessionResultsScreen.fromDetail(
+              onTap: () => context.push(SessionResultsScreen(
                 detail: _mockEmergencyUncertain(),
               )),
             ),
@@ -1353,10 +1262,7 @@ class _FullLiveCprSimulatorState extends State<_FullLiveCprSimulator> {
   final Duration _cprTime         = const Duration(minutes: 1, seconds: 22);
 
   // ── Posture flags ──────────────────────────────────────────────────────────
-  bool _recoilAchieved = false;
-  final bool        _leaningDetectd    = false;
-  final bool        _postureOk          = true;
-  final bool        _wristDropped       = false;
+  final bool _recoilAchieved = false;
   double      _wristAngle         = 8.0;
 
   // ── Ventilation window ─────────────────────────────────────────────────────
@@ -2035,7 +1941,11 @@ class _DepthBarPreviewState extends State<_DepthBarPreview> {
               child: SizedBox(
                 width:  AppSpacing.depthBarWidth,
                 height: 200,
-                child: AnimatedDepthBar(depth: _depth),
+                child: AnimatedDepthBar(
+                  depth:            _depth,
+                  targetDepthCm:    5.0,
+                  targetDepthMaxCm: 6.0,
+                ),
               ),
             ),
         ),

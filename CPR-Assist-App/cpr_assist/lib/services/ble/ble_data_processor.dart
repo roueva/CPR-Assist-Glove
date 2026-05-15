@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 // The glove exposes exactly two BLE characteristics:
 //
 //   LIVE_STREAM   UUID 19b10001-e8f2-537e-4f6c-d104768a1214
-//     100 bytes fixed, 10 Hz notify.
+//     108 bytes fixed, 25 Hz notify.
 //     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
 //
 //   EVENT_CHANNEL UUID 19b10002-e8f2-537e-4f6c-d104768a1214
@@ -64,7 +64,7 @@ const int kCmdRunSelftest      = 0xFC;
 class BLEDataProcessor {
   const BLEDataProcessor();
 
-  // ── LIVE_STREAM parser (100 bytes, 10 Hz) ────────────────────────────────
+  // ── LIVE_STREAM parser (108 bytes, 25 Hz) ────────────────────────────────
   //
   // Byte layout per spec v3.0 Section 3:
   //   0– 3  float32  depth               cm
@@ -99,7 +99,8 @@ class BLEDataProcessor {
   //  81     uint8    rescuerRMSSD        ms clamped 0–200
   //  82–83  uint16   rescuerTemperature  °C × 100 fixed-point
   //  84     uint8    rescuerPI           0–100
-  //  85–87  uint8[3] reserved
+  //  85     uint8    rescuerHumidity     0–100 %
+  //  86–87  uint8[3] reserved
   //  88     uint8    sessionActive       0/1
   //  89     uint8    pulseCheckActive    0/1
   //  90     uint8    currentMode         0/1/2
@@ -174,11 +175,12 @@ class BLEDataProcessor {
       final spO2User             = b.getFloat32(76, Endian.little);
       final rescuerSignalQuality = b.getUint8(80);
       final rescuerRMSSD         = b.getUint8(81);
-      // rescuerTemperature: read float32 at byte 82 (safe aligned read)
+      // rescuerTemperature: uint16 fixed-point, °C × 100
       final rescuerTemperatureRaw = b.getUint16(82, Endian.little) / 100.0;
 
       final rescuerPI            = b.getUint8(84);
-      // bytes 85–87 reserved
+      final rescuerHumidityRaw   = b.getUint8(85);
+      // bytes 86–87 reserved
 
       // ── SESSION STATE ─────────────────────────────────────────────────────
       final sessionActive     = b.getUint8(88) == 1;
@@ -201,6 +203,9 @@ class BLEDataProcessor {
           : null;
       final rescuerTemp = (rescuerTemperatureRaw > 10.0 && rescuerTemperatureRaw < 50.0)
           ? rescuerTemperatureRaw
+          : null;
+      final rescuerHumidity = (rescuerHumidityRaw > 0 && rescuerHumidityRaw <= 100)
+          ? rescuerHumidityRaw
           : null;
       final battPct = (batteryPercentage > 0 && batteryPercentage <= 100)
           ? batteryPercentage
@@ -246,6 +251,7 @@ class BLEDataProcessor {
         rescuerSignalQuality:  rescuerSignalQuality,
         rescuerRMSSD:          rescuerRMSSD,
         rescuerTemperature:    rescuerTemp,
+        rescuerHumidity:       rescuerHumidity,
         rescuerPI:             rescuerPI,
         // Session state
         sessionActive:      sessionActive,
@@ -310,11 +316,11 @@ class BLEDataProcessor {
       //  58–61   float32 peakDepth
       //  62–65   float32 compressionDepthSD
       //  66–69   float32 patientTemperature
-      //  70–73   float32 rescuerTemperature
+      //  70–73   reserved (rescuer wrist temp at start/end at 82–89)
       //  74–77   float32 rescuerHRLastPause
       //  78–81   float32 rescuerSpO2LastPause
-      //  82–85   float32 ambientTempStart
-      //  86–89   float32 ambientTempEnd
+//  82–85   float32 rescuerWristTempStart
+//  86–89   float32 rescuerWristTempEnd
       //  90      uint8   pulseDetected
       //  91      uint8   noFlowIntervals
       //  92      uint8   rescuerSwapCount
@@ -322,10 +328,9 @@ class BLEDataProcessor {
       //  95      reserved
 
         case kPacketSessionEnd:
-          final patTempEnd  = b.getFloat32(66, Endian.little);
-          final resTempEnd  = b.getFloat32(70, Endian.little);
-          final ambTmpStart = b.getFloat32(82, Endian.little);
-          final ambTmpEnd   = b.getFloat32(86, Endian.little);
+          final patTempEnd       = b.getFloat32(66, Endian.little);
+          final wristTempStart   = b.getFloat32(82, Endian.little);
+          final wristTempEnd     = b.getFloat32(86, Endian.little);
           return ParsedBLEData._event(
             isEndPing:           true,
             currentMode:         b.getUint8(1),
@@ -345,12 +350,11 @@ class BLEDataProcessor {
             fatigueOnsetIndex:   b.getUint32(54, Endian.little),
             peakDepth:           b.getFloat32(58, Endian.little),
             compressionDepthSD:  b.getFloat32(62, Endian.little),
-            patientTemperature:  (patTempEnd  > 10 && patTempEnd  < 50) ? patTempEnd  : null,
-            rescuerTemperatureEnd: (resTempEnd > 10 && resTempEnd < 50) ? resTempEnd  : null,
-            rescuerHRLastPause:  b.getFloat32(74, Endian.little),
-            rescuerSpO2LastPause: b.getFloat32(78, Endian.little),
-            ambientTempStart:    (ambTmpStart > 5 && ambTmpStart < 55) ? ambTmpStart : null,
-            ambientTempEnd:      (ambTmpEnd   > 5 && ambTmpEnd   < 55) ? ambTmpEnd   : null,
+            patientTemperature:    (patTempEnd     > 10 && patTempEnd     < 50) ? patTempEnd     : null,
+            rescuerHRLastPause:    b.getFloat32(74, Endian.little),
+            rescuerSpO2LastPause:  b.getFloat32(78, Endian.little),
+            rescuerWristTempStart: (wristTempStart > 10 && wristTempStart < 50) ? wristTempStart : null,
+            rescuerWristTempEnd:   (wristTempEnd   > 10 && wristTempEnd   < 50) ? wristTempEnd   : null,
             pulseDetected:       b.getUint8(90),
             noFlowIntervalsEnd:  b.getUint8(91),
             rescuerSwapCountEnd: b.getUint8(92),
@@ -436,7 +440,8 @@ class BLEDataProcessor {
             localTotalChunks:    b.getUint8(3),
             // Chunk data occupies bytes 4–79 (76 bytes) per spec v3.0.
 // Bytes 80–95 are reserved. Update range if firmware expands chunk size.
-            localChunkData: data.sublist(4, 80),
+            // Chunk data occupies bytes 4–95 (92 bytes) per spec v3.0 §4.11.
+            localChunkData: data.sublist(4, 96),
           );
 
       // ── 0x0B SELFTEST_RESULT ─────────────────────────────────────────────
@@ -553,6 +558,7 @@ class ParsedBLEData {
   final int     rescuerRMSSD;       // HRV ms clamped 0–200
   final double? rescuerTemperature;
   final int     rescuerPI;          // perfusion index 0–100
+  final int?    rescuerHumidity;    // %, 0–100, null if invalid
 
   // ── LIVE_STREAM: session state ────────────────────────────────────────────
   final bool  sessionActive;
@@ -589,9 +595,8 @@ class ParsedBLEData {
   // Rescuer vitals captured at last pause
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
-  final double? rescuerTemperatureEnd;
-  final double? ambientTempStart;
-  final double? ambientTempEnd;
+  final double? rescuerWristTempStart;
+  final double? rescuerWristTempEnd;
 
   // ── VENTILATION_WINDOW fields ─────────────────────────────────────────────
   final int? cycleNumber;
@@ -681,6 +686,7 @@ class ParsedBLEData {
     this.rescuerRMSSD          = 0,
     this.rescuerTemperature,
     this.rescuerPI             = 0,
+    this.rescuerHumidity,
     this.sessionActive         = false,
     this.pulseCheckActive      = false,
     this.currentMode           = 0,
@@ -711,9 +717,8 @@ class ParsedBLEData {
     this.timeToFirstCompressionMs = 0,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
-    this.rescuerTemperatureEnd,
-    this.ambientTempStart,
-    this.ambientTempEnd,
+    this.rescuerWristTempStart,
+    this.rescuerWristTempEnd,
     this.cycleNumber,
     this.ventilationsExpected,
     this.intervalNumber,
@@ -776,11 +781,10 @@ class ParsedBLEData {
     int    rescuerSwapCountEnd   = 0,
     int timeToFirstCompressionMs = 0,
     double? patientTemperature,
-    double? rescuerTemperatureEnd,
     double? rescuerHRLastPause,
     double? rescuerSpO2LastPause,
-    double? ambientTempStart,
-    double? ambientTempEnd,
+    double? rescuerWristTempStart,
+    double? rescuerWristTempEnd,
     int?   cycleNumber,
     int?   ventilationsExpected,
     int?   intervalNumber,
@@ -838,11 +842,10 @@ class ParsedBLEData {
     rescuerSwapCountEnd:   rescuerSwapCountEnd,
     timeToFirstCompressionMs: timeToFirstCompressionMs,
     patientTemperature:    patientTemperature,
-    rescuerTemperatureEnd: rescuerTemperatureEnd,
     rescuerHRLastPause:    rescuerHRLastPause,
     rescuerSpO2LastPause:  rescuerSpO2LastPause,
-    ambientTempStart:      ambientTempStart,
-    ambientTempEnd:        ambientTempEnd,
+    rescuerWristTempStart: rescuerWristTempStart,
+    rescuerWristTempEnd:   rescuerWristTempEnd,
     cycleNumber:           cycleNumber,
     ventilationsExpected:  ventilationsExpected,
     intervalNumber:        intervalNumber,

@@ -22,11 +22,16 @@ class VitalsCard extends StatelessWidget {
   final double? heartRate;
   final double? temperature;
   final double? spO2;
+  final int?    humidity;  // rescuer wrist humidity, %, 0–100 (rescuer card only)
 
   // pulseConfidence: for patient card — gates HR/SpO₂ display (requires ≥ 40)
   // null = rescuer card (no gating)
   final int? pulseConfidence;
   final int? rescuerSignalQuality;
+
+  /// When true, the whole card renders dimmed — used for the patient card
+  /// between pulse checks to show the last reading as stale.
+  final bool greyedOut;
 
   const VitalsCard({
     super.key,
@@ -34,8 +39,10 @@ class VitalsCard extends StatelessWidget {
     this.heartRate,
     this.temperature,
     this.spO2,
+    this.humidity,
     this.pulseConfidence,
     this.rescuerSignalQuality,
+    this.greyedOut = false,
   });
 
   @override
@@ -116,7 +123,7 @@ class VitalsCard extends StatelessWidget {
           ),
         ),
         Opacity(
-          opacity: hasGoodSignal ? 1.0 : 0.45,
+          opacity: (hasGoodSignal && !greyedOut) ? 1.0 : 0.45,
           child: Container(
             padding: const EdgeInsets.symmetric(
               vertical: AppSpacing.md,
@@ -166,6 +173,18 @@ class VitalsCard extends StatelessWidget {
                     label: 'TEMP',
                   ),
                 ),
+                if (humidity != null) ...[
+                  _Divider(),
+                  Expanded(
+                    child: _VitalItem(
+                      icon: Icons.water_drop_rounded,
+                      iconColor: AppColors.primary,
+                      value: humidity!.toString(),
+                      unit: '%',
+                      label: 'HUMIDITY',
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

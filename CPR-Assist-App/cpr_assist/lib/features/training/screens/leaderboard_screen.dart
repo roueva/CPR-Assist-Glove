@@ -747,8 +747,11 @@ class _MyStatsTab extends ConsumerWidget {
 
         int streak = 0;
         for (final s in training) {
-          if (s.totalGrade >= 75) streak++;
-          else break;
+          if (s.totalGrade >= 75) {
+            streak++;
+          } else {
+            break;
+          }
         }
 
         if (training.isEmpty) {
@@ -824,8 +827,8 @@ class _MyStatsTab extends ConsumerWidget {
         // Depth and rate accuracy as % of sessions in target range
         final targetMin = scenario == 'standard_adult' ? 5.0 : 4.0;
         final targetMax = scenario == 'standard_adult' ? 6.0 : 5.0;
-        final targetRateMin = 100.0;
-        final targetRateMax = 120.0;
+        const targetRateMin = 100.0;
+        const targetRateMax = 120.0;
         final depthAccuracy = (avgDepth >= targetMin &&
             avgDepth <= targetMax)
             ? 100.0
@@ -1484,7 +1487,7 @@ class _GradeTrendCardState extends State<_GradeTrendCard> {
                   gridData: FlGridData(
                     show:             true,
                     drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(
+                    getDrawingHorizontalLine: (_) => const FlLine(
                       color:       AppColors.divider,
                       strokeWidth: AppSpacing.dividerThickness,
                     ),
@@ -1620,7 +1623,7 @@ class _GradeTrendCardState extends State<_GradeTrendCard> {
                             .withValues(alpha: 0.25),
                         strokeWidth: 1,
                       ),
-                      FlDotData(show: false),
+                      const FlDotData(show: false),
                     ))
                         .toList(),
                     touchTooltipData: LineTouchTooltipData(
@@ -1706,7 +1709,7 @@ class _GradeTrendCardState extends State<_GradeTrendCard> {
 // PERSONAL RECORDS
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PersonalRecordsCard extends StatelessWidget {
+class _PersonalRecordsCard extends ConsumerWidget {
   final SessionSummary bestSession;
   final List<SessionSummary> allSessions;
   final SessionSummary? bestDepthSession;
@@ -1722,8 +1725,8 @@ class _PersonalRecordsCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final sessionIdx   = allSessions.indexOf(bestSession);
+  Widget build(BuildContext context, WidgetRef ref) {
+    allSessions.indexOf(bestSession);
     final longestSession = allSessions.reduce(
             (a, b) => a.sessionDuration > b.sessionDuration ? a : b);
 
@@ -1749,11 +1752,8 @@ class _PersonalRecordsCard extends StatelessWidget {
           // Best session hero
         GestureDetector(
           onTap: () {
-            final idx = allSessions.indexOf(bestSession);
-            final num = bestSession.sessionNumber ??
-                (allSessions.length - (idx >= 0 ? idx : 0));
-            context.push(SessionResultsScreen.fromSummary(
-                summary: bestSession, sessionNumber: num));
+            allSessions.indexOf(bestSession);
+            openSessionResults(context, ref, summary: bestSession);
           },
           child: Container(
             width: double.infinity,
@@ -1784,7 +1784,7 @@ class _PersonalRecordsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
-                        'Session #${bestSession.sessionNumber ?? (allSessions.length - (allSessions.indexOf(bestSession) >= 0 ? allSessions.indexOf(bestSession) : 0))}'
+                        'Session #${bestSession.sessionNumber ?? (allSessions.length - (allSessions.contains(bestSession) ? allSessions.indexOf(bestSession) : 0))}'
                             '  ·  ${bestSession.dateTimeFormatted}',
                         style: AppTypography.caption(
                             color: AppColors.pbGoldText.withValues(alpha: 0.7)),
@@ -1863,7 +1863,7 @@ class _PersonalRecordsCard extends StatelessWidget {
   }
 }
 
-class _RecordRow extends StatelessWidget {
+class _RecordRow extends ConsumerWidget {
   final String         label;
   final String         value;
   final int?           sessionNumber;
@@ -1882,16 +1882,13 @@ class _RecordRow extends StatelessWidget {
 
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final canTap = session != null;
     return GestureDetector(
       onTap: canTap
           ? () {
-        final idx = allSessions.indexOf(session!);
-        final num = session!.sessionNumber ??
-            (allSessions.length - (idx >= 0 ? idx : 0));
-        context.push(SessionResultsScreen.fromSummary(
-            summary: session!, sessionNumber: num));
+        allSessions.indexOf(session!);
+        openSessionResults(context, ref, summary: session!);
       }
           : null,
       child: Padding(
@@ -2051,7 +2048,7 @@ class _NextMilestoneCard extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SimulatedLeaderboardPreview extends StatefulWidget {
-  const SimulatedLeaderboardPreview();
+  const SimulatedLeaderboardPreview({super.key});
   @override
   State<SimulatedLeaderboardPreview> createState() =>
       _SimulatedLeaderboardPreviewState();

@@ -40,7 +40,7 @@ class AchievementsScreen extends ConsumerWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: AppColors.primary),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
         title: Text('Achievements', style: AppTypography.heading(size: 18)),
       ),

@@ -52,7 +52,7 @@ class _FrequencyArcGaugeState extends State<FrequencyArcGauge>
     super.initState();
     _needleCtrl = AnimationController(
       vsync:    this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 100),
     );
     _needleAnim = const AlwaysStoppedAnimation(0.0);
 

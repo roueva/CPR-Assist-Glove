@@ -94,6 +94,10 @@ class CompressionEvent {
   /// 0 when not available (Emergency mode or older firmware).
   final int downstrokeTimeMs;
 
+  /// Peak force seen during this compression's downstroke (N).
+  /// Tracked client-side from LIVE_STREAM `force` updates.
+  final double peakForce;
+
   /// Session ms when peak depth was locked by the IMU (firmware peakTimestampMs).
   /// Absolute timestamp from session start. Use with valleyTimestampMs to
   /// compute exact compression phase durations.
@@ -119,14 +123,21 @@ class CompressionEvent {
     this.compressionAxisDev  = 0.0,
     this.effectiveDepth      = 0.0,
     this.downstrokeTimeMs    = 0,
+    this.peakForce         = 0.0,
     this.peakTimestampMs   = 0,
     this.valleyTimestampMs = 0,
   });
 
   // ── Derived quality checks ────────────────────────────────────────────────
 
-  bool get isDepthInTarget =>
-      depth >= CprTargets.depthMin && depth <= CprTargets.depthMax;
+  bool isDepthInTargetFor({required double depthMin, required double depthMax}) =>
+      depth >= depthMin && depth <= depthMax;
+
+  bool isPerfectFor({required double depthMin, required double depthMax}) =>
+      isDepthInTargetFor(depthMin: depthMin, depthMax: depthMax) &&
+          isFrequencyInTarget &&
+          recoilAchieved &&
+          postureOk;
 
   /// Uses [instantaneousRate] for per-compression accuracy per spec v3.0.
   /// Falls back to [frequency] if instantaneousRate is 0 (warmup phase).
@@ -139,14 +150,10 @@ class CompressionEvent {
       wristAlignmentAngle <= CprTargets.alignmentMaxDeg &&
           wristFlexionAngle.abs() <= CprTargets.flexionMaxDeg;
 
-  /// True if depth, rate, recoil, and posture are all within target.
-  bool get isPerfect =>
-      isDepthInTarget && isFrequencyInTarget && recoilAchieved && postureOk;
-
   double get timestampSec => timestampMs / 1000.0;
 
-  /// Duration of downstroke phase: session start → peak (ms).
-  /// Use peakTimestampMs - timestampMs to get time-within-compression.
+  /// Duration from compression-start timestamp to peak timestamp.
+  /// Returns 0 if timestampMs already represents the peak timestamp.
   int get downstrokePhaseDurationMs =>
       peakTimestampMs > timestampMs ? peakTimestampMs - timestampMs : 0;
 
@@ -154,68 +161,43 @@ class CompressionEvent {
   int get recoilPhaseDurationMs =>
       valleyTimestampMs > peakTimestampMs ? valleyTimestampMs - peakTimestampMs : 0;
 
-  // ── BLE factory — called in BLEConnection._handleLiveStream() ─────────────
-  //
-  // [packet] is the Map<String,dynamic> broadcast by BLEConnection.
-  // [sessionStartMs] is the wall-clock ms when SESSION_START was received.
-  //
-  factory CompressionEvent.fromBlePacket(
-      Map<String, dynamic> packet, {
-        required int sessionStartMs,
-      }) {
-    final absoluteTs  = packet['timestamp']             as int?  ?? 0;
-    final axisDevDeg  = (packet['compressionAxisDeviation'] as num?)?.toDouble() ?? 0.0;
-    final rawDepth    = (packet['depth']                as num?)?.toDouble() ?? 0.0;
-    final instRate    = (packet['instantaneousRate']    as num?)?.toDouble() ?? 0.0;
-
-    return CompressionEvent(
-      timestampMs:          absoluteTs - sessionStartMs,
-      depth:                rawDepth,
-      instantaneousRate:    instRate,
-      frequency:            (packet['frequency']             as num?)?.toDouble() ?? 0.0,
-      force:                (packet['force']                 as num?)?.toDouble() ?? 0.0,
-      valleyDepth:          (packet['valleyDepth']           as num?)?.toDouble() ?? 0.0,
-      recoilAchieved:        packet['recoilAchieved']        as bool?             ?? false,
-      overForce:             packet['overForceFlag']         as bool?             ?? false,
-      postureOk:             packet['postureOk']             as bool?             ?? false,
-      leaningDetected:       packet['leaningDetected']       as bool?             ?? false,
-      wristAlignmentAngle:  (packet['wristAlignmentAngle']   as num?)?.toDouble() ?? 0.0,
-      wristFlexionAngle:    (packet['wristFlexionAngle']     as num?)?.toDouble() ?? 0.0,
-      compressionAxisDev:   axisDevDeg,
-      effectiveDepth:       rawDepth * cos(axisDevDeg * pi / 180.0),
-      downstrokeTimeMs:     (packet['downstrokeTimeMs']      as num?)?.toInt()    ?? 0,
-      peakTimestampMs:   (packet['peakTimestampMs']   as num?)?.toInt() ?? 0,
-      valleyTimestampMs: (packet['valleyTimestampMs'] as num?)?.toInt() ?? 0,
-    );
-  }
-
   // ── JSON factory — called when hydrating from backend ─────────────────────
   //
   // Key names match the aliases returned by GET /sessions/:id/detail.
   // Tolerant of missing fields for backward compatibility with older records.
   //
   factory CompressionEvent.fromJson(Map<String, dynamic> json) {
-    final axisDevDeg = (json['axis_dev']         as num?)?.toDouble() ?? 0.0;
-    final rawDepth   = (json['depth']             as num?)?.toDouble() ?? 0.0;
+    final axisDevDeg = (json['axis_dev'] as num?)?.toDouble() ?? 0.0;
+    final rawDepth = (json['depth'] as num?)?.toDouble() ?? 0.0;
+    final storedEffectiveDepth =
+        (json['effective_depth'] as num?)?.toDouble() ?? 0.0;
+    final computedEffectiveDepth =
+        rawDepth * cos(axisDevDeg * pi / 180.0);
 
     return CompressionEvent(
-      timestampMs:         (json['ts']                   as num).toInt(),
-      depth:               rawDepth,
-      instantaneousRate:   (json['instantaneous_rate']   as num?)?.toDouble() ?? 0.0,
-      frequency:           (json['freq']                 as num?)?.toDouble() ?? 0.0,
-      force:               (json['force']                as num?)?.toDouble() ?? 0.0,
-      valleyDepth:         (json['valley_depth']          as num?)?.toDouble() ?? 0.0,
-      recoilAchieved:       json['recoil']               as bool?             ?? false,
-      overForce:            json['over_force']           as bool?             ?? false,
-      postureOk:            json['posture_ok']           as bool?             ?? false,
-      leaningDetected:      json['leaning']              as bool?             ?? false,
-      wristAlignmentAngle: (json['wrist_angle']          as num?)?.toDouble() ?? 0.0,
-      wristFlexionAngle:   (json['wrist_flexion']        as num?)?.toDouble() ?? 0.0,
-      compressionAxisDev:  axisDevDeg,
-      effectiveDepth:      (json['effective_depth']      as num?)?.toDouble()
-          ?? rawDepth * cos(axisDevDeg * pi / 180.0),
-      downstrokeTimeMs:    (json['downstroke_time_ms']   as num?)?.toInt()    ?? 0,
-      peakTimestampMs:   (json['peak_ts']   as num?)?.toInt() ?? 0,
+      timestampMs: (json['ts'] as num?)?.toInt() ?? 0,
+      depth: rawDepth,
+      instantaneousRate:
+      (json['instantaneous_rate'] as num?)?.toDouble() ?? 0.0,
+      frequency: (json['freq'] as num?)?.toDouble() ?? 0.0,
+      force: (json['force'] as num?)?.toDouble() ?? 0.0,
+      peakForce: (json['peak_force'] as num?)?.toDouble() ?? 0.0,
+      valleyDepth: (json['valley_depth'] as num?)?.toDouble() ?? 0.0,
+      recoilAchieved: json['recoil'] as bool? ?? false,
+      overForce: json['over_force'] as bool? ?? false,
+      postureOk: json['posture_ok'] as bool? ?? false,
+      leaningDetected: json['leaning'] as bool? ?? false,
+      wristAlignmentAngle:
+      (json['wrist_angle'] as num?)?.toDouble() ?? 0.0,
+      wristFlexionAngle:
+      (json['wrist_flexion'] as num?)?.toDouble() ?? 0.0,
+      compressionAxisDev: axisDevDeg,
+      effectiveDepth: storedEffectiveDepth > 0
+          ? storedEffectiveDepth
+          : computedEffectiveDepth,
+      downstrokeTimeMs:
+      (json['downstroke_time_ms'] as num?)?.toInt() ?? 0,
+      peakTimestampMs: (json['peak_ts'] as num?)?.toInt() ?? 0,
       valleyTimestampMs: (json['valley_ts'] as num?)?.toInt() ?? 0,
     );
   }
@@ -239,7 +221,7 @@ class CompressionEvent {
     'wrist_flexion':       wristFlexionAngle,
     'axis_dev':            compressionAxisDev,
     'effective_depth':     effectiveDepth,
-    'peak_force':          force,        // reuse force as peak_force — glove sends peak
+    'peak_force':          peakForce > 0 ? peakForce : force,
     'downstroke_time_ms':  downstrokeTimeMs,
     'peak_ts':   peakTimestampMs,
     'valley_ts': valleyTimestampMs,

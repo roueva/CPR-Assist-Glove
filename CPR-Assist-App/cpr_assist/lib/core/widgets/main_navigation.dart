@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
@@ -9,6 +11,7 @@ import '../../features/aed_map/screens/aed_map_screen.dart';
 import '../../features/guide/screens/guide_screen.dart';
 import '../../features/live_cpr/screens/live_cpr_screen.dart';
 import '../../main.dart';
+import '../../providers/app_providers.dart';
 
 class MainNavigationScreen extends ConsumerStatefulWidget {
   const MainNavigationScreen({super.key});
@@ -21,6 +24,7 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 class _MainNavigationScreenState
     extends ConsumerState<MainNavigationScreen> {
   late PageController _pageController;
+  StreamSubscription<Map<String, dynamic>>? _sessionStartSub;
   int _currentIndex = 0;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -39,6 +43,15 @@ class _MainNavigationScreenState
       const GuideScreen(),
     ];
     nfcTabNotifier.addListener(_onNfcTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sessionStartSub = ref.read(bleConnectionProvider).dataStream.listen((data) {
+        if (!mounted) return;
+        if (data['isStartPing'] == true) {
+          final autoSwitch = ref.read(settingsProvider).autoSwitchToCPR;
+          if (autoSwitch && _currentIndex != 1) _onTabTapped(1);
+        }
+      });
+    });
   }
 
   void _onTabTapped(int index) {
@@ -54,6 +67,7 @@ class _MainNavigationScreenState
     _pageController.dispose();
     _panelController.dispose();
     nfcTabNotifier.removeListener(_onNfcTab);
+    _sessionStartSub?.cancel();
     super.dispose();
   }
 

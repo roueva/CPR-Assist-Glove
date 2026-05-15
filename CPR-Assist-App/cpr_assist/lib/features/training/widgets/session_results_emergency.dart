@@ -1568,11 +1568,11 @@ class _PatientEnvironmentSection extends StatelessWidget {
             note: 'Glove sensor, carotid contact',
             iconColor: AppColors.error,
           ),
-        if (detail.ambientTempStart != null)
+        if (detail.rescuerWristTempStart != null)
           _DetailRow(
             icon:      Icons.device_thermostat_rounded,
             label:     'Room Temperature',
-            value:     '${detail.ambientTempStart!.toStringAsFixed(1)} °C',
+            value:     '${detail.rescuerWristTempStart!.toStringAsFixed(1)} °C',
             note:      'At session start',
             iconColor: AppColors.textSecondary,
           ),
@@ -2023,12 +2023,12 @@ class _BiometricsSection extends StatelessWidget {
             note: 'Glove sensor, carotid contact',
             iconColor: AppColors.error,
           ),
-        if (detail?.ambientTempStart != null)
+        if (detail?.rescuerWristTempStart != null)
           _DetailRow(
             icon:      Icons.thermostat_rounded,
             label:     'Room Temperature',
-            value:     '${detail!.ambientTempStart!.toStringAsFixed(1)}°C',
-            note:      'Ambient at session start',
+            value:     '${detail!.rescuerWristTempStart!.toStringAsFixed(1)}°C',
+            note:      'Rescuer wrist temp at session start',
             iconColor: AppColors.textSecondary,
           ),
       ],

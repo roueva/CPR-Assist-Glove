@@ -131,10 +131,12 @@ async function ensureSessionTables() {
                 depth_sd                FLOAT        DEFAULT 0,
                 depth_consistency       FLOAT        DEFAULT 0,
                 freq_consistency        FLOAT        DEFAULT 0,
-                hands_on_ratio          FLOAT        DEFAULT 1,
-                no_flow_time            FLOAT        DEFAULT 0,
-                no_flow_intervals       INT          DEFAULT 0,
-                rate_variability        FLOAT        DEFAULT 0,
+              hands_on_ratio          FLOAT        DEFAULT 1,
+no_flow_time            FLOAT        DEFAULT 0,
+no_flow_intervals       INT          DEFAULT 0,
+unplanned_pause_time    FLOAT        DEFAULT 0,
+unplanned_pause_count   INT          DEFAULT 0,
+rate_variability        FLOAT        DEFAULT 0,
                 time_to_first_comp      FLOAT        DEFAULT 0,
                 consecutive_good_peak   INT          DEFAULT 0,
                 fatigue_onset_index     INT          DEFAULT 0,
@@ -145,16 +147,19 @@ async function ensureSessionTables() {
                 pulse_checks_complied   INT          DEFAULT 0,
                 pulse_detected_final    BOOLEAN      DEFAULT false,
                 patient_temperature     FLOAT,
+                patient_spo2_last_check FLOAT,
                 rescuer_hr_last_pause   FLOAT,
                 rescuer_spo2_last_pause FLOAT,
-                ambient_temp_start      FLOAT,
-                ambient_temp_end        FLOAT,
+                rescuer_wrist_temp_start FLOAT,
+                rescuer_wrist_temp_end   FLOAT,
                 user_heart_rate         FLOAT,
                 user_temperature        FLOAT,
                 session_duration        INT          DEFAULT 0,
                 total_grade             FLOAT        DEFAULT 0,
-                synced_from_local       BOOLEAN      DEFAULT false,
-                note                    VARCHAR(500)
+                note                    VARCHAR(500),
+fatigue_alert_timestamp_ms INTEGER,
+fatigue_alert_score INTEGER,
+two_min_alert_timestamps_ms INTEGER[]
             );
         `);
 
@@ -200,7 +205,6 @@ async function ensureSessionTables() {
                 session_id         BIGINT  NOT NULL REFERENCES cpr_sessions(id) ON DELETE CASCADE,
                 timestamp_ms       INT     NOT NULL,
                 cycle_number       INT     NOT NULL,
-                ventilations_given INT     DEFAULT 0,
                 duration_sec       FLOAT   DEFAULT 0,
                 compliant          BOOLEAN DEFAULT false
             );
@@ -249,7 +253,8 @@ async function ensureSessionTables() {
                 temperature    FLOAT   DEFAULT 0,
                 fatigue_score  INT     DEFAULT 0,
                 signal_quality INT     DEFAULT 0,
-                pause_type     VARCHAR(20)
+                pause_type     VARCHAR(20),
+                humidity       INT
             );
         `);
 
@@ -284,19 +289,36 @@ async function ensureSessionTables() {
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS patient_temperature     FLOAT`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_hr_last_pause   FLOAT`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_spo2_last_pause FLOAT`,
-            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS synced_from_local       BOOLEAN      DEFAULT false`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS note                    VARCHAR(500)`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS depth_sd               FLOAT        DEFAULT 0`,
-            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_intervals       INT          DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS unplanned_pause_time    FLOAT        DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS unplanned_pause_count   INT          DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_swap_count      INT          DEFAULT 0`,
-            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS ambient_temp_start      FLOAT`,
-            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS ambient_temp_end        FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_wrist_temp_start FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS rescuer_wrist_temp_end   FLOAT`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS hands_on_ratio          FLOAT        DEFAULT 1`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_time            FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS depth_consistency       FLOAT        DEFAULT 0`,
             `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS freq_consistency        FLOAT        DEFAULT 0`,
             `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS patient_spo2  FLOAT DEFAULT 0`,
             `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS ppg_samples   JSONB`,
+            `DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cpr_sessions' AND column_name='ambient_temp_start') THEN
+    UPDATE cpr_sessions SET rescuer_wrist_temp_start = COALESCE(rescuer_wrist_temp_start, ambient_temp_start);
+    ALTER TABLE cpr_sessions DROP COLUMN ambient_temp_start;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='cpr_sessions' AND column_name='ambient_temp_end') THEN
+    UPDATE cpr_sessions SET rescuer_wrist_temp_end = COALESCE(rescuer_wrist_temp_end, ambient_temp_end);
+    ALTER TABLE cpr_sessions DROP COLUMN ambient_temp_end;
+  END IF;
+END $$`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS patient_spo2_last_check FLOAT`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS fatigue_alert_timestamp_ms INTEGER`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS fatigue_alert_score INTEGER`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS two_min_alert_timestamps_ms INTEGER[]`,
+            `ALTER TABLE session_ventilations DROP COLUMN IF EXISTS ventilations_given`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_intervals INT DEFAULT 0`,
 
             // Add FK from cpr_sessions.user_id → users.id with cascade delete
             // DO $$ wrapping makes it safe to re-run — it only adds the constraint if it doesn't already exist
@@ -343,6 +365,7 @@ END $$`,
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_depth REAL DEFAULT 0`,
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS peak_ts  INTEGER DEFAULT 0`,
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_ts INTEGER DEFAULT 0`,
+            `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS humidity INT`,
             // Unique index required for ON CONFLICT upsert in POST /sessions/detail
             `CREATE UNIQUE INDEX IF NOT EXISTS uq_user_session_start
              ON cpr_sessions (user_id, session_start)`,

@@ -2434,7 +2434,7 @@ class _MetricGroup extends StatelessWidget {
                                 color: AppColors.textOnDark)),
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: () => context.pop(),
                         child: Padding(
                           padding: const EdgeInsets.only(right: AppSpacing.xs),
                           child: Icon(Icons.close_rounded,
@@ -2701,7 +2701,7 @@ class _ComparChartCard extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.close_rounded,
                       color: AppColors.textSecondary, size: 20),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => context.pop(),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),

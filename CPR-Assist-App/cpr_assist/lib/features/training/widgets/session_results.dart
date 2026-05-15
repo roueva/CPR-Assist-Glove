@@ -41,24 +41,14 @@ part 'session_results_training_tabs.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SessionResultsScreen extends ConsumerStatefulWidget {
-  final SessionDetail?  _detail;
-  final SessionSummary? _summary;
-  final int?            _sessionNumber;
+  final SessionDetail detail;
+  final int?          sessionNumber;
 
-  const SessionResultsScreen.fromDetail({
+  const SessionResultsScreen({
     super.key,
-    required SessionDetail detail,
-  })  : _detail        = detail,
-        _summary       = null,
-        _sessionNumber = null;
-
-  const SessionResultsScreen.fromSummary({
-    super.key,
-    required SessionSummary summary,
-    int? sessionNumber,
-  })  : _detail        = null,
-        _summary       = summary,
-        _sessionNumber = sessionNumber;
+    required this.detail,
+    this.sessionNumber,
+  });
 
   @override
   ConsumerState<SessionResultsScreen> createState() =>
@@ -69,29 +59,25 @@ class _SessionResultsScreenState
     extends ConsumerState<SessionResultsScreen>
     with SingleTickerProviderStateMixin {
 
+
   String? _note;
   List<String> _previouslyUnlockedIds  = [];
   List<String> _previouslyEarnedCertIds = [];
   late TabController _tabController;
-  SessionDetail? _fetchedDetail;
-  bool _isFetchingDetail = false;
+
+  SessionDetail get _d => widget.detail;
 
   // ── Init ────────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _note = widget._detail?.note ?? widget._summary?.note;
+    _note = _d.note;
     _tabController = TabController(length: 3, vsync: this);
 
-    if (widget._detail != null && !_isEmergency) {
+    if (!_isEmergency) {
       _previouslyUnlockedIds   = _computePreviouslyUnlocked();
       _previouslyEarnedCertIds = _computePreviouslyEarnedCerts();
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkNewAchievements());
-    }
-
-    // If opened from summary and has a backend id, fetch full detail immediately
-    if (widget._detail == null && widget._summary?.id != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchDetail());
     }
   }
 
@@ -105,23 +91,22 @@ class _SessionResultsScreenState
 
   bool get _isPersonalBest {
     final summaries = ref.watch(sessionSummariesProvider).valueOrNull ?? [];
+    final start = _d.sessionStart;
     final training = summaries
         .where((s) => s.isTraining && s.totalGrade > 0)
-        .where((s) {
-      final start = widget._detail?.sessionStart ?? widget._summary?.sessionStart;
-      return start == null ||
-          s.sessionStart?.millisecondsSinceEpoch != start.millisecondsSinceEpoch;
-    })
+        .where((s) =>
+    s.sessionStart?.millisecondsSinceEpoch != start.millisecondsSinceEpoch)
         .toList();
     if (training.isEmpty) return _grade > 0;
     final best = training.map((s) => s.totalGrade).reduce((a, b) => a > b ? a : b);
     return _grade > 0 && _grade >= best;
   }
 
+
   // ── Achievement helpers ─────────────────────────────────────────────────────
   List<String> _computePreviouslyUnlocked() {
     final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-    final start = widget._detail!.sessionStart;
+    final start = _d.sessionStart;
     final previous = summaries.where((s) =>
     s.sessionStart == null ||
         s.sessionStart!.millisecondsSinceEpoch != start.millisecondsSinceEpoch,
@@ -132,29 +117,7 @@ class _SessionResultsScreenState
 
   List<String> _computePreviouslyEarnedCerts() {
     final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-    final start = widget._detail!.sessionStart;
-    final previous = summaries.where((s) =>
-    s.sessionStart == null ||
-        s.sessionStart!.millisecondsSinceEpoch != start.millisecondsSinceEpoch,
-    ).toList();
-    return CertificateService.compute(previous)
-        .where((c) => c.earned).map((c) => c.id).toList();
-  }
-
-  List<String> _computePreviouslyUnlockedFrom(SessionDetail detail) {
-    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-    final start = detail.sessionStart;
-    final previous = summaries.where((s) =>
-    s.sessionStart == null ||
-        s.sessionStart!.millisecondsSinceEpoch != start.millisecondsSinceEpoch,
-    ).toList();
-    return AchievementService.compute(previous)
-        .where((a) => a.unlocked).map((a) => a.id).toList();
-  }
-
-  List<String> _computePreviouslyEarnedCertsFrom(SessionDetail detail) {
-    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-    final start = detail.sessionStart;
+    final start = _d.sessionStart;
     final previous = summaries.where((s) =>
     s.sessionStart == null ||
         s.sessionStart!.millisecondsSinceEpoch != start.millisecondsSinceEpoch,
@@ -172,9 +135,11 @@ class _SessionResultsScreenState
     for (int i = 0; i < newlyUnlocked.length; i++) {
       final a = newlyUnlocked[i];
       Future.delayed(Duration(milliseconds: 600 + i * 900), () {
-        if (mounted) UIHelper.showSnackbar(context,
+        if (mounted) {
+          UIHelper.showSnackbar(context,
             message: '${a.emoji} Achievement unlocked: ${a.title}',
             icon: Icons.emoji_events_rounded);
+        }
       });
     }
     final certs    = ref.read(certificatesProvider);
@@ -185,50 +150,20 @@ class _SessionResultsScreenState
       final c = newCerts[i];
       Future.delayed(
           Duration(milliseconds: 1200 + newlyUnlocked.length * 900 + i * 1000), () {
-        if (mounted) UIHelper.showSnackbar(context,
+        if (mounted) {
+          UIHelper.showSnackbar(context,
             message: '${c.emoji} Certificate earned: ${c.title}!',
             icon: Icons.workspace_premium_rounded);
+        }
       });
     }
   }
 
-  Future<void> _fetchDetail() async {
-    final id = widget._summary?.id;
-    if (id == null || _isFetchingDetail) return;
-    setState(() => _isFetchingDetail = true);
-    try {
-      final service = ref.read(sessionServiceProvider);
-      final detail  = await service.fetchDetail(id);
-      if (!mounted) return;
-      setState(() {
-        _fetchedDetail      = detail;
-        _isFetchingDetail   = false;
-        _note               = detail.note ?? _note;
-      });
-      // Run achievement check now that we have real detail
-      if (!detail.isEmergency) {
-        _previouslyUnlockedIds   = _computePreviouslyUnlockedFrom(detail);
-        _previouslyEarnedCertIds = _computePreviouslyEarnedCertsFrom(detail);
-        _checkNewAchievements();
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isFetchingDetail = false);
-    }
-  }
-
-  // ── Mode / scenario helpers ─────────────────────────────────────────────────
-  bool get _isEmergency =>
-      (widget._detail?.isEmergency ?? _fetchedDetail?.isEmergency ?? widget._summary?.isEmergency) ?? true;
-
-  String get _scenario =>
-      widget._detail?.scenario ?? _fetchedDetail?.scenario ?? widget._summary?.scenario ?? 'standard_adult';
-
-  bool get _isPediatric => _scenario == 'pediatric';
-
-  bool get _isNoFeedback =>
-      widget._detail?.isNoFeedback ?? _fetchedDetail?.isNoFeedback ?? widget._summary?.isNoFeedback ?? false;
-
-  SessionDetail? get _effectiveDetail => widget._detail ?? _fetchedDetail;
+// ── Mode / scenario helpers ─────────────────────────────────────────────────
+  bool   get _isEmergency  => _d.isEmergency;
+  String get _scenario     => _d.scenario;
+  bool   get _isPediatric  => _scenario == 'pediatric';
+  bool   get _isNoFeedback => _d.isNoFeedback;
 
   double get _targetDepthMin =>
       _isPediatric ? CprTargets.depthMinPediatric : CprTargets.depthMin;
@@ -240,33 +175,15 @@ class _SessionResultsScreenState
       '${_targetDepthMin.toStringAsFixed(0)}–${_targetDepthMax.toStringAsFixed(0)} cm';
 
   // ── Data helpers ────────────────────────────────────────────────────────────
-  double get _grade =>
-      widget._detail?.totalGrade ?? _fetchedDetail?.totalGrade ?? widget._summary?.totalGrade ?? 0;
-
-  int get _compressionCount =>
-      widget._detail?.compressionCount ?? _fetchedDetail?.compressionCount ?? widget._summary?.compressionCount ?? 0;
-
-
-  String get _durationFormatted =>
-      widget._detail?.durationFormatted ?? _fetchedDetail?.durationFormatted ?? widget._summary?.durationFormatted ?? '—';
-
-  double get _averageFrequency =>
-      widget._detail?.averageFrequency ?? _fetchedDetail?.averageFrequency ?? widget._summary?.averageFrequency ?? 0;
-
-  double get _averageDepth =>
-      widget._detail?.averageDepth ?? _fetchedDetail?.averageDepth ?? widget._summary?.averageDepth ?? 0;
-
-  String get _dateTimeFormatted =>
-      widget._detail?.dateTimeFormatted ?? _fetchedDetail?.dateTimeFormatted ?? widget._summary?.dateTimeFormatted ?? '—';
-
-  int get _correctDepth =>
-      widget._detail?.correctDepth ?? _fetchedDetail?.correctDepth ?? widget._summary?.correctDepth ?? 0;
-
-  int get _correctFrequency =>
-      widget._detail?.correctFrequency ?? _fetchedDetail?.correctFrequency ?? widget._summary?.correctFrequency ?? 0;
-
-  int get _correctRecoil =>
-      widget._detail?.correctRecoil ?? _fetchedDetail?.correctRecoil ?? widget._summary?.correctRecoil ?? 0;
+  double get _grade             => _d.totalGrade;
+  int    get _compressionCount  => _d.compressionCount;
+  String get _durationFormatted => _d.durationFormatted;
+  double get _averageFrequency  => _d.averageFrequency;
+  double get _averageDepth      => _d.averageDepth;
+  String get _dateTimeFormatted => _d.dateTimeFormatted;
+  int    get _correctDepth      => _d.correctDepth;
+  int    get _correctFrequency  => _d.correctFrequency;
+  int    get _correctRecoil     => _d.correctRecoil;
 
   double get _depthPct =>
       _compressionCount > 0 ? (_correctDepth / _compressionCount * 100) : 0;
@@ -278,20 +195,14 @@ class _SessionResultsScreenState
       _compressionCount > 0 ? (_correctRecoil / _compressionCount * 100) : 0;
 
   double get _avgWristAngle {
-    final c = widget._detail?.compressions ?? _fetchedDetail?.compressions;
-    if (c == null || c.isEmpty) return 0.0;
+    final c = _d.compressions;
+    if (c.isEmpty) return 0.0;
     return c.map((e) => e.wristAlignmentAngle).reduce((a, b) => a + b) / c.length;
   }
 
-  double? get _rescuerHR =>
-      widget._detail?.rescuerHRLastPause
-          ?? _fetchedDetail?.rescuerHRLastPause
-          ?? widget._summary?.rescuerHRLastPause;
-
-  double? get _rescuerSpO2 =>
-      widget._detail?.rescuerSpO2LastPause ?? _fetchedDetail?.rescuerSpO2LastPause ?? widget._summary?.rescuerSpO2LastPause;
-
-  bool get _hasBiometrics => _rescuerHR != null || _rescuerSpO2 != null;
+  double? get _rescuerHR    => _d.rescuerHRLastPause;
+  double? get _rescuerSpO2  => _d.rescuerSpO2LastPause;
+  bool    get _hasBiometrics => _rescuerHR != null || _rescuerSpO2 != null;
 
   String get _motivationalLabel {
     if (_grade >= 90) return 'Outstanding performance!';
@@ -307,15 +218,15 @@ class _SessionResultsScreenState
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   Future<void> _exportSession() async {
-    final summary = widget._summary ??
-        (widget._detail != null ? SessionSummary.fromDetail(widget._detail!) : null);
-    if (summary == null) return;
-    await ExportBottomSheet.showForSingleSession(context,
-        summary: summary, detail: widget._detail ?? _fetchedDetail);
+    await ExportBottomSheet.showForSingleSession(
+      context,
+      summary: SessionSummary.fromDetail(_d),
+      detail:  _d,
+    );
   }
 
   Future<void> _confirmDeleteSession() async {
-    final sessionId = widget._detail?.id ?? widget._summary?.id;
+    final sessionId = _d.id;
     if (sessionId == null) return;
     final confirmed = await AppDialogs.showDestructiveConfirm(context,
       icon:         Icons.delete_outline_rounded,
@@ -343,7 +254,7 @@ class _SessionResultsScreenState
   Future<void> _editNote() async {
     final result = await AppDialogs.showNoteEditor(context, initialNote: _note);
     if (result == null) return;
-    final sessionId = widget._detail?.id ?? widget._summary?.id;
+    final sessionId = _d.id;
     if (sessionId != null) {
       final service = ref.read(sessionServiceProvider);
       final ok = await service.updateNote(sessionId, result.isEmpty ? null : result);
@@ -358,8 +269,7 @@ class _SessionResultsScreenState
     } else {
       final newNote = result.isEmpty ? null : result;
       setState(() => _note = newNote);
-      final updatedDetail = widget._detail?.withNote(newNote);
-      if (updatedDetail != null) await SessionLocalStorage.saveLocal(updatedDetail);
+      await SessionLocalStorage.saveLocal(_d.withNote(newNote));
       ref.invalidate(sessionSummariesProvider);
     }
   }
@@ -367,13 +277,12 @@ class _SessionResultsScreenState
   // ── Build ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final canEditNote = (widget._detail?.id ?? widget._summary?.id) != null
-        || _effectiveDetail != null;
+    const canEditNote = true;  // always have a detail now
 
     // AppBar title
     String title;
-    if (widget._sessionNumber != null) {
-      title = 'Session ${widget._sessionNumber}';
+    if (widget.sessionNumber != null) {
+      title = 'Session ${widget.sessionNumber}';
     } else if (_isEmergency) {
       title = 'Emergency Session';
     } else if (_isNoFeedback) {
@@ -400,12 +309,6 @@ class _SessionResultsScreenState
       elevation:              0,
       scrolledUnderElevation: 0,
       toolbarHeight:          AppSpacing.headerHeight,
-      bottom: _isFetchingDetail
-          ? const PreferredSize(
-        preferredSize: Size.fromHeight(2),
-        child: LinearProgressIndicator(minHeight: 2),
-      )
-          : null,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
         onPressed: context.pop,
@@ -436,16 +339,14 @@ class _SessionResultsScreenState
             ),
           ),
         ),
-        if (widget._detail != null || widget._summary != null)
+        IconButton(
+          icon: const Icon(Icons.download_outlined, color: AppColors.primary),
+          tooltip: 'Export',
+          onPressed: _exportSession,
+        ),
+        if (_d.id != null)
           IconButton(
-            icon: const Icon(Icons.download_outlined, color: AppColors.primary),
-            tooltip: 'Export',
-            onPressed: _exportSession,
-          ),
-        if ((widget._detail?.id ?? widget._summary?.id) != null)
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded,
-                color: AppColors.textSecondary),
+            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textSecondary),
             tooltip: 'Delete',
             onPressed: _confirmDeleteSession,
           ),
@@ -456,8 +357,7 @@ class _SessionResultsScreenState
   // TRAINING BODY — collapsing grade card + 3 tabs
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildTrainingBody(bool canEditNote) {
-    final hasGraphs = _effectiveDetail != null &&
-        _effectiveDetail!.compressions.isNotEmpty;
+    final hasGraphs = _d.compressions.isNotEmpty;
 
     return _CollapsingTrainingLayout(
       grade:             _grade,
@@ -487,14 +387,14 @@ class _SessionResultsScreenState
       personalBest: _PersonalBestComparison(
         currentGrade: _grade,
         scenario:     _scenario,
-        sessionStart: _effectiveDetail?.sessionStart ?? widget._summary?.sessionStart,
+        sessionStart: _d.sessionStart,
       ),
       isPersonalBest: _isPersonalBest,
       tabController: _tabController,
       tabs: [
         _TrainingOverviewTab(
-          detail:       _effectiveDetail,
-          summary:      widget._summary,
+          detail:       _d,
+          summary:      SessionSummary.fromDetail(_d),
           note:         _note,
           canEditNote:  canEditNote,
           onEditNote:   _editNote,
@@ -504,7 +404,7 @@ class _SessionResultsScreenState
           targetDepthMax: _targetDepthMax,
         ),
         _TrainingMetricsTab(
-          detail:           _effectiveDetail,
+          detail:           _d,
           compressionCount: _compressionCount,
           targetDepthLabel: _targetDepthLabel,
           targetDepthMin:   _targetDepthMin,
@@ -517,7 +417,7 @@ class _SessionResultsScreenState
           hasBiometrics:    _hasBiometrics,
         ),
         _TrainingChartsTab(
-          detail:         _effectiveDetail,
+          detail:         _d,
           hasGraphs:      hasGraphs,
           targetDepthMin: _targetDepthMin,
           targetDepthMax: _targetDepthMax,
@@ -530,12 +430,12 @@ class _SessionResultsScreenState
   // EMERGENCY BODY — single scroll
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildEmergencyBody(bool canEditNote) {
-    final lastPulseCheck = _effectiveDetail?.pulseChecks.lastOrNull;
+    final lastPulseCheck = _d.pulseChecks.lastOrNull;
 
     return _CollapsingTrainingLayout(
       isEmergency:       true,
-      pulseDetected: (_effectiveDetail?.pulseChecksPrompted ?? 0) > 0
-          ? _effectiveDetail?.pulseDetectedFinal
+      pulseDetected: _d.pulseChecksPrompted > 0
+          ? _d.pulseDetectedFinal
           : null,
       pulseDetectedBpm:  lastPulseCheck?.detectedBpm,
       pulseUncertain:    lastPulseCheck?.isUncertain,
@@ -555,14 +455,14 @@ class _SessionResultsScreenState
       personalBest:      const SizedBox.shrink(),
       isPersonalBest:    false,
       tabController:     _tabController,
-      handsOnPct:           _effectiveDetail?.handsOnPct ?? '—',
-      pulseCheckSamples:    _effectiveDetail?.pulseChecks.lastOrNull?.ppgSamples,
-      pulseCheckInterval:   _effectiveDetail?.pulseChecks.lastOrNull?.intervalNumber,
-      pulseCheckConfidence: _effectiveDetail?.pulseChecks.lastOrNull?.confidence,
+      handsOnPct:           _d.handsOnPct,
+      pulseCheckSamples:    lastPulseCheck?.ppgSamples,
+      pulseCheckInterval:   lastPulseCheck?.intervalNumber,
+      pulseCheckConfidence: lastPulseCheck?.confidence,
       tabs: [
         _EmergencySummaryTab(
-          detail:         _effectiveDetail,
-          summary:        widget._summary,
+          detail:         _d,
+          summary:        SessionSummary.fromDetail(_d),
           note:           _note,
           canEditNote:    canEditNote,
           onEditNote:     _editNote,
@@ -572,18 +472,41 @@ class _SessionResultsScreenState
           targetDepthMax: _targetDepthMax,
         ),
         _EmergencyPatientTab(
-          detail:      _effectiveDetail,
-          summary:     widget._summary,
+          detail:      _d,
+          summary:        SessionSummary.fromDetail(_d),
           isPediatric: _isPediatric,
           rescuerHR:   _rescuerHR,
           rescuerSpO2: _rescuerSpO2,
         ),
         _EmergencyTimelineTab(
-          detail:        _effectiveDetail,
+          detail:        _d,
           targetDepthMin: _targetDepthMin,
           targetDepthMax: _targetDepthMax,
         ),
       ],
     );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navigation helper — opens SessionResultsScreen with the full detail.
+// Fetches the detail before navigating. On failure, shows an error toast.
+// ─────────────────────────────────────────────────────────────────────────────
+Future<void> openSessionResults(
+    BuildContext context,
+    WidgetRef ref, {
+      required SessionSummary summary,
+    }) async {
+  final service = ref.read(sessionServiceProvider);
+  try {
+    final detail = await service.fetchDetailForSummary(summary);
+    if (!context.mounted) return;
+    await context.push(SessionResultsScreen(detail: detail));
+  } catch (e, st) {
+    debugPrint('openSessionResults failed: $e\n$st');
+    if (context.mounted) {
+      UIHelper.showError(context, 'Could not load session details.');
+    }
   }
 }

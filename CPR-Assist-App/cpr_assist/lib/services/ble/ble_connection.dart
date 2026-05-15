@@ -8,10 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../features/training/services/compression_event.dart';
+import '../../features/training/services/session_detail.dart';
 import '../../features/training/services/ventilation_event.dart';
 import '../../features/training/services/pulse_check_event.dart';
 import '../../features/training/services/rescuer_vital_snapshot.dart';
 import 'ble_data_processor.dart';
+import 'offline_session_parser.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BLEConnection  —  BLE Spec v3.0
@@ -21,8 +23,8 @@ import 'ble_data_processor.dart';
 //   subscribe LIVE_STREAM + EVENT_CHANNEL → auto-reconnect on drop.
 //
 // Two separate characteristic subscriptions per spec v3.0 Section 2:
-//   LIVE_STREAM   19b10001-...  100 bytes, 10 Hz notify
-//   EVENT_CHANNEL 19b10002-...  80  bytes, on-event notify + write
+//   LIVE_STREAM   19b10001-...  108 bytes, 25 Hz notify
+//   EVENT_CHANNEL 19b10002-...  96  bytes, on-event notify + write
 //
 // Parsed packets are broadcast on [dataStream].
 // Session event lists are accumulated here and exposed to SessionService
@@ -64,7 +66,6 @@ class BLEConnection {
   int    _sessionMode        = 0;   // 0=emergency 1=training 2=no_feedback
   bool   _sessionActive      = false;
   bool   _pulseCheckOpen     = false;
-  int _connectTimestampMs = 0;
 
   final List<double> _ppgBuffer = [];   // accumulates ppgRaw during pulse check window
   double _bestPatientSpO2 = 0.0;        // best spO2Patient reading during pulse check
@@ -72,6 +73,20 @@ class BLEConnection {
   // ── Rescuer vital sampling state ──────────────────────────────────────────
   int _lastVitalSnapshotMs = 0;
   static const int _vitalSnapshotIntervalMs = 5000; // sample every 5 s
+
+  // ── Alert timestamps (captured at receive time, session-relative ms) ──────
+  final List<int> _twoMinAlertTimestampsMs = [];
+  int? _fatigueAlertTimestampMs;       // null if not fired
+  int? _fatigueAlertScore;             // null if not fired
+
+  // ── Offline session chunk reassembly ──────────────────────────────────────
+  /// sessionIndex → list of received chunks (each 92 bytes). Index is the
+  /// chunkIndex from the LOCAL_SESSION_CHUNK packet.
+  final Map<int, Map<int, List<int>>> _chunkBuffers = {};
+  /// sessionIndex → totalChunks (from any received chunk for that session)
+  final Map<int, int> _chunkTotals = {};
+  /// Callback when an offline session is fully reassembled and parsed.
+  void Function(SessionDetail detail, int sessionIndex)? onOfflineSessionParsed;
 
   // ── BLE connection state ──────────────────────────────────────────────────
   bool _isScanning       = false;
@@ -127,6 +142,10 @@ class BLEConnection {
   List<VentilationEvent>     get ventilationEvents     => List.unmodifiable(_ventilationEvents);
   List<PulseCheckEvent>      get pulseCheckEvents      => List.unmodifiable(_pulseCheckEvents);
   List<RescuerVitalSnapshot> get rescuerVitalSnapshots => List.unmodifiable(_rescuerVitalSnapshots);
+
+  List<int> get twoMinAlertTimestampsMs => List.unmodifiable(_twoMinAlertTimestampsMs);
+  int? get fatigueAlertTimestampMs => _fatigueAlertTimestampMs;
+  int? get fatigueAlertScore => _fatigueAlertScore;
 
   /// Mode string for the current/last session ("emergency" / "training" / "training_no_feedback").
   String get sessionMode {
@@ -449,12 +468,16 @@ class BLEConnection {
     }
 
     // Track peak depth between compression count increments.
-    // We accumulate the maximum depth seen across all 10 Hz packets so that
+    // We accumulate the maximum depth seen across all 25 Hz packets so that
     // when compressionCount increments we have the real peak, not whatever
     // the instantaneous depth happens to be at that exact packet.
-    if (_sessionActive && parsed.isContinuousData &&
-        parsed.depth > _pendingPeakDepth) {
-      _pendingPeakDepth = parsed.depth;
+    if (_sessionActive && parsed.isContinuousData) {
+      if (parsed.depth > _pendingPeakDepth) {
+        _pendingPeakDepth = parsed.depth;
+      }
+      if (parsed.force > _pendingPeakForce) {
+        _pendingPeakForce = parsed.force;
+      }
     }
 
     // Accumulate compression events when a new compression is confirmed.
@@ -464,14 +487,30 @@ class BLEConnection {
       final recordDepth = _pendingPeakDepth > 0
           ? _pendingPeakDepth
           : (parsed.depthTrend > 0 ? parsed.depthTrend : 0.1);
+      final recordPeakForce = _pendingPeakForce > 0
+          ? _pendingPeakForce
+          : parsed.force;
       _pendingPeakDepth = 0.0; // reset for next compression
+      _pendingPeakForce = 0.0;
+      final compressionTimestampMs = parsed.peakTimestampMs > 0
+          ? parsed.peakTimestampMs
+          : now - _sessionStartMs;
+
+// Downstroke time = current peakTs − previous valleyTs (start of downstroke)
+      // First compression has no previous valley → 0
+      final int downstrokeMs = (_prevValleyTimestampMs > 0 &&
+          parsed.peakTimestampMs > _prevValleyTimestampMs)
+          ? parsed.peakTimestampMs - _prevValleyTimestampMs
+          : 0;
+
       _compressionEvents.add(CompressionEvent(
-        timestampMs:         now - _sessionStartMs,
+        timestampMs:         compressionTimestampMs,
         depth:               recordDepth,
         valleyDepth:         parsed.valleyDepth,
         instantaneousRate:   parsed.instantaneousRate,
         frequency:           parsed.frequency,
         force:               parsed.force,
+        peakForce:           recordPeakForce,
         recoilAchieved:      parsed.recoilAchieved,
         overForce:           parsed.overForceFlag,
         postureOk:           parsed.postureOk,
@@ -479,15 +518,23 @@ class BLEConnection {
         wristAlignmentAngle: parsed.wristAlignmentAngle,
         wristFlexionAngle:   parsed.wristFlexionAngle,
         compressionAxisDev:  parsed.compressionAxisDeviation,
-        effectiveDepth:      parsed.effectiveDepth,
-        peakTimestampMs:   parsed.peakTimestampMs,
-        valleyTimestampMs: parsed.valleyTimestampMs,
+        effectiveDepth:      recordDepth * math.cos(
+          parsed.compressionAxisDeviation * math.pi / 180.0,
+        ),
+        downstrokeTimeMs:    downstrokeMs,
+        peakTimestampMs:     parsed.peakTimestampMs,
+        valleyTimestampMs:   parsed.valleyTimestampMs,
       ));
+
+      // Remember this valley for next compression's downstroke calc
+      _prevValleyTimestampMs = parsed.valleyTimestampMs;
     }
 
-    // Sample rescuer vitals every 5 s when signal quality is good enough
+    // Sample rescuer vitals every 5 s regardless of signal quality.
+    // signalQuality is recorded in the row so the display layer can choose
+    // to grey-out or hide entries with poor quality. This keeps the post-session
+    // vitals graph continuous and lets us see when the sensor lost contact.
     if (_sessionActive &&
-        parsed.rescuerSignalQuality >= 40 &&
         (now - _lastVitalSnapshotMs) >= _vitalSnapshotIntervalMs) {
       _lastVitalSnapshotMs = now;
       final pauseType = _pulseCheckOpen
@@ -502,6 +549,7 @@ class BLEConnection {
         temperature:   parsed.rescuerTemperature ?? 0.0,
         fatigueScore:  parsed.rescuerFatigueScore,
         signalQuality: parsed.rescuerSignalQuality,
+        humidity:      parsed.rescuerHumidity,
         pauseType:     pauseType,
       ));
     }
@@ -563,6 +611,7 @@ class BLEConnection {
       'rescuerRMSSD':         parsed.rescuerRMSSD,
       'rescuerTemperature':   parsed.rescuerTemperature,
       'rescuerPI':            parsed.rescuerPI,
+      'rescuerHumidity':      parsed.rescuerHumidity,
       // Session state
       'sessionActive':      parsed.sessionActive,
       'currentMode':        parsed.currentMode,
@@ -578,6 +627,9 @@ class BLEConnection {
   int _lastCompressionCount = 0;
   int _lastVentilationCount = 0;
   double _pendingPeakDepth = 0.0;
+  // Track per-compression peak force and downstroke timing
+  double _pendingPeakForce       = 0.0;  // max force seen since last compression
+  int _prevValleyTimestampMs = 0;    // valley_ts of current compression (for downstroke calc)
 
   // ── EVENT_CHANNEL packet handler ──────────────────────────────────────────
   void _handleEventPacket(List<int> packet) {
@@ -594,6 +646,10 @@ class BLEConnection {
       _compressionEvents.clear();
       _ventilationEvents.clear();
       _pulseCheckEvents.clear();
+      _twoMinAlertTimestampsMs.clear();
+      _prevValleyTimestampMs = 0;
+      _fatigueAlertTimestampMs = null;
+      _fatigueAlertScore = null;
       _rescuerVitalSnapshots.clear();
       _sessionStartMs         = now;
       _sessionMode            = parsed.currentMode;
@@ -646,11 +702,10 @@ class BLEConnection {
         'pulseDetected':       parsed.pulseDetected,
         // Biometrics
         'patientTemperature':  parsed.patientTemperature,
-        'rescuerHRLastPause':  parsed.rescuerHRLastPause,
-        'rescuerTemperatureEnd': parsed.rescuerTemperatureEnd,
-        'rescuerSpO2LastPause': parsed.rescuerSpO2LastPause,
-        'ambientTempStart':    parsed.ambientTempStart,
-        'ambientTempEnd':      parsed.ambientTempEnd,
+        'rescuerHRLastPause':     parsed.rescuerHRLastPause,
+        'rescuerSpO2LastPause':   parsed.rescuerSpO2LastPause,
+        'rescuerWristTempStart':  parsed.rescuerWristTempStart,
+        'rescuerWristTempEnd':    parsed.rescuerWristTempEnd,
       });
       return;
     }
@@ -741,20 +796,29 @@ class BLEConnection {
 
     // ── TWO_MIN_ALERT ────────────────────────────────────────────────────────
     if (parsed.isTwoMinAlert) {
-      debugPrint('BLE: TWO_MIN_ALERT #${parsed.twoMinAlertNumber}');
+      final timestampMs = now - _sessionStartMs;
+      if (_sessionActive) _twoMinAlertTimestampsMs.add(timestampMs);
+      debugPrint('BLE: TWO_MIN_ALERT #${parsed.twoMinAlertNumber} @ ${timestampMs}ms');
       _dataController.add({
         'isTwoMinAlert':    true,
         'twoMinAlertNumber': parsed.twoMinAlertNumber,
+        'twoMinAlertTimestampMs': timestampMs,
       });
       return;
     }
 
     // ── FATIGUE_ALERT ────────────────────────────────────────────────────────
     if (parsed.isFatigueAlert) {
-      debugPrint('BLE: FATIGUE_ALERT score=${parsed.fatigueAlertScore}');
+      final timestampMs = now - _sessionStartMs;
+      if (_sessionActive && _fatigueAlertTimestampMs == null) {
+        _fatigueAlertTimestampMs = timestampMs;
+        _fatigueAlertScore = parsed.fatigueAlertScore;
+      }
+      debugPrint('BLE: FATIGUE_ALERT score=${parsed.fatigueAlertScore} @ ${timestampMs}ms');
       _dataController.add({
         'isFatigueAlert':   true,
         'fatigueAlertScore': parsed.fatigueAlertScore,
+        'fatigueAlertTimestampMs': timestampMs,
       });
       return;
     }
@@ -770,14 +834,48 @@ class BLEConnection {
     }
 
     // ── LOCAL_SESSION_CHUNK ──────────────────────────────────────────────────
+// ── LOCAL_SESSION_CHUNK ──────────────────────────────────────────────────
     if (parsed.isLocalSessionChunk) {
+      final sessionIdx  = parsed.localSessionIndex ?? 0;
+      final chunkIdx    = parsed.localChunkIndex ?? 0;
+      final totalChunks = parsed.localTotalChunks ?? 0;
+      final chunkData   = parsed.localChunkData ?? const <int>[];
+
+      _chunkTotals[sessionIdx] = totalChunks;
+      _chunkBuffers
+          .putIfAbsent(sessionIdx, () => <int, List<int>>{})[chunkIdx] = chunkData;
+
       _dataController.add({
         'isLocalSessionChunk': true,
-        'localSessionIndex':   parsed.localSessionIndex,
-        'localChunkIndex':     parsed.localChunkIndex,
-        'localTotalChunks':    parsed.localTotalChunks,
-        'localChunkData':      parsed.localChunkData,
+        'localSessionIndex':   sessionIdx,
+        'localChunkIndex':     chunkIdx,
+        'localTotalChunks':    totalChunks,
       });
+
+      // Once we've received all chunks for this session, reassemble + parse
+      final buffers = _chunkBuffers[sessionIdx]!;
+      if (buffers.length >= totalChunks && totalChunks > 0) {
+        final fullBytes = <int>[];
+        for (int i = 0; i < totalChunks; i++) {
+          final c = buffers[i];
+          if (c == null) {
+            debugPrint('BLE: chunk $i missing for session $sessionIdx — aborting reassembly');
+            return;
+          }
+          fullBytes.addAll(c);
+        }
+        _chunkBuffers.remove(sessionIdx);
+        _chunkTotals.remove(sessionIdx);
+
+        try {
+          final detail = OfflineSessionParser.parse(fullBytes);
+          debugPrint('BLE: offline session $sessionIdx parsed — '
+              '${detail.compressions.length} comps, ${detail.ventilations.length} vents');
+          onOfflineSessionParsed?.call(detail, sessionIdx);
+        } catch (e) {
+          debugPrint('BLE: offline session parse failed — $e');
+        }
+      }
       return;
     }
 
@@ -788,13 +886,17 @@ class BLEConnection {
             'warn=0x${parsed.selftestWarnMask?.toRadixString(16)} '
             'critical=0x${parsed.selftestCriticalMask?.toRadixString(16)}',
       );
-      _dataController.add({
-        'isSelftestResult':    true,
-        'selftestPassMask':    parsed.selftestPassMask,
-        'selftestWarnMask':    parsed.selftestWarnMask,
+      final result = {
+        'isSelftestResult':     true,
+        'selftestPassMask':     parsed.selftestPassMask,
+        'selftestWarnMask':     parsed.selftestWarnMask,
         'selftestCriticalMask': parsed.selftestCriticalMask,
-        'selftestBatteryPct':  parsed.selftestBatteryPct,
-      });
+        'selftestBatteryPct':   parsed.selftestBatteryPct,
+      };
+
+      _dataController.add(result);
+      onSelftestResult?.call(result);
+
       return;
     }
   }
@@ -803,7 +905,7 @@ class BLEConnection {
   void Function(Map<String, dynamic>)? onSelftestResult;
 
   // ── App → Glove write commands ────────────────────────────────────────────
-  // All commands are 80-byte frames. Unused bytes are 0x00.
+  // All commands are 96-byte frames. Unused bytes are 0x00.
 
   Future<bool> _writeCommand(List<int> payload) async {
     final char = _eventCharacteristic;
@@ -906,6 +1008,8 @@ class BLEConnection {
   void _processDisconnection() {
     if (_isConnecting) _isConnecting = false;
     if (_userDisconnected) {
+      _sessionActive = false;
+      _pulseCheckOpen = false;
       _updateStatus('Disconnected');
     } else {
       _updateStatus('Disconnected — Reconnecting…');
@@ -950,7 +1054,6 @@ class BLEConnection {
     _liveBuffer.clear();
     _eventBuffer.clear();
     _eventCharacteristic = null;
-    _connectTimestampMs = 0;
 
     _connectedDevice?.disconnect().catchError(
           (Object e) => debugPrint('BLE disconnect error: $e'),

@@ -141,6 +141,7 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
     final isLoggedIn      = ref.read(authStateProvider).isLoggedIn;
     final goingToTraining = !currentMode.isTraining;
 
+    // Going to Training? Must be logged in first.
     if (goingToTraining && !isLoggedIn) {
       if (!mounted) return;
       final shouldLogin = await AppDialogs.promptLogin(context);
@@ -148,15 +149,21 @@ class _AccountPanelState extends ConsumerState<AccountPanel>
       _close();
       await Future<void>.delayed(const Duration(milliseconds: 150));
       if (mounted) await context.push(const LoginScreen());
-      return;
+      if (!mounted) return;
+      if (!ref.read(authStateProvider).isLoggedIn) return;
     }
 
-    // Switch immediately — no confirmation needed
+    // Confirm the switch.
+    if (!mounted) return;
+    final confirmed = goingToTraining
+        ? await AppDialogs.confirmSwitchToTraining(context)
+        : await AppDialogs.confirmSwitchToEmergency(context);
+    if (confirmed != true || !mounted) return;
+
     ref.read(appModeProvider.notifier).setMode(
       goingToTraining ? AppMode.training : AppMode.emergency,
     );
     HapticFeedback.lightImpact();
-
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -561,7 +568,6 @@ class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
 
     int synced = 0;
     for (final detail in pending) {
-      final ok = await service.saveDetail(detail);
       final savedId = await service.saveDetail(detail);
       if (savedId != null) {
         await SessionLocalStorage.markSynced(detail);

@@ -80,6 +80,9 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
 
   bool get _isSingleSession => widget.summary != null;
 
+  bool get _singlePdfUnavailable =>
+      _isSingleSession && widget.detail == null && _format == _ExportFormat.pdf;
+
   String get _sessionCountLabel {
     if (_isSingleSession) return '1 session';
     final n = widget.sessions.length;
@@ -88,6 +91,15 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
 
   Future<void> _doExport() async {
     if (_isExporting) return;
+    if (_singlePdfUnavailable) {
+      UIHelper.showSnackbar(
+        context,
+        message: 'Full session detail is still loading. Try again in a moment or export CSV.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
     setState(() => _isExporting = true);
 
     final auth = ref.read(authStateProvider);
@@ -104,14 +116,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 widget.detail!, username: auth.username)
                 : await ExportService.exportSingleSessionPdf(
                 widget.detail!, username: auth.username);
-          } else if (_isSingleSession) {
-            ok = download
-                ? await ExportService.downloadSingleSessionCsv(widget.summary!)
-                : await ExportService.exportSingleSessionCsv(widget.summary!);
-            if (mounted) UIHelper.showSnackbar(context,
-                message: 'Full detail not available — exported as CSV',
-                icon: Icons.info_outline_rounded);
-          } else {
+          }  else {
             ok = download
                 ? await ExportService.downloadMultiSessionPdf(
                 widget.sessions, username: auth.username)
@@ -159,10 +164,11 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final singlePdfAvailable = !_isSingleSession || widget.detail != null;
     return Container(
       decoration: AppDecorations.bottomSheet(),
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+        maxHeight: context.screenHeight * 0.92,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -231,19 +237,26 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                         const SizedBox(height: AppSpacing.sm),
                         Row(
                           children: [
-                            Expanded(
-                              child: _FormatTile(
-                                icon:        Icons.picture_as_pdf_rounded,
-                                label:       'PDF Report',
-                                description: _isSingleSession
-                                    ? 'Analytical report\nwith metrics & charts'
-                                    : 'Summary report\nwith table & grade trend',
-                                selected:    _format == _ExportFormat.pdf,
-                                accent:      AppColors.emergency,
-                                accentBg:    AppColors.errorBg,
-                                onTap:       () => setState(() => _format = _ExportFormat.pdf),
-                              ),
-                            ),
+                        Expanded(
+                        child: Opacity(
+                        opacity: singlePdfAvailable ? 1.0 : 0.45,
+                          child: _FormatTile(
+                            icon: Icons.picture_as_pdf_rounded,
+                            label: 'PDF Report',
+                            description: _isSingleSession
+                                ? singlePdfAvailable
+                                ? 'Analytical report\nwith metrics & charts'
+                                : 'Loading full detail\nrequired for PDF'
+                                : 'Summary report\nwith table & grade trend',
+                            selected: _format == _ExportFormat.pdf,
+                            accent: AppColors.emergency,
+                            accentBg: AppColors.errorBg,
+                            onTap: singlePdfAvailable
+                                ? () => setState(() => _format = _ExportFormat.pdf)
+                                : null,
+                          ),
+                        ),
+                  ),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: _FormatTile(
@@ -329,7 +342,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                             width:  double.infinity,
                             height: AppSpacing.touchTargetLarge,
                             child: ElevatedButton.icon(
-                              onPressed: _isExporting
+                              onPressed: _isExporting || _singlePdfUnavailable
                                   ? null
                                   : () {
                                 setState(() => _action = _ExportAction.download);
@@ -345,7 +358,9 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                                   ))
                                   : const Icon(Icons.download_rounded),
                               label: Text(
-                                _isExporting && _action == _ExportAction.download
+                                _singlePdfUnavailable
+                                    ? 'Full detail required'
+                                    : _isExporting && _action == _ExportAction.download
                                     ? 'Saving…'
                                     : 'Download ${_format == _ExportFormat.pdf ? 'PDF' : 'CSV'}',
                               ),
@@ -365,7 +380,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                             width:  double.infinity,
                             height: AppSpacing.touchTargetLarge,
                             child: OutlinedButton.icon(
-                              onPressed: _isExporting
+                              onPressed: _isExporting || _singlePdfUnavailable
                                   ? null
                                   : () {
                                 setState(() => _action = _ExportAction.share);
@@ -381,7 +396,9 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                                   ))
                                   : const Icon(Icons.share_rounded),
                               label: Text(
-                                _isExporting && _action == _ExportAction.share
+                                _singlePdfUnavailable
+                                    ? 'Full detail required'
+                                    : _isExporting && _action == _ExportAction.share
                                     ? 'Sharing…'
                                     : 'Share ${_format == _ExportFormat.pdf ? 'PDF' : 'CSV'}',
                               ),
@@ -433,7 +450,7 @@ class _FormatTile extends StatelessWidget {
   final bool         selected;
   final Color        accent;
   final Color        accentBg;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _FormatTile({
     required this.icon,
@@ -802,7 +819,7 @@ class _FormatDescription extends StatelessWidget {
             'Two-column metrics: depth/force group + rate/timing group',
             'Ventilation cycle table with compliance per cycle',
             if (hasDetail) 'Pulse check table with ABSENT/UNCERTAIN/PRESENT classification',
-            if (hasDetail) 'Biometrics: rescuer HR, SpO₂, RMSSD, fatigue — patient temp, SpO₂, ambient temp',
+            if (hasDetail) 'Biometrics: rescuer HR, SpO₂, RMSSD, fatigue — patient temp, SpO₂, rescuer wrist temp',
             'Session note (if any) · Session ID for traceability',
           ];
         } else {
@@ -820,7 +837,7 @@ class _FormatDescription extends StatelessWidget {
           'Identity: session ID, date/time UTC, mode, scenario, depth targets',
           'Compression quality: counts + computed percentages for depth, rate, recoil, posture',
           'Metrics: avg depth, effective depth, peak depth, SD, CCF, no-flow time',
-          'Ventilation + pulse check results, biometrics, ambient temperature',
+          'Ventilation + pulse check results, biometrics, rescuer wrist temperature',
           'UTF-8 encoded · compatible with Excel, SPSS, R, Python pandas',
         ];
       case _ExportFormat.rawCsv:

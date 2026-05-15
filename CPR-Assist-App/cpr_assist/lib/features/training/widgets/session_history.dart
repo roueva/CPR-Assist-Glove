@@ -9,6 +9,7 @@ import '../../account/screens/registration_screen.dart';
 import '../screens/session_service.dart';
 import '../services/export_service.dart';
 import '../services/session_detail.dart';
+import '../services/session_local_storage.dart';
 import 'export_bottom_sheet.dart';
 import 'session_results.dart';
 import 'session_compare_screen.dart';
@@ -115,9 +116,15 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
       final summary = selected.first;
       SessionDetail? detail;
       try {
-        detail = await ref.read(sessionServiceProvider).fetchDetail(summary.id!);
-      } catch (_) {
-        // detail stays null — sheet gracefully hides Raw CSV
+        detail = await ref.read(sessionServiceProvider).fetchDetailForSummary(summary);
+      } catch (e) {
+        debugPrint('fetchDetailForSummary for export failed: $e');
+        if (mounted) {
+          UIHelper.showWarning(
+            context,
+            "Couldn't load full session — only summary CSV will be available.",
+          );
+        }
       }
       if (!mounted) return;
       await ExportBottomSheet.showForSingleSession(
@@ -292,7 +299,19 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
           if (all.isEmpty) {
             final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
             return RefreshIndicator(
-              onRefresh: () async => ref.invalidate(sessionSummariesProvider),
+              onRefresh: () async {
+                final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                if (isLoggedIn) {
+                  final service = ref.read(sessionServiceProvider);
+                  final locals  = await SessionLocalStorage.loadAll();
+                  final pending = locals.where((d) => !d.syncedToBackend).toList();
+                  for (final detail in pending) {
+                    final id = await service.saveDetail(detail);
+                    if (id != null) await SessionLocalStorage.markSynced(detail);
+                  }
+                }
+                ref.invalidate(sessionSummariesProvider);
+              },
               color: AppColors.primary,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -301,7 +320,19 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
                     height: context.screenHeight * 0.7,
                     child: _EmptyState(
                       isLoggedIn: isLoggedIn,
-                      onRefresh: () => ref.invalidate(sessionSummariesProvider),
+                      onRefresh: () async {
+                        final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                        if (isLoggedIn) {
+                          final service = ref.read(sessionServiceProvider);
+                          final locals  = await SessionLocalStorage.loadAll();
+                          final pending = locals.where((d) => !d.syncedToBackend).toList();
+                          for (final detail in pending) {
+                            final id = await service.saveDetail(detail);
+                            if (id != null) await SessionLocalStorage.markSynced(detail);
+                          }
+                        }
+                        ref.invalidate(sessionSummariesProvider);
+                      },
                     ),
                   ),
                 ],
@@ -793,10 +824,9 @@ class SessionCard extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           onLongPress: onLongPress,
-            onTap: selectionMode
-                ? onToggle
-                : () => context.push(SessionResultsScreen.fromSummary(
-                summary: session, sessionNumber: sessionNumber)),
+          onTap: selectionMode
+              ? onToggle
+              : () => openSessionResults(context, ref, summary: session),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(

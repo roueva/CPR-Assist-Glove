@@ -65,6 +65,25 @@ class SessionService {
     return SessionDetail.fromJson(response['data'] as Map<String, dynamic>);
   }
 
+  /// Resolves a SessionSummary into a full SessionDetail.
+  /// - Backend session (id != null): calls GET /sessions/:id/detail.
+  /// - Local-only session (id == null): looks up by sessionStart in local storage.
+  /// Throws if no matching detail can be located.
+  Future<SessionDetail> fetchDetailForSummary(SessionSummary summary) async {
+    if (summary.id != null) {
+      return fetchDetail(summary.id!);
+    }
+    final start = summary.sessionStart;
+    if (start == null) {
+      throw Exception('Local session has no start time');
+    }
+    final all = await SessionLocalStorage.loadAll();
+    return all.firstWhere(
+          (d) => d.sessionStart.millisecondsSinceEpoch == start.millisecondsSinceEpoch,
+      orElse: () => throw Exception('Local session not found'),
+    );
+  }
+
   // ── Save ───────────────────────────────────────────────────────────────────
 
 
@@ -164,22 +183,6 @@ class SessionService {
     return (entries, myRank);
   }
 
-
-  /// Legacy: save a summary-only record. Kept for backward compatibility.
-  Future<bool> saveSummary(SessionSummary session) async {
-    try {
-      await _network.post(
-        '/sessions/summary',
-        session.toJson(),
-        requiresAuth: true,
-      );
-      return true;
-    } catch (e) {
-      debugPrint('saveSummary failed: $e');
-      return false;
-    }
-  }
-
   // ── Grade calculation ──────────────────────────────────────────────────────
   //
   // Training mode only — Emergency sessions always return 0.0.
@@ -277,6 +280,11 @@ class SessionService {
     required List<RescuerVitalSnapshot> rescuerVitalSnapshots,
     required DateTime                   sessionStart,
     required int                        sessionDurationSecs,
+    DateTime?                           sessionEnd,
+    // ── Alert timestamps from BLEConnection ─────────────────────────────────
+    int?      fatigueAlertTimestampMs,
+    int?      fatigueAlertScore,
+    List<int> twoMinAlertTimestampsMs = const [],
     String mode     = 'emergency',
     String scenario = 'standard_adult',
   }) {
@@ -288,13 +296,16 @@ class SessionService {
       pulseCheckEvents:      pulseCheckEvents,
       rescuerVitalSnapshots: rescuerVitalSnapshots,
       sessionStart:          sessionStart,
+      sessionEnd:            sessionEnd,
       sessionDurationSecs:   sessionDurationSecs,
       totalGrade:            0,
       mode:                  mode,
       scenario:              scenario,
+      fatigueAlertTimestampMs: fatigueAlertTimestampMs,
+      fatigueAlertScore:       fatigueAlertScore,
+      twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
     );
 
-    // Pass 2: grade from computed metrics, then rebuild
     final grade = calculateGradeFromDetail(partialDetail);
 
     return SessionDetail.fromBleSession(
@@ -304,10 +315,14 @@ class SessionService {
       pulseCheckEvents:      pulseCheckEvents,
       rescuerVitalSnapshots: rescuerVitalSnapshots,
       sessionStart:          sessionStart,
+      sessionEnd:            sessionEnd,
       sessionDurationSecs:   sessionDurationSecs,
       totalGrade:            grade,
       mode:                  mode,
       scenario:              scenario,
+      fatigueAlertTimestampMs: fatigueAlertTimestampMs,
+      fatigueAlertScore:       fatigueAlertScore,
+      twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
     );
   }
 }
@@ -340,7 +355,12 @@ class SessionSummary {
   final int correctPosture;
   final int leaningCount;
   final int overForceCount;
+
+  final double noFlowTime;
   final int noFlowIntervals;
+  final double unplannedPauseTime;
+  final int unplannedPauseCount;
+
   final int rescuerSwapCount;
   final int fatigueOnsetIndex;
 
@@ -365,6 +385,7 @@ class SessionSummary {
 
   // ── Biometrics ────────────────────────────────────────────────────────────
   final double? patientTemperature;
+  final double? patientSpO2LastCheck;
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
 
@@ -388,7 +409,10 @@ class SessionSummary {
     this.correctPosture       = 0,
     this.leaningCount         = 0,
     this.overForceCount       = 0,
+    this.noFlowTime           = 0.0,
     this.noFlowIntervals      = 0,
+    this.unplannedPauseTime   = 0.0,
+    this.unplannedPauseCount  = 0,
     this.rescuerSwapCount     = 0,
     this.fatigueOnsetIndex    = 0,
     this.averageDepth         = 0.0,
@@ -405,6 +429,7 @@ class SessionSummary {
     this.pulseChecksPrompted  = 0,
     this.pulseChecksComplied  = 0,
     this.patientTemperature,
+    this.patientSpO2LastCheck,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
     required this.sessionDuration,
@@ -444,36 +469,6 @@ class SessionSummary {
         '${sessionStart!.year} • $h:$m';
   }
 
-  // ── Build from BLE end-ping (summary-only fallback) ───────────────────────
-
-  factory SessionSummary.fromBleData(
-      Map<String, dynamic> data, {
-        required DateTime sessionStart,
-        required int      sessionDuration,
-        required double   totalGrade,
-        String mode     = 'emergency',
-        String scenario = 'standard_adult',
-      }) {
-    return SessionSummary(
-      mode:             mode,
-      scenario:         scenario,
-      compressionCount: data['totalCompressions']   as int?    ?? 0,
-      correctDepth:     data['correctDepth']         as int?    ?? 0,
-      correctFrequency: data['correctFrequency']     as int?    ?? 0,
-      correctRecoil:    data['correctRecoil']        as int?    ?? 0,
-      depthRateCombo:   data['depthRateCombo']       as int?    ?? 0,
-      averageDepth:     (data['depth']               as num?)?.toDouble() ?? 0.0,
-      averageFrequency: (data['frequency']           as num?)?.toDouble() ?? 0.0,
-      peakDepth:        (data['peakDepth']           as num?)?.toDouble() ?? 0.0,
-      handsOnRatio:     (data['handsOnRatio'] as num?)?.toDouble() ?? 0.0,
-      rescuerHRLastPause:   (data['rescuerHRLastPause']   as num?)?.toDouble(),
-      rescuerSpO2LastPause: (data['rescuerSpO2LastPause'] as num?)?.toDouble(),
-      sessionDuration:  sessionDuration,
-      totalGrade:       mode == 'emergency' ? 0.0 : totalGrade,
-      sessionStart:     sessionStart,
-    );
-  }
-
   /// Build a lightweight summary from a full SessionDetail.
   /// Used when merging local unsynced sessions into the session list.
   factory SessionSummary.fromDetail(SessionDetail d) => SessionSummary(
@@ -488,9 +483,13 @@ class SessionSummary {
     correctPosture:        d.correctPosture,
     leaningCount:          d.leaningCount,
     overForceCount:        d.overForceCount,
+    noFlowTime:            d.noFlowTime,
     noFlowIntervals:       d.noFlowIntervals,
+    unplannedPauseTime:    d.unplannedPauseTime,
+    unplannedPauseCount:   d.unplannedPauseCount,
     rescuerSwapCount:      d.rescuerSwapCount,
     fatigueOnsetIndex:     d.fatigueOnsetIndex,
+
     averageDepth:          d.averageDepth,
     averageFrequency:      d.averageFrequency,
     averageEffectiveDepth: d.averageEffectiveDepth,
@@ -499,14 +498,19 @@ class SessionSummary {
     depthConsistency:      d.depthConsistency,
     frequencyConsistency:  d.frequencyConsistency,
     handsOnRatio:          d.handsOnRatio,
+
     ventilationCount:      d.ventilationCount,
     ventilationCompliance: d.ventilationCompliance,
+
     pulseDetectedFinal:    d.pulseDetectedFinal,
     pulseChecksPrompted:   d.pulseChecksPrompted,
     pulseChecksComplied:   d.pulseChecksComplied,
+
     patientTemperature:    d.patientTemperature,
+    patientSpO2LastCheck:  d.patientSpO2LastCheck,
     rescuerHRLastPause:    d.rescuerHRLastPause,
     rescuerSpO2LastPause:  d.rescuerSpO2LastPause,
+
     sessionDuration:       d.sessionDuration,
     totalGrade:            d.totalGrade,
     sessionStart:          d.sessionStart,
@@ -522,15 +526,19 @@ class SessionSummary {
       sessionNumber: (json['session_number'] as num?)?.toInt(),
       mode:                  json['mode']                     as String? ?? 'emergency',
       scenario:              json['scenario']                 as String? ?? 'standard_adult',
-      compressionCount:      (json['compression_count']       as num).toInt(),
-      correctDepth:          (json['correct_depth']           as num).toInt(),
-      correctFrequency:      (json['correct_frequency']       as num).toInt(),
+      compressionCount:      (json['compression_count']       as num?)?.toInt() ?? 0,
+      correctDepth:          (json['correct_depth']           as num?)?.toInt() ?? 0,
+      correctFrequency:      (json['correct_frequency']       as num?)?.toInt() ?? 0,
+      sessionDuration:       (json['session_duration']        as num?)?.toInt() ?? 0,
       correctRecoil:         (json['correct_recoil']          as num?)?.toInt()    ?? 0,
       depthRateCombo:        (json['depth_rate_combo']        as num?)?.toInt()    ?? 0,
       correctPosture:        (json['correct_posture']         as num?)?.toInt()    ?? 0,
       leaningCount:          (json['leaning_count']           as num?)?.toInt()    ?? 0,
       overForceCount:        (json['over_force_count']        as num?)?.toInt()    ?? 0,
+      noFlowTime:            (json['no_flow_time']            as num?)?.toDouble() ?? 0.0,
       noFlowIntervals:       (json['no_flow_intervals']       as num?)?.toInt()    ?? 0,
+      unplannedPauseTime:    (json['unplanned_pause_time']    as num?)?.toDouble() ?? 0.0,
+      unplannedPauseCount:   (json['unplanned_pause_count']   as num?)?.toInt()    ?? 0,
       rescuerSwapCount:      (json['rescuer_swap_count']      as num?)?.toInt()    ?? 0,
       fatigueOnsetIndex:     (json['fatigue_onset_index']     as num?)?.toInt()    ?? 0,
       averageDepth:          (json['average_depth']           as num?)?.toDouble() ?? 0.0,
@@ -546,10 +554,10 @@ class SessionSummary {
       pulseDetectedFinal:     json['pulse_detected_final']    as bool?             ?? false,
       pulseChecksPrompted:   (json['pulse_checks_prompted']   as num?)?.toInt()    ?? 0,
       pulseChecksComplied:   (json['pulse_checks_complied']   as num?)?.toInt()    ?? 0,
-      patientTemperature:    (json['patient_temperature']     as num?)?.toDouble(),
-      rescuerHRLastPause:    (json['rescuer_hr_last_pause']   as num?)?.toDouble(),
-      rescuerSpO2LastPause:  (json['rescuer_spo2_last_pause'] as num?)?.toDouble(),
-      sessionDuration:       (json['session_duration']        as num).toInt(),
+      patientTemperature:    (json['patient_temperature']        as num?)?.toDouble(),
+      patientSpO2LastCheck:  (json['patient_spo2_last_check']    as num?)?.toDouble(),
+      rescuerHRLastPause:    (json['rescuer_hr_last_pause']      as num?)?.toDouble(),
+      rescuerSpO2LastPause:  (json['rescuer_spo2_last_pause']    as num?)?.toDouble(),
       totalGrade:            (json['total_grade']             as num?)?.toDouble() ?? 0.0,
       sessionStart: json['session_start'] != null
           ? DateTime.tryParse(json['session_start'] as String)
@@ -560,43 +568,6 @@ class SessionSummary {
       note: json['note'] as String?,
     );
   }
-
-  Map<String, dynamic> toJson() => {
-    'mode':                   mode,
-    'scenario':               scenario,
-    'compression_count':      compressionCount,
-    'correct_depth':          correctDepth,
-    'correct_frequency':      correctFrequency,
-    'correct_recoil':         correctRecoil,
-    'depth_rate_combo':       depthRateCombo,
-    'correct_posture':        correctPosture,
-    'leaning_count':          leaningCount,
-    'over_force_count':       overForceCount,
-    'no_flow_intervals':      noFlowIntervals,
-    'rescuer_swap_count':     rescuerSwapCount,
-    'fatigue_onset_index':    fatigueOnsetIndex,
-    'average_depth':          averageDepth,
-    'average_frequency':      averageFrequency,
-    'average_effective_depth': averageEffectiveDepth,
-    'peak_depth':             peakDepth,
-    'depth_sd':               depthSD,
-    'depth_consistency':      depthConsistency,
-    'freq_consistency':       frequencyConsistency,
-    'hands_on_ratio':         handsOnRatio,
-    'ventilation_count':      ventilationCount,
-    'ventilation_compliance': ventilationCompliance,
-    'pulse_detected_final':   pulseDetectedFinal,
-    'pulse_checks_prompted':  pulseChecksPrompted,
-    'pulse_checks_complied':  pulseChecksComplied,
-    if (patientTemperature   != null) 'patient_temperature':    patientTemperature,
-    if (rescuerHRLastPause   != null) 'rescuer_hr_last_pause':  rescuerHRLastPause,
-    if (rescuerSpO2LastPause != null) 'rescuer_spo2_last_pause': rescuerSpO2LastPause,
-    'session_duration':       sessionDuration,
-    'total_grade':            totalGrade,
-    if (sessionStart != null) 'session_start': sessionStart!.toIso8601String(),
-    if (sessionEnd   != null) 'session_end':   sessionEnd!.toIso8601String(),
-    if (note         != null) 'note':          note,
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

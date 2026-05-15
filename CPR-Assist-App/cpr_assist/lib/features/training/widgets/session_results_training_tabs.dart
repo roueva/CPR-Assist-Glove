@@ -461,7 +461,7 @@ class _TrainingMetricsTab extends StatelessWidget {
     }
 
     final hasBody = hasBiometrics
-        || d.ambientTempStart != null
+        || d.rescuerWristTempStart != null
         || d.rescuerVitals.isNotEmpty;
 
     return Padding(
@@ -2179,8 +2179,8 @@ class _RescuerVitalsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final onset  = detail.fatigueOnsetIndex;
     final temp   = _rescuerTemp;
-    final ambient = detail.ambientTempEnd ?? detail.ambientTempStart;
-    final ambientSub = detail.ambientTempEnd != null ? 'at session end' : 'at session start';
+    final wristTemp = detail.rescuerWristTempEnd ?? detail.rescuerWristTempStart;
+    final wristTempSub = detail.rescuerWristTempEnd != null ? 'at session end' : 'at session start';
 
     final hrColor = rescuerHR == null  ? AppColors.textDisabled
         : rescuerHR! < 60             ? AppColors.primary
@@ -2259,7 +2259,7 @@ class _RescuerVitalsSection extends StatelessWidget {
         ],
 
         // ── Wrist temp + Room temp row ─────────────────────────────────────
-        if (temp != null || ambient != null) ...[
+        if (temp != null || wristTemp != null) ...[
           Row(
             children: [
               if (temp != null)
@@ -2277,19 +2277,19 @@ class _RescuerVitalsSection extends StatelessWidget {
                     vitals:    detail.rescuerVitals,
                   ),
                 )),
-              if (temp != null && ambient != null)
+              if (temp != null && wristTemp != null)
                 const SizedBox(width: AppSpacing.sm),
-              if (ambient != null)
+              if (wristTemp != null)
                 Expanded(child: _VitalInfoTile(
                   icon:  Icons.device_thermostat_rounded,
                   label: 'Room temp',
-                  value: ambient.toStringAsFixed(1),
+                  value: wristTemp.toStringAsFixed(1),
                   unit:  '°C',
-                  sub:   ambientSub,
+                  sub:   wristTempSub,
                   color: AppColors.textSecondary,
                   onInfo: () => _RoomTempDetailDialog.show(context,
-                    ambientStart: detail.ambientTempStart,
-                    ambientEnd:   detail.ambientTempEnd,
+                    wristTempStart: detail.rescuerWristTempStart,
+                    wristTempEnd:   detail.rescuerWristTempEnd,
                   ),
                 )),
             ],

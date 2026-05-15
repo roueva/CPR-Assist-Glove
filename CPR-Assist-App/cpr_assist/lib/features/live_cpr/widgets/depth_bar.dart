@@ -22,9 +22,9 @@ class AnimatedDepthBar extends StatefulWidget {
   const AnimatedDepthBar({
     super.key,
     required this.depth,
+    required this.targetDepthCm,
+    required this.targetDepthMaxCm,
     this.recoilAchieved    = false,
-    this.targetDepthCm     = 5.0,
-    this.targetDepthMaxCm  = 6.0,
     this.maxDepthCm        = 6.5,
   });
 
@@ -50,7 +50,7 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
     super.initState();
     _ctrl = AnimationController(
       vsync:    this,
-      duration: const Duration(milliseconds: 120),
+      duration: const Duration(milliseconds: 50),
     );
     _pillPulse = AnimationController(
       vsync:    this,

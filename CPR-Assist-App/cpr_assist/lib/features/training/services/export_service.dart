@@ -1,7 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show cos, pi;
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -133,13 +131,38 @@ class ExportService {
   // PUBLIC API — SUMMARY CSV
   // ═══════════════════════════════════════════════════════════════════════════
 
-  static Future<bool> exportSingleSessionCsv(SessionSummary s) =>
-      exportSessionsAsCsv([s],
-          filename: 'cpr_session_${_stamp(s.sessionStart)}');
+  static Future<bool> exportSingleSessionCsv(
+      SessionSummary s, {
+        SessionDetail? detail,
+      }) async {
+    try {
+      final csv = _buildSingleSessionMetricsCsv(s, detail: detail);
+      final name = 'cpr_session_metrics_${_stamp(s.sessionStart)}.csv';
+      return _shareFile(
+        _csvBytes(csv),
+        name,
+        'CPR Assist — Session Metrics',
+        'text/csv',
+      );
+    } catch (e) {
+      debugPrint('ExportService single metrics CSV share: $e');
+      return false;
+    }
+  }
 
-  static Future<bool> downloadSingleSessionCsv(SessionSummary s) =>
-      downloadSessionsAsCsv([s],
-          filename: 'cpr_session_${_stamp(s.sessionStart)}');
+  static Future<bool> downloadSingleSessionCsv(
+      SessionSummary s, {
+        SessionDetail? detail,
+      }) async {
+    try {
+      final csv = _buildSingleSessionMetricsCsv(s, detail: detail);
+      final name = 'cpr_session_metrics_${_stamp(s.sessionStart)}.csv';
+      return _saveToDevice(_csvBytes(csv), name);
+    } catch (e) {
+      debugPrint('ExportService single metrics CSV download: $e');
+      return false;
+    }
+  }
 
   static Future<bool> exportSessionsAsCsv(
       List<SessionSummary> sessions, { String filename = 'cpr_assist_sessions' }) async {
@@ -263,118 +286,788 @@ class ExportService {
   // CSV BUILDERS — one per data shape, used by both share and download
   // ═══════════════════════════════════════════════════════════════════════════
 
+
+  // ── Single Session Metrics CSV ───────────────────────────────────────────────
+// Sectioned summary for one session.
+// Not raw data. Raw timestamp/event data stays in the raw ZIP exports.
+
+  static String _buildSingleSessionMetricsCsv(
+      SessionSummary s, {
+        SessionDetail? detail,
+      }) {
+    final sb = StringBuffer();
+
+    final isPediatric = s.scenario == 'pediatric';
+    final isTraining = s.isTraining;
+
+    final depthMin = isPediatric
+        ? CprTargets.depthMinPediatric
+        : CprTargets.depthMin;
+    final depthMax = isPediatric
+        ? CprTargets.depthMaxPediatric
+        : CprTargets.depthMax;
+
+    final depthTarget = '${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm';
+    final rateTarget =
+        '${CprTargets.rateMin.toStringAsFixed(0)}-${CprTargets.rateMax.toStringAsFixed(0)} BPM';
+    const ccfTarget = '≥80%';
+
+    final n = s.compressionCount > 0 ? s.compressionCount.toDouble() : 0.0;
+
+    String pctFromCount(int count) {
+      if (n <= 0) return '';
+      return '${(count / n * 100).toStringAsFixed(1)}%';
+    }
+
+    String pctValue(double value) {
+      return '${value.toStringAsFixed(1)}%';
+    }
+
+    String fmtNum(double value, {int digits = 1, String suffix = ''}) {
+      if (value <= 0) return '';
+      return '${value.toStringAsFixed(digits)}$suffix';
+    }
+
+    String fmtNullable(double? value, {int digits = 1, String suffix = ''}) {
+      if (value == null || value <= 0) return '';
+      return '${value.toStringAsFixed(digits)}$suffix';
+    }
+
+    String fmtIntOrBlank(int value) {
+      return value > 0 ? value.toString() : '';
+    }
+
+    String fmtDelta(double start, double end, {int digits = 1, String suffix = ''}) {
+      if (start <= 0 || end <= 0) return '';
+      final delta = end - start;
+      final sign = delta > 0 ? '+' : '';
+      return '$sign${delta.toStringAsFixed(digits)}$suffix';
+    }
+
+    void blankLine() => sb.writeln(',');
+
+    void section(String title) {
+      blankLine();
+      sb.writeln(title);
+    }
+
+    void metricHeader() {
+      sb.writeln('Metric,Target,Value');
+    }
+
+    void qualityHeader() {
+      sb.writeln('Metric,Target,Count,Percentage');
+    }
+
+    void row2(String metric, String value) {
+      sb.writeln('${_esc(metric)},${_esc(value)}');
+    }
+
+    void row3(String metric, String target, String value) {
+      sb.writeln('${_esc(metric)},${_esc(target)},${_esc(value)}');
+    }
+
+    void row4(String metric, String target, String count, String percentage) {
+      sb.writeln('${_esc(metric)},${_esc(target)},${_esc(count)},${_esc(percentage)}');
+    }
+
+    // Detail-only calculations.
+    final allTargetsMetCount = detail?.compressions
+        .where((c) => c.isPerfectFor(
+      depthMin: depthMin,
+      depthMax: depthMax,
+    ))
+        .length;
+
+    final avgWristAlignment = detail != null && detail.compressions.isNotEmpty
+        ? detail.compressions
+        .map((c) => c.wristAlignmentAngle)
+        .reduce((a, b) => a + b) /
+        detail.compressions.length
+        : 0.0;
+
+    final ventilationPauseTime = detail != null && detail.ventilations.isNotEmpty
+        ? detail.ventilations
+        .map((v) => v.durationSec)
+        .reduce((a, b) => a + b)
+        : 0.0;
+
+    final rateVariability = detail?.rateVariability ?? 0.0;
+    final timeToFirstCompression = detail?.timeToFirstCompression ?? 0.0;
+    final correctVentilations = detail?.correctVentilations ?? 0;
+    final patientSpO2LastCheck = detail?.patientSpO2LastCheck;
+
+    final lastPulseCheck = detail != null && detail.pulseChecks.isNotEmpty
+        ? detail.pulseChecks.last
+        : null;
+
+    // Rescuer vitals start/end.
+    final rescuerVitals = detail?.rescuerVitals ?? [];
+
+    final hrVitals = rescuerVitals.where((v) => v.heartRate > 0).toList();
+    final spO2Vitals = rescuerVitals.where((v) => v.spO2 > 0).toList();
+    final tempVitals = rescuerVitals.where((v) => v.temperature > 0).toList();
+
+    final startHR = hrVitals.isNotEmpty ? hrVitals.first.heartRate : 0.0;
+    final endHR = hrVitals.isNotEmpty ? hrVitals.last.heartRate : 0.0;
+
+    final startSpO2 = spO2Vitals.isNotEmpty ? spO2Vitals.first.spO2 : 0.0;
+    final endSpO2 = spO2Vitals.isNotEmpty ? spO2Vitals.last.spO2 : 0.0;
+
+    final startTemp = tempVitals.isNotEmpty ? tempVitals.first.temperature : 0.0;
+    final endTemp = tempVitals.isNotEmpty ? tempVitals.last.temperature : 0.0;
+
+    final avgSignalQuality = rescuerVitals.isNotEmpty
+        ? rescuerVitals.map((v) => v.signalQuality).reduce((a, b) => a + b) /
+        rescuerVitals.length
+        : 0.0;
+
+    // ── Title ────────────────────────────────────────────────────────────────
+    sb.writeln('CPR Assist - Session Metrics Summary');
+
+    // ── INFO ─────────────────────────────────────────────────────────────────
+    section('INFO');
+    sb.writeln('Metric,Value');
+    row2('Session ID', s.id?.toString() ?? 'local');
+    row2('Date & Time', _fmtDt(s.sessionStart));
+    row2(
+      'Mode',
+      s.mode == 'emergency'
+          ? 'Emergency'
+          : s.mode == 'training_no_feedback'
+          ? 'Training (No Feedback)'
+          : 'Training',
+    );
+    row2('Scenario', isPediatric ? 'Pediatric' : 'Adult');
+    row2('Duration', _mmss(s.sessionDuration));
+    if (s.note != null && s.note!.isNotEmpty) {
+      row2('Note', s.note!);
+    }
+
+    // ── GRADE ────────────────────────────────────────────────────────────────
+    if (isTraining) {
+      section('GRADE');
+      metricHeader();
+      row3('Total Grade (%)', '', s.totalGrade.toStringAsFixed(1));
+    }
+
+    // ── COMPRESSION TOTALS ───────────────────────────────────────────────────
+    section('COMPRESSION TOTALS');
+    metricHeader();
+    row3('Total Compressions', '', s.compressionCount.toString());
+    row3('Leaning Events', '0', s.leaningCount.toString());
+    row3('Over-Force Events', '0', s.overForceCount.toString());
+
+    // ── COMPRESSION QUALITY ──────────────────────────────────────────────────
+    section('COMPRESSION QUALITY');
+    qualityHeader();
+    row4(
+      'Depth Target Met',
+      depthTarget,
+      s.correctDepth.toString(),
+      pctFromCount(s.correctDepth),
+    );
+    row4(
+      'Rate Target Met',
+      rateTarget,
+      s.correctFrequency.toString(),
+      pctFromCount(s.correctFrequency),
+    );
+    row4(
+      'Recoil Target Met',
+      'Full recoil',
+      s.correctRecoil.toString(),
+      pctFromCount(s.correctRecoil),
+    );
+    row4(
+      'Posture Target Met',
+      'Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°',
+      s.correctPosture.toString(),
+      pctFromCount(s.correctPosture),
+    );
+    row4(
+      'Depth + Rate Target Met',
+      'Depth + rate targets',
+      s.depthRateCombo.toString(),
+      pctFromCount(s.depthRateCombo),
+    );
+    row4(
+      'All Targets Met',
+      'Depth + rate + recoil + posture',
+      allTargetsMetCount?.toString() ?? '',
+      allTargetsMetCount != null ? pctFromCount(allTargetsMetCount) : '',
+    );
+
+    // ── AVERAGES & DISTRIBUTION ──────────────────────────────────────────────
+    section('AVERAGES & DISTRIBUTION');
+    metricHeader();
+    row3('Average Depth', depthTarget, fmtNum(s.averageDepth, digits: 2, suffix: ' cm'));
+    row3('Average Effective Depth', '', fmtNum(s.averageEffectiveDepth, digits: 2, suffix: ' cm'));
+    row3('Peak Depth', '', fmtNum(s.peakDepth, digits: 2, suffix: ' cm'));
+    row3('Depth SD', '', fmtNum(s.depthSD, digits: 2, suffix: ' cm'));
+    row3('Depth Consistency', '', pctValue(s.depthConsistency));
+    row3('Average Rate', rateTarget, fmtNum(s.averageFrequency, digits: 1, suffix: ' BPM'));
+    row3('Rate Consistency', '', pctValue(s.frequencyConsistency));
+    row3('Rate Variability', '', fmtNum(rateVariability, digits: 0, suffix: ' ms'));
+    if (avgWristAlignment > 0) {
+      row3(
+        'Average Wrist Alignment',
+        '≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°',
+        '${avgWristAlignment.toStringAsFixed(1)}°',
+      );
+    }
+
+    // ── FLOW & TIMING ────────────────────────────────────────────────────────
+    section('FLOW & TIMING');
+    metricHeader();
+    final ccfPct = s.handsOnRatio * 100;
+    row3('CCF', ccfTarget, pctValue(ccfPct));
+    row3('Time to First Compression', '', fmtNum(timeToFirstCompression, digits: 1, suffix: ' s'));
+    row3('No-Flow Intervals', '', s.noFlowIntervals.toString());
+    row3('No-Flow Time', '', fmtNum(s.noFlowTime, digits: 1, suffix: ' s'));
+    row3('Unplanned Pauses', '0', s.unplannedPauseCount.toString());
+    row3('Unplanned Pause Time', '0 s', fmtNum(s.unplannedPauseTime, digits: 1, suffix: ' s'));
+
+    // ── VENTILATION ──────────────────────────────────────────────────────────
+    section('VENTILATION');
+    metricHeader();
+    row3('Ventilation Windows Recorded', '', s.ventilationCount.toString());
+    row3('Ventilation Target Met Windows', '', fmtIntOrBlank(correctVentilations));
+    row3('Ventilation Target Met (%)', 'Window timing', fmtNum(s.ventilationCompliance, digits: 1, suffix: '%'));
+    row3('Total Ventilation Pause Time', '', fmtNum(ventilationPauseTime, digits: 1, suffix: ' s'));
+
+    // ── PULSE CHECKS ─────────────────────────────────────────────────────────
+    section('PULSE CHECKS');
+    metricHeader();
+    row3('Pulse Checks Prompted', '', s.pulseChecksPrompted.toString());
+    row3('Pulse Checks Done', '', s.pulseChecksComplied.toString());
+    row3('ROSC Detected', '', _yn(s.pulseDetectedFinal));
+
+    if (lastPulseCheck != null) {
+      const classLabels = ['ABSENT', 'UNCERTAIN', 'PRESENT'];
+      final cls = lastPulseCheck.classification.clamp(0, 2);
+
+      row3('Last Pulse Classification', '', classLabels[cls]);
+      row3(
+        'Last Detected BPM',
+        '',
+        lastPulseCheck.detectedBpm > 0
+            ? '${lastPulseCheck.detectedBpm.toStringAsFixed(1)} BPM'
+            : '',
+      );
+      row3('Last Pulse Confidence', '', '${lastPulseCheck.confidence}%');
+      row3(
+        'Patient SpO2 Last Check',
+        '',
+        lastPulseCheck.patientSpO2 > 0
+            ? '${lastPulseCheck.patientSpO2.toStringAsFixed(1)}%'
+            : '',
+      );
+    } else {
+      row3('Last Pulse Classification', '', '');
+      row3('Last Detected BPM', '', '');
+      row3('Last Pulse Confidence', '', '');
+      row3(
+        'Patient SpO2 Last Check',
+        '',
+        patientSpO2LastCheck != null
+            ? '${patientSpO2LastCheck.toStringAsFixed(1)}%'
+            : '',
+      );
+    }
+
+    // ── FATIGUE & RESCUER ────────────────────────────────────────────────────
+    section('FATIGUE & RESCUER');
+    metricHeader();
+    row3(
+      'Fatigue Onset',
+      '',
+      s.fatigueOnsetIndex > 0 ? 'Compression #${s.fatigueOnsetIndex}' : '',
+    );
+    row3('Rescuer Swaps', '', s.rescuerSwapCount.toString());
+
+    row3('Rescuer HR at Start', '', fmtNum(startHR, digits: 1, suffix: ' BPM'));
+    row3('Rescuer HR at End', '', fmtNum(endHR, digits: 1, suffix: ' BPM'));
+    row3('Rescuer HR Change', '', fmtDelta(startHR, endHR, digits: 1, suffix: ' BPM'));
+
+    row3('Rescuer SpO2 at Start', '', fmtNum(startSpO2, digits: 1, suffix: '%'));
+    row3('Rescuer SpO2 at End', '', fmtNum(endSpO2, digits: 1, suffix: '%'));
+    row3('Rescuer SpO2 Change', '', fmtDelta(startSpO2, endSpO2, digits: 1, suffix: '%'));
+
+    row3('Rescuer Skin Temp at Start', '', fmtNum(startTemp, digits: 2, suffix: ' C'));
+    row3('Rescuer Skin Temp at End', '', fmtNum(endTemp, digits: 2, suffix: ' C'));
+    row3('Rescuer Skin Temp Change', '', fmtDelta(startTemp, endTemp, digits: 2, suffix: ' C'));
+
+    row3('Average Signal Quality', '', fmtNum(avgSignalQuality, digits: 1));
+    row3('Rescuer HR at Last Pause', '', fmtNullable(s.rescuerHRLastPause, digits: 1, suffix: ' BPM'));
+    row3('Rescuer SpO2 at Last Pause', '', fmtNullable(s.rescuerSpO2LastPause, digits: 1, suffix: '%'));
+    row3('Patient Temperature', '', fmtNullable(s.patientTemperature, digits: 1, suffix: ' C'));
+
+    return sb.toString();
+  }
+
+
   // ── Summary CSV ────────────────────────────────────────────────────────────
   // Headers use human-readable Title Case with units in parentheses.
   // Dates formatted as "YYYY-MM-DD HH:MM:SS" so Excel auto-detects them.
   // Booleans are YES/NO. Percentages are plain numbers (e.g. 78.3, not "78.3%").
   // Section comment rows (starting with #) group columns visually in Excel.
 
+// ── Multi-Session Metrics CSV ────────────────────────────────────────────────
+// Sectioned comparison table.
+// One metric per row. Sessions are columns.
+// Raw timestamp/event data stays in the raw ZIP exports.
+
   static String _buildSummaryCsv(List<SessionSummary> sessions) {
     final sb = StringBuffer();
 
-    // ── Metadata header block ─────────────────────────────────────────────
-    sb.writeln('# CPR Assist - Session Summary Export');
-    sb.writeln('# Generated,${_fmtDt(DateTime.now())}');
-    sb.writeln('# Sessions,${sessions.length}');
-    sb.writeln('# AHA 2020 Guidelines: Depth 5-6 cm (adult) / 4-5 cm (pediatric) | Rate 100-120 BPM | CCF >= 80%');
-    sb.writeln('# Percentages are 0-100 scale. Booleans are YES/NO. Depths in cm. Rates in BPM.');
-    sb.writeln('#');
+    final sessionLabels = List.generate(
+      sessions.length,
+          (i) => 'Session ${i + 1}',
+    );
 
-    // ── Column headers ────────────────────────────────────────────────────
-    sb.writeln([
-      // ── IDENTITY
-      'Session ID', 'Session #', 'Date & Time', 'End Time',
-      'Mode', 'Scenario', 'Duration (s)', 'Duration (MM:SS)',
-      'Depth Target Min (cm)', 'Depth Target Max (cm)',
-      // ── COMPRESSION COUNTS
-      'Total Compressions',
-      'Correct Depth (n)', 'Correct Rate (n)', 'Correct Recoil (n)',
-      'Depth+Rate Combo (n)', 'Correct Posture (n)',
-      'Leaning Events (n)', 'Over-Force Events (n)',
-      // ── COMPUTED PERCENTAGES
-      'Depth in Target (%)', 'Rate in Target (%)', 'Recoil OK (%)',
-      'Posture OK (%)', 'Depth+Rate Combo (%)',
-      // ── AVERAGES & DISTRIBUTION
-      'Avg Depth (cm)', 'Avg Effective Depth (cm)',
-      'Peak Depth (cm)', 'Depth SD (cm)', 'Depth Consistency (%)',
-      'Avg Rate (BPM)', 'Rate Consistency (%)',
-      // ── FLOW QUALITY
-      'CCF / Hands-On Ratio', 'No-Flow Intervals (n)',
-      // ── FATIGUE & ENDURANCE
-      'Fatigue Onset Compression #', 'Rescuer Swaps (n)',
-      // ── VENTILATION
-      'Ventilation Cycles (n)', 'Ventilation Compliance (%)',
-      // ── PULSE CHECK
-      'Pulse Checks Prompted (n)', 'Pulse Checks Done (n)', 'ROSC Detected',
-      // ── BIOMETRICS
-      'Patient Temperature ( C)',
-      'Rescuer HR at Last Pause (BPM)', 'Rescuer SpO2 at Last Pause (%)',
-      // ── GRADE
-      'Total Grade (%)',
-    ].join(','));
+    String pctFromCount(int count, int total) {
+      if (total <= 0) return '';
+      return '${(count / total * 100).toStringAsFixed(1)}%';
+    }
 
-    for (var i = 0; i < sessions.length; i++) {
-      final s   = sessions[i];
-      final n   = s.compressionCount > 0 ? s.compressionCount.toDouble() : 1.0;
+    String pctValue(double value) {
+      return '${value.toStringAsFixed(1)}%';
+    }
+
+    String fmtNum(double value, {int digits = 1, String suffix = ''}) {
+      if (value <= 0) return '';
+      return '${value.toStringAsFixed(digits)}$suffix';
+    }
+
+    String fmtNullable(double? value, {int digits = 1, String suffix = ''}) {
+      if (value == null || value <= 0) return '';
+      return '${value.toStringAsFixed(digits)}$suffix';
+    }
+
+    String modeLabel(SessionSummary s) {
+      if (s.mode == 'emergency') return 'Emergency';
+      if (s.mode == 'training_no_feedback') return 'Training (No Feedback)';
+      return 'Training';
+    }
+
+    String scenarioLabel(SessionSummary s) {
+      return s.scenario == 'pediatric' ? 'Pediatric' : 'Adult';
+    }
+
+    String depthTargetLabel(SessionSummary s) {
       final isPediatric = s.scenario == 'pediatric';
-      final modeLabel = s.mode == 'emergency' ? 'Emergency'
-          : s.mode == 'training_no_feedback' ? 'Training (No Feedback)'
-          : 'Training';
-      final scenarioLabel = s.scenario == 'pediatric' ? 'Pediatric' : 'Standard Adult';
+      final min = isPediatric
+          ? CprTargets.depthMinPediatric
+          : CprTargets.depthMin;
+      final max = isPediatric
+          ? CprTargets.depthMaxPediatric
+          : CprTargets.depthMax;
 
+      return '${min.toStringAsFixed(1)}-${max.toStringAsFixed(1)} cm';
+    }
+
+    String genericDepthTarget() {
+      return 'Adult ${CprTargets.depthMin.toStringAsFixed(1)}-${CprTargets.depthMax.toStringAsFixed(1)} cm / '
+          'Pediatric ${CprTargets.depthMinPediatric.toStringAsFixed(1)}-${CprTargets.depthMaxPediatric.toStringAsFixed(1)} cm';
+    }
+
+    String rateTarget() {
+      return '${CprTargets.rateMin.toStringAsFixed(0)}-${CprTargets.rateMax.toStringAsFixed(0)} BPM';
+    }
+
+    String postureTarget() {
+      return 'Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / '
+          'Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°';
+    }
+
+    void blankLine() => sb.writeln(',');
+
+    void section(String title) {
+      blankLine();
+      sb.writeln(title);
       sb.writeln([
-        // Identity
-        s.id?.toString() ?? '',
-        s.sessionNumber ?? (i + 1),
-        _esc(_fmtDt(s.sessionStart)),
-        _esc(_fmtDt(s.sessionEnd)),
-        _esc(modeLabel),
-        _esc(scenarioLabel),
-        s.sessionDuration,
-        _esc(_mmss(s.sessionDuration)),
-        isPediatric ? '4.0' : '5.0',
-        isPediatric ? '5.0' : '6.0',
-        // Compression counts
-        s.compressionCount,
-        s.correctDepth, s.correctFrequency, s.correctRecoil,
-        s.depthRateCombo, s.correctPosture,
-        s.leaningCount, s.overForceCount,
-        // Computed percentages
-        (s.correctDepth     / n * 100).toStringAsFixed(1),
-        (s.correctFrequency / n * 100).toStringAsFixed(1),
-        (s.correctRecoil    / n * 100).toStringAsFixed(1),
-        (s.correctPosture   / n * 100).toStringAsFixed(1),
-        (s.depthRateCombo   / n * 100).toStringAsFixed(1),
-        // Averages
-        s.averageDepth.toStringAsFixed(2),
-        s.averageEffectiveDepth.toStringAsFixed(2),
-        s.peakDepth.toStringAsFixed(2),
-        s.depthSD.toStringAsFixed(2),
-        s.depthConsistency.toStringAsFixed(1),
-        s.averageFrequency.toStringAsFixed(2),
-        s.frequencyConsistency.toStringAsFixed(1),
-        // Flow quality
-        s.handsOnRatio.toStringAsFixed(3),
-        s.noFlowIntervals,
-        // Fatigue
-        s.fatigueOnsetIndex == 0 ? '' : s.fatigueOnsetIndex,
-        s.rescuerSwapCount,
-        // Ventilation
-        s.ventilationCount,
-        s.ventilationCompliance.toStringAsFixed(1),
-        // Pulse check
-        s.pulseChecksPrompted, s.pulseChecksComplied,
-        _yn(s.pulseDetectedFinal),
-        // Biometrics
-        s.patientTemperature?.toStringAsFixed(1) ?? '',
-        s.rescuerHRLastPause?.toStringAsFixed(1) ?? '',
-        s.rescuerSpO2LastPause?.toStringAsFixed(1) ?? '',
-        // Grade
-        s.isEmergency ? '' : s.totalGrade.toStringAsFixed(1),
+        'Metric',
+        'Target',
+        ...sessionLabels,
       ].join(','));
     }
+
+    void row(
+        String metric,
+        String target,
+        List<String> values,
+        ) {
+      sb.writeln([
+        _esc(metric),
+        _esc(target),
+        ...values.map(_esc),
+      ].join(','));
+    }
+
+    // ── Title ────────────────────────────────────────────────────────────────
+    sb.writeln('CPR Assist - Multi-Session Metrics Summary');
+    sb.writeln('Generated,${_fmtDt(DateTime.now())}');
+    sb.writeln('Sessions,${sessions.length}');
+
+    // ── INFO ─────────────────────────────────────────────────────────────────
+    section('INFO');
+
+    row(
+      'Session ID',
+      '',
+      sessions.map((s) => s.id?.toString() ?? 'local').toList(),
+    );
+
+    row(
+      'Date & Time',
+      '',
+      sessions.map((s) => _fmtDt(s.sessionStart)).toList(),
+    );
+
+    row(
+      'Mode',
+      '',
+      sessions.map(modeLabel).toList(),
+    );
+
+    row(
+      'Scenario',
+      '',
+      sessions.map(scenarioLabel).toList(),
+    );
+
+    row(
+      'Duration',
+      '',
+      sessions.map((s) => _mmss(s.sessionDuration)).toList(),
+    );
+
+    row(
+      'Depth Target',
+      '',
+      sessions.map(depthTargetLabel).toList(),
+    );
+
+    // ── GRADE ────────────────────────────────────────────────────────────────
+    section('GRADE');
+
+    row(
+      'Total Grade (%)',
+      '',
+      sessions
+          .map((s) => s.isEmergency ? '' : s.totalGrade.toStringAsFixed(1))
+          .toList(),
+    );
+
+    // ── COMPRESSION TOTALS ───────────────────────────────────────────────────
+    section('COMPRESSION TOTALS');
+
+    row(
+      'Total Compressions',
+      '',
+      sessions.map((s) => s.compressionCount.toString()).toList(),
+    );
+
+    row(
+      'Leaning Events',
+      '0',
+      sessions.map((s) => s.leaningCount.toString()).toList(),
+    );
+
+    row(
+      'Over-Force Events',
+      '0',
+      sessions.map((s) => s.overForceCount.toString()).toList(),
+    );
+
+    // ── COMPRESSION QUALITY - COUNTS ─────────────────────────────────────────
+    section('COMPRESSION QUALITY - COUNTS');
+
+    row(
+      'Depth Target Met',
+      genericDepthTarget(),
+      sessions.map((s) => s.correctDepth.toString()).toList(),
+    );
+
+    row(
+      'Rate Target Met',
+      rateTarget(),
+      sessions.map((s) => s.correctFrequency.toString()).toList(),
+    );
+
+    row(
+      'Recoil Target Met',
+      'Full recoil',
+      sessions.map((s) => s.correctRecoil.toString()).toList(),
+    );
+
+    row(
+      'Posture Target Met',
+      postureTarget(),
+      sessions.map((s) => s.correctPosture.toString()).toList(),
+    );
+
+    row(
+      'Depth + Rate Target Met',
+      'Depth + rate targets',
+      sessions.map((s) => s.depthRateCombo.toString()).toList(),
+    );
+
+    // Important:
+    // All Targets Met cannot be computed reliably from SessionSummary unless
+    // you store it in the database/model. It needs per-compression detail.
+    row(
+      'All Targets Met',
+      'Depth + rate + recoil + posture',
+      sessions.map((_) => '').toList(),
+    );
+
+    // ── COMPRESSION QUALITY - PERCENTAGES ────────────────────────────────────
+    section('COMPRESSION QUALITY - PERCENTAGES');
+
+    row(
+      'Depth Target Met',
+      genericDepthTarget(),
+      sessions
+          .map((s) => pctFromCount(s.correctDepth, s.compressionCount))
+          .toList(),
+    );
+
+    row(
+      'Rate Target Met',
+      rateTarget(),
+      sessions
+          .map((s) => pctFromCount(s.correctFrequency, s.compressionCount))
+          .toList(),
+    );
+
+    row(
+      'Recoil Target Met',
+      'Full recoil',
+      sessions
+          .map((s) => pctFromCount(s.correctRecoil, s.compressionCount))
+          .toList(),
+    );
+
+    row(
+      'Posture Target Met',
+      postureTarget(),
+      sessions
+          .map((s) => pctFromCount(s.correctPosture, s.compressionCount))
+          .toList(),
+    );
+
+    row(
+      'Depth + Rate Target Met',
+      'Depth + rate targets',
+      sessions
+          .map((s) => pctFromCount(s.depthRateCombo, s.compressionCount))
+          .toList(),
+    );
+
+    row(
+      'All Targets Met',
+      'Depth + rate + recoil + posture',
+      sessions.map((_) => '').toList(),
+    );
+
+    // ── AVERAGES & DISTRIBUTION ──────────────────────────────────────────────
+    section('AVERAGES & DISTRIBUTION');
+
+    row(
+      'Average Depth',
+      genericDepthTarget(),
+      sessions
+          .map((s) => fmtNum(s.averageDepth, digits: 2, suffix: ' cm'))
+          .toList(),
+    );
+
+    row(
+      'Average Effective Depth',
+      '',
+      sessions
+          .map((s) => fmtNum(s.averageEffectiveDepth, digits: 2, suffix: ' cm'))
+          .toList(),
+    );
+
+    row(
+      'Peak Depth',
+      '',
+      sessions
+          .map((s) => fmtNum(s.peakDepth, digits: 2, suffix: ' cm'))
+          .toList(),
+    );
+
+    row(
+      'Depth SD',
+      '',
+      sessions
+          .map((s) => fmtNum(s.depthSD, digits: 2, suffix: ' cm'))
+          .toList(),
+    );
+
+    row(
+      'Depth Consistency',
+      '',
+      sessions.map((s) => pctValue(s.depthConsistency)).toList(),
+    );
+
+    row(
+      'Average Rate',
+      rateTarget(),
+      sessions
+          .map((s) => fmtNum(s.averageFrequency, digits: 1, suffix: ' BPM'))
+          .toList(),
+    );
+
+    row(
+      'Rate Consistency',
+      '',
+      sessions.map((s) => pctValue(s.frequencyConsistency)).toList(),
+    );
+
+    // ── FLOW & TIMING ────────────────────────────────────────────────────────
+    section('FLOW & TIMING');
+
+    row(
+      'CCF',
+      '≥80%',
+      sessions
+          .map((s) => pctValue(s.handsOnRatio * 100))
+          .toList(),
+    );
+
+    row(
+      'No-Flow Intervals',
+      '',
+      sessions.map((s) => s.noFlowIntervals.toString()).toList(),
+    );
+
+    row(
+      'No-Flow Time',
+      '',
+      sessions
+          .map((s) => fmtNum(s.noFlowTime, digits: 1, suffix: ' s'))
+          .toList(),
+    );
+
+    row(
+      'Unplanned Pauses',
+      '0',
+      sessions.map((s) => s.unplannedPauseCount.toString()).toList(),
+    );
+
+    row(
+      'Unplanned Pause Time',
+      '0 s',
+      sessions
+          .map((s) => fmtNum(s.unplannedPauseTime, digits: 1, suffix: ' s'))
+          .toList(),
+    );
+
+    row(
+      'Time to First Compression',
+      '',
+      sessions.map((_) => '').toList(),
+    );
+
+    // ── VENTILATION ──────────────────────────────────────────────────────────
+    section('VENTILATION');
+
+    row(
+      'Ventilation Windows Recorded',
+      '',
+      sessions.map((s) => s.ventilationCount.toString()).toList(),
+    );
+
+    row(
+      'Ventilation Target Met Windows',
+      '',
+      sessions.map((s) {
+        if (s.ventilationCount <= 0) return '';
+        final count = (s.ventilationCompliance / 100 * s.ventilationCount).round();
+        return count.toString();
+      }).toList(),
+    );
+
+    row(
+      'Ventilation Target Met (%)',
+      'Window timing',
+      sessions
+          .map((s) => s.ventilationCount > 0
+          ? pctValue(s.ventilationCompliance)
+          : '')
+          .toList(),
+    );
+
+    // ── PULSE CHECKS ─────────────────────────────────────────────────────────
+    section('PULSE CHECKS');
+
+    row(
+      'Pulse Checks Prompted',
+      '',
+      sessions.map((s) => s.pulseChecksPrompted.toString()).toList(),
+    );
+
+    row(
+      'Pulse Checks Done',
+      '',
+      sessions.map((s) => s.pulseChecksComplied.toString()).toList(),
+    );
+
+    row(
+      'ROSC Detected',
+      '',
+      sessions.map((s) => _yn(s.pulseDetectedFinal)).toList(),
+    );
+
+    // ── FATIGUE & RESCUER ────────────────────────────────────────────────────
+    section('FATIGUE & RESCUER');
+
+    row(
+      'Fatigue Onset',
+      '',
+      sessions
+          .map((s) => s.fatigueOnsetIndex > 0
+          ? 'Compression #${s.fatigueOnsetIndex}'
+          : '')
+          .toList(),
+    );
+
+    row(
+      'Rescuer Swaps',
+      '',
+      sessions.map((s) => s.rescuerSwapCount.toString()).toList(),
+    );
+
+    row(
+      'Rescuer HR at Last Pause',
+      '',
+      sessions
+          .map((s) => fmtNullable(s.rescuerHRLastPause, digits: 1, suffix: ' BPM'))
+          .toList(),
+    );
+
+    row(
+      'Rescuer SpO2 at Last Pause',
+      '',
+      sessions
+          .map((s) => fmtNullable(s.rescuerSpO2LastPause, digits: 1, suffix: '%'))
+          .toList(),
+    );
+
+    row(
+      'Patient Temperature',
+      '',
+      sessions
+          .map((s) => fmtNullable(s.patientTemperature, digits: 1, suffix: ' C'))
+          .toList(),
+    );
+
     return sb.toString();
   }
+
 
   // ── Raw Compressions CSV ── Unified timeline ─────────────────────────────
   // One row per event in chronological order. Event Type identifies each row.
@@ -409,15 +1102,17 @@ class ExportService {
     // Convert consistency % back to count for display (n = pct/100 * total)
     final inDepthN  = nc > 0 ? (d.depthConsistency     / 100 * nc).round() : 0;
     final inRateN   = nc > 0 ? (d.frequencyConsistency / 100 * nc).round() : 0;
-    final allOkN    = d.compressions.where((c) => c.isPerfect).length;
+
     // Unplanned pauses
-    int unpN = 0; double unpTot = 0.0;
+    int unpN = 0;
     void scanGap(double a, double b) {
-      if (b-a > 2.0 && !isPlannedGap(a,b)) { unpN++; unpTot += b-a; }
+      if (b-a > 2.0 && !isPlannedGap(a,b)) { unpN++; }
     }
     if (nc > 0) {
       scanGap(0, d.compressions.first.timestampMs/1000.0);
-      for (int i=1;i<nc;i++) scanGap(d.compressions[i-1].timestampMs/1000.0, d.compressions[i].timestampMs/1000.0);
+      for (int i=1;i<nc;i++) {
+        scanGap(d.compressions[i-1].timestampMs/1000.0, d.compressions[i].timestampMs/1000.0);
+      }
       scanGap(d.compressions.last.timestampMs/1000.0, d.sessionDuration.toDouble());
     }
 
@@ -430,7 +1125,7 @@ class ExportService {
     sb.writeln('Date & Time,${_fmtDt(d.sessionStart)}');
     sb.writeln('Mode,${d.mode == "emergency" ? "Emergency" : d.mode == "training_no_feedback" ? "Training (No Feedback)" : "Training"}');
     sb.writeln(
-      'Scenario,${isPediatric ? "Pediatric" : "Standard Adult"},'
+      'Scenario,${isPediatric ? "Pediatric" : "Adult"},'
           'Correct Depth Target,${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm',
     );
     if (d.note != null && d.note!.isNotEmpty) {
@@ -448,154 +1143,247 @@ class ExportService {
     sb.writeln('Avg Depth (cm),${avgDepth.toStringAsFixed(2)}');
     sb.writeln('Avg Rate (BPM),${avgRate.toStringAsFixed(1)}');
     sb.writeln('CCF (%),${(d.handsOnRatio * 100).toStringAsFixed(1)}');
-    if (unpN > 0) sb.writeln('Total Unplanned Pauses (s),${unpTot.toStringAsFixed(1)}');
+    sb.writeln('No-Flow Intervals,${d.noFlowIntervals}');
+    sb.writeln('No-Flow Time (s),${d.noFlowTime.toStringAsFixed(1)}');
+    sb.writeln('Total Unplanned Pauses,${d.unplannedPauseCount}');
+    if (d.unplannedPauseTime > 0) {
+      sb.writeln(
+        'Total Unplanned Pause Time (s),${d.unplannedPauseTime.toStringAsFixed(1)}',
+      );
+    }
     if (d.rescuerSwapCount > 0) sb.writeln('Rescuer Swaps,${d.rescuerSwapCount}');
+    if (d.fatigueOnsetIndex > 0) {
+      sb.writeln('Fatigue Onset Compression #,${d.fatigueOnsetIndex}');
+    }
     if (isEmergency && d.pulseChecks.isNotEmpty) {
       sb.writeln('Pulse Checks,${d.pulseChecks.length}');
       sb.writeln('Final Outcome,${d.pulseDetectedFinal?"ROSC DETECTED":"NO ROSC"}');
     }
     sb.writeln(',');
 
-    final bool showPulse = isEmergency;
-    final bool showSwap  = d.rescuerSwapCount > 0;
-
     // ── Column headers ────────────────────────────────────────────────────
+// This CSV exports one row per compression.
+// Each row contains the peak compression values and the release/recoil values
+// for the same compression, so the file is easier to read and analyze.
     final headers = [
-      '#', 'Elapsed (s)', 'Event Type',
-      // Compression columns
-      'Depth (cm)', 'Depth Corrected (cm)', 'Depth OK',
-      'Recoil (cm)', 'Recoil OK',
-      'Rate (BPM)', 'Rate OK',
-      'Wrist Align (deg)', 'Wrist Flex (deg)', 'Posture OK',
-      'All OK', 'Leaning', 'Unplanned Pause After (s)',
-      // Ventilation column (details in ventilations.csv)
-      'Ventilation #',
-      // Pulse check columns (emergency only; details in pulse_checks.csv)
-      if (showPulse) ...['Pulse Check #', 'Pulse Result', 'Patient SpO2 (%)'],
-      // Rescuer swap column
-      if (showSwap) 'Swap #',
+      'A/A',
+      'Compression #',
+
+      // Timing
+      'Peak Time (ms)',
+      'Release Time (ms)',
+      'Inter-compression Interval (ms)',
+      'Unplanned Pause After (ms)',
+
+      // Depth
+      'Peak Depth (cm)',
+      'Effective Depth (cm)',
+      'Recoil Depth (cm)',
+      'Depth Target Met (${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm)',
+
+      // Compression phases
+      'Downstroke Duration (ms)',
+      'Recoil Duration (ms)',
+      'Recoil Target Met (Full Recoil)',
+      'Leaning Detected',
+
+      // Force
+      'Force (N)',
+      'Over Force Detected',
+
+      // Rate
+      'Instant Rate (BPM)',
+      'Rolling Rate (BPM)',
+      'Rate Target Met (${CprTargets.rateMin.toStringAsFixed(0)}-${CprTargets.rateMax.toStringAsFixed(0)} BPM)',
+
+      // Posture
+      'Wrist Alignment (deg)',
+      'Wrist Flexion (deg)',
+      'Axis Deviation (deg)',
+      'Posture Target Met (Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°)',
+
+      // Overall
+      'All Targets Met',
     ];
 
-    // ── Row builder helper ────────────────────────────────────────────────
-    // Returns a list of strings matching the headers list above.
-    // All unused fields default to empty string.
-    List<String> mkRow({
-      required int    rowNum,
-      required double elapsed,
-      required String type,
-      // compression
-      String depth='', String depthCor='', String depthOk='',
-      String recoil='', String recoilOk='',
-      String rate='', String rateOk='',
-      String wristAlign='', String wristFlex='', String postureOk='',
-      String allOk='', String leaning='', String pauseAfter='',
-      // ventilation (just the number — detail in ventilations.csv)
-      String ventNum='',
-      // pulse check (summary only — detail in pulse_checks.csv)
-      String pulseNum='', String pulseResult='', String patSpO2='',
-      // swap
-      String swapNum='',
+    String fmtNum(double value, {int digits = 1}) {
+      return value > 0 ? value.toStringAsFixed(digits) : '';
+    }
+
+    String fmtInt(int value) {
+      return value > 0 ? value.toString() : '';
+    }
+
+    List<String> mkCompressionRow({
+      required int rowNum,
+      required int compressionNum,
+
+      required String peakTimeMs,
+      required String releaseTimeMs,
+      required String interCompressionInterval,
+      required String unplannedPauseAfter,
+
+      required String peakDepth,
+      required String effectiveDepth,
+      required String recoilDepth,
+      required String depthTargetMet,
+
+      required String downstrokeDuration,
+      required String recoilDuration,
+      required String recoilTargetMet,
+      required String leaningDetected,
+
+      required String force,
+      required String overForceDetected,
+
+      required String instantRate,
+      required String rollingRate,
+      required String rateTargetMet,
+
+      required String wristAlignment,
+      required String wristFlexion,
+      required String axisDeviation,
+      required String postureTargetMet,
+
+      required String allTargetsMet,
     }) {
       return [
-        '$rowNum', elapsed.toStringAsFixed(3), type,
-        depth, depthCor, depthOk,
-        recoil, recoilOk,
-        rate, rateOk,
-        wristAlign, wristFlex, postureOk,
-        allOk, leaning, pauseAfter,
-        ventNum,
-        if (showPulse) ...[pulseNum, pulseResult, patSpO2],
-        if (showSwap)  swapNum,
+        '$rowNum',
+        '$compressionNum',
+
+        peakTimeMs,
+        releaseTimeMs,
+        interCompressionInterval,
+        unplannedPauseAfter,
+
+        peakDepth,
+        effectiveDepth,
+        recoilDepth,
+        depthTargetMet,
+
+        downstrokeDuration,
+        recoilDuration,
+        recoilTargetMet,
+        leaningDetected,
+
+        force,
+        overForceDetected,
+
+        instantRate,
+        rollingRate,
+        rateTargetMet,
+
+        wristAlignment,
+        wristFlexion,
+        axisDeviation,
+        postureTargetMet,
+
+        allTargetsMet,
       ];
     }
 
-    const classLabels = ['ABSENT', 'UNCERTAIN', 'PRESENT'];
-
-    // ── Build all event rows ──────────────────────────────────────────────
-    final events = <(double elapsed, List<String> cols)>[];
-
-    // COMPRESSION rows
-    for (int i = 0; i < d.compressions.length; i++) {
-      final c   = d.compressions[i];
-      final el  = c.timestampMs / 1000.0;
-      final r   = c.instantaneousRate > 0 ? c.instantaneousRate : c.frequency;
-      final inD = c.depth >= depthMin && c.depth <= depthMax;
-      final inR = r >= CprTargets.rateMin && r <= CprTargets.rateMax;
-      // Unplanned pause AFTER this compression?
-      String pauseAfter = '';
-      if (i < nc - 1) {
-        final next = d.compressions[i+1].timestampMs / 1000.0;
-        if (next - el > 2.0 && !isPlannedGap(el, next)) {
-          pauseAfter = (next - el).toStringAsFixed(2);
-        }
-      }
-      events.add((el, mkRow(
-        rowNum: i + 1, elapsed: el, type: 'COMPRESSION',
-        depth:     c.depth.toStringAsFixed(3),
-        depthCor:  c.effectiveDepth > 0 ? c.effectiveDepth.toStringAsFixed(3) : '',
-        depthOk:   _yn(inD),
-        recoil:    c.valleyDepth > 0 ? c.valleyDepth.toStringAsFixed(3) : '',
-        recoilOk:  _yn(c.recoilAchieved),
-        rate:      r.toStringAsFixed(1),
-        rateOk:    _yn(inR),
-        wristAlign: c.wristAlignmentAngle.toStringAsFixed(1),
-        wristFlex:  c.wristFlexionAngle.toStringAsFixed(1),
-        postureOk:  _yn(c.postureOk),
-        allOk:      _yn(c.isPerfect),
-        leaning:    c.leaningDetected ? 'YES' : '',
-        pauseAfter: pauseAfter,
-      )));
-    }
-
-    // VENTILATION rows — just marker + number; detail is in ventilations.csv
-    for (int i = 0; i < d.ventilations.length; i++) {
-      final v  = d.ventilations[i];
-      final el = v.timestampMs / 1000.0;
-      events.add((el, mkRow(
-        rowNum: i + 1, elapsed: el, type: 'VENTILATION',
-        ventNum: '${i + 1}',
-      )));
-    }
-
-    // PULSE_CHECK rows (emergency only) — summary only; detail in pulse_checks.csv
-    if (showPulse) {
-      for (int i = 0; i < d.pulseChecks.length; i++) {
-        final p   = d.pulseChecks[i];
-        final el  = p.timestampMs / 1000.0;
-        final cls = p.classification.clamp(0, 2);
-        events.add((el, mkRow(
-          rowNum: i + 1, elapsed: el, type: 'PULSE_CHECK',
-          pulseNum:    '${i + 1}',
-          pulseResult: classLabels[cls],
-          patSpO2:     p.patientSpO2 > 0 ? p.patientSpO2.toStringAsFixed(1) : '',
-        )));
-      }
-    }
-
-    // RESCUER_SWAP rows (inferred from 120 s TWO_MIN_ALERT intervals)
-    if (showSwap) {
-      for (int i = 1; i <= d.rescuerSwapCount; i++) {
-        final el = (i * 120.0).clamp(0.0, d.sessionDuration.toDouble());
-        events.add((el, mkRow(
-          rowNum: i, elapsed: el, type: 'RESCUER_SWAP',
-          swapNum: '$i',
-        )));
-      }
-    }
-
-    // Sort chronologically, then assign final row numbers
-    events.sort((a, b) => a.$1.compareTo(b.$1));
-
-    // ── Write DATA ────────────────────────────────────────────────────────
+// ── Write DATA ────────────────────────────────────────────────────────
     sb.writeln('DATA');
     sb.writeln(headers.join(','));
 
-    int rowNum = 1;
-    for (final e in events) {
-      // Replace the row number placeholder (first element) with actual sequence
-      final cols = List<String>.from(e.$2);
-      if (cols.isNotEmpty) cols[0] = '${rowNum++}';
-      sb.writeln(cols.join(','));
+    for (int i = 0; i < d.compressions.length; i++) {
+      final c = d.compressions[i];
+      final compressionNum = i + 1;
+
+      final peakMs = c.peakTimestampMs > 0 ? c.peakTimestampMs : c.timestampMs;
+      final valleyMs = c.valleyTimestampMs;
+
+      final instantRate = c.instantaneousRate;
+      final rollingRate = c.frequency;
+      final rateForTarget = instantRate > 0 ? instantRate : rollingRate;
+
+      final depthTargetMet =
+          c.depth >= depthMin && c.depth <= depthMax;
+
+      final rateTargetMet =
+          rateForTarget >= CprTargets.rateMin &&
+              rateForTarget <= CprTargets.rateMax;
+
+      final hasRecoilData =
+          valleyMs > 0 ||
+              c.valleyDepth > 0 ||
+              c.recoilPhaseDurationMs > 0 ||
+              c.leaningDetected;
+
+      // Inter-compression interval: peak-to-peak interval.
+      String interCompressionInterval = '';
+      if (i > 0) {
+        final prev = d.compressions[i - 1];
+        final prevPeakMs = prev.peakTimestampMs > 0
+            ? prev.peakTimestampMs
+            : prev.timestampMs;
+
+        final interval = peakMs - prevPeakMs;
+        if (interval > 0) {
+          interCompressionInterval = interval.toString();
+        }
+      }
+
+      // Unplanned pause AFTER this compression.
+      String pauseAfter = '';
+      if (i < nc - 1) {
+        final currentTime = (valleyMs > 0 ? valleyMs : peakMs) / 1000.0;
+
+        final next = d.compressions[i + 1];
+        final nextPeakMs = next.peakTimestampMs > 0
+            ? next.peakTimestampMs
+            : next.timestampMs;
+        final nextTime = nextPeakMs / 1000.0;
+
+        if (nextTime - currentTime > 2.0 &&
+            !isPlannedGap(currentTime, nextTime)) {
+          pauseAfter = ((nextTime - currentTime) * 1000).toStringAsFixed(0);
+        }
+      }
+
+      final allTargetsMet =
+          depthTargetMet &&
+              rateTargetMet &&
+              c.recoilAchieved &&
+              c.postureOk;
+
+      sb.writeln(mkCompressionRow(
+        rowNum: i + 1,
+        compressionNum: compressionNum,
+
+        peakTimeMs: peakMs > 0 ? peakMs.toString() : '',
+        releaseTimeMs: valleyMs > 0 ? valleyMs.toString() : '',
+        interCompressionInterval: interCompressionInterval,
+        unplannedPauseAfter: pauseAfter,
+
+        peakDepth: c.depth.toStringAsFixed(2),
+        effectiveDepth: c.effectiveDepth > 0
+            ? c.effectiveDepth.toStringAsFixed(2)
+            : '',
+        recoilDepth: c.valleyDepth > 0
+            ? c.valleyDepth.toStringAsFixed(2)
+            : '',
+        depthTargetMet: _yn(depthTargetMet),
+
+        downstrokeDuration: fmtInt(c.downstrokePhaseDurationMs),
+        recoilDuration: fmtInt(c.recoilPhaseDurationMs),
+        recoilTargetMet: hasRecoilData ? _yn(c.recoilAchieved) : '',
+        leaningDetected: hasRecoilData ? _yn(c.leaningDetected) : '',
+
+        force: fmtNum(c.force, digits: 1),
+        overForceDetected: _yn(c.overForce),
+
+        instantRate: fmtNum(instantRate, digits: 1),
+        rollingRate: fmtNum(rollingRate, digits: 1),
+        rateTargetMet: _yn(rateTargetMet),
+
+        wristAlignment: c.wristAlignmentAngle.toStringAsFixed(1),
+        wristFlexion: c.wristFlexionAngle.toStringAsFixed(1),
+        axisDeviation: c.compressionAxisDev.toStringAsFixed(1),
+        postureTargetMet: _yn(c.postureOk),
+
+        allTargetsMet: _yn(allTargetsMet),
+      ).join(','));
     }
 
     return sb.toString();
@@ -605,67 +1393,162 @@ class ExportService {
   // ── Raw Rescuer Vitals CSV ─────────────────────────────────────────────────
 
   static String _buildRescuerVitalsCsv(SessionDetail d) {
-    final n       = d.rescuerVitals.length;
-    final withHR  = d.rescuerVitals.where((v) => v.heartRate  > 0).toList();
-    final withSp  = d.rescuerVitals.where((v) => v.spO2       > 0).toList();
-    final withT   = d.rescuerVitals.where((v) => v.temperature > 0).toList();
-    final avgHR   = withHR.isNotEmpty ? withHR.map((v) => v.heartRate).reduce((a,b)=>a+b) / withHR.length  : 0.0;
-    final avgSp   = withSp.isNotEmpty ? withSp.map((v) => v.spO2).reduce((a,b)=>a+b)      / withSp.length  : 0.0;
-    final avgT    = withT.isNotEmpty  ? withT.map((v) => v.temperature).reduce((a,b)=>a+b) / withT.length   : 0.0;
-    final avgFat  = n > 0 ? d.rescuerVitals.map((v) => v.fatigueScore).reduce((a,b)=>a+b) / n : 0.0;
-    // Ambient: average of start + end if both available
-    final ambStart = d.ambientTempStart;
-    final ambEnd   = d.ambientTempEnd;
-    final avgAmb   = (ambStart != null && ambEnd != null) ? (ambStart + ambEnd) / 2
-        : ambStart ?? ambEnd;
+    final n = d.rescuerVitals.length;
+
+    final withHR = d.rescuerVitals.where((v) => v.heartRate > 0).toList();
+    final withSpO2 = d.rescuerVitals.where((v) => v.spO2 > 0).toList();
+    final withTemp = d.rescuerVitals.where((v) => v.temperature > 0).toList();
+    final withRmssd = d.rescuerVitals.where((v) => v.rmssd > 0).toList();
+    final withPi = d.rescuerVitals.where((v) => v.rescuerPi > 0).toList();
+    final withFatigue = d.rescuerVitals.where((v) => v.fatigueScore > 0).toList();
+
+    double avgOf(List<double> values) {
+      if (values.isEmpty) return 0.0;
+      return values.reduce((a, b) => a + b) / values.length;
+    }
+
+    String fmtDouble(double value, {int digits = 1}) {
+      return value > 0 ? value.toStringAsFixed(digits) : '';
+    }
+
+    String fmtDelta(double start, double end, {int digits = 1}) {
+      if (start <= 0 || end <= 0) return '';
+      final delta = end - start;
+      final sign = delta > 0 ? '+' : '';
+      return '$sign${delta.toStringAsFixed(digits)}';
+    }
+
+    double firstValue(List<dynamic> list, double Function(dynamic v) getter) {
+      if (list.isEmpty) return 0.0;
+      return getter(list.first);
+    }
+
+    double lastValue(List<dynamic> list, double Function(dynamic v) getter) {
+      if (list.isEmpty) return 0.0;
+      return getter(list.last);
+    }
+
+    final avgHR = avgOf(withHR.map((v) => v.heartRate).toList());
+    final avgSpO2 = avgOf(withSpO2.map((v) => v.spO2).toList());
+    final avgTemp = avgOf(withTemp.map((v) => v.temperature).toList());
+    final avgRmssd = avgOf(withRmssd.map((v) => v.rmssd.toDouble()).toList());
+    final avgPi = avgOf(withPi.map((v) => v.rescuerPi.toDouble()).toList());
+    final avgFatigue = avgOf(withFatigue.map((v) => v.fatigueScore.toDouble()).toList());
+
+    final startHR = firstValue(withHR, (v) => v.heartRate);
+    final endHR = lastValue(withHR, (v) => v.heartRate);
+
+    final startSpO2 = firstValue(withSpO2, (v) => v.spO2);
+    final endSpO2 = lastValue(withSpO2, (v) => v.spO2);
+
+    final startTemp = firstValue(withTemp, (v) => v.temperature);
+    final endTemp = lastValue(withTemp, (v) => v.temperature);
+
+    final maxFatigue = withFatigue.isNotEmpty
+        ? withFatigue.map((v) => v.fatigueScore).reduce((a, b) => a > b ? a : b)
+        : 0;
+
+
+    String contextForMs(int timestampMs) {
+      final t = timestampMs / 1000.0;
+
+      final inVentilation = d.ventilations.any((v) {
+        final start = v.timestampMs / 1000.0;
+        final end = start + v.durationSec;
+        return t >= start && t <= end;
+      });
+
+      if (inVentilation) return 'ventilation';
+
+      final inPulseCheck = d.pulseChecks.any((p) {
+        final start = p.timestampMs / 1000.0;
+        final end = start + 10.0;
+        return t >= start && t <= end;
+      });
+
+      if (inPulseCheck) return 'pulse_check';
+
+      if (d.compressions.isEmpty) return 'no_compressions';
+
+      final firstCompressionSec = d.compressions.first.timestampMs / 1000.0;
+      final lastCompressionSec = d.compressions.last.timestampMs / 1000.0;
+
+      if (t < firstCompressionSec) return 'before_first_compression';
+      if (t > lastCompressionSec + 2.0) return 'after_last_compression';
+
+      return 'active_cpr';
+    }
 
     final sb = StringBuffer();
 
-    sb.writeln('CPR Assist - Rescuer Vital Signs');
+    sb.writeln('CPR Assist - Raw Rescuer Vitals');
     sb.writeln(',');
     sb.writeln('Session ID,${d.id ?? "local"}');
     sb.writeln('Date & Time,${_fmtDt(d.sessionStart)}');
-    sb.writeln('Mode,${d.mode=="emergency"?"Emergency":d.mode=="training_no_feedback"?"Training (No Feedback)":"Training"}');
-    sb.writeln('Scenario,${d.scenario=="pediatric"?"Pediatric":"Standard Adult"}');
-    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
-    if (d.note != null && d.note!.isNotEmpty) sb.writeln('Note,${_esc(d.note!)}');
+    sb.writeln('Mode,${d.mode == "emergency" ? "Emergency" : d.mode == "training_no_feedback" ? "Training (No Feedback)" : "Training"}');
+    sb.writeln('Scenario,${d.scenario == "pediatric" ? "Pediatric" : "Adult"}');
+    if (d.note != null && d.note!.isNotEmpty) {
+      sb.writeln('Note,${_esc(d.note!)}');
+    }
     sb.writeln(',');
+
     sb.writeln('SUMMARY');
-    if (avgHR  > 0) sb.writeln('Avg Heart Rate (BPM),${avgHR.toStringAsFixed(1)}');
-    if (avgSp  > 0) sb.writeln('Avg SpO2 (%),${avgSp.toStringAsFixed(1)}');
-    if (avgT   > 0) sb.writeln('Avg Skin Temp (C),${avgT.toStringAsFixed(2)}');
-    if (avgAmb != null) sb.writeln('Avg Ambient Temp (C),${avgAmb.toStringAsFixed(1)}');
-    if (avgFat > 0) sb.writeln('Avg Fatigue Score,${avgFat.toStringAsFixed(1)}');
+    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
+    sb.writeln('Total Vital Snapshots,$n');
+
+    sb.writeln('Start Heart Rate (BPM),${fmtDouble(startHR, digits: 1)}');
+    sb.writeln('End Heart Rate (BPM),${fmtDouble(endHR, digits: 1)}');
+    sb.writeln('Heart Rate Change (BPM),${fmtDelta(startHR, endHR, digits: 1)}');
+
+    sb.writeln('Start Rescuer SpO2 (%),${fmtDouble(startSpO2, digits: 1)}');
+    sb.writeln('End Rescuer SpO2 (%),${fmtDouble(endSpO2, digits: 1)}');
+    sb.writeln('Rescuer SpO2 Change (%),${fmtDelta(startSpO2, endSpO2, digits: 1)}');
+
+    sb.writeln('Start Rescuer Wrist Temp (C),${fmtDouble(startTemp, digits: 2)}');
+    sb.writeln('End Rescuer Wrist Temp (C),${fmtDouble(endTemp, digits: 2)}');
+    sb.writeln('Rescuer Wrist Temp Change (C),${fmtDelta(startTemp, endTemp, digits: 2)}');
+
+    if (avgHR > 0) sb.writeln('Avg Heart Rate (BPM),${avgHR.toStringAsFixed(1)}');
+    if (avgSpO2 > 0) sb.writeln('Avg Rescuer SpO2 (%),${avgSpO2.toStringAsFixed(1)}');
+    if (avgTemp > 0) sb.writeln('Avg Rescuer Wrist Temp (C),${avgTemp.toStringAsFixed(2)}');
+    if (avgRmssd > 0) sb.writeln('Avg RMSSD (ms),${avgRmssd.toStringAsFixed(1)}');
+    if (avgPi > 0) sb.writeln('Avg Perfusion Index (0-100),${avgPi.toStringAsFixed(1)}');
+    if (avgFatigue > 0) sb.writeln('Avg Fatigue Score,${avgFatigue.toStringAsFixed(1)}');
+    if (maxFatigue > 0) sb.writeln('Max Fatigue Score,$maxFatigue');
+
     sb.writeln(',');
     sb.writeln('DATA');
+
     sb.writeln([
-      '#', 'Elapsed (s)',
-      'HR (BPM)', 'SpO2 (%)', 'Skin Temp (C)', 'Ambient Temp (C)',
-      'Signal Quality (0-100)', 'RMSSD (ms)', 'Perfusion Index (0-100)',
-      'Fatigue Score (0-100)',
+      'A/A',
+      'Elapsed (ms)',
+      'Context',
+      'Heart Rate (BPM)',
+      'Rescuer SpO2 (%)',
+      'Rescuer Wrist Temp (C)',
+      'Signal Quality (0-100)',
+      'RMSSD (ms)',
+      'Perfusion Index (0-100)',
+      'Estimated Fatigue Score (0-100)',
     ].join(','));
 
-    final midSec = d.sessionDuration / 2.0;
     for (var i = 0; i < n; i++) {
-      final v   = d.rescuerVitals[i];
-      final el  = v.timestampMs / 1000.0;
-      // Interpolate ambient temp: use start for first half, end for second
-      final amb = el < midSec
-          ? (ambStart?.toStringAsFixed(1) ?? '')
-          : (ambEnd?.toStringAsFixed(1) ?? '');
+      final v = d.rescuerVitals[i];
+
       sb.writeln([
         i + 1,
-        el.toStringAsFixed(3),
+        v.timestampMs,
+        contextForMs(v.timestampMs),
         v.heartRate > 0 ? v.heartRate.toStringAsFixed(1) : '',
         v.spO2 > 0 ? v.spO2.toStringAsFixed(1) : '',
         v.temperature > 0 ? v.temperature.toStringAsFixed(2) : '',
-        amb,
         v.signalQuality,
         v.rmssd > 0 ? v.rmssd : '',
         v.rescuerPi > 0 ? v.rescuerPi : '',
         v.fatigueScore,
       ].join(','));
     }
+
     return sb.toString();
   }
 
@@ -673,42 +1556,55 @@ class ExportService {
   // ── Raw Ventilations CSV ─────────────────────────────────────────────────
 
   static String _buildVentilationsCsv(SessionDetail d) {
-    final n          = d.ventilations.length;
+    final n = d.ventilations.length;
     final compliantN = d.ventilations.where((v) => v.compliant).length;
-    final avgDur     = n > 0 ? d.ventilations.map((v) => v.durationSec).reduce((a,b)=>a+b)/n : 0.0;
+    final avgDur = n > 0
+        ? d.ventilations.map((v) => v.durationSec).reduce((a, b) => a + b) / n
+        : 0.0;
+    final compliancePct = n > 0 ? compliantN / n * 100 : 0.0;
 
     final sb = StringBuffer();
 
-    sb.writeln('CPR Assist - Ventilation Cycles');
+    sb.writeln('CPR Assist - Raw Ventilation Windows');
     sb.writeln(',');
     sb.writeln('Session ID,${d.id ?? "local"}');
     sb.writeln('Date & Time,${_fmtDt(d.sessionStart)}');
-    sb.writeln('Mode,${d.mode=="emergency"?"Emergency":d.mode=="training_no_feedback"?"Training (No Feedback)":"Training"}');
-    sb.writeln('Scenario,${d.scenario=="pediatric"?"Pediatric":"Standard Adult"}');
-    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
+    sb.writeln('Mode,${d.mode == "emergency" ? "Emergency" : d.mode == "training_no_feedback" ? "Training (No Feedback)" : "Training"}');
+    sb.writeln('Scenario,${d.scenario == "pediatric" ? "Pediatric" : "Standard Adult"}');
+    if (d.note != null && d.note!.isNotEmpty) {
+      sb.writeln('Note,${_esc(d.note!)}');
+    }
+
     sb.writeln(',');
     sb.writeln('SUMMARY');
-    sb.writeln('Total Cycles,$n');
-    sb.writeln('Compliant Cycles,$compliantN');
+    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
+    sb.writeln('Total Ventilation Windows,$n');
+    sb.writeln('Ventilation Target Met Windows,$compliantN');
+    sb.writeln('Ventilation Compliance (%),${compliancePct.toStringAsFixed(1)}');
     sb.writeln('Avg Window Duration (s),${avgDur.toStringAsFixed(2)}');
+
     sb.writeln(',');
     sb.writeln('DATA');
     sb.writeln([
-      '#', 'Elapsed (s)',
-      '30:2 Cycle #', 'Window Duration (s)', 'Compliant',
+      'A/A',
+      'Elapsed (ms)',
+      '30:2 Cycle #',
+      'Window Duration (s)',
+      'Ventilation Target Met',
     ].join(','));
 
     for (var i = 0; i < n; i++) {
-      final v   = d.ventilations[i];
-      final el  = v.timestampMs / 1000.0;
+      final v = d.ventilations[i];
+
       sb.writeln([
         i + 1,
-        el.toStringAsFixed(3),
+        v.timestampMs,
         v.cycleNumber,
         v.durationSec.toStringAsFixed(2),
         _yn(v.compliant),
       ].join(','));
     }
+
     return sb.toString();
   }
 
@@ -717,48 +1613,66 @@ class ExportService {
 
   static String _buildPulseChecksCsv(SessionDetail d) {
     const classLabels = ['ABSENT', 'UNCERTAIN', 'PRESENT'];
-    final n        = d.pulseChecks.length;
+
+    final n = d.pulseChecks.length;
     final presentN = d.pulseChecks.where((p) => p.classification == 2).length;
-    final absentN  = d.pulseChecks.where((p) => p.classification == 0).length;
+    final uncertainN = d.pulseChecks.where((p) => p.classification == 1).length;
+    final absentN = d.pulseChecks.where((p) => p.classification == 0).length;
 
     final sb = StringBuffer();
 
-    sb.writeln('CPR Assist - Pulse Check Results');
+    sb.writeln('CPR Assist - Raw Pulse Check Results');
     sb.writeln(',');
     sb.writeln('Session ID,${d.id ?? "local"}');
     sb.writeln('Date & Time,${_fmtDt(d.sessionStart)}');
-    sb.writeln('Mode,Emergency');
-    sb.writeln('Scenario,${d.scenario=="pediatric"?"Pediatric":"Standard Adult"}');
-    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
+    sb.writeln('Mode,${d.mode == "emergency" ? "Emergency" : d.mode == "training_no_feedback" ? "Training (No Feedback)" : "Training"}');
+    sb.writeln('Scenario,${d.scenario == "pediatric" ? "Pediatric" : "Standard Adult"}');
+    if (d.note != null && d.note!.isNotEmpty) {
+      sb.writeln('Note,${_esc(d.note!)}');
+    }
+
     sb.writeln(',');
-    sb.writeln('OUTCOME SUMMARY');
-    sb.writeln('Final Result,${d.pulseDetectedFinal?"ROSC DETECTED":"NO ROSC"}');
-    sb.writeln('Total Checks,$n');
-    sb.writeln('PULSE PRESENT,$presentN');
-    sb.writeln('PULSE ABSENT,$absentN');
+    sb.writeln('SUMMARY');
+    sb.writeln('Duration,${_mmss(d.sessionDuration)}');
+    sb.writeln('Final Result,${d.pulseDetectedFinal ? "ROSC DETECTED" : "NO ROSC"}');
+    sb.writeln('Total Pulse Checks,$n');
+    sb.writeln('Pulse Present,$presentN');
+    sb.writeln('Pulse Uncertain,$uncertainN');
+    sb.writeln('Pulse Absent,$absentN');
+
     sb.writeln(',');
     sb.writeln('DATA');
     sb.writeln([
-      '#', 'Elapsed (s)',
+      'A/A',
+      'Elapsed (ms)',
       '2-Min Interval',
-      'Classification', 'Class Code',
-      'Detected BPM', 'Confidence (0-100)', 'Perfusion Index (0-100)',
-      'Patient SpO2 (%)', 'Det A Peaks', 'Det B Beats',
+      'Pulse Classification',
+      'Class Code',
+      'Detected BPM',
+      'Confidence (0-100)',
+      'Perfusion Index (0-100)',
+      'Patient SpO2 (%)',
+      'Detector A Peaks',
+      'Detector B Beats',
       'Rescuer Decision',
-      'PPG Samples (#)', 'PPG Waveform',
+      'PPG Samples (#)',
+      'PPG Waveform',
     ].join(','));
 
     for (var i = 0; i < n; i++) {
-      final p     = d.pulseChecks[i];
-      final el    = p.timestampMs / 1000.0;
-      final cls   = p.classification.clamp(0, 2);
+      final p = d.pulseChecks[i];
+      final cls = p.classification.clamp(0, 2);
       final label = classLabels[cls];
-      final dec   = p.userDecision == 'continue' ? 'Continue CPR'
-          : p.userDecision == 'stop_cpr' ? 'Stop CPR'
+
+      final decision = p.userDecision == 'continue'
+          ? 'Continue CPR'
+          : p.userDecision == 'stop_cpr'
+          ? 'Stop CPR'
           : p.userDecision ?? '';
+
       sb.writeln([
         i + 1,
-        el.toStringAsFixed(3),
+        p.timestampMs,
         p.intervalNumber,
         _esc(label),
         cls,
@@ -768,11 +1682,12 @@ class ExportService {
         p.patientSpO2 > 0 ? p.patientSpO2.toStringAsFixed(1) : '',
         p.detectorACount,
         p.detectorBCount,
-        _esc(dec),
+        _esc(decision),
         p.ppgSamples.length,
         _esc(p.ppgSamples.map((s) => s.toStringAsFixed(4)).join(';')),
       ].join(','));
     }
+
     return sb.toString();
   }
 
@@ -812,56 +1727,130 @@ class ExportService {
         'Session ID   : ${d.id ?? "local (not synced)"}\n'
         'Date & Time  : ${_fmtDt(d.sessionStart)}\n'
         'Mode         : $modeLabel\n'
-        'Scenario     : ${d.scenario == "pediatric" ? "Pediatric" : "Standard Adult"}\n'
+        'Scenario     : ${d.scenario == "pediatric" ? "Pediatric" : "Adult"}\n'
         'Duration     : ${_mmss(d.sessionDuration)} (${d.sessionDuration} s)\n'
         '================================================\n\n'
+
         'FILES\n'
-        '  compressions.csv   - Session timeline: COMPRESSION | VENTILATION | PULSE_CHECK | RESCUER_SWAP events\n'
-        '  rescuer_vitals.csv - ${d.rescuerVitals.length} snapshots (HR, SpO2, HRV, fatigue)\n'
-        '  ventilations.csv   - ${d.ventilations.length} ventilation cycles\n'
+        '  compressions.csv   - One row per compression with depth, recoil, rate, force, posture, and pause metrics\n'
+        '  rescuer_vitals.csv - ${d.rescuerVitals.length} rescuer vital snapshots (HR, SpO2, HRV, temperature, fatigue)\n'
+        '  ventilations.csv   - ${d.ventilations.length} ventilation windows\n'
         '  pulse_checks.csv   - ${d.pulseChecks.length} pulse check results\n\n'
-        'FORMAT\n'
-        '  Each file has a header block (session info + summary) followed by DATA\n'
-        '  compressions.csv is a unified timeline: one row per event in time order\n'
-        '  Event types: COMPRESSION | VENTILATION | PULSE_CHECK | RESCUER_SWAP\n'
-        '  Non-applicable columns are blank for each event type\n\n'
-        'COLUMN GUIDE - compressions.csv (VENTILATION rows show only Ventilation # - see ventilations.csv for detail)\n'
-        '  Depth (cm)             - Peak sternum displacement per compression\n'
-        '  Depth Corrected (cm)   - Depth x cos(axis deviation), angle-corrected\n'
-        '  Depth OK               - YES if depth within target range\n'
-        '  Recoil (cm)            - Chest floor after compression (near 0 = full recoil)\n'
-        '  Recoil OK              - YES if depth < 0.5 cm and force < 5 N before next compression\n'
-        '  Rate (BPM)             - Instantaneous rate from last two inter-beat intervals\n'
-        '  Rate OK                - YES if rate 100-120 BPM\n'
-        '  Wrist Align (deg)      - 3D compression vector deviation from vertical (< 15 deg target)\n'
-        '  Wrist Flex (deg)       - Wrist bend forward/back from ulnar IMU (+-10 deg target)\n'
-        '  Posture OK             - YES if alignment < 15 deg AND flexion within +-10 deg\n'
-        '  All OK                 - YES if Depth OK + Rate OK + Recoil OK + Posture OK simultaneously\n'
-        '  Leaning                - YES if inter-compression force > 5 N for > 200 ms\n'
-        '  Unplanned Pause After  - Gap (s) after this compression that is not a ventilation or pulse check\n'
-        '  CCF (%)                - Chest Compression Fraction: proportion of session with active compressions\n\n'
-        'COLUMN GUIDE - rescuer_vitals.csv\n'
-        '  HR (BPM)               - Wrist MAX30102 heart rate\n'
-        '  SpO2 (%)               - Wrist MAX30102 oxygen saturation\n'
-        '  Skin Temp (C)          - GXHT30 rescuer wrist temperature\n'
-        '  Ambient Temp (C)       - Interpolated from session start/end readings\n'
-        '  Signal Quality (0-100) - Snapshot taken only when >= 40\n'
-        '  RMSSD (ms)             - Within-session HRV indicator (not absolute clinical value)\n'
-        '  Perfusion Index (0-100)- Wrist blood flow index; drops indicate vasoconstriction\n'
-        '  Fatigue Score (0-100)  - Composite: HR trend + RMSSD decline + depth fade\n'
-        '  Context                - active | ventilation | pulse_check\n\n'
-        'COLUMN GUIDE - pulse_checks.csv\n'
-        '  Classification         - ABSENT | UNCERTAIN | PRESENT\n'
-        '  Det A Peaks            - Raw peak count from fingertip MAX30102 (unfiltered)\n'
-        '  Det B Beats            - Physiologically-gated beat count (use for BPM)\n'
-        '  PPG Waveform           - Normalised 0.0-1.0 waveform at ~10 Hz, semicolon-delimited\n\n'
-        'Python example:\n'
-        '  import pandas as pd\n'
-        '  df = pd.read_csv("compressions.csv")\n'
-        '  # Find the DATA row, then:\n'
-        '  compressions = df[df["Event Type"] == "COMPRESSION"]\n\n'
-        'Generated by CPR Assist - AUTH BME Thesis - Prof. P. Bamidis\n'
-    ;
+
+        'GENERAL FORMAT\n'
+        '  Each CSV file contains three parts:\n\n'
+        '  1) HEADER BLOCK\n'
+        '     This appears at the top of the file.\n'
+        '     It identifies the exported session.\n'
+        '     Example fields include Session ID, Date & Time, Mode, Scenario, and Note.\n\n'
+        '  2) SUMMARY BLOCK\n'
+        '     This starts after the line SUMMARY.\n'
+        '     It contains already-calculated session-level metrics.\n'
+        '     Use this block for quick reporting without recalculating values manually.\n\n'
+        '  3) DATA BLOCK\n'
+        '     This starts after the line DATA.\n'
+        '     This is the main analysis table.\n'
+        '     Use this block for detailed analysis, charts, validation, and statistics.\n\n'
+        '  Blank values mean that the value was not available or could not be calculated.\n\n'
+
+        'FORMAT - compressions.csv\n'
+        '  compressions.csv uses one row per compression.\n'
+        '  Each row contains the peak compression values and the release/recoil values for the same compression.\n'
+        '  This means one row can be used to evaluate depth, recoil, rate, force, posture, pauses, and overall quality.\n\n'
+
+        'STRUCTURE - compressions.csv\n'
+        '  HEADER BLOCK:\n'
+        '    Identifies the session and export context.\n'
+        '    Use it to know which session the data belongs to.\n\n'
+        '  SUMMARY BLOCK:\n'
+        '    Contains session-level compression results.\n'
+        '    Examples: duration, total compressions, average depth, average rate, CCF, no-flow time, unplanned pauses, rescuer swaps, fatigue onset, and final outcome when available.\n'
+        '    Use it for quick reports and overview statistics.\n\n'
+        '  DATA BLOCK:\n'
+        '    Contains one row per compression.\n'
+        '    Use it for detailed per-compression analysis.\n\n'
+
+        'COLUMN GUIDE - compressions.csv DATA block\n'
+        '  A/A                         - Row number in the DATA table\n'
+        '  Compression #               - Compression number in the session\n'
+        '  Peak Time (ms)              - Time from session start to the deepest point of the compression\n'
+        '  Release Time (ms)           - Time from session start to the release/recoil point after the compression\n'
+        '  Inter-compression Interval  - Time between this compression peak and the previous compression peak\n'
+        '  Unplanned Pause After (ms)  - Long gap after this compression, excluding planned ventilation or pulse-check pauses\n'
+        '  Peak Depth (cm)             - Maximum compression depth reached during this compression\n'
+        '  Effective Depth (cm)        - Angle-corrected or usable compression depth used for quality analysis\n'
+        '  Recoil Depth (cm)           - Remaining depth after release; lower values indicate better chest recoil\n'
+        '  Depth Target Met            - YES if peak depth is within the adult or pediatric target range\n'
+        '  Downstroke Duration (ms)    - Time from compression start to peak depth\n'
+        '  Recoil Duration (ms)        - Time from peak depth to release/recoil\n'
+        '  Recoil Target Met           - YES if full or acceptable recoil was detected\n'
+        '  Leaning Detected            - YES if the rescuer did not fully release pressure after the compression\n'
+        '  Force (N)                   - Peak force applied during the compression, in Newtons\n'
+        '  Over Force Detected         - YES if force exceeded the configured safety or quality threshold\n'
+        '  Instant Rate (BPM)          - Rate calculated from the current compression interval\n'
+        '  Rolling Rate (BPM)          - Smoothed compression rate used for stable feedback\n'
+        '  Rate Target Met             - YES if the compression rate is within the target CPR range\n'
+        '  Wrist Alignment (deg)       - Wrist or hand alignment deviation from the desired compression posture\n'
+        '  Wrist Flexion (deg)         - Wrist flexion or extension angle during compression\n'
+        '  Axis Deviation (deg)        - Deviation of compression direction from the ideal vertical axis\n'
+        '  Posture Target Met          - YES if wrist alignment, wrist flexion, and compression-axis direction are acceptable\n'
+        '  All Targets Met             - YES if depth, rate, recoil, and posture are all correct for this compression\n\n'
+
+        'COLUMN GUIDE - rescuer_vitals.csv DATA block\n'
+        '  A/A                       - Row number in the DATA table\n'
+        '  Elapsed (ms)              - Time from session start when the snapshot was recorded\n'
+        '  Context                   - active_cpr, ventilation, pulse_check, before_first_compression, after_last_compression, or no_compressions\n'
+        '  Heart Rate (BPM)          - Rescuer heart rate from the wrist sensor\n'
+        '  Rescuer SpO2 (%)          - Rescuer oxygen saturation from the wrist sensor\n'
+        '  Rescuer Wrist Temp (C)    - Rescuer wrist temperature\n'
+        '  Signal Quality (0-100)    - Sensor signal quality for the snapshot\n'
+        '  RMSSD (ms)                - Within-session HRV-related fatigue indicator, not an absolute clinical value\n'
+        '  Perfusion Index (0-100)   - Wrist blood-flow/perfusion signal index\n'
+        '  Estimated Fatigue Score (0-100)     - Composite fatigue estimate based on rescuer physiological and CPR-performance trends\n\n'
+
+        'COLUMN GUIDE - ventilations.csv DATA block\n'
+        '  Elapsed (ms)           - Start time of the ventilation window\n'
+        '  30:2 Cycle #           - CPR cycle number associated with the ventilation window\n'
+        '  Window Duration (s)    - Length of the ventilation pause/window\n'
+        '  Ventilation Target Met - YES if the ventilation window timing was acceptable\n\n'
+
+        'COLUMN GUIDE - pulse_checks.csv DATA block\n'
+        '  Elapsed (ms)            - Time when the pulse check was recorded\n'
+        '  2-Min Interval          - CPR interval or check number\n'
+        '  Pulse Classification    - ABSENT, UNCERTAIN, or PRESENT\n'
+        '  Class Code              - 0 = absent, 1 = uncertain, 2 = present\n'
+        '  Detected BPM            - Estimated patient pulse or beat rate if detected\n'
+        '  Confidence (0-100)      - Confidence score for the pulse classification\n'
+        '  Perfusion Index (0-100) - Patient PPG signal/perfusion strength\n'
+        '  Patient SpO2 (%)        - Patient oxygen saturation if available\n'
+        '  Detector A Peaks        - Raw peak count from the patient PPG signal\n'
+        '  Detector B Beats        - Physiologically-gated beat count used for BPM\n'
+        '  Rescuer Decision        - User decision after the pulse check\n'
+        '  PPG Samples (#)         - Number of waveform samples stored\n'
+        '  PPG Waveform            - Normalized 0.0-1.0 waveform, semicolon-delimited\n\n'
+
+        'HOW TO LOCATE THE DATA TABLE IN PYTHON\n'
+        '  The CSV files contain descriptive text before the actual DATA table.\n'
+        '  Do not read them as normal CSV files from the first line.\n'
+        '  First find the line that says DATA, then read the next line as the table header.\n\n'
+        '  Python:\n'
+        '    import pandas as pd\n'
+        '    from pathlib import Path\n\n'
+        '    path = Path("compressions.csv")\n'
+        '    lines = path.read_text(encoding="utf-8").splitlines()\n\n'
+        '    data_line_index = lines.index("DATA")\n'
+        '    header_line_index = data_line_index + 1\n\n'
+        '    df = pd.read_csv(path, skiprows=header_line_index)\n\n'
+        '  After this, df contains only the compression DATA table.\n'
+        '  Each row in df is one compression.\n'
+        '  The header block and SUMMARY block are intentionally skipped.\n\n'
+
+        'IMPORTANT NOTES\n'
+        '  These exports are intended for CPR performance review, training analysis, and research validation.\n'
+        '  Sensor-derived physiological values should not be treated as standalone clinical diagnoses.\n'
+        '  Patient pulse and SpO2 values depend on signal quality and should be interpreted together with confidence and perfusion index.\n';
+
+
     final readmeBytes = utf8.encode(sessionLabel);
     archive.addFile(ArchiveFile('README.txt', readmeBytes.length, readmeBytes));
 
@@ -898,8 +1887,8 @@ class ExportService {
         s.rescuerSpO2LastPause != null ||
         s.patientTemperature != null ||
         patSpO2 != null ||
-        s.ambientTempStart != null ||
-        s.ambientTempEnd != null;
+        s.rescuerWristTempStart != null ||
+        s.rescuerWristTempEnd != null;
 
     final hasForceData  = s.compressions.any((c) => c.force > 0);
     final hasPostureData = s.compressions.any(
@@ -1059,7 +2048,7 @@ class ExportService {
             ),
             legendItems: [
               _LegendItem('Heart Rate (BPM)', _kError),
-              _LegendItem('Fatigue Score (0-100)', _kWarning),
+              _LegendItem('Estimated Fatigue Score (0-100)', _kWarning),
             ],
             font: roboto,
           ),
@@ -1068,7 +2057,7 @@ class ExportService {
 
         // ── Ventilation cycles table ───────────────────────────────────────
         if (s.ventilations.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Ventilation Cycles'),
+          _sectionTitle(robotoBold, 'Ventilation Windows'),
           pw.SizedBox(height: 8),
           _ventilationTable(robotoBold, robotoMedium, roboto, s.ventilations),
           pw.SizedBox(height: 20),
@@ -1572,9 +2561,6 @@ class ExportService {
     final outcomeText = rosc ? 'ROSC DETECTED'
         : hadChecks ? 'NO ROSC'
         : 'NO PULSE DATA';
-    final outcomeColor = rosc ? _kEmgGreen
-        : hadChecks ? _kError
-        : _kTextDisabled;
     final headerBg = rosc ? _kEmgGreen : _kBrandDark;
 
     return pw.Container(
@@ -1726,6 +2712,13 @@ class ExportService {
       if (s.noFlowTime > 0)
         _Row('No-Flow Time', '${s.noFlowTime.toStringAsFixed(1)} s',
             note: '${s.noFlowIntervals} gap(s) > 2 s'),
+      if (s.unplannedPauseCount > 0 || s.unplannedPauseTime > 0)
+        _Row(
+          'Unplanned Pauses',
+          '${s.unplannedPauseCount}',
+          note: '${s.unplannedPauseTime.toStringAsFixed(1)} s not explained by ventilation/pulse checks',
+          isAlert: s.unplannedPauseCount > 0,
+        ),
       if (s.timeToFirstCompression > 0)
         _Row('Time to First Compression', '${s.timeToFirstCompression.toStringAsFixed(1)} s'),
       if (s.consecutiveGoodPeak > 0)
@@ -1735,7 +2728,7 @@ class ExportService {
       if (s.rescuerSwapCount > 0)
         _Row('Rescuer Swaps', '${s.rescuerSwapCount}'),
       if (s.ventilationCount > 0) ...[
-        _Row('Ventilation Cycles', '${s.ventilationCount}'),
+        _Row('Ventilation Windows', '${s.ventilationCount}'),
         _Row('Ventilation Compliance', '${s.ventilationCompliance.round()}%'),
         if (s.correctVentilations > 0)
           _Row('Compliant Ventilations', '${s.correctVentilations}/${s.ventilationCount}'),
@@ -1821,9 +2814,8 @@ class ExportService {
       columnWidths: {
         0: const pw.FixedColumnWidth(28),
         1: const pw.FlexColumnWidth(1.5),
-        2: const pw.FixedColumnWidth(50),
-        3: const pw.FixedColumnWidth(60),
-        4: const pw.FixedColumnWidth(52),
+        2: const pw.FixedColumnWidth(60),  // was index 3 — Duration
+        3: const pw.FixedColumnWidth(52),  // was index 4 — Compliant
       },
       children: [
         pw.TableRow(
@@ -1831,7 +2823,6 @@ class ExportService {
           children: [
             _tableCell(bold, 'Cycle', isHeader: true, isDark: true),
             _tableCell(bold, 'At (elapsed)', isHeader: true, isDark: true),
-            _tableCell(bold, 'Breaths', isHeader: true, isDark: true, align: pw.TextAlign.center),
             _tableCell(bold, 'Duration', isHeader: true, isDark: true, align: pw.TextAlign.right),
             _tableCell(bold, 'Compliant', isHeader: true, isDark: true, align: pw.TextAlign.center),
           ],
@@ -1848,7 +2839,6 @@ class ExportService {
             children: [
               _tableCell(font, '${v.cycleNumber}', color: _kTextSecond),
               _tableCell(font, '$m:$s'),
-              _tableCell(font, '${v.ventilationsGiven}', align: pw.TextAlign.center),
               _tableCell(font, '${v.durationSec.toStringAsFixed(1)} s', align: pw.TextAlign.right),
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -1983,12 +2973,12 @@ class ExportService {
     if (patSpO2 != null)
       patientItems.add(_Metric('Patient SpO₂ (best)',
           '${patSpO2.toStringAsFixed(0)}%', _kTextPrimary));
-    if (s.ambientTempStart != null)
-      patientItems.add(_Metric('Ambient Temp (start)',
-          '${s.ambientTempStart!.toStringAsFixed(1)}  C', _kTextSecond));
-    if (s.ambientTempEnd != null)
-      patientItems.add(_Metric('Ambient Temp (end)',
-          '${s.ambientTempEnd!.toStringAsFixed(1)}  C', _kTextSecond));
+    if (s.rescuerWristTempStart != null)
+      rescuerItems.add(_Metric('Wrist Temp (start)',
+          '${s.rescuerWristTempStart!.toStringAsFixed(1)}  C', _kTextSecond));
+    if (s.rescuerWristTempEnd != null)
+      rescuerItems.add(_Metric('Wrist Temp (end)',
+          '${s.rescuerWristTempEnd!.toStringAsFixed(1)}  C', _kTextSecond));
 
     if (rescuerItems.isEmpty && patientItems.isEmpty) return pw.SizedBox.shrink();
 

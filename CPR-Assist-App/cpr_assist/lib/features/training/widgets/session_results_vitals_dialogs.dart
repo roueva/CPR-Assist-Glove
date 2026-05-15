@@ -1139,31 +1139,31 @@ class _WristTempDetailDialog extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _RoomTempDetailDialog extends StatelessWidget {
-  final double? ambientStart;
-  final double? ambientEnd;
+  final double? wristTempStart ;
+  final double? wristTempEnd ;
 
   const _RoomTempDetailDialog({
-    required this.ambientStart,
-    required this.ambientEnd,
+    required this.wristTempStart,
+    required this.wristTempEnd,
   });
 
   static void show(BuildContext context, {
-    required double? ambientStart,
-    required double? ambientEnd,
+    required double? wristTempStart,
+    required double? wristTempEnd,
   }) {
     showDialog<void>(
       context:      context,
       barrierColor: AppColors.overlayDark,
       builder: (_) => _RoomTempDetailDialog(
-        ambientStart: ambientStart,
-        ambientEnd:   ambientEnd,
+        wristTempStart: wristTempStart,
+        wristTempEnd:   wristTempEnd,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final lastVal = ambientEnd ?? ambientStart;
+    final lastVal = wristTempEnd ?? wristTempStart;
     if (lastVal == null) return const SizedBox.shrink();
 
     return Dialog(
@@ -1229,7 +1229,7 @@ class _RoomTempDetailDialog extends StatelessWidget {
                     ]),
                   ),
                   const SizedBox(height: AppSpacing.xxs),
-                  Text(ambientEnd != null ? 'at session end' : 'at session start',
+                  Text(wristTempEnd != null ? 'at session end' : 'at session start',
                       style: AppTypography.caption(
                           color: AppColors.textDisabled)),
                 ],
@@ -1249,13 +1249,13 @@ class _RoomTempDetailDialog extends StatelessWidget {
                       padding: const EdgeInsets.all(AppSpacing.sm),
                       decoration: AppDecorations.greyInfoBox(),
                       child: Text(
-                        'Ambient air temperature recorded by the glove sensor. '
-                            'Warmer environments increase rescuer fatigue and may affect sensor accuracy.',
+                        'Rescuer wrist skin temperature recorded by the glove sensor. '
+                            'Rising temperature during prolonged CPR can indicate physical exertion.',
                         style: AppTypography.body(
                             size: 13, color: AppColors.textSecondary),
                       ),
                     ),
-                    if (ambientStart != null && ambientEnd != null) ...[
+                    if (wristTempStart != null && wristTempEnd != null) ...[
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
@@ -1285,7 +1285,7 @@ class _RoomTempDetailDialog extends StatelessWidget {
                                 children: [
                                   Expanded(child: Text('Session start',
                                       style: AppTypography.bodyMedium(size: 13))),
-                                  Text('${ambientStart!.toStringAsFixed(1)} °C',
+                                  Text('${wristTempStart!.toStringAsFixed(1)} °C',
                                       style: AppTypography.bodyBold(
                                           size: 13,
                                           color: AppColors.textSecondary)),
@@ -1300,13 +1300,13 @@ class _RoomTempDetailDialog extends StatelessWidget {
                                 children: [
                                   Expanded(child: Text('Session end',
                                       style: AppTypography.bodyMedium(size: 13))),
-                                  Text('${ambientEnd!.toStringAsFixed(1)} °C',
+                                  Text('${wristTempEnd!.toStringAsFixed(1)} °C',
                                       style: AppTypography.bodyBold(
                                           size: 13,
                                           color: AppColors.textSecondary)),
                                   const SizedBox(width: AppSpacing.xs),
                                       () {
-                                    final diff = ambientEnd! - ambientStart!;
+                                    final diff = wristTempEnd! - wristTempStart!;
                                     final diffColor = diff.abs() < 0.5
                                         ? AppColors.success : AppColors.warning;
                                     return Container(

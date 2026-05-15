@@ -10,6 +10,7 @@ import '../../../main.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../../account/screens/login_screen.dart';
+import '../../training/services/session_detail.dart';
 import '../../training/services/session_local_storage.dart';
 import '../../training/widgets/pulse_check_overlay.dart';
 import '../../training/widgets/session_results.dart';
@@ -74,10 +75,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   double?       _pulseCheckDetectedBpm;
   int?          _pulseCheckConfidence;
   Timer?        _pulseResultTimer;
-  double? _wristAngle;
-  int _swapSecondsRemaining = 5;
+  bool _hasCompletedPulseCheck = false;
+  int _swapSecondsRemaining = 10;
   Timer? _swapCountdownTimer;
   int _rescuerSignalQuality = 0;
+  int?    _rescuerHumidity;
 
   // ── Ventilation window state ───────────────────────────────────────────────
   bool _showVentilationOverlay = false;
@@ -116,15 +118,55 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         );
       }
     };
-    // ADD THIS — process BLE data via subscription, not StreamBuilder callback
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _bleDataSubscription = ref
-          .read(bleConnectionProvider)
-          .dataStream
-          .listen((data) {
+      final ble = ref.read(bleConnectionProvider);
+      _bleDataSubscription = ble.dataStream.listen((data) {
         if (mounted) _updateDisplayValues(data);
       });
+      // Reassembled offline sessions from glove flash storage
+      ble.onOfflineSessionParsed = _handleOfflineSession;
     });
+  }
+
+  Future<void> _handleOfflineSession(SessionDetail detail, int sessionIndex) async {
+    final service = ref.read(sessionServiceProvider);
+    final ble     = ref.read(bleConnectionProvider);
+    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+
+    // Offline parser doesn't compute a grade — do it here for training sessions.
+    // Emergency sessions always stay at grade 0.
+    if (detail.mode != 'emergency') {
+      detail = detail.withGrade(service.calculateGradeFromDetail(detail));
+    }
+
+    // Always save locally first
+    await service.saveLocalOnly(detail);
+
+    // If logged in, try to push to backend
+    int? savedId;
+    if (isLoggedIn) {
+      savedId = await service.saveDetail(detail);
+      if (savedId != null) {
+        await SessionLocalStorage.markSynced(detail);
+      }
+    }
+
+    // Tell the glove it's safe to delete this slot, regardless of backend status
+    // (we have a local copy and will retry backend later via _syncLocalSessions)
+    // We use the most recent localSessionIndex broadcast — track that:
+    await ble.sendConfirmReceived(sessionIndex);
+
+    if (mounted) {
+      ref.invalidate(sessionSummariesProvider);
+      final didSync = savedId != null;
+      UIHelper.showSnackbar(
+        context,
+        message: didSync
+            ? 'Glove session synced (${detail.compressionCount} compressions)'
+            : 'Glove session saved locally (${detail.compressionCount} compressions)',
+        icon: didSync ? Icons.cloud_done_rounded : Icons.save_rounded,
+      );
+    }
   }
 
   void _onTabActivated() {
@@ -289,8 +331,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       final gloveModeInt = data['currentMode'] as int? ?? 0;
       ref.read(appModeProvider.notifier).setModeFromGlove(gloveModeInt);
       ref.read(cprSessionActiveProvider.notifier).state = true;
-      final autoSwitch = ref.read(settingsProvider).autoSwitchToCPR;
-      if (autoSwitch) widget.onTabTapped(1);
 
       setState(() {
         _compressionInCycle = 0;
@@ -308,8 +348,18 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _ventilationCycleNumber = 0;
         _pulseCheckActive        = false;
         _pulseClassification     = null;
+        _hasCompletedPulseCheck = false;
         _pulseCheckDetectedBpm   = null;
         _pulseCheckConfidence    = null;
+        _heartRatePatient = null;
+        _spO2Patient = null;
+        _patientTemperature = null;
+
+        _heartRateUser = null;
+        _spO2User = null;
+        _rescuerTemperature = null;
+        _rescuerHumidity = null;
+        _rescuerSignalQuality = 0;
         _rescuerSignalQuality = 0;
         _ppgBuffer.clear();
       });
@@ -419,7 +469,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return;
     }
 
-
     // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────────
     if (data['isPendingLocalData'] == true) {
       final count = data['pendingSessionCount'] as int? ?? 0;
@@ -447,6 +496,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     if (data['isPulseCheckResult'] == true) {
       _pulseResultTimer?.cancel();
       setState(() {
+        _hasCompletedPulseCheck = true;
         _pulseClassification = data['pulseClassification'] as int? ?? 0;
         _pulseCheckDetectedBpm = (data['detectedBPM'] as num?)?.toDouble();
         _pulseCheckConfidence = data['confidencePct'] as int?;
@@ -461,7 +511,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     }
 
     // ── LIVE_STREAM data ───────────────────────────────────────────────────
-    if (data['isContinuousData'] == true || data.containsKey('depth')) {
+    if (data['isContinuousData'] == true) {
       _updateLiveValues(data);
     }
   }
@@ -482,6 +532,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       final v = (raw as num).toDouble();
       return v > 0 ? v : null;
     }
+
     int? readPositiveInt(String key) {
       final raw = data[key];
       if (raw == null) return null;
@@ -489,26 +540,32 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return v > 0 ? v : null;
     }
 
-    final hrP    = readPositive('heartRatePatient');
-    final spo2P  = readPositive('spO2Patient');
-    final tempP  = readPositive('patientTemperature');
-    final hrU    = readPositive('heartRateUser');
-    final spo2U  = readPositive('spO2User');
-    final tempU  = readPositive('rescuerTemperature');
-    readPositiveInt('rescuerSignalQuality');
-
-    // Compressions resuming — dismiss ventilation overlay
-    if (_showVentilationOverlay && data['isContinuousData'] == true) {
-      if ((data['compressionInCycle'] as int? ?? 0) > 0) {
-        setState(() => _showVentilationOverlay = false);
-      }
+    if (data['isContinuousData'] == true && !_isSessionActive) {
+      ref.read(cprSessionActiveProvider.notifier).state = true;
     }
+
+    // Display rule: rescuer vitals shown only when signalQuality ≥ 40.
+    // Patient vitals only shown during pulse check (and quality ≥ 40 internally).
+    // Values are always measured + streamed; display is what filters.
+    final rescuerSq = (data['rescuerSignalQuality'] as int?) ?? 0;
+    final patientSq = (data['ppgSignalQuality'] as int?) ?? 0;
+    final inPulseCheck = data['pulseCheckActive'] == true;
+
+    final hrP    = (inPulseCheck && patientSq >= 40) ? readPositive('heartRatePatient') : null;
+    final spo2P  = (inPulseCheck && patientSq >= 40) ? readPositive('spO2Patient')      : null;
+    final tempP  = (inPulseCheck && patientSq >= 40) ? readPositive('patientTemperature') : null;
+    final hrU    = (rescuerSq >= 40) ? readPositive('heartRateUser') : null;
+    final spo2U  = (rescuerSq >= 40) ? readPositive('spO2User')      : null;
+    final tempU  = readPositive('rescuerTemperature');  // GXHT30, always valid
+    final humU   = readPositiveInt('rescuerHumidity');
+
+    // Auto-dismiss is handled inside the overlay (tap to dismiss) and by
+    // the next VENTILATION_WINDOW or SESSION_END event. We don't dismiss on
+    // the first compression-in-cycle because the firmware now keeps the
+    // window open for a guaranteed minimum time.
 
     if (!mounted) return;
     setState(() {
-      if (data.containsKey('wristAlignmentAngle')) {
-        _wristAngle = (data['wristAlignmentAngle'] as num?)?.toDouble();
-      }
 
       if (data['isContinuousData'] == true) {
         _isSessionActive = true;
@@ -579,7 +636,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (data.containsKey('rescuerSignalQuality')) {
         _rescuerSignalQuality = (data['rescuerSignalQuality'] as int?) ?? 0;
       }
-      if (_rescuerSignalQuality >= 40) {
+      if (_rescuerSignalQuality >= 20) {
         if (hrU   != null) _heartRateUser = hrU;
         if (spo2U != null) _spO2User      = spo2U;
       } else {
@@ -587,6 +644,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _spO2User      = null;
       }
       if (tempU != null) _rescuerTemperature = tempU;
+      if (humU != null) _rescuerHumidity = humU;
     });
   }
 
@@ -601,18 +659,22 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final container = ProviderScope.containerOf(context, listen: false);
 
 
+    final endTime = DateTime.now();
+    final sessionStartTs = _sessionStartTime ?? DateTime.now();
     var detail = service.assembleDetail(
       summaryPacket: data,
       events: List.from(bleConn.compressionEvents),
       ventilationEvents: List.from(bleConn.ventilationEvents),
       pulseCheckEvents: List.from(bleConn.pulseCheckEvents),
       rescuerVitalSnapshots: List.from(bleConn.rescuerVitalSnapshots),
-      sessionStart: _sessionStartTime ?? DateTime.now(),
+      sessionStart: sessionStartTs,
+      sessionEnd:   endTime,
       sessionDurationSecs: _displaySessionDuration.inSeconds,
       mode: currentMode.sessionModeString,
-      scenario: ref
-          .read(scenarioProvider)
-          .sessionScenarioString,
+      scenario: ref.read(scenarioProvider).sessionScenarioString,
+      twoMinAlertTimestampsMs: List.from(bleConn.twoMinAlertTimestampsMs),
+      fatigueAlertTimestampMs: bleConn.fatigueAlertTimestampMs,
+      fatigueAlertScore: bleConn.fatigueAlertScore,
     );
 
     // Emergency + not logged in: offer login once, non-blocking
@@ -632,7 +694,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         await service.saveLocalOnly(detail);
         container.invalidate(sessionSummariesProvider);  // ← add this
         if (mounted) {
-          context.push(SessionResultsScreen.fromDetail(detail: detail));
+          context.push(SessionResultsScreen(detail: detail));
         }
         return;
       }
@@ -655,7 +717,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         );
       }
     }
-    if (mounted) context.push(SessionResultsScreen.fromDetail(detail: detail));
+    if (mounted) context.push(SessionResultsScreen(detail: detail));
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -678,36 +740,53 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                 mode: currentMode,
                 scenario: scenario,
                 sessionLocked: sessionLocked,
-                onScenarioToggle: () {
-                  ref.read(scenarioProvider.notifier).toggle();
-                  final ble = ref.read(bleConnectionProvider);
-                  final next = ref.read(scenarioProvider);
-                  ble.sendSetTargetDepth(
-                    minMm: next.targetDepthMinMm,
-                    maxMm: next.targetDepthMaxMm,
-                  );
-                  ble.sendSetTargetRate(
-                    minBpm: next.targetRateMin,
-                    maxBpm: next.targetRateMax,
-                  );
-                },
-                onModeToggle: sessionLocked
-                    ? null
-                    : () async {
-                  final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
-                  if (currentMode == AppMode.emergency && !isLoggedIn) {
-                    if (!mounted) return;
-                    final shouldLogin = await AppDialogs.promptLogin(context);
-                    if (shouldLogin == true && mounted) {
-                      await context.push(const LoginScreen());
-                    }
-                    return;
-                  }
-                  final next = _nextMode(currentMode, true);
-                  if (next == null || !mounted) return;
-                  ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
-                  ref.read(appModeProvider.notifier).setMode(next);
-                },
+          onScenarioToggle: () {
+            ref.read(scenarioProvider.notifier).toggle();
+            final ble = ref.read(bleConnectionProvider);
+            final next = ref.read(scenarioProvider);
+            // Inform the glove of the scenario change FIRST so target
+            // overrides are interpreted in the right context.
+            ble.sendSetScenario(next.bleValue);
+            ble.sendSetTargetDepth(
+              minMm: next.targetDepthMinMm,
+              maxMm: next.targetDepthMaxMm,
+            );
+            ble.sendSetTargetRate(
+              minBpm: next.targetRateMin,
+              maxBpm: next.targetRateMax,
+            );
+          },
+          onModeToggle: sessionLocked
+              ? null
+              : () async {
+            final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+            final goingToTraining = currentMode == AppMode.emergency;
+
+            // Going to Training? Must be logged in first.
+            if (goingToTraining && !isLoggedIn) {
+              if (!mounted) return;
+              final shouldLogin = await AppDialogs.promptLogin(context);
+              if (shouldLogin != true || !mounted) return;
+              await context.push(const LoginScreen());
+              if (!mounted) return;
+              // If login didn't take, stay in Emergency.
+              if (!ref.read(authStateProvider).isLoggedIn) return;
+            }
+
+            // Logged in (or going to Emergency) — confirm switch.
+            if (goingToTraining) {
+              final confirmed = await AppDialogs.confirmSwitchToTraining(context);
+              if (confirmed != true || !mounted) return;
+            } else {
+              final confirmed = await AppDialogs.confirmSwitchToEmergency(context);
+              if (confirmed != true || !mounted) return;
+            }
+
+            final next = _nextMode(currentMode, true);
+            if (next == null || !mounted) return;
+            ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
+            ref.read(appModeProvider.notifier).setMode(next);
+          },
 
                 onNoFeedbackToggle: sessionLocked
                     ? null
@@ -726,47 +805,17 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                   child: Column(
                     children: [
                       // ── Patient vitals — only after confirmed pulse ───────
-                      if (_pulseClassification == 2 &&
-                          (_pulseCheckConfidence ?? 0) >= 40) ...[
+                      if (_hasCompletedPulseCheck) ...[
                         VitalsCard(
                           label:           'Patient Vitals',
                           heartRate:       _heartRatePatient,
                           spO2:            _spO2Patient,
                           temperature:     _patientTemperature,
                           pulseConfidence: _pulseCheckConfidence,
+                          greyedOut:       !_pulseCheckActive,
                         ),
                         const SizedBox(height: AppSpacing.md),
                       ],
-
-                      // ── Wrist angle warning ───────────────────────────────
-                      if (_isSessionActive &&
-                          _wristAngle != null &&
-                          _wristAngle! > 15.0)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical:   AppSpacing.xs,
-                            ),
-                            decoration: AppDecorations.warningBanner(),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.back_hand_outlined,
-                                    size: 14, color: AppColors.warning),
-                                const SizedBox(width: AppSpacing.xs),
-                                Expanded(
-                                  child: Text(
-                                    'Wrist angle ${_wristAngle!.toStringAsFixed(0)}°. Try to keep arms straight',
-                                    style: AppTypography.label(
-                                        size: 12, color: AppColors.warning),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
 
                       // ── CPR metrics card ─────────────────────────────────
                       if (ref.watch(settingsProvider).showCprMetrics) ...[
@@ -794,6 +843,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                         heartRate:            _heartRateUser,
                         spO2:                 _spO2User,
                         temperature:          _rescuerTemperature,
+                        humidity:             _rescuerHumidity,
                         rescuerSignalQuality: _rescuerSignalQuality > 0 ? _rescuerSignalQuality : null,
                       ),
                     ],
