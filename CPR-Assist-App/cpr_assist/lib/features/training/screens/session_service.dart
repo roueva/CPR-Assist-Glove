@@ -78,8 +78,10 @@ class SessionService {
       throw Exception('Local session has no start time');
     }
     final all = await SessionLocalStorage.loadAll();
+    int trunc(DateTime t) =>
+        t.toUtc().copyWith(millisecond: 0, microsecond: 0).millisecondsSinceEpoch;
     return all.firstWhere(
-          (d) => d.sessionStart.millisecondsSinceEpoch == start.millisecondsSinceEpoch,
+          (d) => trunc(d.sessionStart) == trunc(start),
       orElse: () => throw Exception('Local session not found'),
     );
   }
@@ -106,10 +108,10 @@ class SessionService {
 
   /// Save a session locally only, without hitting the backend.
   /// Used when Emergency mode ends and the user declines to log in.
-  Future<void> saveLocalOnly(SessionDetail detail) async {
+  Future<bool> saveLocalOnly(SessionDetail detail) async {
     // SessionLocalStorage handles the SharedPreferences write.
     // The sync-on-reconnect logic will pick this up later if the user logs in.
-    await SessionLocalStorage.saveLocal(detail);
+    return SessionLocalStorage.saveLocal(detail);
   }
 
   /// Update the note on a saved session.
@@ -288,8 +290,8 @@ class SessionService {
     String mode     = 'emergency',
     String scenario = 'standard_adult',
   }) {
-    // Pass 1: build with grade = 0 to get all computed metrics
-    final partialDetail = SessionDetail.fromBleSession(
+    // Build raw (fromBleSession no longer computes pause logic inline).
+    final raw = SessionDetail.fromBleSession(
       summaryPacket:         summaryPacket,
       events:                events,
       ventilationEvents:     ventilationEvents,
@@ -306,24 +308,13 @@ class SessionService {
       twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
     );
 
-    final grade = calculateGradeFromDetail(partialDetail);
+    // Single authoritative pause/ventilation computation.
+    final withPause = SessionDetail.applyPauseModel(raw);
 
-    return SessionDetail.fromBleSession(
-      summaryPacket:         summaryPacket,
-      events:                events,
-      ventilationEvents:     ventilationEvents,
-      pulseCheckEvents:      pulseCheckEvents,
-      rescuerVitalSnapshots: rescuerVitalSnapshots,
-      sessionStart:          sessionStart,
-      sessionEnd:            sessionEnd,
-      sessionDurationSecs:   sessionDurationSecs,
-      totalGrade:            grade,
-      mode:                  mode,
-      scenario:              scenario,
-      fatigueAlertTimestampMs: fatigueAlertTimestampMs,
-      fatigueAlertScore:       fatigueAlertScore,
-      twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
-    );
+    // Grade now sees correct handsOnRatio + ventilationCompliance.
+    final grade = calculateGradeFromDetail(withPause);
+
+    return withPause.withGrade(grade);
   }
 }
 
@@ -377,6 +368,7 @@ class SessionSummary {
   // ── Ventilation ───────────────────────────────────────────────────────────
   final int    ventilationCount;
   final double ventilationCompliance;
+  final int    correctVentilations;
 
   // ── Pulse check (Emergency only) ──────────────────────────────────────────
   final bool pulseDetectedFinal;
@@ -388,10 +380,15 @@ class SessionSummary {
   final double? patientSpO2LastCheck;
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
+  final double? rescuerWristTempStart;
+  final double? rescuerWristTempEnd;
 
   // ── Timing & grade ────────────────────────────────────────────────────────
   final int       sessionDuration; // seconds
   final double    totalGrade;      // 0–100; always 0.0 for Emergency
+  final double    timeToFirstCompression;  // seconds
+  final double    rateVariability;          // ms
+  final int       consecutiveGoodPeak;
   final DateTime? sessionStart;
   final DateTime? sessionEnd;
   final String?   note;
@@ -432,6 +429,12 @@ class SessionSummary {
     this.patientSpO2LastCheck,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
+    this.rescuerWristTempStart,
+    this.rescuerWristTempEnd,
+    required this.timeToFirstCompression,
+    required this.rateVariability,
+    required this.consecutiveGoodPeak,
+    required this.correctVentilations,
     required this.sessionDuration,
     this.totalGrade           = 0.0,
     this.sessionStart,
@@ -453,20 +456,45 @@ class SessionSummary {
 
   String get dateFormatted {
     if (sessionStart == null) return '—';
+    final d = sessionStart!.toLocal();
     const months = ['Jan','Feb','Mar','Apr','May','Jun',
       'Jul','Aug','Sep','Oct','Nov','Dec'];
-    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
-        '${sessionStart!.year}';
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   String get dateTimeFormatted {
     if (sessionStart == null) return '—';
+    final d = sessionStart!.toLocal();
     const months = ['Jan','Feb','Mar','Apr','May','Jun',
       'Jul','Aug','Sep','Oct','Nov','Dec'];
-    final h = sessionStart!.hour.toString().padLeft(2, '0');
-    final m = sessionStart!.minute.toString().padLeft(2, '0');
-    return '${sessionStart!.day} ${months[sessionStart!.month - 1]} '
-        '${sessionStart!.year} • $h:$m';
+    final h = d.hour.toString().padLeft(2, '0');
+    final m = d.minute.toString().padLeft(2, '0');
+    return '${d.day} ${months[d.month - 1]} ${d.year} • $h:$m';
+  }
+
+  /// History-list friendly: "Today", "Yesterday", "12 May", or
+  /// "12 May 2024" only when not the current year.
+  String get relativeDateLabel {
+    final d = sessionStart?.toLocal();
+    if (d == null) return '—';
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final that  = DateTime(d.year, d.month, d.day);
+    final diff  = today.difference(that).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    final base = '${d.day} ${months[d.month - 1]}';
+    return d.year == now.year ? base : '$base ${d.year}';
+  }
+
+  String get timeLabel {
+    final d = sessionStart?.toLocal();
+    if (d == null) return '';
+    final h = d.hour.toString().padLeft(2, '0');
+    final m = d.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   /// Build a lightweight summary from a full SessionDetail.
@@ -501,6 +529,7 @@ class SessionSummary {
 
     ventilationCount:      d.ventilationCount,
     ventilationCompliance: d.ventilationCompliance,
+    correctVentilations:   d.correctVentilations,
 
     pulseDetectedFinal:    d.pulseDetectedFinal,
     pulseChecksPrompted:   d.pulseChecksPrompted,
@@ -510,9 +539,14 @@ class SessionSummary {
     patientSpO2LastCheck:  d.patientSpO2LastCheck,
     rescuerHRLastPause:    d.rescuerHRLastPause,
     rescuerSpO2LastPause:  d.rescuerSpO2LastPause,
+    rescuerWristTempStart: d.rescuerWristTempStart,
+    rescuerWristTempEnd:   d.rescuerWristTempEnd,
 
-    sessionDuration:       d.sessionDuration,
-    totalGrade:            d.totalGrade,
+    sessionDuration:        d.sessionDuration,
+    totalGrade:             d.totalGrade,
+    timeToFirstCompression: d.timeToFirstCompression,
+    rateVariability:        d.rateVariability,
+    consecutiveGoodPeak:    d.consecutiveGoodPeak,
     sessionStart:          d.sessionStart,
     sessionEnd:            d.sessionEnd,
     note:                  d.note,
@@ -551,6 +585,7 @@ class SessionSummary {
       handsOnRatio:          (json['hands_on_ratio'] as num?)?.toDouble() ?? 0.0,
       ventilationCount:      (json['ventilation_count']       as num?)?.toInt()    ?? 0,
       ventilationCompliance: (json['ventilation_compliance']  as num?)?.toDouble() ?? 0.0,
+      correctVentilations: (json['correct_ventilations'] as num?)?.toInt() ?? 0,
       pulseDetectedFinal:     json['pulse_detected_final']    as bool?             ?? false,
       pulseChecksPrompted:   (json['pulse_checks_prompted']   as num?)?.toInt()    ?? 0,
       pulseChecksComplied:   (json['pulse_checks_complied']   as num?)?.toInt()    ?? 0,
@@ -558,12 +593,17 @@ class SessionSummary {
       patientSpO2LastCheck:  (json['patient_spo2_last_check']    as num?)?.toDouble(),
       rescuerHRLastPause:    (json['rescuer_hr_last_pause']      as num?)?.toDouble(),
       rescuerSpO2LastPause:  (json['rescuer_spo2_last_pause']    as num?)?.toDouble(),
+      rescuerWristTempStart: (json['rescuer_wrist_temp_start'] as num?)?.toDouble(),
+      rescuerWristTempEnd:   (json['rescuer_wrist_temp_end']   as num?)?.toDouble(),
       totalGrade:            (json['total_grade']             as num?)?.toDouble() ?? 0.0,
+      timeToFirstCompression: (json['time_to_first_comp']      as num?)?.toDouble() ?? 0.0,
+      rateVariability:        (json['rate_variability']        as num?)?.toDouble() ?? 0.0,
+      consecutiveGoodPeak:    (json['consecutive_good_peak']   as num?)?.toInt()    ?? 0,
       sessionStart: json['session_start'] != null
-          ? DateTime.tryParse(json['session_start'] as String)
+          ? DateTime.tryParse(json['session_start'] as String)?.toUtc()
           : null,
       sessionEnd: json['session_end'] != null
-          ? DateTime.tryParse(json['session_end'] as String)
+          ? DateTime.tryParse(json['session_end'] as String)?.toUtc()
           : null,
       note: json['note'] as String?,
     );

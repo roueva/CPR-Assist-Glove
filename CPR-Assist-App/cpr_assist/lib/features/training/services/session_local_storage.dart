@@ -22,13 +22,16 @@ class SessionLocalStorage {
   /// Called when sessions are evicted due to the local storage limit.
   /// Set this from your app entry point or wherever UIHelper is accessible.
   static void Function(int evictedCount)? onEviction;
+  static int _keyMs(SessionDetail d) =>
+      d.sessionStart.copyWith(millisecond: 0, microsecond: 0)
+          .millisecondsSinceEpoch;
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
-  static Future<void> saveLocal(SessionDetail detail) async {
+  static Future<bool> saveLocal(SessionDetail detail) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key   = 'session_local_${detail.sessionStart.millisecondsSinceEpoch}';
+      final key   = 'session_local_${_keyMs(detail)}';
 
       // Write the session
       await prefs.setString(key, jsonEncode(detail.toJson()));
@@ -53,8 +56,10 @@ class SessionLocalStorage {
 
       await prefs.setString(_indexKey, jsonEncode(keys));
       debugPrint('SessionLocalStorage: saved $key');
+      return true;
     } catch (e) {
       debugPrint('SessionLocalStorage: save failed — $e');
+      return false;
     }
   }
 
@@ -94,7 +99,7 @@ class SessionLocalStorage {
   static Future<void> markSynced(SessionDetail detail) async {
     try {
       final prefs  = await SharedPreferences.getInstance();
-      final key    = 'session_local_${detail.sessionStart.millisecondsSinceEpoch}';
+      final key   = 'session_local_${_keyMs(detail)}';
       final synced = detail.markSynced();
       await prefs.setString(key, jsonEncode(synced.toJson()));
     } catch (e) {
@@ -107,7 +112,7 @@ class SessionLocalStorage {
   static Future<void> deleteLocal(SessionDetail detail) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key   = 'session_local_${detail.sessionStart.millisecondsSinceEpoch}';
+      final key   = 'session_local_${_keyMs(detail)}';
       await prefs.remove(key);
       final keys  = _readIndex(prefs)..remove(key);
       await prefs.setString(_indexKey, jsonEncode(keys));

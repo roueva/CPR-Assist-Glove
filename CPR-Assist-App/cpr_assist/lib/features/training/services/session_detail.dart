@@ -1,7 +1,8 @@
 import 'dart:math' show sqrt;
-
+import 'dart:math' as math;
 import 'package:cpr_assist/features/training/services/rescuer_vital_snapshot.dart';
 
+import '../../../core/utils/app_constants.dart';
 import '../../../core/utils/app_extensions.dart';
 import 'compression_event.dart';
 import 'ventilation_event.dart';
@@ -245,17 +246,109 @@ class SessionDetail {
 
     // ── 3. Depth trend ────────────────────────────────────────────
     double depthScore = 0.0;
-    if (compressions.length >= 5) {
-      final peakDepth = compressions
+    // Exclude unmeasured compressions (NaN depth sentinel set by
+    // BLEConnection when a compression was counted but no valid depth
+    // packet arrived) so a single dropout cannot NaN the fatigue score.
+    final _finiteComps =
+    compressions.where((c) => c.depth.isFinite && c.depth > 0).toList();
+    if (_finiteComps.length >= 5) {
+      final peakDepth = _finiteComps
           .map((c) => c.depth)
           .reduce((a, b) => a > b ? a : b);
-      final lastFive = compressions.sublist(compressions.length - 5);
-      final lastAvg  = lastFive.map((c) => c.depth).reduce((a, b) => a + b) / 5;
+      final lastFive = _finiteComps.sublist(_finiteComps.length - 5);
+      final lastAvg  =
+          lastFive.map((c) => c.depth).reduce((a, b) => a + b) / 5;
       depthScore = ((peakDepth - lastAvg) / 2.0).clamp(0.0, 1.0) * 100;
     }
 
     return (hrScore * 0.40 + rmssdScore * 0.35 + depthScore * 0.25).round();
   }
+
+
+
+  /// The single authoritative pause/ventilation computation. Recomputes
+  /// noFlowTime / unplannedPause* from the compression timeline and stamps
+  /// each ventilation's measured no-flow duration + compliance.
+  ///
+  /// Called once per session by BOTH the live BLE path (via SessionService)
+  /// and the offline-storage path (OfflineSessionParser) so every session,
+  /// regardless of origin, is scored by identical code and is comparable.
+  /// Firmware-stored ventilation windowMs is intentionally NOT used: it
+  /// measures a different quantity (prompt→close window incl. grace + resume
+  /// latency) and does not implement the AHA excess rule.
+  static SessionDetail applyPauseModel(SessionDetail d) {
+    final pm = _calculatePauseMetrics(
+      compressions:        d.compressions,
+      ventilations:        d.ventilations,
+      pulseChecks:         d.pulseChecks,
+      sessionDurationSecs: d.sessionDuration,
+    );
+
+    final measuredVents = d.ventilations.map((v) {
+      final dur = pm.ventDurationByTsMs[v.timestampMs];
+      if (dur == null) {
+        // Prompt fired but no qualifying no-flow gap → rescuer never paused
+        // for this ventilation. Zero duration, non-compliant.
+        return v.copyWith(durationSec: 0.0, compliant: false);
+      }
+      // The ventilation event represents only the compliant portion. Any
+      // overrun beyond the allowance is surfaced separately as an unplanned
+      // pause (Behavior Y), so the displayed vent duration is capped here to
+      // avoid double-representing the same hands-off time.
+      final cappedDur = dur <= AppConstants.maxAcceptablePauseSec
+          ? dur
+          : AppConstants.maxAcceptablePauseSec;
+      // Compliant only when the rescuer ACTUALLY paused (>= 3 s, matching
+      // firmware WINDOW_PAUSE_COMPLIANT_MS) AND did not overrun the 10 s
+      // allowance. A sub-3 s blip is too short to have delivered breaths.
+      return v.copyWith(
+        durationSec: cappedDur,
+        compliant:   dur >= AppConstants.minCompliantPauseSec &&
+            dur <= AppConstants.maxAcceptablePauseSec,
+      );
+    }).toList();
+
+    // Same rule as ventilation, applied to pulse checks. pulseDurationByTsMs
+    // is keyed by (timestampSec * 1000).round() in _calculatePauseMetrics.
+    final measuredPulses = d.pulseChecks.map((p) {
+      final key = (p.timestampSec * 1000).round();
+      final dur = pm.pulseDurationByTsMs[key];
+      if (dur == null) {
+        return p.copyWith(durationSec: 0.0, compliant: false);
+      }
+      final cappedDur = dur <= AppConstants.maxAcceptablePauseSec
+          ? dur
+          : AppConstants.maxAcceptablePauseSec;
+      return p.copyWith(
+        durationSec: cappedDur,
+        compliant:   dur >= AppConstants.minCompliantPauseSec &&
+            dur <= AppConstants.maxAcceptablePauseSec,
+      );
+    }).toList();
+
+    final handsOn = d.sessionDuration > 0
+        ? (1.0 - pm.noFlowTime / d.sessionDuration).clamp(0.0, 1.0)
+        : 1.0;
+
+    final localVtCount     = measuredVents.length;
+    final localVtCompliant = measuredVents.where((v) => v.compliant).length;
+    final vtCompliance = localVtCount > 0
+        ? localVtCompliant / localVtCount * 100.0
+        : 0.0;
+
+    return d._copyWithPause(
+      ventilations:          measuredVents,
+      pulseChecks:           measuredPulses,
+      noFlowTime:            pm.noFlowTime,
+      noFlowIntervals:       pm.noFlowIntervals,
+      unplannedPauseTime:    pm.unplannedPauseTime,
+      unplannedPauseCount:   pm.unplannedPauseCount,
+      handsOnRatio:          handsOn,
+      ventilationCompliance: vtCompliance,
+      correctVentilations:   localVtCompliant,
+    );
+  }
+
 
   // ── Factory: assemble from live BLE session ───────────────────────────────
   //
@@ -297,21 +390,11 @@ class SessionDetail {
     double unplannedPauseTime = 0.0;
     int unplannedPauseCount = 0;
 
-    final pauseMetrics = _calculatePauseMetrics(
-      compressions: events,
-      ventilations: ventilationEvents,
-      pulseChecks: pulseCheckEvents,
-      sessionDurationSecs: sessionDurationSecs,
-    );
-
-    noFlowTime = pauseMetrics.noFlowTime;
-    noFlowIntervals = pauseMetrics.noFlowIntervals;
-    unplannedPauseTime = pauseMetrics.unplannedPauseTime;
-    unplannedPauseCount = pauseMetrics.unplannedPauseCount;
-
-    handsOnRatio = sessionDurationSecs > 0
-        ? (1.0 - noFlowTime / sessionDurationSecs).clamp(0.0, 1.0)
-        : 1.0;
+    // Pause/ventilation-duration metrics are applied as a single post-step
+    // by SessionDetail.applyPauseModel() (the one source of truth, shared
+    // with the offline-storage path). Build raw here; do not compute inline.
+    // noFlowTime / handsOnRatio / unplanned* stay at constructor defaults
+    // until applyPauseModel runs.
 
     if (events.isNotEmpty) {
       final n = events.length;
@@ -327,7 +410,7 @@ class SessionDetail {
 
       // Time to first compression
       final firmwareTTF = summaryPacket['timeToFirstCompressionMs'] as int? ?? 0;
-      timeToFirst = firmwareTTF > 0
+      timeToFirst = (firmwareTTF > 0 && firmwareTTF < 65535)
           ? firmwareTTF / 1000.0
           : (events.isNotEmpty ? events.first.timestampSec : 0.0);
 
@@ -346,8 +429,15 @@ class SessionDetail {
         rateVariability = sqrt(variance);
       }
 
-      // Averages
-      avgDepth = events.map((e) => e.depth).reduce((a, b) => a + b) / n;
+      // Averages — exclude events whose depth could not be measured
+      // (NaN sentinel set in BLEConnection when a compression was counted
+      // but no valid depth packet arrived). Prevents fake values from
+      // dragging the session average down.
+      final _depthVals =
+      events.map((e) => e.depth).where((d) => d.isFinite && d > 0).toList();
+      avgDepth = _depthVals.isNotEmpty
+          ? _depthVals.reduce((a, b) => a + b) / _depthVals.length
+          : 0.0;
 
       // Use instantaneousRate when available; fall back to frequency for older data
       final rates = events
@@ -361,17 +451,24 @@ class SessionDetail {
 
       final effectiveDepths = events
           .map((e) => e.effectiveDepth > 0 ? e.effectiveDepth : e.depth)
+          .where((d) => d.isFinite && d > 0)
           .toList();
 
-      avgEffectiveDepth =
-          effectiveDepths.reduce((a, b) => a + b) / effectiveDepths.length;
+      avgEffectiveDepth = effectiveDepths.isNotEmpty
+          ? effectiveDepths.reduce((a, b) => a + b) / effectiveDepths.length
+          : 0.0;
 
-      // Depth standard deviation
-      final depthVariance = events
-          .map((e) => (e.depth - avgDepth) * (e.depth - avgDepth))
-          .reduce((a, b) => a + b) /
-          n;
-      depthSD = sqrt(depthVariance);
+      // Depth standard deviation — same filtered set as avgDepth so a single
+      // unmeasured compression cannot inflate or deflate the SD.
+      if (_depthVals.length > 1) {
+        final depthVariance = _depthVals
+            .map((d) => (d - avgDepth) * (d - avgDepth))
+            .reduce((a, b) => a + b) /
+            _depthVals.length;
+        depthSD = sqrt(depthVariance);
+      } else {
+        depthSD = 0.0;
+      }
 
       // Consecutive good streak
       int streak = 0;
@@ -384,20 +481,6 @@ class SessionDetail {
         }
       }
     }
-
-    // Ventilation compliance
-    final localVtCount = ventilationEvents.length;
-    final localVtCompliant = ventilationEvents.where((v) => v.compliant).length;
-
-    final totalVentilations =
-        summaryPacket['totalVentilations'] as int? ?? localVtCount;
-
-    final correctVentilations =
-        summaryPacket['correctVentilations'] as int? ?? localVtCompliant;
-
-    final vtCompliance = totalVentilations > 0
-        ? correctVentilations / totalVentilations * 100.0
-        : 0.0;
 
     return SessionDetail(
       sessionStart:           sessionStart,
@@ -433,9 +516,9 @@ class SessionDetail {
       fatigueAlertTimestampMs: fatigueAlertTimestampMs,
       fatigueAlertScore:       fatigueAlertScore,
       twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
-      correctVentilations: correctVentilations,
-      ventilationCount: totalVentilations,
-      ventilationCompliance: vtCompliance,
+      correctVentilations:    summaryPacket['correctVentilations'] as int? ?? 0,
+      ventilationCount:       summaryPacket['totalVentilations']   as int? ?? ventilationEvents.length,
+      ventilationCompliance:  0.0,   // computed in applyPauseModel
       pulseChecksPrompted:    summaryPacket['pulseChecksPrompted'] as int?    ?? 0,
       pulseChecksComplied:    summaryPacket['pulseChecksComplied'] as int?    ?? 0,
       pulseDetectedFinal:     (summaryPacket['pulseDetected']      as int?    ?? 0) == 1,
@@ -459,7 +542,7 @@ class SessionDetail {
   factory SessionDetail.fromJson(Map<String, dynamic> json) {
     return SessionDetail(
       id:           json['id']          as int?,
-      sessionStart: DateTime.parse(json['session_start'] as String),
+      sessionStart: DateTime.parse(json['session_start'] as String).toUtc(),
       sessionEnd:   json['session_end'] != null
           ? DateTime.tryParse(json['session_end'] as String)
           : null,
@@ -528,13 +611,19 @@ class SessionDetail {
     );
   }
 
+  static double _fin(double v) => v.isFinite ? v : 0.0;
+  static double? _finN(double? v) => (v != null && v.isFinite) ? v : null;
+
   // ── Serialisation — sent to backend via POST /sessions/detail ────────────
   Map<String, dynamic> toJson() => {
     if (id != null) 'id':              id,
     'session_start':            sessionStart
+        .toUtc()
         .copyWith(millisecond: 0, microsecond: 0)
         .toIso8601String(),
-    if (sessionEnd != null) 'session_end': sessionEnd!.toIso8601String(),
+    if (sessionEnd != null) 'session_end': sessionEnd!
+        .toUtc()
+        .toIso8601String(),
     'mode':                     mode,
     'scenario':                 scenario,
     'compression_count':        compressionCount,
@@ -547,20 +636,20 @@ class SessionDetail {
     'over_force_count':         overForceCount,
     'too_deep_count':           tooDeepCount,
     'correct_ventilations':     correctVentilations,
-    'average_depth':            averageDepth,
-    'average_frequency':        averageFrequency,
-    'average_effective_depth':  averageEffectiveDepth,
-    'peak_depth':               peakDepth,
-    'depth_sd':                 depthSD,
-    'depth_consistency':        depthConsistency,
-    'freq_consistency':         frequencyConsistency,
-    'hands_on_ratio':           handsOnRatio,
-    'no_flow_time':             noFlowTime,
+    'average_depth':            _fin(averageDepth),
+    'average_frequency':        _fin(averageFrequency),
+    'average_effective_depth':  _fin(averageEffectiveDepth),
+    'peak_depth':               _fin(peakDepth),
+    'depth_sd':                 _fin(depthSD),
+    'depth_consistency':        _fin(depthConsistency),
+    'freq_consistency':         _fin(frequencyConsistency),
+    'hands_on_ratio':           _fin(handsOnRatio),
+    'no_flow_time':             _fin(noFlowTime),
     'no_flow_intervals':        noFlowIntervals,
-    'unplanned_pause_time':     unplannedPauseTime,
+    'unplanned_pause_time':     _fin(unplannedPauseTime),
     'unplanned_pause_count':    unplannedPauseCount,
-    'rate_variability':         rateVariability,
-    'time_to_first_comp':       timeToFirstCompression,
+    'rate_variability':         _fin(rateVariability),
+    'time_to_first_comp':       _fin(timeToFirstCompression),
     'consecutive_good_peak':    consecutiveGoodPeak,
     'fatigue_onset_index':      fatigueOnsetIndex,
     'rescuer_swap_count':       rescuerSwapCount,
@@ -569,24 +658,24 @@ class SessionDetail {
     if (twoMinAlertTimestampsMs.isNotEmpty)
       'two_min_alert_timestamps_ms': twoMinAlertTimestampsMs,
     'ventilation_count':        ventilationCount,
-    'ventilation_compliance':   ventilationCompliance,
+    'ventilation_compliance':   _fin(ventilationCompliance),
     'pulse_checks_prompted':    pulseChecksPrompted,
     'pulse_checks_complied':    pulseChecksComplied,
     'pulse_detected_final':     pulseDetectedFinal,
-    if (patientTemperature != null)
-      'patient_temperature': patientTemperature,
+    if (_finN(patientTemperature) != null)
+      'patient_temperature': _finN(patientTemperature),
 
-    if (patientSpO2LastCheck != null)
-      'patient_spo2_last_check': patientSpO2LastCheck,
+    if (_finN(patientSpO2LastCheck) != null)
+      'patient_spo2_last_check': _finN(patientSpO2LastCheck),
 
-    if (rescuerHRLastPause != null)
-      'rescuer_hr_last_pause': rescuerHRLastPause,
+    if (_finN(rescuerHRLastPause) != null)
+      'rescuer_hr_last_pause': _finN(rescuerHRLastPause),
 
-    if (rescuerSpO2LastPause != null) 'rescuer_spo2_last_pause': rescuerSpO2LastPause,
-    if (rescuerWristTempStart != null) 'rescuer_wrist_temp_start': rescuerWristTempStart,
-    if (rescuerWristTempEnd   != null) 'rescuer_wrist_temp_end':   rescuerWristTempEnd,
+    if (_finN(rescuerSpO2LastPause) != null) 'rescuer_spo2_last_pause': _finN(rescuerSpO2LastPause),
+    if (_finN(rescuerWristTempStart) != null) 'rescuer_wrist_temp_start': _finN(rescuerWristTempStart),
+    if (_finN(rescuerWristTempEnd)   != null) 'rescuer_wrist_temp_end':   _finN(rescuerWristTempEnd),
     'session_duration':         sessionDuration,
-    'total_grade':              totalGrade,
+    'total_grade':              _fin(totalGrade),
     'compressions':    compressions.map((e)  => e.toJson()).toList(),
     'ventilations':    ventilations.map((e)  => e.toJson()).toList(),
     'pulse_checks':    pulseChecks.map((e)   => e.toJson()).toList(),
@@ -666,6 +755,74 @@ class SessionDetail {
         syncedToBackend:        syncedToBackend ?? this.syncedToBackend,
         note: identical(note, _noNoteChange) ? this.note : note as String?,
       );
+
+  SessionDetail _copyWithPause({
+    required List<VentilationEvent> ventilations,
+    required List<PulseCheckEvent>  pulseChecks,
+    required double noFlowTime,
+    required int    noFlowIntervals,
+    required double unplannedPauseTime,
+    required int    unplannedPauseCount,
+    required double handsOnRatio,
+    required double ventilationCompliance,
+    required int    correctVentilations,
+  }) =>
+      SessionDetail(
+        id:                     id,
+        sessionStart:           sessionStart,
+        sessionEnd:             sessionEnd,
+        mode:                   mode,
+        scenario:               scenario,
+        compressionCount:       compressionCount,
+        correctDepth:           correctDepth,
+        correctFrequency:       correctFrequency,
+        correctRecoil:          correctRecoil,
+        depthRateCombo:         depthRateCombo,
+        correctPosture:         correctPosture,
+        leaningCount:           leaningCount,
+        overForceCount:         overForceCount,
+        tooDeepCount:           tooDeepCount,
+        correctVentilations:    correctVentilations,
+        averageDepth:           averageDepth,
+        averageFrequency:       averageFrequency,
+        averageEffectiveDepth:  averageEffectiveDepth,
+        peakDepth:              peakDepth,
+        depthSD:                depthSD,
+        depthConsistency:       depthConsistency,
+        frequencyConsistency:   frequencyConsistency,
+        handsOnRatio:           handsOnRatio,
+        noFlowTime:             noFlowTime,
+        noFlowIntervals:        noFlowIntervals,
+        unplannedPauseTime:     unplannedPauseTime,
+        unplannedPauseCount:    unplannedPauseCount,
+        rateVariability:        rateVariability,
+        timeToFirstCompression: timeToFirstCompression,
+        consecutiveGoodPeak:    consecutiveGoodPeak,
+        fatigueOnsetIndex:      fatigueOnsetIndex,
+        rescuerSwapCount:       rescuerSwapCount,
+        fatigueAlertTimestampMs: fatigueAlertTimestampMs,
+        fatigueAlertScore:       fatigueAlertScore,
+        twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
+        ventilationCount:       ventilationCount,
+        ventilationCompliance:  ventilationCompliance,
+        pulseChecksPrompted:    pulseChecksPrompted,
+        pulseChecksComplied:    pulseChecksComplied,
+        pulseDetectedFinal:     pulseDetectedFinal,
+        patientTemperature:     patientTemperature,
+        rescuerHRLastPause:     rescuerHRLastPause,
+        rescuerSpO2LastPause:   rescuerSpO2LastPause,
+        rescuerWristTempStart:  rescuerWristTempStart,
+        rescuerWristTempEnd:    rescuerWristTempEnd,
+        sessionDuration:        sessionDuration,
+        totalGrade:             totalGrade,
+        compressions:           compressions,
+        ventilations:           ventilations,
+        pulseChecks:            pulseChecks,
+        rescuerVitals:          rescuerVitals,
+        syncedToBackend:        syncedToBackend,
+        note:                   note,
+      );
+
 }
 
 
@@ -675,12 +832,16 @@ class PauseMetrics {
   final int noFlowIntervals;
   final double unplannedPauseTime;
   final int unplannedPauseCount;
+  final Map<int, double> ventDurationByTsMs;
+  final Map<int, double> pulseDurationByTsMs;
 
   const PauseMetrics({
     required this.noFlowTime,
     required this.noFlowIntervals,
     required this.unplannedPauseTime,
     required this.unplannedPauseCount,
+    this.ventDurationByTsMs  = const {},
+    this.pulseDurationByTsMs = const {},
   });
 }
 
@@ -715,22 +876,35 @@ PauseMetrics _calculatePauseMetrics({
   double unplannedPauseTime = 0.0;
   int unplannedPauseCount = 0;
 
-  bool overlapsPlannedWindow(double gapStartSec, double gapEndSec) {
-    final overlapsVentilation = ventilations.any((v) {
-      final start = v.timestampSec;
-      final end = start + v.durationSec;
-      return gapStartSec < end && gapEndSec > start;
-    });
+  final Map<int, double> ventDur  = {};
+  final Map<int, double> pulseDur = {};
 
-    if (overlapsVentilation) return true;
+  // Associates a gap with a ventilation/pulse prompt and returns the planned
+  // allowance, also recording the measured gap duration against that prompt.
+  double? plannedAllowanceForGap(double gapStartSec, double gapEndSec) {
+    const tol = AppConstants.plannedWindowAssocToleranceSec;
+    final gapSec = gapEndSec - gapStartSec;
+    bool planned = false;
 
-    final overlapsPulseCheck = pulseChecks.any((p) {
-      final start = p.timestampSec;
-      final end = start + 10.0; // expected pulse-check window
-      return gapStartSec < end && gapEndSec > start;
-    });
+    for (final v in ventilations) {
+      if (v.timestampSec >= gapStartSec - tol &&
+          v.timestampSec <= gapEndSec) {
+        // Longest containing gap wins if multiple prompts map oddly.
+        ventDur[v.timestampMs] =
+            math.max(ventDur[v.timestampMs] ?? 0.0, gapSec);
+        planned = true;
+      }
+    }
+    for (final p in pulseChecks) {
+      final pts = (p.timestampSec * 1000).round();
+      if (p.timestampSec >= gapStartSec - tol &&
+          p.timestampSec <= gapEndSec) {
+        pulseDur[pts] = math.max(pulseDur[pts] ?? 0.0, gapSec);
+        planned = true;
+      }
+    }
 
-    return overlapsPulseCheck;
+    return planned ? AppConstants.maxAcceptablePauseSec : null;
   }
 
   void scanGap(double startSec, double endSec) {
@@ -740,8 +914,17 @@ PauseMetrics _calculatePauseMetrics({
     noFlowTime += gapSec;
     noFlowIntervals++;
 
-    if (!overlapsPlannedWindow(startSec, endSec)) {
+    final allowance = plannedAllowanceForGap(startSec, endSec);
+
+    if (allowance == null) {
       unplannedPauseTime += gapSec;
+      unplannedPauseCount++;
+    } else if (gapSec > allowance) {
+      // Planned pause that overran the allowance. The portion beyond the
+      // allowance is a genuine compression interruption (perfusion harm
+      // occurs regardless of rescuer intent), so it counts as a distinct
+      // unplanned pause — both time AND count (Behavior Y).
+      unplannedPauseTime += (gapSec - allowance);
       unplannedPauseCount++;
     }
   }
@@ -765,5 +948,7 @@ PauseMetrics _calculatePauseMetrics({
     noFlowIntervals: noFlowIntervals,
     unplannedPauseTime: unplannedPauseTime,
     unplannedPauseCount: unplannedPauseCount,
+    ventDurationByTsMs:  ventDur,
+    pulseDurationByTsMs: pulseDur,
   );
 }

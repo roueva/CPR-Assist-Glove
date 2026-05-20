@@ -55,16 +55,19 @@ FutureProvider<List<SessionSummary>>((ref) async {
     return localSummaries;
   }
 
-  // Deduplicate: prefer backend version (has id) over local
+  // Deduplicate: prefer backend version (has id) over local.
+  // Both sides are normalized to UTC at parse time; compare by truncated
+  // UTC epoch-second so the same session never appears twice.
+  int? startKey(DateTime? d) =>
+      d == null ? null : d.toUtc().millisecondsSinceEpoch ~/ 1000;
+
   final backendStarts = backendSessions
-      .map((s) => s.sessionStart != null
-      ? s.sessionStart!.millisecondsSinceEpoch ~/ 1000
-      : null)
+      .map((s) => startKey(s.sessionStart))
       .whereType<int>()
       .toSet();
   final onlyLocal = localSummaries.where((s) =>
   s.sessionStart == null ||
-      !backendStarts.contains(s.sessionStart!.millisecondsSinceEpoch ~/ 1000),
+      !backendStarts.contains(startKey(s.sessionStart)),
   ).toList();
 
   final merged = [...backendSessions, ...onlyLocal]

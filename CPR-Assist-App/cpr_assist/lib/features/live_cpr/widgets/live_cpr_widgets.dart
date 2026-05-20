@@ -289,6 +289,7 @@ class LiveCprMetricsCard extends StatefulWidget {
   final CprScenario scenario;
   final int compressionInCycle;
   final bool isNoFeedback;
+  final bool isVentilationWindow;
 
   const LiveCprMetricsCard({
     super.key,
@@ -305,6 +306,7 @@ class LiveCprMetricsCard extends StatefulWidget {
     required this.scenario,
     this.compressionInCycle = 0,
     this.isNoFeedback       = false,
+    this.isVentilationWindow = false,
   });
 
   @override
@@ -529,13 +531,15 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                         color: AppColors.textOnDark.withValues(alpha: 0.55),
                       ),
                     ),
-                    if (widget.isSessionActive && widget.compressionInCycle > 0) ...[
+                    if (widget.isSessionActive &&
+                        (widget.compressionInCycle > 0 ||
+                            widget.isVentilationWindow)) ...[
                       const SizedBox(height: AppSpacing.xs),
                       Row(
                         children: [
                           // Counter label
                           Text(
-                            '${widget.compressionInCycle}/30',
+                            '${widget.isVentilationWindow ? 30 : widget.compressionInCycle}/30',
                             style: AppTypography.badge(
                               size:  9,
                               color: widget.compressionInCycle >= 26
@@ -549,7 +553,9 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(AppSpacing.xxs),
                               child: LinearProgressIndicator(
-                                value:           widget.compressionInCycle / 30,
+                                value: widget.isVentilationWindow
+                                    ? 1.0
+                                    : widget.compressionInCycle / 30,
                                 minHeight:       4,
                                 backgroundColor: AppColors.textOnDark.withValues(alpha: 0.15),
                                 valueColor: AlwaysStoppedAnimation<Color>(
@@ -635,6 +641,7 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                           state:          depthState,
                           recoilAchieved: widget.recoilAchieved,
                           scenario:       widget.scenario,
+                          sessionActive:  widget.isSessionActive,
                         ),
                       ),
                     ),
@@ -918,6 +925,7 @@ class _DepthColumn extends StatelessWidget {
   final _FeedbackState state;
   final bool           recoilAchieved;
   final CprScenario    scenario;
+  final bool           sessionActive;
 
   static const double _barWidth  = AppSpacing.depthBarWidth;
   static const double _barHeight = AppSpacing.depthBarHeight;
@@ -927,7 +935,8 @@ class _DepthColumn extends StatelessWidget {
     required this.peakDepth,
     required this.state,
     required this.scenario,
-    this.recoilAchieved = false,
+    this.recoilAchieved  = false,
+    this.sessionActive   = false,
   });
 
   @override
@@ -959,6 +968,7 @@ class _DepthColumn extends StatelessWidget {
               recoilAchieved:    recoilAchieved && depth > 0,
               targetDepthCm:     scenario.targetDepthMinCm,
               targetDepthMaxCm:  scenario.targetDepthMaxCm,
+              sessionActive:     sessionActive,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

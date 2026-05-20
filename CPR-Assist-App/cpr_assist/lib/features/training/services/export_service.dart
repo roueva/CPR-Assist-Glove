@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:archive/archive.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -17,6 +19,7 @@ import 'package:cpr_assist/features/training/services/ventilation_event.dart';
 import 'package:cpr_assist/features/training/services/pulse_check_event.dart';
 import 'package:cpr_assist/features/training/services/rescuer_vital_snapshot.dart';
 
+import 'package:cpr_assist/core/core.dart';
 import 'certificate_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,29 +50,35 @@ import 'certificate_service.dart';
 //   exportRawDataZip / downloadRawDataZip
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── PDF brand colours — mirror app_colors.dart exactly ───────────────────────
+// ── PDF colours — derived from app_colors.dart at runtime so the PDF
+//    tracks the design system automatically (no hand-copied hex). ──────────────
 
-const _kBrandBlue    = PdfColor.fromInt(0xFF1E4D96); // AppColors.primary
-const _kBrandMid     = PdfColor.fromInt(0xFF2D62B8); // AppColors.primaryAlt
-const _kBrandDark    = PdfColor.fromInt(0xFF335484); // dark header surface
-const _kBrandLight   = PdfColor.fromInt(0xFFEDF4F9); // AppColors.primaryLight
-const _kSuccess      = PdfColor.fromInt(0xFF2E7D32); // AppColors.success
-const _kSuccessLight = PdfColor.fromInt(0xFFE6F5E8); // AppColors.successBg
-const _kWarning      = PdfColor.fromInt(0xFFF57C00); // AppColors.warning
-const _kWarningLight = PdfColor.fromInt(0xFFFFF3E0); // AppColors.warningBg
-const _kError        = PdfColor.fromInt(0xFFD32F2F); // AppColors.error
-const _kErrorLight   = PdfColor.fromInt(0xFFFDF0F0); // AppColors.errorBg
-const _kEmgGreen     = PdfColor.fromInt(0xFF1B7A3F); // AppColors.emergencyMode
-const _kEmgGreenBg   = PdfColor.fromInt(0xFFE6F4EC); // AppColors.emergencyModeBg
-const _kPediatric    = PdfColor.fromInt(0xFF057692); // AppColors.pediatric
-const _kPediatricBg  = PdfColor.fromInt(0xFFE0F7FA); // AppColors.pediatricLight
-const _kTextPrimary  = PdfColor.fromInt(0xFF111827); // AppColors.textPrimary
-const _kTextSecond   = PdfColor.fromInt(0xFF4B5563); // AppColors.textSecondary
-const _kTextDisabled = PdfColor.fromInt(0xFF9CA3AF); // AppColors.textDisabled
-const _kDivider      = PdfColor.fromInt(0xFFE8EEF6); // AppColors.divider
-const _kWhite        = PdfColors.white;
-const _kBgGrey       = PdfColor.fromInt(0xFFF2F6FC); // AppColors.screenBgGrey
-const _kBgCard       = PdfColor.fromInt(0xFFF8FAFC);
+PdfColor _pdf(Color c) => PdfColor(
+  (c.r * 255).round() / 255,
+  (c.g * 255).round() / 255,
+  (c.b * 255).round() / 255,
+);
+
+final _kBrandBlue    = _pdf(AppColors.primary);
+final _kBrandMid     = _pdf(AppColors.primaryAlt);
+final _kBrandDark    = _pdf(AppColors.cprCardBg);      // dark header surface
+final _kBrandLight   = _pdf(AppColors.primaryLight);
+final _kSuccess      = _pdf(AppColors.success);
+final _kSuccessLight = _pdf(AppColors.successBg);
+final _kWarning      = _pdf(AppColors.warning);
+final _kWarningLight = _pdf(AppColors.warningBg);
+final _kError        = _pdf(AppColors.error);
+final _kErrorLight   = _pdf(AppColors.errorBg);
+final _kEmgGreen     = _pdf(AppColors.emergencyMode);
+final _kEmgGreenBg   = _pdf(AppColors.emergencyModeBg);
+final _kPediatric    = _pdf(AppColors.pediatric);
+final _kPediatricBg  = _pdf(AppColors.pediatricLight);
+final _kTextPrimary  = _pdf(AppColors.textPrimary);
+final _kTextSecond   = _pdf(AppColors.textSecondary);
+final _kTextDisabled = _pdf(AppColors.textDisabled);
+final _kDivider      = _pdf(AppColors.divider);
+final _kWhite        = PdfColors.white;
+final _kBgGrey       = _pdf(AppColors.screenBgGrey);
 
 class ExportService {
   ExportService._();
@@ -97,20 +106,20 @@ class ExportService {
   }
 
   static Future<bool> exportMultiSessionPdf(
-      List<SessionSummary> sessions, { String? username }) async {
+      List<SessionSummary> sessions, { String? username, List<SessionDetail?>? details }) async {
     if (sessions.isEmpty) return false;
     try {
-      final bytes = await _buildMultiSessionPdf(sessions, username: username);
+      final bytes = await _buildMultiSessionPdf(sessions, username: username, details: details);
       final name  = 'cpr_sessions_${sessions.length}_${_dateStamp()}.pdf';
       return _shareFile(bytes, name, 'CPR Assist — Session History Report', 'application/pdf');
     } catch (e) { debugPrint('ExportService PDF multi share: $e'); return false; }
   }
 
   static Future<bool> downloadMultiSessionPdf(
-      List<SessionSummary> sessions, { String? username }) async {
+      List<SessionSummary> sessions, { String? username, List<SessionDetail?>? details }) async {
     if (sessions.isEmpty) return false;
     try {
-      final bytes = await _buildMultiSessionPdf(sessions, username: username);
+      final bytes = await _buildMultiSessionPdf(sessions, username: username, details: details);
       final name  = 'cpr_sessions_${sessions.length}_${_dateStamp()}.pdf';
       return _saveToDevice(bytes, name);
     } catch (e) { debugPrint('ExportService PDF multi download: $e'); return false; }
@@ -180,7 +189,7 @@ class ExportService {
     try {
       final csv  = _buildSummaryCsv(sessions);
       final name = '${filename}_${_dateStamp()}.csv';
-      return _saveToDevice(utf8.encode(csv), name);
+      return _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService CSV download: $e'); return false; }
   }
 
@@ -311,6 +320,7 @@ class ExportService {
     final rateTarget =
         '${CprTargets.rateMin.toStringAsFixed(0)}-${CprTargets.rateMax.toStringAsFixed(0)} BPM';
     const ccfTarget = '≥80%';
+    const timeToFirstCompressionTarget = '≤10 s';
 
     final n = s.compressionCount > 0 ? s.compressionCount.toDouble() : 0.0;
 
@@ -349,6 +359,10 @@ class ExportService {
     void section(String title) {
       blankLine();
       sb.writeln(title);
+    }
+
+    void valueHeader() {
+      sb.writeln('Metric,Value');
     }
 
     void metricHeader() {
@@ -414,8 +428,12 @@ class ExportService {
     final startSpO2 = spO2Vitals.isNotEmpty ? spO2Vitals.first.spO2 : 0.0;
     final endSpO2 = spO2Vitals.isNotEmpty ? spO2Vitals.last.spO2 : 0.0;
 
-    final startTemp = tempVitals.isNotEmpty ? tempVitals.first.temperature : 0.0;
-    final endTemp = tempVitals.isNotEmpty ? tempVitals.last.temperature : 0.0;
+    final startTemp = tempVitals.isNotEmpty
+        ? tempVitals.first.temperature
+        : (s.rescuerWristTempStart ?? 0.0);
+    final endTemp   = tempVitals.isNotEmpty
+        ? tempVitals.last.temperature
+        : (s.rescuerWristTempEnd ?? 0.0);
 
     final avgSignalQuality = rescuerVitals.isNotEmpty
         ? rescuerVitals.map((v) => v.signalQuality).reduce((a, b) => a + b) /
@@ -427,7 +445,6 @@ class ExportService {
 
     // ── INFO ─────────────────────────────────────────────────────────────────
     section('INFO');
-    sb.writeln('Metric,Value');
     row2('Session ID', s.id?.toString() ?? 'local');
     row2('Date & Time', _fmtDt(s.sessionStart));
     row2(
@@ -449,14 +466,23 @@ class ExportService {
       section('GRADE');
       metricHeader();
       row3('Total Grade (%)', '', s.totalGrade.toStringAsFixed(1));
+      row3('Best Streak (consecutive perfect compressions)', '',
+          fmtIntOrBlank(s.consecutiveGoodPeak));
+    }
+
+    if (s.mode == 'emergency') {
+      final outcome = detail != null && detail.pulseChecks.isEmpty
+          ? 'NO PULSE DATA'
+          : (s.pulseDetectedFinal ? 'ROSC DETECTED' : 'NO ROSC');
+      row2('Outcome', outcome);
     }
 
     // ── COMPRESSION TOTALS ───────────────────────────────────────────────────
     section('COMPRESSION TOTALS');
-    metricHeader();
-    row3('Total Compressions', '', s.compressionCount.toString());
-    row3('Leaning Events', '0', s.leaningCount.toString());
-    row3('Over-Force Events', '0', s.overForceCount.toString());
+    valueHeader();
+    row2('Total Compressions', s.compressionCount.toString());
+    row2('Leaning Events', s.leaningCount.toString());
+    row2('Over-Force Events', s.overForceCount.toString());
 
     // ── COMPRESSION QUALITY ──────────────────────────────────────────────────
     section('COMPRESSION QUALITY');
@@ -487,32 +513,32 @@ class ExportService {
     );
     row4(
       'Depth + Rate Target Met',
-      'Depth + rate targets',
+      '',
       s.depthRateCombo.toString(),
       pctFromCount(s.depthRateCombo),
     );
     row4(
       'All Targets Met',
-      'Depth + rate + recoil + posture',
+      '',
       allTargetsMetCount?.toString() ?? '',
       allTargetsMetCount != null ? pctFromCount(allTargetsMetCount) : '',
     );
 
     // ── AVERAGES & DISTRIBUTION ──────────────────────────────────────────────
     section('AVERAGES & DISTRIBUTION');
-    metricHeader();
-    row3('Average Depth', depthTarget, fmtNum(s.averageDepth, digits: 2, suffix: ' cm'));
-    row3('Average Effective Depth', '', fmtNum(s.averageEffectiveDepth, digits: 2, suffix: ' cm'));
-    row3('Peak Depth', '', fmtNum(s.peakDepth, digits: 2, suffix: ' cm'));
-    row3('Depth SD', '', fmtNum(s.depthSD, digits: 2, suffix: ' cm'));
-    row3('Depth Consistency', '', pctValue(s.depthConsistency));
-    row3('Average Rate', rateTarget, fmtNum(s.averageFrequency, digits: 1, suffix: ' BPM'));
-    row3('Rate Consistency', '', pctValue(s.frequencyConsistency));
-    row3('Rate Variability', '', fmtNum(rateVariability, digits: 0, suffix: ' ms'));
+    valueHeader();
+    row2('Average Depth', fmtNum(s.averageDepth, digits: 2, suffix: ' cm'));
+    row2('Average Effective Depth', fmtNum(s.averageEffectiveDepth, digits: 2, suffix: ' cm'));
+    row2('Peak Depth', fmtNum(s.peakDepth, digits: 2, suffix: ' cm'));
+    row2('Depth SD', fmtNum(s.depthSD, digits: 2, suffix: ' cm'));
+    row2('Depth Consistency', pctValue(s.depthConsistency));
+    row2('Average Rate', fmtNum(s.averageFrequency, digits: 1, suffix: ' BPM'));
+    row2('Rate Consistency', pctValue(s.frequencyConsistency));
+    row2('Rate Variability', fmtNum(rateVariability, digits: 0, suffix: ' ms'));
+
     if (avgWristAlignment > 0) {
-      row3(
+      row2(
         'Average Wrist Alignment',
-        '≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°',
         '${avgWristAlignment.toStringAsFixed(1)}°',
       );
     }
@@ -522,54 +548,64 @@ class ExportService {
     metricHeader();
     final ccfPct = s.handsOnRatio * 100;
     row3('CCF', ccfTarget, pctValue(ccfPct));
-    row3('Time to First Compression', '', fmtNum(timeToFirstCompression, digits: 1, suffix: ' s'));
+    row3(
+      'Time to First Compression',
+      timeToFirstCompressionTarget,
+      fmtNum(timeToFirstCompression, digits: 1, suffix: ' s'),
+    );
     row3('No-Flow Intervals', '', s.noFlowIntervals.toString());
     row3('No-Flow Time', '', fmtNum(s.noFlowTime, digits: 1, suffix: ' s'));
-    row3('Unplanned Pauses', '0', s.unplannedPauseCount.toString());
-    row3('Unplanned Pause Time', '0 s', fmtNum(s.unplannedPauseTime, digits: 1, suffix: ' s'));
+    row3('Unplanned Pauses', 'Ideal: 0', s.unplannedPauseCount.toString());
+    row3('Unplanned Pause Time', '≤10 s', fmtNum(s.unplannedPauseTime, digits: 1, suffix: ' s'));
 
     // ── VENTILATION ──────────────────────────────────────────────────────────
     section('VENTILATION');
-    metricHeader();
-    row3('Ventilation Windows Recorded', '', s.ventilationCount.toString());
-    row3('Ventilation Target Met Windows', '', fmtIntOrBlank(correctVentilations));
-    row3('Ventilation Target Met (%)', 'Window timing', fmtNum(s.ventilationCompliance, digits: 1, suffix: '%'));
-    row3('Total Ventilation Pause Time', '', fmtNum(ventilationPauseTime, digits: 1, suffix: ' s'));
+    valueHeader();
+    row2('Ventilation Windows Recorded', s.ventilationCount.toString());
+    row2('Ventilation Target Met Windows', fmtIntOrBlank(correctVentilations));
+    row2('Ventilation Target Met (%)', fmtNum(s.ventilationCompliance, digits: 1, suffix: '%'));
+    row2('Total Ventilation Pause Time', fmtNum(ventilationPauseTime, digits: 1, suffix: ' s'));
 
     // ── PULSE CHECKS ─────────────────────────────────────────────────────────
     section('PULSE CHECKS');
-    metricHeader();
-    row3('Pulse Checks Prompted', '', s.pulseChecksPrompted.toString());
-    row3('Pulse Checks Done', '', s.pulseChecksComplied.toString());
-    row3('ROSC Detected', '', _yn(s.pulseDetectedFinal));
+    valueHeader();
+    row2('Pulse Checks Prompted', s.pulseChecksPrompted.toString());
+    row2('Pulse Checks Done', s.pulseChecksComplied.toString());
+    row2('ROSC Detected', _yn(s.pulseDetectedFinal));
+
+    if (detail != null && detail.pulseChecks.isNotEmpty) {
+      final present   = detail.pulseChecks.where((p) => p.classification == 2).length;
+      final uncertain = detail.pulseChecks.where((p) => p.classification == 1).length;
+      final absent    = detail.pulseChecks.where((p) => p.classification == 0).length;
+      row2('Pulse Present Count', present.toString());
+      row2('Pulse Uncertain Count', uncertain.toString());
+      row2('Pulse Absent Count', absent.toString());
+    }
 
     if (lastPulseCheck != null) {
       const classLabels = ['ABSENT', 'UNCERTAIN', 'PRESENT'];
       final cls = lastPulseCheck.classification.clamp(0, 2);
 
-      row3('Last Pulse Classification', '', classLabels[cls]);
-      row3(
+      row2('Last Pulse Classification', classLabels[cls]);
+      row2(
         'Last Detected BPM',
-        '',
         lastPulseCheck.detectedBpm > 0
             ? '${lastPulseCheck.detectedBpm.toStringAsFixed(1)} BPM'
             : '',
       );
-      row3('Last Pulse Confidence', '', '${lastPulseCheck.confidence}%');
-      row3(
+      row2('Last Pulse Confidence', '${lastPulseCheck.confidence}%');
+      row2(
         'Patient SpO2 Last Check',
-        '',
         lastPulseCheck.patientSpO2 > 0
             ? '${lastPulseCheck.patientSpO2.toStringAsFixed(1)}%'
             : '',
       );
     } else {
-      row3('Last Pulse Classification', '', '');
-      row3('Last Detected BPM', '', '');
-      row3('Last Pulse Confidence', '', '');
-      row3(
+      row2('Last Pulse Classification', '');
+      row2('Last Detected BPM', '');
+      row2('Last Pulse Confidence', '');
+      row2(
         'Patient SpO2 Last Check',
-        '',
         patientSpO2LastCheck != null
             ? '${patientSpO2LastCheck.toStringAsFixed(1)}%'
             : '',
@@ -578,30 +614,38 @@ class ExportService {
 
     // ── FATIGUE & RESCUER ────────────────────────────────────────────────────
     section('FATIGUE & RESCUER');
-    metricHeader();
-    row3(
+    valueHeader();
+    row2(
       'Fatigue Onset',
-      '',
       s.fatigueOnsetIndex > 0 ? 'Compression #${s.fatigueOnsetIndex}' : '',
     );
-    row3('Rescuer Swaps', '', s.rescuerSwapCount.toString());
+    row2('Rescuer Swaps', s.rescuerSwapCount.toString());
 
-    row3('Rescuer HR at Start', '', fmtNum(startHR, digits: 1, suffix: ' BPM'));
-    row3('Rescuer HR at End', '', fmtNum(endHR, digits: 1, suffix: ' BPM'));
-    row3('Rescuer HR Change', '', fmtDelta(startHR, endHR, digits: 1, suffix: ' BPM'));
+    final fatigueVitals = rescuerVitals.where((v) => v.fatigueScore > 0).toList();
+    if (fatigueVitals.isNotEmpty) {
+      final finalFatigue = fatigueVitals.last.fatigueScore;
+      final maxFatigue   = fatigueVitals.map((v) => v.fatigueScore)
+          .reduce((a, b) => a > b ? a : b);
+      row2('Final Fatigue Score', '$finalFatigue');
+      row2('Max Fatigue Score', '$maxFatigue');
+    }
 
-    row3('Rescuer SpO2 at Start', '', fmtNum(startSpO2, digits: 1, suffix: '%'));
-    row3('Rescuer SpO2 at End', '', fmtNum(endSpO2, digits: 1, suffix: '%'));
-    row3('Rescuer SpO2 Change', '', fmtDelta(startSpO2, endSpO2, digits: 1, suffix: '%'));
+    row2('Rescuer HR at Start', fmtNum(startHR, digits: 1, suffix: ' BPM'));
+    row2('Rescuer HR at End', fmtNum(endHR, digits: 1, suffix: ' BPM'));
+    row2('Rescuer HR Change', fmtDelta(startHR, endHR, digits: 1, suffix: ' BPM'));
 
-    row3('Rescuer Skin Temp at Start', '', fmtNum(startTemp, digits: 2, suffix: ' C'));
-    row3('Rescuer Skin Temp at End', '', fmtNum(endTemp, digits: 2, suffix: ' C'));
-    row3('Rescuer Skin Temp Change', '', fmtDelta(startTemp, endTemp, digits: 2, suffix: ' C'));
+    row2('Rescuer SpO2 at Start', fmtNum(startSpO2, digits: 1, suffix: '%'));
+    row2('Rescuer SpO2 at End', fmtNum(endSpO2, digits: 1, suffix: '%'));
+    row2('Rescuer SpO2 Change', fmtDelta(startSpO2, endSpO2, digits: 1, suffix: '%'));
 
-    row3('Average Signal Quality', '', fmtNum(avgSignalQuality, digits: 1));
-    row3('Rescuer HR at Last Pause', '', fmtNullable(s.rescuerHRLastPause, digits: 1, suffix: ' BPM'));
-    row3('Rescuer SpO2 at Last Pause', '', fmtNullable(s.rescuerSpO2LastPause, digits: 1, suffix: '%'));
-    row3('Patient Temperature', '', fmtNullable(s.patientTemperature, digits: 1, suffix: ' C'));
+    row2('Rescuer Skin Temp at Start', fmtNum(startTemp, digits: 2, suffix: ' °C'));
+    row2('Rescuer Skin Temp at End', fmtNum(endTemp, digits: 2, suffix: ' °C'));
+    row2('Rescuer Skin Temp Change', fmtDelta(startTemp, endTemp, digits: 2, suffix: ' °C'));
+
+    row2('Average Signal Quality', fmtNum(avgSignalQuality, digits: 1));
+    row2('Rescuer HR at Last Pause', fmtNullable(s.rescuerHRLastPause, digits: 1, suffix: ' BPM'));
+    row2('Rescuer SpO2 at Last Pause', fmtNullable(s.rescuerSpO2LastPause, digits: 1, suffix: '%'));
+    row2('Patient Temperature', fmtNullable(s.patientTemperature, digits: 1, suffix: ' °C'));
 
     return sb.toString();
   }
@@ -645,6 +689,31 @@ class ExportService {
       return '${value.toStringAsFixed(digits)}$suffix';
     }
 
+    // Aggregate statistics on a list of values, ignoring zeros/NaN.
+    ({double mean, double median, double min, double max, double sd, int n})
+    aggregate(List<double> raw) {
+      final values = raw.where((v) => v > 0 && v.isFinite).toList();
+      if (values.isEmpty) {
+        return (mean: 0, median: 0, min: 0, max: 0, sd: 0, n: 0);
+      }
+      values.sort();
+      final n      = values.length;
+      final mean   = values.reduce((a, b) => a + b) / n;
+      final median = n.isOdd
+          ? values[n ~/ 2]
+          : (values[n ~/ 2 - 1] + values[n ~/ 2]) / 2;
+      final min    = values.first;
+      final max    = values.last;
+      final variance = values
+          .map((v) => (v - mean) * (v - mean))
+          .reduce((a, b) => a + b) / n;
+      final sd = variance > 0 ? math.sqrt(variance) : 0.0;
+      return (mean: mean, median: median, min: min, max: max, sd: sd, n: n);
+    }
+
+    String fmtAgg(double v, {int digits = 1}) =>
+        v > 0 ? v.toStringAsFixed(digits) : '';
+
     String modeLabel(SessionSummary s) {
       if (s.mode == 'emergency') return 'Emergency';
       if (s.mode == 'training_no_feedback') return 'Training (No Feedback)';
@@ -653,6 +722,11 @@ class ExportService {
 
     String scenarioLabel(SessionSummary s) {
       return s.scenario == 'pediatric' ? 'Pediatric' : 'Adult';
+    }
+
+    String emergencyOutcomeLabel(SessionSummary s) {
+      if (!s.isEmergency) return '';
+      return s.pulseDetectedFinal ? 'ROSC DETECTED' : 'NO ROSC';
     }
 
     String depthTargetLabel(SessionSummary s) {
@@ -749,14 +823,38 @@ class ExportService {
       sessions.map(depthTargetLabel).toList(),
     );
 
-    // ── GRADE ────────────────────────────────────────────────────────────────
-    section('GRADE');
+    // ── OUTCOME ───────────────────────────────────────────────────────────────
+    section('OUTCOME');
 
     row(
       'Total Grade (%)',
       '',
       sessions
-          .map((s) => s.isEmergency ? '' : s.totalGrade.toStringAsFixed(1))
+          .map((s) => s.isTraining ? s.totalGrade.toStringAsFixed(1) : '')
+          .toList(),
+    );
+
+    row(
+      'Emergency Outcome',
+      '',
+      sessions.map(emergencyOutcomeLabel).toList(),
+    );
+
+    row(
+      'ROSC Detected',
+      '',
+      sessions
+          .map((s) => s.isEmergency ? _yn(s.pulseDetectedFinal) : '')
+          .toList(),
+    );
+
+    row(
+      'Best Streak (consecutive perfect compressions)',
+      '',
+      sessions
+          .map((s) => s.isTraining && s.consecutiveGoodPeak > 0
+          ? s.consecutiveGoodPeak.toString()
+          : '')
           .toList(),
     );
 
@@ -771,13 +869,13 @@ class ExportService {
 
     row(
       'Leaning Events',
-      '0',
+      '',
       sessions.map((s) => s.leaningCount.toString()).toList(),
     );
 
     row(
       'Over-Force Events',
-      '0',
+      '',
       sessions.map((s) => s.overForceCount.toString()).toList(),
     );
 
@@ -810,17 +908,8 @@ class ExportService {
 
     row(
       'Depth + Rate Target Met',
-      'Depth + rate targets',
+      '',
       sessions.map((s) => s.depthRateCombo.toString()).toList(),
-    );
-
-    // Important:
-    // All Targets Met cannot be computed reliably from SessionSummary unless
-    // you store it in the database/model. It needs per-compression detail.
-    row(
-      'All Targets Met',
-      'Depth + rate + recoil + posture',
-      sessions.map((_) => '').toList(),
     );
 
     // ── COMPRESSION QUALITY - PERCENTAGES ────────────────────────────────────
@@ -828,7 +917,7 @@ class ExportService {
 
     row(
       'Depth Target Met',
-      genericDepthTarget(),
+      '',
       sessions
           .map((s) => pctFromCount(s.correctDepth, s.compressionCount))
           .toList(),
@@ -836,7 +925,7 @@ class ExportService {
 
     row(
       'Rate Target Met',
-      rateTarget(),
+      '',
       sessions
           .map((s) => pctFromCount(s.correctFrequency, s.compressionCount))
           .toList(),
@@ -844,7 +933,7 @@ class ExportService {
 
     row(
       'Recoil Target Met',
-      'Full recoil',
+      '',
       sessions
           .map((s) => pctFromCount(s.correctRecoil, s.compressionCount))
           .toList(),
@@ -852,7 +941,7 @@ class ExportService {
 
     row(
       'Posture Target Met',
-      postureTarget(),
+      '',
       sessions
           .map((s) => pctFromCount(s.correctPosture, s.compressionCount))
           .toList(),
@@ -860,16 +949,10 @@ class ExportService {
 
     row(
       'Depth + Rate Target Met',
-      'Depth + rate targets',
+      '',
       sessions
           .map((s) => pctFromCount(s.depthRateCombo, s.compressionCount))
           .toList(),
-    );
-
-    row(
-      'All Targets Met',
-      'Depth + rate + recoil + posture',
-      sessions.map((_) => '').toList(),
     );
 
     // ── AVERAGES & DISTRIBUTION ──────────────────────────────────────────────
@@ -927,6 +1010,14 @@ class ExportService {
       sessions.map((s) => pctValue(s.frequencyConsistency)).toList(),
     );
 
+    row(
+      'Rate Variability',
+      'Lower',
+      sessions
+          .map((s) => fmtNum(s.rateVariability, digits: 0, suffix: ' ms'))
+          .toList(),
+    );
+
     // ── FLOW & TIMING ────────────────────────────────────────────────────────
     section('FLOW & TIMING');
 
@@ -954,13 +1045,13 @@ class ExportService {
 
     row(
       'Unplanned Pauses',
-      '0',
+      'Ideal: 0',
       sessions.map((s) => s.unplannedPauseCount.toString()).toList(),
     );
 
     row(
       'Unplanned Pause Time',
-      '0 s',
+      '≤10 s',
       sessions
           .map((s) => fmtNum(s.unplannedPauseTime, digits: 1, suffix: ' s'))
           .toList(),
@@ -968,8 +1059,10 @@ class ExportService {
 
     row(
       'Time to First Compression',
-      '',
-      sessions.map((_) => '').toList(),
+      '≤10 s',
+      sessions
+          .map((s) => fmtNum(s.timeToFirstCompression, digits: 1, suffix: ' s'))
+          .toList(),
     );
 
     // ── VENTILATION ──────────────────────────────────────────────────────────
@@ -986,14 +1079,13 @@ class ExportService {
       '',
       sessions.map((s) {
         if (s.ventilationCount <= 0) return '';
-        final count = (s.ventilationCompliance / 100 * s.ventilationCount).round();
-        return count.toString();
+        return s.correctVentilations.toString();
       }).toList(),
     );
 
     row(
       'Ventilation Target Met (%)',
-      'Window timing',
+      '',
       sessions
           .map((s) => s.ventilationCount > 0
           ? pctValue(s.ventilationCompliance)
@@ -1007,19 +1099,25 @@ class ExportService {
     row(
       'Pulse Checks Prompted',
       '',
-      sessions.map((s) => s.pulseChecksPrompted.toString()).toList(),
+      sessions
+          .map((s) => s.isEmergency ? s.pulseChecksPrompted.toString() : '')
+          .toList(),
     );
 
     row(
       'Pulse Checks Done',
       '',
-      sessions.map((s) => s.pulseChecksComplied.toString()).toList(),
+      sessions
+          .map((s) => s.isEmergency ? s.pulseChecksComplied.toString() : '')
+          .toList(),
     );
 
     row(
       'ROSC Detected',
       '',
-      sessions.map((s) => _yn(s.pulseDetectedFinal)).toList(),
+      sessions
+          .map((s) => s.isEmergency ? _yn(s.pulseDetectedFinal) : '')
+          .toList(),
     );
 
     // ── FATIGUE & RESCUER ────────────────────────────────────────────────────
@@ -1030,7 +1128,7 @@ class ExportService {
       '',
       sessions
           .map((s) => s.fatigueOnsetIndex > 0
-          ? 'Compression #${s.fatigueOnsetIndex}'
+          ? '#${s.fatigueOnsetIndex}'
           : '')
           .toList(),
     );
@@ -1058,12 +1156,103 @@ class ExportService {
     );
 
     row(
+      'Rescuer Wrist Temp at Start',
+      '',
+      sessions
+          .map((s) => fmtNullable(s.rescuerWristTempStart, digits: 2, suffix: ' °C'))
+          .toList(),
+    );
+
+    row(
+      'Rescuer Wrist Temp at End',
+      '',
+      sessions
+          .map((s) => fmtNullable(s.rescuerWristTempEnd, digits: 2, suffix: ' °C'))
+          .toList(),
+    );
+
+    row(
       'Patient Temperature',
       '',
       sessions
-          .map((s) => fmtNullable(s.patientTemperature, digits: 1, suffix: ' C'))
+          .map((s) => fmtNullable(s.patientTemperature, digits: 1, suffix: ' °C'))
           .toList(),
     );
+
+    // ── AGGREGATE ─────────────────────────────────────────────────────────────
+    blankLine();
+    sb.writeln('AGGREGATE');
+    sb.writeln('Statistics across all ${sessions.length} sessions (missing values excluded)');
+    sb.writeln('Metric,N,Mean,Median,Min,Max,SD');
+
+    void aggRow(String label, List<double> values, {int digits = 1}) {
+      final a = aggregate(values);
+      sb.writeln([
+        _esc(label),
+        a.n.toString(),
+        fmtAgg(a.mean,   digits: digits),
+        fmtAgg(a.median, digits: digits),
+        fmtAgg(a.min,    digits: digits),
+        fmtAgg(a.max,    digits: digits),
+        fmtAgg(a.sd,     digits: digits),
+      ].join(','));
+    }
+
+    // Grade — training only
+    final trainingGrades = sessions
+        .where((s) => s.isTraining)
+        .map((s) => s.totalGrade)
+        .toList();
+    if (trainingGrades.isNotEmpty) {
+      aggRow('Total Grade (%) [training only]', trainingGrades, digits: 1);
+    }
+
+    aggRow('Total Compressions',
+        sessions.map((s) => s.compressionCount.toDouble()).toList(),
+        digits: 0);
+
+    aggRow('Session Duration (s)',
+        sessions.map((s) => s.sessionDuration.toDouble()).toList(),
+        digits: 0);
+
+    aggRow('Average Depth (cm)',
+        sessions.map((s) => s.averageDepth).toList(),
+        digits: 2);
+
+    aggRow('Average Rate (BPM)',
+        sessions.map((s) => s.averageFrequency).toList(),
+        digits: 1);
+
+    aggRow('Depth Consistency (%)',
+        sessions.map((s) => s.depthConsistency).toList(),
+        digits: 1);
+
+    aggRow('Rate Consistency (%)',
+        sessions.map((s) => s.frequencyConsistency).toList(),
+        digits: 1);
+
+    aggRow('CCF (%)',
+        sessions.map((s) => s.handsOnRatio * 100).toList(),
+        digits: 1);
+
+    aggRow('Time to First Compression (s)',
+        sessions.map((s) => s.timeToFirstCompression).toList(),
+        digits: 1);
+
+    aggRow('No-Flow Time (s)',
+        sessions.map((s) => s.noFlowTime).toList(),
+        digits: 1);
+
+    aggRow('Rate Variability (ms)',
+        sessions.map((s) => s.rateVariability).toList(),
+        digits: 0);
+
+    aggRow('Ventilation Compliance (%)',
+        sessions
+            .where((s) => s.ventilationCount > 0)
+            .map((s) => s.ventilationCompliance)
+            .toList(),
+        digits: 1);
 
     return sb.toString();
   }
@@ -1080,15 +1269,18 @@ class ExportService {
     final isEmergency = d.mode == 'emergency';
     final nc          = d.compressions.length;
 
-    // Unplanned pause = gap > 2 s not overlapping any planned window
+    // A gap is "planned" if a ventilation/pulse-check prompt occurred at or
+    // shortly before it started — same association rule as
+    // SessionDetail._calculatePauseMetrics (single source of truth).
     bool isPlannedGap(double a, double b) {
+      const tol = AppConstants.plannedWindowAssocToleranceSec;
       return d.ventilations.any((v) {
         final vs = v.timestampMs / 1000.0;
-        return a < vs + v.durationSec && b > vs;
+        return vs >= a - tol && vs <= b;
       }) ||
           d.pulseChecks.any((p) {
             final ps = p.timestampMs / 1000.0;
-            return a < ps + 10.0 && b > ps;
+            return ps >= a - tol && ps <= b;
           });
     }
 
@@ -1102,19 +1294,6 @@ class ExportService {
     // Convert consistency % back to count for display (n = pct/100 * total)
     final inDepthN  = nc > 0 ? (d.depthConsistency     / 100 * nc).round() : 0;
     final inRateN   = nc > 0 ? (d.frequencyConsistency / 100 * nc).round() : 0;
-
-    // Unplanned pauses
-    int unpN = 0;
-    void scanGap(double a, double b) {
-      if (b-a > 2.0 && !isPlannedGap(a,b)) { unpN++; }
-    }
-    if (nc > 0) {
-      scanGap(0, d.compressions.first.timestampMs/1000.0);
-      for (int i=1;i<nc;i++) {
-        scanGap(d.compressions[i-1].timestampMs/1000.0, d.compressions[i].timestampMs/1000.0);
-      }
-      scanGap(d.compressions.last.timestampMs/1000.0, d.sessionDuration.toDouble());
-    }
 
     final sb = StringBuffer();
 
@@ -1166,7 +1345,7 @@ class ExportService {
 // Each row contains the peak compression values and the release/recoil values
 // for the same compression, so the file is easier to read and analyze.
     final headers = [
-      'A/A',
+      'Row #',
       'Compression #',
 
       // Timing
@@ -1177,12 +1356,14 @@ class ExportService {
 
       // Depth
       'Peak Depth (cm)',
-      'Effective Depth (cm)',
-      'Recoil Depth (cm)',
       'Depth Target Met (${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm)',
+      'Estimated Effective Depth (cm)',
 
-      // Compression phases
+// Compression phases
       'Downstroke Duration (ms)',
+
+// Recoil
+      'Recoil Depth (cm)',
       'Recoil Duration (ms)',
       'Recoil Target Met (Full Recoil)',
       'Leaning Detected',
@@ -1224,11 +1405,12 @@ class ExportService {
       required String unplannedPauseAfter,
 
       required String peakDepth,
-      required String effectiveDepth,
-      required String recoilDepth,
       required String depthTargetMet,
+      required String effectiveDepth,
 
       required String downstrokeDuration,
+
+      required String recoilDepth,
       required String recoilDuration,
       required String recoilTargetMet,
       required String leaningDetected,
@@ -1257,11 +1439,12 @@ class ExportService {
         unplannedPauseAfter,
 
         peakDepth,
-        effectiveDepth,
-        recoilDepth,
         depthTargetMet,
+        effectiveDepth,
 
         downstrokeDuration,
+
+        recoilDepth,
         recoilDuration,
         recoilTargetMet,
         leaningDetected,
@@ -1335,9 +1518,16 @@ class ExportService {
             : next.timestampMs;
         final nextTime = nextPeakMs / 1000.0;
 
-        if (nextTime - currentTime > 2.0 &&
-            !isPlannedGap(currentTime, nextTime)) {
-          pauseAfter = ((nextTime - currentTime) * 1000).toStringAsFixed(0);
+        final gapSec = nextTime - currentTime;
+        if (gapSec > 2.0) {
+          if (!isPlannedGap(currentTime, nextTime)) {
+            pauseAfter = (gapSec * 1000).toStringAsFixed(0);
+          } else if (gapSec > AppConstants.maxAcceptablePauseSec) {
+            // Planned pause overran — record only the unplanned excess so the
+            // per-row column is consistent with the summary total (Behavior Y).
+            pauseAfter = ((gapSec - AppConstants.maxAcceptablePauseSec) * 1000)
+                .toStringAsFixed(0);
+          }
         }
       }
 
@@ -1357,15 +1547,16 @@ class ExportService {
         unplannedPauseAfter: pauseAfter,
 
         peakDepth: c.depth.toStringAsFixed(2),
+        depthTargetMet: _yn(depthTargetMet),
         effectiveDepth: c.effectiveDepth > 0
             ? c.effectiveDepth.toStringAsFixed(2)
             : '',
+
+        downstrokeDuration: fmtInt(c.downstrokePhaseDurationMs),
+
         recoilDepth: c.valleyDepth > 0
             ? c.valleyDepth.toStringAsFixed(2)
             : '',
-        depthTargetMet: _yn(depthTargetMet),
-
-        downstrokeDuration: fmtInt(c.downstrokePhaseDurationMs),
         recoilDuration: fmtInt(c.recoilPhaseDurationMs),
         recoilTargetMet: hasRecoilData ? _yn(c.recoilAchieved) : '',
         leaningDetected: hasRecoilData ? _yn(c.leaningDetected) : '',
@@ -1462,7 +1653,7 @@ class ExportService {
 
       final inPulseCheck = d.pulseChecks.any((p) {
         final start = p.timestampMs / 1000.0;
-        final end = start + 10.0;
+        final end = start + AppConstants.maxAcceptablePauseSec;
         return t >= start && t <= end;
       });
 
@@ -1520,15 +1711,15 @@ class ExportService {
     sb.writeln('DATA');
 
     sb.writeln([
-      'A/A',
-      'Elapsed (ms)',
+      'Row #',
+      'Elapsed Time (ms)',
       'Context',
-      'Heart Rate (BPM)',
+      'Rescuer Heart Rate (BPM)',
       'Rescuer SpO2 (%)',
-      'Rescuer Wrist Temp (C)',
-      'Signal Quality (0-100)',
+      'Rescuer Wrist Temperature (°C)',
+      'Rescuer Signal Quality (0-100)',
       'RMSSD (ms)',
-      'Perfusion Index (0-100)',
+      'Rescuer Perfusion Index (0-100)',
       'Estimated Fatigue Score (0-100)',
     ].join(','));
 
@@ -1586,11 +1777,11 @@ class ExportService {
     sb.writeln(',');
     sb.writeln('DATA');
     sb.writeln([
-      'A/A',
-      'Elapsed (ms)',
+      'Row #',
+      'Elapsed Time (ms)',
       '30:2 Cycle #',
       'Window Duration (s)',
-      'Ventilation Target Met',
+      'Ventilation Timing Target Met',
     ].join(','));
 
     for (var i = 0; i < n; i++) {
@@ -1643,19 +1834,20 @@ class ExportService {
     sb.writeln(',');
     sb.writeln('DATA');
     sb.writeln([
-      'A/A',
-      'Elapsed (ms)',
-      '2-Min Interval',
-      'Pulse Classification',
-      'Class Code',
-      'Detected BPM',
-      'Confidence (0-100)',
+      'Row #',
+      'Elapsed Time (ms)',
+      'Pulse Check #',
+      'Pulse Result',
+      'Pulse Result Code',
+      'Estimated Patient Pulse Rate (BPM)',
+      'Signal Quality (0-100)',
       'Perfusion Index (0-100)',
       'Patient SpO2 (%)',
-      'Detector A Peaks',
-      'Detector B Beats',
+      'Raw IR Peak Count',
+      'Confirmed Beat Count',
+      'Beat Agreement Ratio',
       'Rescuer Decision',
-      'PPG Samples (#)',
+      'PPG Sample Count',
       'PPG Waveform',
     ].join(','));
 
@@ -1670,6 +1862,11 @@ class ExportService {
           ? 'Stop CPR'
           : p.userDecision ?? '';
 
+      final beatAgreementRatio = p.detectorACount > 0
+          ? p.detectorBCount / p.detectorACount
+          : 0.0;
+      
+
       sb.writeln([
         i + 1,
         p.timestampMs,
@@ -1682,6 +1879,7 @@ class ExportService {
         p.patientSpO2 > 0 ? p.patientSpO2.toStringAsFixed(1) : '',
         p.detectorACount,
         p.detectorBCount,
+        beatAgreementRatio.toStringAsFixed(2),
         _esc(decision),
         p.ppgSamples.length,
         _esc(p.ppgSamples.map((s) => s.toStringAsFixed(4)).join(';')),
@@ -1732,57 +1930,76 @@ class ExportService {
         '================================================\n\n'
 
         'FILES\n'
-        '  compressions.csv   - One row per compression with depth, recoil, rate, force, posture, and pause metrics\n'
-        '  rescuer_vitals.csv - ${d.rescuerVitals.length} rescuer vital snapshots (HR, SpO2, HRV, temperature, fatigue)\n'
-        '  ventilations.csv   - ${d.ventilations.length} ventilation windows\n'
-        '  pulse_checks.csv   - ${d.pulseChecks.length} pulse check results\n\n'
+        '  compressions.csv   - One row per chest compression with depth, recoil, rate, force, posture, and pause metrics\n'
+        '  rescuer_vitals.csv - ${d.rescuerVitals.length} rescuer vital snapshots for fatigue and physiological monitoring\n'
+        '  ventilations.csv   - ${d.ventilations.length} ventilation timing windows\n'
+        '  pulse_checks.csv   - ${d.pulseChecks.length} patient pulse-check results\n\n'
 
-        'GENERAL FORMAT\n'
+        'GENERAL CSV STRUCTURE\n'
         '  Each CSV file contains three parts:\n\n'
         '  1) HEADER BLOCK\n'
-        '     This appears at the top of the file.\n'
-        '     It identifies the exported session.\n'
-        '     Example fields include Session ID, Date & Time, Mode, Scenario, and Note.\n\n'
+        '     Appears at the top of the file.\n'
+        '     Identifies the exported session and export context.\n\n'
         '  2) SUMMARY BLOCK\n'
-        '     This starts after the line SUMMARY.\n'
-        '     It contains already-calculated session-level metrics.\n'
+        '     Starts after the line SUMMARY.\n'
+        '     Contains already-calculated session-level metrics.\n'
         '     Use this block for quick reporting without recalculating values manually.\n\n'
         '  3) DATA BLOCK\n'
-        '     This starts after the line DATA.\n'
-        '     This is the main analysis table.\n'
+        '     Starts after the line DATA.\n'
+        '     Contains the detailed row-level table.\n'
         '     Use this block for detailed analysis, charts, validation, and statistics.\n\n'
-        '  Blank values mean that the value was not available or could not be calculated.\n\n'
+        '  Blank values mean that the value was not available, not applicable, or could not be calculated.\n\n'
 
-        'FORMAT - compressions.csv\n'
-        '  compressions.csv uses one row per compression.\n'
-        '  Each row contains the peak compression values and the release/recoil values for the same compression.\n'
-        '  This means one row can be used to evaluate depth, recoil, rate, force, posture, pauses, and overall quality.\n\n'
+        'COMMON HEADER FIELDS\n'
+        '  Export Type   - Shows which raw CSV file this is, such as raw compressions, raw rescuer vitals, raw ventilations, or raw pulse checks\n'
+        '  Session ID    - Unique session identifier. If the session has not synced to the backend, it appears as local (not synced)\n'
+        '  Date & Time   - Session start date and time\n'
+        '  Mode          - Session mode, such as Training, Training without Feedback, or Emergency\n'
+        '  Scenario      - Adult or Pediatric CPR scenario\n'
+        '  Note          - User or session note, if available\n\n'
 
-        'STRUCTURE - compressions.csv\n'
-        '  HEADER BLOCK:\n'
-        '    Identifies the session and export context.\n'
-        '    Use it to know which session the data belongs to.\n\n'
-        '  SUMMARY BLOCK:\n'
-        '    Contains session-level compression results.\n'
-        '    Examples: duration, total compressions, average depth, average rate, CCF, no-flow time, unplanned pauses, rescuer swaps, fatigue onset, and final outcome when available.\n'
-        '    Use it for quick reports and overview statistics.\n\n'
-        '  DATA BLOCK:\n'
-        '    Contains one row per compression.\n'
-        '    Use it for detailed per-compression analysis.\n\n'
+        '================================================\n'
+        'compressions.csv\n'
+        '================================================\n'
+        'PURPOSE\n'
+        '  Stores detailed compression-by-compression CPR quality data.\n'
+        '  This is the main file for analyzing compression depth, rate, recoil, force, posture, pauses, and overall CPR quality.\n\n'
 
-        'COLUMN GUIDE - compressions.csv DATA block\n'
-        '  A/A                         - Row number in the DATA table\n'
+        'SUMMARY BLOCK FIELDS\n'
+        '  Duration                         - Total session duration\n'
+        '  Total Compressions               - Total number of compressions recorded\n'
+        '  Time to First Compression (s)    - Time from session start until the first compression\n'
+        '  Correct Depth Compressions       - Number of compressions within the target depth range\n'
+        '  Correct Rate Compressions        - Number of compressions within the target rate range\n'
+        '  Correct Recoil Compressions      - Number of compressions with acceptable chest recoil\n'
+        '  Avg Depth (cm)                   - Average compression depth across the session\n'
+        '  Avg Rate (BPM)                   - Average compression rate across the session\n'
+        '  CCF (%)                          - Chest compression fraction. This is the percentage of session time spent actively compressing\n'
+        '  No-Flow Intervals                - Number of detected intervals without compressions\n'
+        '  No-Flow Time (s)                 - Total time without compressions\n'
+        '  Total Unplanned Pauses           - Number of long pauses not explained by planned ventilation or pulse-check windows\n'
+        '  Total Unplanned Pause Time (s)   - Total duration of unplanned pauses, when available\n'
+        '  Rescuer Swaps                    - Number of rescuer swaps, when detected\n'
+        '  Fatigue Onset Compression #      - Compression number where fatigue was first detected, when available\n'
+        '  Pulse Checks                     - Number of pulse checks, only shown for emergency sessions when pulse checks exist\n'
+        '  Final Outcome                    - Final emergency outcome, only shown for emergency sessions when pulse checks exist\n\n'
+
+        'DATA BLOCK\n'
+        '  One row represents one chest compression.\n\n'
+
+        'DATA COLUMN GUIDE\n'
+        '  Row #                       - Row number in the DATA table\n'
         '  Compression #               - Compression number in the session\n'
         '  Peak Time (ms)              - Time from session start to the deepest point of the compression\n'
-        '  Release Time (ms)           - Time from session start to the release/recoil point after the compression\n'
+        '  Release Time (ms)           - Time from session start to the release or recoil point after the compression\n'
         '  Inter-compression Interval  - Time between this compression peak and the previous compression peak\n'
         '  Unplanned Pause After (ms)  - Long gap after this compression, excluding planned ventilation or pulse-check pauses\n'
         '  Peak Depth (cm)             - Maximum compression depth reached during this compression\n'
-        '  Effective Depth (cm)        - Angle-corrected or usable compression depth used for quality analysis\n'
-        '  Recoil Depth (cm)           - Remaining depth after release; lower values indicate better chest recoil\n'
         '  Depth Target Met            - YES if peak depth is within the adult or pediatric target range\n'
+        '  Estimated Effective Depth   - Estimated usable or corrected compression depth used for quality analysis\n'
         '  Downstroke Duration (ms)    - Time from compression start to peak depth\n'
-        '  Recoil Duration (ms)        - Time from peak depth to release/recoil\n'
+        '  Recoil Depth (cm)           - Remaining depth after release. Lower values indicate better chest recoil\n'
+        '  Recoil Duration (ms)        - Time from peak depth to release or recoil\n'
         '  Recoil Target Met           - YES if full or acceptable recoil was detected\n'
         '  Leaning Detected            - YES if the rescuer did not fully release pressure after the compression\n'
         '  Force (N)                   - Peak force applied during the compression, in Newtons\n'
@@ -1796,38 +2013,124 @@ class ExportService {
         '  Posture Target Met          - YES if wrist alignment, wrist flexion, and compression-axis direction are acceptable\n'
         '  All Targets Met             - YES if depth, rate, recoil, and posture are all correct for this compression\n\n'
 
-        'COLUMN GUIDE - rescuer_vitals.csv DATA block\n'
-        '  A/A                       - Row number in the DATA table\n'
-        '  Elapsed (ms)              - Time from session start when the snapshot was recorded\n'
-        '  Context                   - active_cpr, ventilation, pulse_check, before_first_compression, after_last_compression, or no_compressions\n'
-        '  Heart Rate (BPM)          - Rescuer heart rate from the wrist sensor\n'
-        '  Rescuer SpO2 (%)          - Rescuer oxygen saturation from the wrist sensor\n'
-        '  Rescuer Wrist Temp (C)    - Rescuer wrist temperature\n'
-        '  Signal Quality (0-100)    - Sensor signal quality for the snapshot\n'
-        '  RMSSD (ms)                - Within-session HRV-related fatigue indicator, not an absolute clinical value\n'
-        '  Perfusion Index (0-100)   - Wrist blood-flow/perfusion signal index\n'
-        '  Estimated Fatigue Score (0-100)     - Composite fatigue estimate based on rescuer physiological and CPR-performance trends\n\n'
+        '================================================\n'
+        'rescuer_vitals.csv\n'
+        '================================================\n'
+        'PURPOSE\n'
+        '  Stores rescuer physiological snapshots recorded during the session.\n'
+        '  This file is mainly used for fatigue monitoring and for comparing CPR quality with rescuer physiological state.\n\n'
 
-        'COLUMN GUIDE - ventilations.csv DATA block\n'
-        '  Elapsed (ms)           - Start time of the ventilation window\n'
-        '  30:2 Cycle #           - CPR cycle number associated with the ventilation window\n'
-        '  Window Duration (s)    - Length of the ventilation pause/window\n'
-        '  Ventilation Target Met - YES if the ventilation window timing was acceptable\n\n'
+        'SUMMARY BLOCK FIELDS\n'
+        '  Duration                         - Total session duration\n'
+        '  Total Vital Snapshots            - Number of rescuer vital snapshots recorded\n'
+        '  Start Heart Rate (BPM)           - Rescuer heart rate at the first available snapshot\n'
+        '  End Heart Rate (BPM)             - Rescuer heart rate at the last available snapshot\n'
+        '  Heart Rate Change (BPM)          - Difference between end heart rate and start heart rate\n'
+        '  Start Rescuer SpO2 (%)           - Rescuer oxygen saturation at the first available snapshot\n'
+        '  End Rescuer SpO2 (%)             - Rescuer oxygen saturation at the last available snapshot\n'
+        '  Rescuer SpO2 Change (%)          - Difference between end SpO2 and start SpO2\n'
+        '  Start Rescuer Wrist Temp (°C)     - Rescuer wrist temperature at the first available snapshot\n'
+        '  End Rescuer Wrist Temp (°C)       - Rescuer wrist temperature at the last available snapshot\n'
+        '  Rescuer Wrist Temp Change (°C)    - Difference between end wrist temperature and start wrist temperature\n'
+        '  Avg Heart Rate (BPM)             - Average rescuer heart rate, when available\n'
+        '  Avg Rescuer SpO2 (%)             - Average rescuer oxygen saturation, when available\n'
+        '  Avg Rescuer Wrist Temp (°C)       - Average rescuer wrist temperature, when available\n'
+        '  Avg RMSSD (ms)                   - Average RMSSD value, when available\n'
+        '  Avg Perfusion Index (0-100)      - Average rescuer perfusion index, when available\n'
+        '  Avg Fatigue Score                - Average estimated fatigue score, when available\n'
+        '  Max Fatigue Score                - Highest estimated fatigue score, when available\n\n'
 
-        'COLUMN GUIDE - pulse_checks.csv DATA block\n'
-        '  Elapsed (ms)            - Time when the pulse check was recorded\n'
-        '  2-Min Interval          - CPR interval or check number\n'
-        '  Pulse Classification    - ABSENT, UNCERTAIN, or PRESENT\n'
-        '  Class Code              - 0 = absent, 1 = uncertain, 2 = present\n'
-        '  Detected BPM            - Estimated patient pulse or beat rate if detected\n'
-        '  Confidence (0-100)      - Confidence score for the pulse classification\n'
-        '  Perfusion Index (0-100) - Patient PPG signal/perfusion strength\n'
-        '  Patient SpO2 (%)        - Patient oxygen saturation if available\n'
-        '  Detector A Peaks        - Raw peak count from the patient PPG signal\n'
-        '  Detector B Beats        - Physiologically-gated beat count used for BPM\n'
-        '  Rescuer Decision        - User decision after the pulse check\n'
-        '  PPG Samples (#)         - Number of waveform samples stored\n'
-        '  PPG Waveform            - Normalized 0.0-1.0 waveform, semicolon-delimited\n\n'
+        'DATA BLOCK\n'
+        '  One row represents one rescuer vital snapshot.\n'
+        '  The Context column explains what was happening when the snapshot was recorded.\n\n'
+
+        'DATA COLUMN GUIDE\n'
+        '  Row #                             - Row number in the DATA table\n'
+        '  Elapsed Time (ms)                 - Time from session start when the snapshot was recorded\n'
+        '  Context                           - Session context at the time of the snapshot\n'
+        '  Rescuer Heart Rate (BPM)          - Rescuer heart rate from the wrist PPG sensor\n'
+        '  Rescuer SpO2 (%)                  - Rescuer oxygen saturation from the wrist PPG sensor\n'
+        '  Rescuer Wrist Temperature (°C)     - Rescuer wrist temperature\n'
+        '  Rescuer Signal Quality (0-100)    - Wrist PPG signal quality for the snapshot\n'
+        '  RMSSD (ms)                        - Within-session HRV-related fatigue indicator. This is not an absolute clinical diagnosis\n'
+        '  Rescuer Perfusion Index (0-100)   - Wrist blood-flow or perfusion signal index\n'
+        '  Estimated Fatigue Score (0-100)   - Composite fatigue estimate based on rescuer physiological and CPR-performance trends\n\n'
+
+        'CONTEXT VALUES\n'
+        '  active_cpr                  - Snapshot was recorded during active compressions\n'
+        '  ventilation                 - Snapshot was recorded during a ventilation window\n'
+        '  pulse_check                 - Snapshot was recorded during a pulse-check window\n'
+        '  before_first_compression    - Snapshot was recorded before the first compression\n'
+        '  after_last_compression      - Snapshot was recorded after the final compression\n'
+        '  no_compressions             - No compression data existed for the session\n\n'
+
+        '================================================\n'
+        'ventilations.csv\n'
+        '================================================\n'
+        'PURPOSE\n'
+        '  Stores ventilation timing windows.\n'
+        '  This file checks whether ventilation pauses happened at the expected time and whether their duration was acceptable.\n'
+        '  It does not prove that an effective breath was delivered.\n\n'
+
+        'SUMMARY BLOCK FIELDS\n'
+        '  Duration                          - Total session duration\n'
+        '  Total Ventilation Windows         - Number of ventilation windows recorded\n'
+        '  Ventilation Target Met Windows    - Number of ventilation windows with acceptable timing\n'
+        '  Ventilation Compliance (%)        - Percentage of ventilation windows with acceptable timing\n'
+        '  Avg Window Duration (s)           - Average ventilation window duration\n\n'
+
+        'DATA BLOCK\n'
+        '  One row represents one ventilation window.\n'
+        '  The row describes when the window started, which 30:2 cycle it belongs to, and whether the timing target was met.\n\n'
+
+        'DATA COLUMN GUIDE\n'
+        '  Row #                           - Row number in the DATA table\n'
+        '  Elapsed Time (ms)               - Start time of the ventilation window\n'
+        '  30:2 Cycle #                    - CPR cycle number associated with the ventilation window\n'
+        '  Window Duration (s)             - Length of the ventilation pause or window\n'
+        '  Ventilation Timing Target Met   - YES if the ventilation window timing was acceptable\n\n'
+
+        '================================================\n'
+        'pulse_checks.csv\n'
+        '================================================\n'
+        'PURPOSE\n'
+        '  Stores patient pulse-check results.\n'
+        '  This file helps review whether the system classified the pulse as absent, uncertain, or present, and why.\n\n'
+
+        'SUMMARY BLOCK FIELDS\n'
+        '  Duration              - Total session duration\n'
+        '  Final Result          - Final pulse outcome for the session\n'
+        '  Total Pulse Checks    - Total number of pulse checks recorded\n'
+        '  Pulse Present         - Number of pulse checks classified as present\n'
+        '  Pulse Uncertain       - Number of pulse checks classified as uncertain\n'
+        '  Pulse Absent          - Number of pulse checks classified as absent\n\n'
+
+        'DATA BLOCK\n'
+        '  One row represents one pulse check.\n'
+        '  The row contains the final classification, patient pulse estimate, confidence, signal quality, detector counts, user decision, and optional PPG waveform.\n\n'
+
+        'DATA COLUMN GUIDE\n'
+        '  Row #                                 - Row number in the DATA table\n'
+        '  Elapsed Time (ms)                     - Time from session start when the pulse check result was recorded\n'
+        '  Pulse Check #                         - CPR pulse-check number or interval number\n'
+        '  Pulse Result                          - Final result: ABSENT, UNCERTAIN, or PRESENT\n'
+        '  Pulse Result Code                     - 0 = absent, 1 = uncertain, 2 = present\n'
+        '  Estimated Patient Pulse Rate (BPM)    - Patient pulse rate estimated from the heart-rate algorithm, when valid\n'
+        '  Signal Quality (0-100)                - Patient PPG signal quality used by the pulse classifier, if stored\n'
+        '  Perfusion Index (0-100)               - Patient PPG signal or perfusion strength\n'
+        '  Patient SpO2 (%)                      - Patient oxygen saturation, if available\n'
+        '  Raw IR Peak Count                     - Raw pulse peaks detected from the patient MAX30102 IR signal during the pulse-check window\n'
+        '  Confirmed Beat Count                  - Peaks that passed the physiological refractory timing gate. This rejects implausible peaks caused by noise or dicrotic artifacts\n'
+        '  Beat Agreement Ratio                  - Confirmed Beat Count divided by Raw IR Peak Count. Lower values suggest noisy or unstable pulse detection\n'
+        '  Rescuer Decision                      - User decision after the pulse check, such as Continue CPR or Stop CPR\n'
+        '  PPG Sample Count                      - Number of waveform samples stored for this pulse check\n'
+        '  PPG Waveform                          - Normalized 0.0 to 1.0 waveform values separated with semicolons\n\n'
+
+        'PULSE DETECTION NOTES\n'
+        '  Raw IR Peak Count is the sensitive detector. It counts raw peaks from the patient IR PPG signal and may over-count in noisy conditions.\n'
+        '  Confirmed Beat Count is the specific detector. It only counts peaks that pass the refractory timing gate used in firmware.\n'
+        '  Beat Agreement Ratio helps explain the pulse result. A high ratio means most raw peaks were confirmed. A low ratio suggests noise, motion artifact, unstable contact, or dicrotic-wave over-counting.\n'
+        '  Pulse Result should be interpreted together with Estimated Patient Pulse Rate, Signal Quality, Perfusion Index, and the detector counts.\n\n'
 
         'HOW TO LOCATE THE DATA TABLE IN PYTHON\n'
         '  The CSV files contain descriptive text before the actual DATA table.\n'
@@ -1841,14 +2144,14 @@ class ExportService {
         '    data_line_index = lines.index("DATA")\n'
         '    header_line_index = data_line_index + 1\n\n'
         '    df = pd.read_csv(path, skiprows=header_line_index)\n\n'
-        '  After this, df contains only the compression DATA table.\n'
-        '  Each row in df is one compression.\n'
-        '  The header block and SUMMARY block are intentionally skipped.\n\n'
+        '  After this, df contains only the DATA table.\n'
+        '  The HEADER and SUMMARY blocks are intentionally skipped.\n\n'
 
         'IMPORTANT NOTES\n'
         '  These exports are intended for CPR performance review, training analysis, and research validation.\n'
         '  Sensor-derived physiological values should not be treated as standalone clinical diagnoses.\n'
-        '  Patient pulse and SpO2 values depend on signal quality and should be interpreted together with confidence and perfusion index.\n';
+        '  Patient pulse and SpO2 values depend on signal quality and should be interpreted together with confidence, perfusion index, and detector agreement.\n'
+        '  Ventilation timing windows indicate timing compliance only. They do not prove that an effective breath was delivered.\n';
 
 
     final readmeBytes = utf8.encode(sessionLabel);
@@ -1860,7 +2163,9 @@ class ExportService {
     return zipBytes != null ? Uint8List.fromList(zipBytes) : null;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════════════════════════
   // PDF — SINGLE SESSION
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1881,181 +2186,294 @@ class ExportService {
     final depthMax    = isPediatric ? CprTargets.depthMaxPediatric : CprTargets.depthMax;
     final n           = s.compressionCount > 0 ? s.compressionCount.toDouble() : 1.0;
 
-    // Derived biometric values
-    final patSpO2 = s.patientSpO2LastCheck;
-    final hasBio  = s.rescuerHRLastPause != null ||
+    final patSpO2    = s.patientSpO2LastCheck;
+    final hasBio     = s.rescuerHRLastPause != null ||
         s.rescuerSpO2LastPause != null ||
         s.patientTemperature != null ||
         patSpO2 != null ||
         s.rescuerWristTempStart != null ||
         s.rescuerWristTempEnd != null;
 
-    final hasForceData  = s.compressions.any((c) => c.force > 0);
+    final hasForceData   = s.compressions.any((c) => c.force > 0);
     final hasPostureData = s.compressions.any(
             (c) => c.wristAlignmentAngle > 0 || c.wristFlexionAngle.abs() > 0);
-    final hasVitals = s.rescuerVitals.isNotEmpty;
+    final hasVitals      = s.rescuerVitals.isNotEmpty;
 
-    // Average force
     final avgForce = s.compressions.isEmpty ? 0.0
         : s.compressions.map((c) => c.force).reduce((a, b) => a + b) /
         s.compressions.length;
 
+    // ── Derived pcts for hero rings ──────────────────────────────────────────
+    final depthPct  = s.compressionCount > 0
+        ? (s.correctDepth    / n * 100).clamp(0.0, 100.0) : 0.0;
+    final ratePct   = s.compressionCount > 0
+        ? (s.correctFrequency / n * 100).clamp(0.0, 100.0) : 0.0;
+    final recoilPct = s.compressionCount > 0
+        ? (s.correctRecoil   / n * 100).clamp(0.0, 100.0) : 0.0;
+    final posturePct = s.compressionCount > 0
+        ? (s.correctPosture  / n * 100).clamp(0.0, 100.0) : 0.0;
+
     doc.addPage(pw.MultiPage(
-      theme:      theme,
-      pageFormat: PdfPageFormat.a4,
-      margin:     const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+      pageTheme: pw.PageTheme(
+        theme:      theme,
+        pageFormat: PdfPageFormat.a4,
+        margin:     const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+        buildBackground: (ctx) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Container(color: _kBgGrey),
+        ),
+      ),
       header: (ctx) => _pageHeader(
         robotoBold, robotoMedium,
-        title:    isTraining ? 'Training Session Report' : 'Emergency Session Record',
-        subtitle: s.dateTimeFormatted,
+        title:    isTraining
+            ? 'CPR Training Session Report'
+            : 'CPR Emergency Session Record',
+        subtitle: '${s.dateTimeFormatted}  ·  ${s.durationFormatted}',
         username: username,
         sessionId: s.id?.toString(),
-        mode:    isTraining ? 'TRAINING' : 'EMERGENCY',
-        modeColor: isTraining ? _kWarning : _kEmgGreen,
-        modeBg:    isTraining ? _kWarningLight : _kEmgGreenBg,
-        scenarioBadge: isPediatric ? 'PEDIATRIC' : 'ADULT',
-        scenarioColor: isPediatric ? _kPediatric : _kBrandBlue,
-        scenarioBg:    isPediatric ? _kPediatricBg : _kBrandLight,
+        mode:      isTraining ? 'TRAINING' : 'EMERGENCY',
+        modeColor: isTraining ? _kBrandBlue : _kError,
+        modeBg:    isTraining ? _kBrandLight : _kErrorLight,
+        scenarioBadge: s.scenario == 'pediatric' ? 'PEDIATRIC' : 'ADULT',
+        scenarioColor: s.scenario == 'pediatric' ? _kPediatric : _kBrandBlue,
+        scenarioBg:    s.scenario == 'pediatric' ? _kPediatricBg : _kBrandLight,
       ),
       footer: (ctx) => _pageFooter(roboto, ctx),
       build: (ctx) => [
 
-        // ── Grade hero (training only) ─────────────────────────────────────
+        // ── 1. Hero card ───────────────────────────────────────────────────
+        if (isTraining)
+          _buildTrainingHero(robotoBold, robotoMedium, roboto,
+              s.totalGrade, depthPct, ratePct, recoilPct, posturePct)
+        else
+          _buildEmergencyHero(robotoBold, robotoMedium, roboto, s),
+        pw.SizedBox(height: 18),
+
+        // ── 3. Headline Metrics grid (training only) ───────────────────────
         if (isTraining) ...[
-          _gradeHero(robotoBold, robotoMedium, s.totalGrade, s.scenario),
-          pw.SizedBox(height: 16),
-        ],
+          _sectionTitle(robotoBold, 'Headline Metrics'),
+          pw.SizedBox(height: 10),
+          _buildMetricGrid(robotoBold, robotoMedium, roboto, s, depthMin, depthMax),
+          pw.SizedBox(height: 20),
 
-        // ── Emergency outcome hero ─────────────────────────────────────────
-        if (!isTraining) ...[
-          _emergencyOutcomeHero(robotoBold, robotoMedium, s),
-          pw.SizedBox(height: 16),
-        ],
-
-        // ── 5-tile summary strip ───────────────────────────────────────────
-        _summaryStrip(robotoBold, robotoMedium, [
-          _Cell('Duration',       s.durationFormatted),
-          _Cell('Compressions',   '${s.compressionCount}'),
-          _Cell('Avg Rate',       s.averageFrequency > 0
-              ? '${s.averageFrequency.round()} BPM' : '—'),
-          _Cell('Avg Depth',      s.averageDepth > 0
-              ? '${s.averageDepth.toStringAsFixed(1)} cm' : '—'),
-          _Cell('CCF',            '${(s.handsOnRatio * 100).round()}%'),
-        ]),
-        pw.SizedBox(height: 20),
-
-        // ── Quality breakdown grid (training only) ─────────────────────────
-        if (isTraining) ...[
+          // ── 4. Quality Breakdown bar table ──────────────────────────────
           _sectionTitle(robotoBold, 'Quality Breakdown'),
           pw.SizedBox(height: 10),
-          _qualityGrid(robotoBold, robotoMedium, roboto, s, n),
+          _buildQualityBarTable(robotoBold, robotoMedium, roboto, s, n,
+              depthMin, depthMax),
           pw.SizedBox(height: 20),
         ],
 
-        // ── Two-column metrics panel ───────────────────────────────────────
-        _sectionTitle(robotoBold, 'Session Metrics'),
-        pw.SizedBox(height: 8),
-        _twoColumnMetrics(robotoMedium, roboto, s, depthMin, depthMax),
-        pw.SizedBox(height: 20),
+        // ── 5. Reading guide (moved here, just before the charts) ──────────
+        _buildMethodologyBox(roboto, robotoBold),
+        pw.NewPage(),
 
         // ── Depth chart ────────────────────────────────────────────────────
         if (s.compressions.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Compression Depth Over Time'),
-          pw.SizedBox(height: 8),
-          _chartCard(
-            child: pw.SizedBox(
-              height: 100,
-              child: pw.CustomPaint(painter: (canvas, size) =>
-                  _paintDepthChart(canvas, size, s.compressions, depthMin, depthMax)),
-            ),
-            legendItems: [
-              _LegendItem('Depth (cm)', _kBrandBlue),
-              _LegendItem('Target ${depthMin.toStringAsFixed(0)}-${depthMax.toStringAsFixed(0)} cm', _kSuccess),
+          _buildTimeChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Compression Depth Over Time',
+            subtitle: 'Per-compression peak depth, measured from baseline to maximum.',
+            caption: 'Green band = AHA target depth '
+                '(${depthMin.toStringAsFixed(0)}–${depthMax.toStringAsFixed(0)} cm). '
+                'Dots: green = in target, amber = close but off, red = out of range. '
+                'Watch for a downward drift across the session — that indicates fatigue.',
+            lines: [
+              _ChartLine(
+                  _series(s.compressions,
+                          (c) => c.timestampSec, (c) => c.depth),
+                  _kBrandBlue, fill: true),
             ],
-            font: roboto,
+            minY: 0, maxY: 9, yTickInterval: 3,
+            yLabel: (v) => v.toStringAsFixed(0),
+            band: _ChartBand(depthMin, depthMax,
+                _kSuccess.shade(0.12), _kSuccess.shade(0.5)),
+            legend: [
+              _LegendItem('Depth (cm)', _kBrandBlue),
+              _LegendItem(
+                  'Target ${depthMin.toStringAsFixed(0)}-${depthMax.toStringAsFixed(0)} cm',
+                  _kSuccess),
+            ],
+            plotHeight: 100,
+            dotColor: (_, d) => d >= depthMin && d <= depthMax
+                ? _kSuccess
+                : (d >= depthMin * 0.85 && d <= depthMax * 1.1)
+                ? _kWarning : _kError,
           ),
           pw.SizedBox(height: 14),
         ],
 
+        // ── Phase depth chart ──────────────────────────────────────────────
+        if (s.compressions.length >= 30) ...[
+          _sectionTitle(robotoBold, 'Depth by Phase'),
+          pw.SizedBox(height: 4),
+          pw.Text(
+              'Average depth in the first / middle / last third of the session — '
+                  'a downward trend across thirds is the classic fatigue signature.',
+              style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+          pw.SizedBox(height: 10),
+          _buildPhaseDepthCard(robotoBold, robotoMedium, roboto,
+              s.compressions, depthMin, depthMax),
+          pw.SizedBox(height: 18),
+        ],
+
         // ── Rate chart ─────────────────────────────────────────────────────
         if (s.compressions.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Compression Rate Over Time'),
-          pw.SizedBox(height: 8),
-          _chartCard(
-            child: pw.SizedBox(
-              height: 100,
-              child: pw.CustomPaint(painter: (canvas, size) =>
-                  _paintRateChart(canvas, size, s.compressions)),
-            ),
-            legendItems: [
+          _buildTimeChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Compression Rate Over Time',
+            subtitle: 'Instantaneous rate, computed from inter-compression intervals.',
+            caption: 'Green band = AHA target rate (100–120 BPM). '
+                'Rates above 120 reduce diastolic filling time; '
+                'rates below 100 reduce coronary perfusion pressure. '
+                'Aim to stay in the green band throughout the session.',
+            lines: [
+              _ChartLine(
+                  _series(s.compressions, (c) => c.timestampSec,
+                          (c) => c.instantaneousRate > 0
+                          ? c.instantaneousRate : c.frequency),
+                  _kBrandMid, fill: true),
+            ],
+            minY: 60, maxY: 160, yTickInterval: 20,
+            yLabel: (v) => v.toStringAsFixed(0),
+            band: _ChartBand(100, 120,
+                _kSuccess.shade(0.12), _kSuccess.shade(0.5)),
+            legend: [
               _LegendItem('Rate (BPM)', _kBrandMid),
               _LegendItem('Target 100-120 BPM', _kSuccess),
             ],
-            font: roboto,
+            plotHeight: 100,
+            dotColor: (_, r) => r >= 100 && r <= 120
+                ? _kSuccess
+                : (r >= 85 && r <= 135) ? _kWarning : _kError,
           ),
           pw.SizedBox(height: 14),
         ],
 
         // ── Force chart ────────────────────────────────────────────────────
         if (hasForceData) ...[
-          _sectionTitle(robotoBold, 'Compression Force Over Time'),
-          pw.SizedBox(height: 8),
-          _chartCard(
-            child: pw.SizedBox(
-              height: 90,
-              child: pw.CustomPaint(painter: (canvas, size) =>
-                  _paintForceChart(canvas, size, s.compressions, avgForce)),
-            ),
-            legendItems: [
+          _buildTimeChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Compression Force Over Time',
+            subtitle: 'Peak force per compression, measured at the FlexiForce sensor.',
+            caption: 'Red dashed line at 600 N = injury threshold. '
+                'Forces above this risk rib fractures. '
+                'Lower forces are not necessarily bad — depth is the clinical target, '
+                'force just measures how hard you push to achieve it.',
+            lines: [
+              _ChartLine(
+                  _series(s.compressions,
+                          (c) => c.timestampSec, (c) => c.force),
+                  _kBrandMid, fill: true),
+            ],
+            minY: 0,
+            maxY: s.compressions.any((c) => c.force > 600) ? 700 : 660,
+            yTickInterval: 100,
+            yLabel: (v) => v.toStringAsFixed(0),
+            guides: [
+              _ChartGuide(600, _kError.shade(0.6)),
+              _ChartGuide(avgForce, _kTextDisabled.shade(0.6)),
+            ],
+            legend: [
               _LegendItem('Force (N)', _kBrandMid),
               _LegendItem('600 N danger threshold', _kError),
               _LegendItem('Average ${avgForce.toStringAsFixed(0)} N', _kTextDisabled),
             ],
-            font: roboto,
+            plotHeight: 90,
+            dotColor: (_, f) => f > 600 ? _kError : _kBrandMid,
           ),
           pw.SizedBox(height: 14),
         ],
 
         // ── Posture chart ──────────────────────────────────────────────────
         if (hasPostureData) ...[
-          _sectionTitle(robotoBold, 'Wrist Posture Over Time'),
-          pw.SizedBox(height: 8),
-          _chartCard(
-            child: pw.SizedBox(
-              height: 90,
-              child: pw.CustomPaint(painter: (canvas, size) =>
-                  _paintPostureChart(canvas, size, s.compressions)),
-            ),
-            legendItems: [
+          _buildTimeChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Wrist Posture Over Time',
+            subtitle: 'Alignment (palm tilt) and flexion (wrist bend) per compression.',
+            caption: 'Both should stay under 15° (alignment) and 10° (flexion). '
+                'Bent wrists reduce force transfer to the chest and increase rescuer '
+                'fatigue. Keep elbows locked and shoulders directly over wrists.',
+            lines: [
+              _ChartLine(
+                  _series(s.compressions, (c) => c.timestampSec,
+                          (c) => c.wristAlignmentAngle),
+                  _kBrandBlue),
+              _ChartLine(
+                  _series(s.compressions, (c) => c.timestampSec,
+                          (c) => c.wristFlexionAngle.abs()),
+                  _kBrandMid),
+            ],
+            minY: 0, maxY: 45, yTickInterval: 15,
+            yLabel: (v) => '${v.toStringAsFixed(0)}°',
+            guides: [
+              _ChartGuide(15, _kSuccess.shade(0.5)),
+              _ChartGuide(10, _kSuccess.shade(0.5)),
+            ],
+            legend: [
               _LegendItem('Wrist alignment (°)', _kBrandBlue),
               _LegendItem('Wrist flexion (°)', _kBrandMid),
               _LegendItem('15° / 10° targets', _kSuccess),
             ],
-            font: roboto,
+            plotHeight: 90,
           ),
           pw.SizedBox(height: 20),
         ],
 
         // ── Rescuer vitals chart ───────────────────────────────────────────
         if (hasVitals) ...[
-          _sectionTitle(robotoBold, 'Rescuer Vitals Over Time'),
-          pw.SizedBox(height: 8),
-          _chartCard(
-            child: pw.SizedBox(
-              height: 90,
-              child: pw.CustomPaint(painter: (canvas, size) =>
-                  _paintVitalsChart(canvas, size, s.rescuerVitals)),
-            ),
-            legendItems: [
+          _buildTimeChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Rescuer Vitals Over Time',
+            subtitle: 'Heart rate (PPG) and composite fatigue score during pauses.',
+            caption: 'Heart rate climbs and fatigue score rises with sustained CPR. '
+                'A fatigue score above 70 is a recommended cue to swap rescuers. '
+                'Vitals are sampled during ventilation and pulse-check windows.',
+            lines: [
+              _ChartLine(
+                // M28: plot all real HR readings for a continuous trend;
+                // signal quality is preserved per-row in the CSV export.
+                  _series(s.rescuerVitals,
+                          (v) => v.timestampSec, (v) => v.heartRate,
+                      where: (v) => v.heartRate > 0),
+                  _kError),
+              _ChartLine(
+                // M28: fatigueScore is a composite that does not depend on
+                // PPG signal quality the way raw HR does — plot all rows.
+                  _series(s.rescuerVitals,
+                          (v) => v.timestampSec,
+                          (v) => v.fatigueScore.toDouble()),
+                  _kWarning),
+            ],
+            minY: 0, maxY: 200, yTickInterval: 50,
+            yLabel: (v) => v.toStringAsFixed(0),
+            legend: [
               _LegendItem('Heart Rate (BPM)', _kError),
               _LegendItem('Estimated Fatigue Score (0-100)', _kWarning),
             ],
-            font: roboto,
+            plotHeight: 90,
           ),
           pw.SizedBox(height: 20),
         ],
 
-        // ── Ventilation cycles table ───────────────────────────────────────
+        // ── 12. Detailed metrics (appendix — full numerical breakdown) ────
+        _sectionTitle(robotoBold, 'Detailed Metrics'),
+        pw.SizedBox(height: 8),
+        _twoColumnMetrics(robotoMedium, roboto, s, depthMin, depthMax),
+        pw.SizedBox(height: 20),
+
+// ── 12b. Session Timeline ──────────────────────────────────────────
+        _sectionTitle(robotoBold, 'Session Timeline'),
+        pw.SizedBox(height: 4),
+        pw.Text(
+            'Chronological log of session events — '
+                'starts, pauses, ventilations, pulse checks, fatigue, and end.',
+            style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+        pw.SizedBox(height: 10),
+        _buildSessionTimeline(robotoBold, robotoMedium, roboto, s),
+        pw.SizedBox(height: 20),
+
+// ── Ventilation table ──────────────────────────────────────────────
         if (s.ventilations.isNotEmpty) ...[
           _sectionTitle(robotoBold, 'Ventilation Windows'),
           pw.SizedBox(height: 8),
@@ -2063,7 +2481,7 @@ class ExportService {
           pw.SizedBox(height: 20),
         ],
 
-        // ── Pulse check table (emergency only) ────────────────────────────
+        // ── Pulse check table ──────────────────────────────────────────────
         if (s.pulseChecks.isNotEmpty) ...[
           _sectionTitle(robotoBold, 'Pulse Check Results'),
           pw.SizedBox(height: 8),
@@ -2092,7 +2510,8 @@ class ExportService {
               border:       pw.Border.all(color: _kDivider, width: 0.5),
             ),
             child: pw.Text(s.note!,
-                style: pw.TextStyle(font: roboto, fontSize: 10, color: _kTextPrimary)),
+                style: pw.TextStyle(font: roboto, fontSize: 10,
+                    color: _kTextPrimary)),
           ),
         ],
       ],
@@ -2101,12 +2520,140 @@ class ExportService {
     return doc.save();
   }
 
+
+  static pw.Widget _buildVerdictCard(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      double depthPct, double ratePct,
+      double recoilPct, double posturePct,
+      double depthMin, double depthMax) {
+
+    final dims = <(String, double, String)>[
+      ('Depth',   depthPct,
+      'Aim for ${depthMin.toStringAsFixed(0)}–${depthMax.toStringAsFixed(0)} cm — '
+          'press firmly and let the chest fully rebound.'),
+      ('Rate',    ratePct,
+      'Aim for 100–120 BPM — try a metronome or sing '
+          '"Stayin\' Alive" at 1 beat per compression.'),
+      ('Recoil',  recoilPct,
+      'Release fully between compressions — lift your '
+          'palms an extra centimetre before pressing down again.'),
+      ('Posture', posturePct,
+      'Keep shoulders directly over your wrists. '
+          'Lock your elbows and use your bodyweight, not your arms.'),
+    ]..sort((a, b) => a.$2.compareTo(b.$2));
+
+    final weakest = dims.first;
+    final color   = _pctColor(weakest.$2 / 100);
+    final bg      = color.shade(0.85);
+
+    if (weakest.$2 >= 80) {
+      // Strong all-round — encouragement instead
+      return pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: pw.BoxDecoration(
+          color: _kSuccessLight,
+          borderRadius: pw.BorderRadius.circular(10),
+        ),
+        child: pw.Row(children: [
+          pw.Container(width: 4, height: 32,
+              decoration: pw.BoxDecoration(color: _kSuccess,
+                  borderRadius: pw.BorderRadius.circular(2))),
+          pw.SizedBox(width: 10),
+          pw.Expanded(child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Strong performance across all metrics',
+                  style: pw.TextStyle(font: bold, fontSize: 11, color: _kSuccess)),
+              pw.SizedBox(height: 2),
+              pw.Text('Consistent quality — keep practising at this level.',
+                  style: pw.TextStyle(font: font, fontSize: 9, color: _kTextSecond)),
+            ],
+          )),
+        ]),
+      );
+    }
+
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: pw.BoxDecoration(
+        color: bg,
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Container(width: 4, height: 44,
+            decoration: pw.BoxDecoration(color: color,
+                borderRadius: pw.BorderRadius.circular(2))),
+        pw.SizedBox(width: 10),
+        pw.Expanded(child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(children: [
+              pw.Text('What to work on next: ',
+                  style: pw.TextStyle(font: bold, fontSize: 11, color: _kTextPrimary)),
+              pw.Text('${weakest.$1} (${weakest.$2.toStringAsFixed(0)}%)',
+                  style: pw.TextStyle(font: bold, fontSize: 11, color: color)),
+            ]),
+            pw.SizedBox(height: 3),
+            pw.Text(weakest.$3,
+                style: pw.TextStyle(font: font, fontSize: 9, color: _kTextSecond)),
+          ],
+        )),
+      ]),
+    );
+  }
+
+  static pw.Widget _buildMethodologyBox(pw.Font font, pw.Font bold) {
+    pw.Widget item(String k, String v) => pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      child: pw.RichText(text: pw.TextSpan(children: [
+        pw.TextSpan(text: '$k  ',
+            style: pw.TextStyle(font: bold, fontSize: 8,
+                color: _kTextPrimary)),
+        pw.TextSpan(text: v,
+            style: pw.TextStyle(font: font, fontSize: 8,
+                color: _kTextSecond)),
+      ])),
+    );
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        color: _kBrandLight,
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('How to read this report',
+              style: pw.TextStyle(font: bold, fontSize: 9,
+                  color: _kBrandBlue)),
+          pw.SizedBox(height: 6),
+          item('Target band',
+              'Green shaded region on each chart = AHA-recommended range.'),
+          item('Depth',
+              '5–6 cm adult · 4–5 cm pediatric. Rate 100–120 min⁻¹.'),
+          item('X-axis',
+              'Elapsed session time (m:ss) from first compression.'),
+          item('Recoil',
+              '% of compressions with full chest release between presses.'),
+          item('Hands-on (CCF)',
+              '% of session time actively compressing (AHA target ≥ 80%).'),
+        ],
+      ),
+    );
+  }
+
+
   // ═══════════════════════════════════════════════════════════════════════════
   // PDF — MULTI SESSION
   // ═══════════════════════════════════════════════════════════════════════════
 
   static Future<Uint8List> _buildMultiSessionPdf(
-      List<SessionSummary> sessions, { String? username }) async {
+      List<SessionSummary> sessions, {
+        String? username,
+        List<SessionDetail?>? details,
+      }) async {
 
     final doc          = pw.Document();
     final roboto       = await PdfGoogleFonts.robotoRegular();
@@ -2122,137 +2669,191 @@ class ExportService {
     final adultSessions     = sessions.where((s) => s.scenario != 'pediatric').length;
     final pediatricSessions = sessions.length - adultSessions;
 
-    final avgGrade  = trainingSessions.isEmpty ? 0.0
-        : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a + b) / trainingSessions.length;
-    final bestGrade = trainingSessions.isEmpty ? 0.0
+    final avgGrade   = trainingSessions.isEmpty ? 0.0
+        : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a + b)
+        / trainingSessions.length;
+    final bestGrade  = trainingSessions.isEmpty ? 0.0
         : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a > b ? a : b);
     final worstGrade = trainingSessions.isEmpty ? 0.0
         : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a < b ? a : b);
 
-    // Trend delta: first graded session vs last graded session
     final trendDelta = trainingSessions.length >= 2
         ? trainingSessions.last.totalGrade - trainingSessions.first.totalGrade
         : 0.0;
 
-    // Average CCF across training sessions
     final avgCCF = trainingSessions.isEmpty ? 0.0
-        : trainingSessions.map((s) => s.handsOnRatio).reduce((a, b) => a + b) / trainingSessions.length;
+        : trainingSessions.map((s) => s.handsOnRatio).reduce((a, b) => a + b)
+        / trainingSessions.length;
 
-    // Emergency ROSC rate
     final roscCount = emergencySessions.where((s) => s.pulseDetectedFinal).length;
 
-    // Date range label
     final sortedByDate = [...sessions]
       ..sort((a, b) => (a.sessionStart ?? DateTime(2000))
           .compareTo(b.sessionStart ?? DateTime(2000)));
     final dateRange = sortedByDate.isEmpty ? ''
         : '${sortedByDate.first.dateFormatted} - ${sortedByDate.last.dateFormatted}';
 
+    // ── Slot colours (mirrors compare screen, derived from AppColors) ──────
+    final slotColors = [
+      _pdf(AppColors.primary),      // brand blue  — slot 1
+      _pdf(AppColors.compareSlot2), // deep orange — slot 2
+      _pdf(AppColors.compareSlot3), // teal        — slot 3
+      _pdf(AppColors.compareSlot4), // amber       — slot 4
+    ];
+
     doc.addPage(pw.MultiPage(
-      theme:      theme,
-      pageFormat: PdfPageFormat.a4,
-      margin:     const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+      pageTheme: pw.PageTheme(
+        theme:      theme,
+        pageFormat: PdfPageFormat.a4,
+        margin:     const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+        buildBackground: (ctx) => pw.FullPage(
+          ignoreMargins: true,
+          child: pw.Container(color: _kBgGrey),
+        ),
+      ),
       header: (ctx) => _pageHeader(
         robotoBold, robotoMedium,
-        title:    'CPR Training History Report',
+        title:    'CPR Session History Report',
         subtitle: '$dateRange  ·  ${sessions.length} sessions',
         username: username,
       ),
       footer: (ctx) => _pageFooter(roboto, ctx),
       build: (ctx) => [
 
-        // ── Overview strip ─────────────────────────────────────────────────
-        _summaryStrip(robotoBold, robotoMedium, [
-          _Cell('Sessions',     '${sessions.length}'),
-          _Cell('Training',     '${trainingSessions.length}'),
-          _Cell('Emergency',    '${emergencySessions.length}'),
-          _Cell('Compressions', totalCompressions > 999
-              ? '${(totalCompressions / 1000).toStringAsFixed(1)}k'
-              : '$totalCompressions'),
-          _Cell('Avg CCF',      '${(avgCCF * 100).round()}%'),
-        ]),
+        // ── Comparison hero — score rings per slot ─────────────────────────
+        _buildCompareHero(robotoBold, robotoMedium, roboto, sessions, slotColors),
+        pw.SizedBox(height: 12),
+
+// ── Slot legend with date + mode ───────────────────────────────────
+        _buildSlotLegend(robotoBold, robotoMedium, roboto, sessions, slotColors),
         pw.SizedBox(height: 20),
 
-        // ── Scenario breakdown ─────────────────────────────────────────────
-        if (pediatricSessions > 0) ...[
-          pw.Row(children: [
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: pw.BoxDecoration(
-                  color: _kBrandLight, borderRadius: pw.BorderRadius.circular(6)),
-              child: pw.Text('Adult: $adultSessions sessions',
-                  style: pw.TextStyle(font: robotoMedium, fontSize: 9, color: _kBrandBlue)),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: pw.BoxDecoration(
-                  color: _kPediatricBg, borderRadius: pw.BorderRadius.circular(6)),
-              child: pw.Text('Pediatric: $pediatricSessions sessions',
-                  style: pw.TextStyle(font: robotoMedium, fontSize: 9, color: _kPediatric)),
-            ),
-          ]),
-          pw.SizedBox(height: 14),
+        // ── Trend banner (kept — useful in comparison too) ─────────────────
+        if (trainingSessions.length >= 2) ...[
+          _buildTrendBannerCard(robotoBold, robotoMedium, roboto,
+              trainingSessions, trendDelta, avgGrade, bestGrade, worstGrade),
+          pw.SizedBox(height: 20),
         ],
 
-        // ── Training progress ──────────────────────────────────────────────
-        if (trainingSessions.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Training Performance'),
-          pw.SizedBox(height: 10),
+// ── Comparison metrics table ───────────────────────────────────────
+        _sectionTitle(robotoBold, 'Side-by-Side Metrics'),
+        pw.SizedBox(height: 4),
+        pw.Text(
+            'Every key metric, slot-by-slot. The best value in each row is highlighted.',
+            style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+        pw.SizedBox(height: 10),
+        _buildComparisonMetricsTable(robotoBold, robotoMedium, roboto,
+            sessions, details, slotColors),
+        pw.SizedBox(height: 20),
 
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Stats panel
-              pw.SizedBox(
-                width: 140,
-                child: _statPanel(robotoBold, robotoMedium, [
-                  _Cell('Average Grade',  '${avgGrade.toStringAsFixed(1)}%'),
-                  _Cell('Best Grade',     '${bestGrade.toStringAsFixed(1)}%'),
-                  _Cell('Worst Grade',    '${worstGrade.toStringAsFixed(1)}%'),
-                  _Cell('Sessions Graded', '${trainingSessions.length}'),
-                  if (trendDelta != 0) _Cell('Trend',
-                      '${trendDelta >= 0 ? '+' : ''}${trendDelta.toStringAsFixed(1)}%'),
-                ]),
-              ),
-              pw.SizedBox(width: 12),
-              // Grade trend chart
-              pw.Expanded(
-                child: _gradeSparklinePanel(roboto, robotoMedium, robotoBold,
-                    trainingSessions, trendDelta),
-              ),
-            ],
+// ── Performance radar — polygon per slot ───────────────────────────
+        if (sessions.any((s) => s.isTraining)) ...[
+          _sectionTitle(robotoBold, 'Performance Profile'),
+          pw.SizedBox(height: 4),
+          pw.Text(
+              'Each axis = % of compressions in target. '
+                  'Bigger polygon = stronger session. '
+                  'Compare shapes to see where each session is strong vs weak.',
+              style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+          pw.SizedBox(height: 10),
+          _buildRadarBarTable(robotoBold, robotoMedium, roboto,
+              sessions, slotColors),
+          pw.SizedBox(height: 20),
+        ],
+
+// ── Page break before chart-heavy section ──────────────────────────
+        pw.NewPage(),
+
+// ── Overlaid charts ────────────────────────────────────────────────
+        _sectionTitle(robotoBold, 'Compression Depth Comparison'),
+        pw.SizedBox(height: 10),
+        _buildOverlaidComparisonChart(
+          font: roboto, fontBold: robotoBold,
+          title: 'Depth Over Time',
+          subtitle: 'All sessions overlaid on the same time axis.',
+          caption: 'Green band = target depth. '
+              'Drift downward across the session indicates fatigue.',
+          sessions: sessions, details: details, slotColors: slotColors,
+          yExtractor: (c) => c.depth,
+          minY: 0, maxY: 9, yTickInterval: 3,
+          yLabel: (v) => v.toStringAsFixed(0),
+          band: _ChartBand(
+              sessions.first.scenario == 'pediatric' ? 4.0 : 5.0,
+              sessions.first.scenario == 'pediatric' ? 5.0 : 6.0,
+              _kSuccess.shade(0.12), _kSuccess.shade(0.5)),
+        ),
+        pw.SizedBox(height: 16),
+
+        _sectionTitle(robotoBold, 'Compression Rate Comparison'),
+        pw.SizedBox(height: 10),
+        _buildOverlaidComparisonChart(
+          font: roboto, fontBold: robotoBold,
+          title: 'Rate Over Time',
+          subtitle: null,
+          caption: 'Green band = target rate (100–120 BPM).',
+          sessions: sessions, details: details, slotColors: slotColors,
+          yExtractor: (c) => c.instantaneousRate > 0
+              ? c.instantaneousRate : c.frequency,
+          minY: 60, maxY: 160, yTickInterval: 20,
+          yLabel: (v) => v.toStringAsFixed(0),
+          band: _ChartBand(100, 120,
+              _kSuccess.shade(0.12), _kSuccess.shade(0.5)),
+        ),
+        pw.SizedBox(height: 16),
+
+// Force — only if any session has force data
+        if (details != null && details.any((d) =>
+        d != null && d.compressions.any((c) => c.force > 0))) ...[
+          _sectionTitle(robotoBold, 'Force Comparison'),
+          pw.SizedBox(height: 10),
+          _buildOverlaidComparisonChart(
+            font: roboto, fontBold: robotoBold,
+            title: 'Force Over Time',
+            subtitle: null,
+            caption: 'Red dashed line = 600 N injury threshold.',
+            sessions: sessions, details: details, slotColors: slotColors,
+            yExtractor: (c) => c.force,
+            minY: 0, maxY: 700, yTickInterval: 100,
+            yLabel: (v) => v.toStringAsFixed(0),
+            guides: [_ChartGuide(600, _kError.shade(0.6))],
           ),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 16),
+        ],
 
-          // ── Average metrics grid ─────────────────────────────────────────
-          _sectionTitle(robotoBold, 'Average Metrics Across Training Sessions'),
+// Phase comparison (kept — useful here)
+        if (details != null && details.any((d) => d != null &&
+            d.compressions.length >= 9)) ...[
+          _sectionTitle(robotoBold, 'Phase Breakdown'),
+          pw.SizedBox(height: 4),
+          pw.Text(
+              'Early / mid / late depth — flat across thirds = consistent stamina.',
+              style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
           pw.SizedBox(height: 10),
-          _avgMetricsGrid(robotoBold, robotoMedium, roboto, trainingSessions),
-          pw.SizedBox(height: 20),
-
-          // ── 2×2 metric trend charts ──────────────────────────────────────
-          if (trainingSessions.length >= 2) ...[
-            _sectionTitle(robotoBold, 'Metric Trends'),
-            pw.SizedBox(height: 10),
-            _metricTrendGrid(roboto, robotoMedium, robotoBold, trainingSessions),
-            pw.SizedBox(height: 20),
-          ],
-        ],
-
-        // ── Emergency summary ──────────────────────────────────────────────
-        if (emergencySessions.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Emergency Sessions'),
-          pw.SizedBox(height: 8),
-          _emergencySessionsSummary(robotoBold, robotoMedium, roboto,
-              emergencySessions, roscCount),
+          _buildMultiPhaseTable(robotoBold, robotoMedium, roboto,
+              sessions, details, slotColors),
           pw.SizedBox(height: 20),
         ],
 
-        // ── All sessions table ─────────────────────────────────────────────
-        _sectionTitle(robotoBold, 'All Sessions'),
-        pw.SizedBox(height: 8),
-        _sessionTable(robotoBold, robotoMedium, roboto, sessions),
+        // ── Session journey timeline ───────────────────────────────────────
+        _sectionTitle(robotoBold, 'Training Journey'),
+        pw.SizedBox(height: 4),
+        pw.Text(
+            'Chronological view of every session — '
+                'dot colour = grade, delta = change vs previous training session.',
+            style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+        pw.SizedBox(height: 12),
+        _buildMultiSessionTimeline(robotoBold, robotoMedium, roboto, sessions),
+        pw.SizedBox(height: 20),
+
+        // ── All sessions table (kept as data appendix) ─────────────────────
+        _sectionTitle(robotoBold, 'All Sessions (Numerical)'),
+        pw.SizedBox(height: 4),
+        pw.Text(
+            'Full numerical breakdown of every session — useful for export and analysis.',
+            style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+        pw.SizedBox(height: 10),
+        _buildAllSessionsTable(robotoBold, robotoMedium, roboto,
+            sessions, slotColors),
       ],
     ));
 
@@ -2260,7 +2861,7 @@ class ExportService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PDF — CERTIFICATE (unchanged from original)
+  // PDF — CERTIFICATE
   // ═══════════════════════════════════════════════════════════════════════════
 
   static Future<Uint8List> _buildCertificatePdf({
@@ -2357,13 +2958,6 @@ class ExportService {
                     pw.Text('Aristotle University of Thessaloniki',
                         style: pw.TextStyle(font: roboto, fontSize: 9, color: _kTextDisabled)),
                   ]),
-                  pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                    pw.Text('Research Ethics Approval', style: pw.TextStyle(
-                        font: roboto, fontSize: 9, color: _kTextDisabled)),
-                    pw.SizedBox(height: 2),
-                    pw.Text('ΕΗΔΕ — AUTH', style: pw.TextStyle(
-                        font: robotoBold, fontSize: 11, color: _kTextPrimary)),
-                  ]),
                 ],
               ),
             ],
@@ -2394,13 +2988,13 @@ class ExportService {
         PdfColor? scenarioColor,
         PdfColor? scenarioBg,
       }) {
-    return pw.Container(
-      decoration: const pw.BoxDecoration(
-          border: pw.Border(bottom: pw.BorderSide(color: _kDivider, width: 1))),
-      padding: const pw.EdgeInsets.only(bottom: 12),
-      margin:  const pw.EdgeInsets.only(bottom: 16),
+    return pw.Column(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+      pw.SizedBox(
+      height: 38,
       child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Expanded(
             child: pw.Column(
@@ -2411,8 +3005,11 @@ class ExportService {
                       decoration: pw.BoxDecoration(
                           color: _kBrandBlue, borderRadius: pw.BorderRadius.circular(2))),
                   pw.SizedBox(width: 8),
-                  pw.Text(title, style: pw.TextStyle(
-                      font: bold, fontSize: 15, color: _kTextPrimary)),
+                  pw.Text(title,
+                      maxLines: 1,
+                      overflow: pw.TextOverflow.clip,
+                      style: pw.TextStyle(
+                          font: bold, fontSize: 15, color: _kTextPrimary)),
                   if (mode != null) ...[
                     pw.SizedBox(width: 10),
                     pw.Container(
@@ -2420,7 +3017,7 @@ class ExportService {
                       decoration: pw.BoxDecoration(
                           color: modeBg ?? _kBrandLight,
                           borderRadius: pw.BorderRadius.circular(999),
-                          border: pw.Border.all(color: modeColor ?? _kBrandBlue, width: 0.8)),
+                      ),
                       child: pw.Text(mode, style: pw.TextStyle(
                           font: bold, fontSize: 8, color: modeColor ?? _kBrandBlue)),
                     ),
@@ -2432,30 +3029,43 @@ class ExportService {
                       decoration: pw.BoxDecoration(
                           color: scenarioBg ?? _kBrandLight,
                           borderRadius: pw.BorderRadius.circular(999),
-                          border: pw.Border.all(color: scenarioColor ?? _kBrandBlue, width: 0.8)),
+                      ),
                       child: pw.Text(scenarioBadge, style: pw.TextStyle(
                           font: bold, fontSize: 8, color: scenarioColor ?? _kBrandBlue)),
                     ),
                   ],
                 ]),
                 pw.SizedBox(height: 3),
-                pw.Text(subtitle, style: pw.TextStyle(
-                    font: medium, fontSize: 9, color: _kTextSecond)),
+                pw.Text(subtitle,
+                    maxLines: 1,
+                    overflow: pw.TextOverflow.clip,
+                    style: pw.TextStyle(
+                        font: medium, fontSize: 9, color: _kTextSecond)),
               ],
             ),
           ),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
             pw.Text('CPR Assist',
+                maxLines: 1, overflow: pw.TextOverflow.clip,
                 style: pw.TextStyle(font: bold, fontSize: 11, color: _kBrandBlue)),
             if (username != null)
-              pw.Text(username, style: pw.TextStyle(
-                  font: medium, fontSize: 9, color: _kTextDisabled)),
+              pw.Text(username,
+                  maxLines: 1, overflow: pw.TextOverflow.clip,
+                  style: pw.TextStyle(
+                      font: medium, fontSize: 9, color: _kTextDisabled)),
             if (sessionId != null)
-              pw.Text('ID: $sessionId', style: pw.TextStyle(
-                  font: medium, fontSize: 8, color: _kTextDisabled)),
+              pw.Text('ID: $sessionId',
+                  maxLines: 1, overflow: pw.TextOverflow.clip,
+                  style: pw.TextStyle(
+                      font: medium, fontSize: 8, color: _kTextDisabled)),
           ]),
         ],
       ),
+      ),
+        pw.SizedBox(height: 6),
+        pw.Container(height: 1, color: _kDivider),
+        pw.SizedBox(height: 12),
+      ],
     );
   }
 
@@ -2463,14 +3073,14 @@ class ExportService {
 
   static pw.Widget _pageFooter(pw.Font font, pw.Context ctx) {
     return pw.Container(
-      decoration: const pw.BoxDecoration(
+      decoration: pw.BoxDecoration(
           border: pw.Border(top: pw.BorderSide(color: _kDivider, width: 1))),
       padding: const pw.EdgeInsets.only(top: 8),
       margin:  const pw.EdgeInsets.only(top: 12),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text('Generated by CPR Assist  ·  AUTH BME Thesis  ·  Prof. P. Bamidis',
+          pw.Text('Generated by CPR Assist',
               style: pw.TextStyle(font: font, fontSize: 8, color: _kTextDisabled)),
           pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
               style: pw.TextStyle(font: font, fontSize: 8, color: _kTextDisabled)),
@@ -2479,76 +3089,460 @@ class ExportService {
     );
   }
 
-  // ── Grade hero (training) ──────────────────────────────────────────────────
 
-  static pw.Widget _gradeHero(
-      pw.Font bold, pw.Font medium, double grade, String scenario) {
-    final color = _gradeColor(grade);
-    final label = grade >= 90 ? 'Excellent!'
-        : grade >= 75 ? 'Good job!'
-        : grade >= 55 ? 'Keep it up!'
-        : 'Keep practicing!';
-    final fillFlex  = (grade.clamp(0.0, 100.0)).round().clamp(1, 99);
-    final emptyFlex = (100 - fillFlex).clamp(1, 99);
+  static pw.Widget _buildCompareHero(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions, List<PdfColor> slotColors) {
 
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(20),
+      padding: const pw.EdgeInsets.fromLTRB(18, 14, 18, 14),
       decoration: pw.BoxDecoration(
-        gradient: const pw.LinearGradient(
-            colors: [_kBrandBlue, _kBrandDark],
-            begin: pw.Alignment.topLeft, end: pw.Alignment.bottomRight),
+        gradient: pw.LinearGradient(
+          colors: [_kBrandBlue, _kBrandDark],
+          begin: pw.Alignment.topLeft, end: pw.Alignment.bottomRight,
+        ),
         borderRadius: pw.BorderRadius.circular(12),
       ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('COMPARING ${sessions.length} SESSIONS',
+              style: pw.TextStyle(font: bold, fontSize: 8,
+                  color: _kWhite.shade(0.6), letterSpacing: 1.2)),
+          pw.SizedBox(height: 10),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < sessions.length; i++)
+                pw.Expanded(child: _compareSlotRing(
+                    bold, medium, font, sessions[i], slotColors[i], i + 1)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _compareSlotRing(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      SessionSummary s, PdfColor slotColor, int slotNum) {
+
+    final isEmg     = s.isEmergency;
+    final value     = isEmg
+        ? (s.pulseChecksPrompted > 0 ? 'CPR' : 'CPR')
+        : '${s.totalGrade.toStringAsFixed(0)}%';
+    final ringPct   = isEmg ? 0.0 : (s.totalGrade / 100).clamp(0.0, 1.0);
+    final ringColor = isEmg ? _kEmgGreen : slotColor;
+
+    return pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
+      // Slot number tag
+      pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: pw.BoxDecoration(
+          color: slotColor,
+          borderRadius: pw.BorderRadius.circular(99),
+        ),
+        child: pw.Text('SLOT $slotNum',
+            style: pw.TextStyle(font: bold, fontSize: 7,
+                color: _kWhite, letterSpacing: 0.5)),
+      ),
+      pw.SizedBox(height: 8),
+      // Ring
+      pw.SizedBox(
+        width: 70, height: 70,
+        child: pw.Stack(alignment: pw.Alignment.center, children: [
+          pw.SizedBox(
+            width: 70, height: 70,
+            child: pw.CustomPaint(painter: (c, size) {
+              const pi = 3.14159265;
+              final cx = size.x / 2;
+              final cy = size.y / 2;
+              final rx = size.x / 2 - 4;
+              final ry = size.y / 2 - 4;
+              c.saveContext();
+              c.setStrokeColor(_kWhite.shade(0.2));
+              c.setLineWidth(6);
+              c.drawEllipse(cx, cy, rx, ry);
+              c.strokePath();
+              c.restoreContext();
+              final steps = (ringPct * 60).round().clamp(0, 60);
+              if (steps > 0) {
+                c.saveContext();
+                c.setStrokeColor(ringColor);
+                c.setLineWidth(6);
+                double angle(int s) => -pi / 2 + s * (2 * pi / 60);
+                c.moveTo(cx + rx * math.cos(angle(0)),
+                    cy + ry * math.sin(angle(0)));
+                for (int i = 1; i <= steps; i++) {
+                  c.lineTo(cx + rx * math.cos(angle(i)),
+                      cy + ry * math.sin(angle(i)));
+                }
+                c.strokePath();
+                c.restoreContext();
+              }
+            }),
+          ),
+          pw.Text(value,
+              style: pw.TextStyle(font: bold, fontSize: 14,
+                  color: _kWhite)),
+        ]),
+      ),
+      pw.SizedBox(height: 6),
+      pw.Text(isEmg ? 'EMERGENCY' : 'TRAINING',
+          style: pw.TextStyle(font: bold, fontSize: 6,
+              color: _kWhite.shade(0.7), letterSpacing: 0.6)),
+    ]);
+  }
+
+  static pw.Widget _buildSlotLegend(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions, List<PdfColor> slotColors) {
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: _kWhite,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: pw.Row(children: [
-        pw.Container(
-          width: 90, height: 90,
-          decoration: pw.BoxDecoration(
-              shape:  pw.BoxShape.circle,
-              color:  _kWhite.shade(0.12),
-              border: pw.Border.all(color: _kWhite.shade(0.3), width: 2)),
-          child: pw.Center(
-            child: pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-              pw.Text('${grade.toStringAsFixed(0)}%',
-                  style: pw.TextStyle(font: bold, fontSize: 24, color: _kWhite)),
-              pw.Text(label,
-                  style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.8))),
+        for (int i = 0; i < sessions.length; i++) ...[
+          if (i > 0) pw.Container(width: 0.5, height: 28, color: _kDivider),
+          pw.Expanded(
+            child: pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8),
+              child: pw.Row(children: [
+                pw.Container(width: 10, height: 10,
+                    decoration: pw.BoxDecoration(
+                        color: slotColors[i], shape: pw.BoxShape.circle)),
+                pw.SizedBox(width: 8),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('SLOT ${i + 1}',
+                          style: pw.TextStyle(font: bold, fontSize: 6,
+                              color: _kTextDisabled, letterSpacing: 0.5)),
+                      pw.SizedBox(height: 1),
+                      pw.Text(sessions[i].dateFormatted,
+                          style: pw.TextStyle(font: medium, fontSize: 9,
+                              color: _kTextPrimary)),
+                      pw.SizedBox(height: 1),
+                      pw.Text(
+                        '${sessions[i].isEmergency ? 'Emergency' : 'Training'}'
+                            ' · '
+                            '${sessions[i].scenario == 'pediatric'
+                            ? 'Pediatric' : 'Adult'}',
+                        style: pw.TextStyle(font: font, fontSize: 7,
+                            color: _kTextSecond),
+                      ),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  // ── Training hero — grade ring + 4 sub-rings ───────────────────────────────
+
+  static pw.Widget _buildTrainingHero(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      double grade, double depthPct, double ratePct,
+      double recoilPct, double posturePct) {
+
+    final gradeColor = _gradeColor(grade);
+    final label      = grade >= 90 ? 'Outstanding!'
+        : grade >= 75 ? 'Great work!'
+        : grade >= 55 ? 'Keep it up!'
+        : 'Keep practising!';
+
+    // Build dim list for verdict (still uses 4 dims for accuracy)
+    final dims = <(String, double, String)>[
+      ('Depth',   depthPct,
+      'Press firmly — aim for the centre of the target depth band.'),
+      ('Rate',    ratePct,
+      'Pace yourself — 100–120 BPM, think "Stayin\' Alive".'),
+      ('Recoil',  recoilPct,
+      'Release fully between compressions — lift your palms a centimetre.'),
+      ('Posture', posturePct,
+      'Lock elbows, shoulders over wrists. Use bodyweight, not arms.'),
+    ]..sort((a, b) => a.$2.compareTo(b.$2));
+
+    final weakest   = dims.first;
+    final allStrong = weakest.$2 >= 80;
+    final verdict   = allStrong
+        ? 'Consistent across all metrics — strong overall performance.'
+        : 'Work on next: ${weakest.$1} (${weakest.$2.toStringAsFixed(0)}%) — ${weakest.$3}';
+
+    // ── Big grade ring (centred) ───────────────────────────────────────────
+    final mainRing = pw.SizedBox(
+      width: 108, height: 108,
+      child: pw.Stack(alignment: pw.Alignment.center, children: [
+        pw.SizedBox(
+          width: 108, height: 108,
+          child: pw.CustomPaint(painter: (c, size) {
+            const pi = 3.14159265;
+            final cx = size.x / 2;
+            final cy = size.y / 2;
+            final rx = size.x / 2 - 6;
+            final ry = size.y / 2 - 6;
+            // Background ring
+            c.saveContext();
+            c.setStrokeColor(_kWhite.shade(0.18));
+            c.setLineWidth(9);
+            c.drawEllipse(cx, cy, rx, ry);
+            c.strokePath();
+            c.restoreContext();
+            // Grade arc
+            final steps = (grade / 100 * 72).round().clamp(0, 72);
+            if (steps > 0) {
+              c.saveContext();
+              c.setStrokeColor(gradeColor);
+              c.setLineWidth(9);
+              double angle(int s) => -pi / 2 + s * (2 * pi / 72);
+              c.moveTo(cx + rx * math.cos(angle(0)),
+                  cy + ry * math.sin(angle(0)));
+              for (int i = 1; i <= steps; i++) {
+                c.lineTo(cx + rx * math.cos(angle(i)),
+                    cy + ry * math.sin(angle(i)));
+              }
+              c.strokePath();
+              c.restoreContext();
+            }
+          }),
+        ),
+        pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
+          pw.Text('${grade.toStringAsFixed(0)}%',
+              style: pw.TextStyle(font: bold, fontSize: 28, color: _kWhite)),
+          pw.SizedBox(height: 2),
+          pw.Text(label,
+              style: pw.TextStyle(font: medium, fontSize: 8,
+                  color: _kWhite.shade(0.8)),
+              textAlign: pw.TextAlign.center),
+        ]),
+      ]),
+    );
+
+    // ── Sub-ring builder (3 sub-rings: DEPTH / RATE / RECOIL) ─────────────
+    pw.Widget subRing(String label, double pct) {
+      final pctInt = pct.round().clamp(0, 100);
+      final col    = _pctColor(pct / 100);
+      return pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.SizedBox(
+            width: 56, height: 56,
+            child: pw.Stack(alignment: pw.Alignment.center, children: [
+              pw.SizedBox(
+                width: 56, height: 56,
+                child: pw.CustomPaint(painter: (c, size) {
+                  const pi = 3.14159265;
+                  final cx = size.x / 2;
+                  final cy = size.y / 2;
+                  final rx = size.x / 2 - 4;
+                  final ry = size.y / 2 - 4;
+                  // bg
+                  c.saveContext();
+                  c.setStrokeColor(_kWhite.shade(0.18));
+                  c.setLineWidth(5);
+                  c.drawEllipse(cx, cy, rx, ry);
+                  c.strokePath();
+                  c.restoreContext();
+                  // filled arc
+                  final steps = (pct / 100 * 48).round().clamp(0, 48);
+                  if (steps > 0) {
+                    c.saveContext();
+                    c.setStrokeColor(col);
+                    c.setLineWidth(5);
+                    double angle(int s) => -pi / 2 + s * (2 * pi / 48);
+                    c.moveTo(cx + rx * math.cos(angle(0)),
+                        cy + ry * math.sin(angle(0)));
+                    for (int i = 1; i <= steps; i++) {
+                      c.lineTo(cx + rx * math.cos(angle(i)),
+                          cy + ry * math.sin(angle(i)));
+                    }
+                    c.strokePath();
+                    c.restoreContext();
+                  }
+                }),
+              ),
+              pw.Text('$pctInt%',
+                  style: pw.TextStyle(font: bold, fontSize: 11, color: _kWhite)),
             ]),
           ),
+          pw.SizedBox(height: 5),
+          pw.Text(label,
+              style: pw.TextStyle(font: medium, fontSize: 8,
+                  color: _kWhite.shade(0.75),
+                  letterSpacing: 0.6)),
+        ],
+      );
+    }
+
+    // ── Compose ───────────────────────────────────────────────────────────
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.fromLTRB(20, 22, 20, 18),
+      decoration: pw.BoxDecoration(
+        gradient: pw.LinearGradient(
+          colors: [_kBrandBlue, _kBrandDark],
+          begin: pw.Alignment.topLeft, end: pw.Alignment.bottomRight,
         ),
-        pw.SizedBox(width: 20),
-        pw.Expanded(
-          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('Overall Grade',
-                  style: pw.TextStyle(font: medium, fontSize: 9, color: _kWhite.shade(0.7))),
-              pw.Text('${grade.toStringAsFixed(1)}%',
-                  style: pw.TextStyle(font: bold, fontSize: 9, color: _kWhite)),
-            ]),
-            pw.SizedBox(height: 6),
-            pw.Stack(children: [
-              pw.Container(height: 7, decoration: pw.BoxDecoration(
-                  color: _kWhite.shade(0.2), borderRadius: pw.BorderRadius.circular(4))),
-              pw.Row(children: [
-                pw.Expanded(flex: fillFlex, child: pw.Container(
-                    height: 7,
-                    decoration: pw.BoxDecoration(
-                        color: color, borderRadius: pw.BorderRadius.circular(4)))),
-                pw.Expanded(flex: emptyFlex, child: pw.SizedBox(height: 7)),
-              ]),
-            ]),
-            pw.SizedBox(height: 8),
-            // Grade scale labels
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-              pw.Text('0%', style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.5))),
-              pw.Text('55%', style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.5))),
-              pw.Text('75%', style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.5))),
-              pw.Text('90%', style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.5))),
-              pw.Text('100%', style: pw.TextStyle(font: medium, fontSize: 8, color: _kWhite.shade(0.5))),
-            ]),
+        borderRadius: pw.BorderRadius.circular(14),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          // Main grade ring centred
+          mainRing,
+          pw.SizedBox(height: 18),
+          // 3 sub-rings centred row
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            children: [
+              subRing('DEPTH',  depthPct),
+              pw.SizedBox(width: 28),
+              subRing('RATE',   ratePct),
+              pw.SizedBox(width: 28),
+              subRing('RECOIL', recoilPct),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+          // Divider
+          pw.Container(height: 1, color: _kWhite.shade(0.2)),
+          pw.SizedBox(height: 10),
+          // Verdict line
+          pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Container(width: 3, height: 28,
+                decoration: pw.BoxDecoration(
+                    color: allStrong ? _kSuccess : _pctColor(weakest.$2 / 100),
+                    borderRadius: pw.BorderRadius.circular(1.5))),
+            pw.SizedBox(width: 9),
+            pw.Expanded(
+              child: pw.Text(verdict,
+                  style: pw.TextStyle(font: medium, fontSize: 9,
+                      color: _kWhite.shade(0.92), lineSpacing: 2)),
+            ),
           ]),
-        ),
-      ]),
+        ],
+      ),
+    );
+  }
+
+  // ── Emergency hero — ROSC banner + 4 stat pills ───────────────────────────
+
+  static pw.Widget _buildEmergencyHero(
+      pw.Font bold, pw.Font medium, pw.Font font, SessionDetail s) {
+
+    final rosc        = s.pulseDetectedFinal;
+    final hadChecks   = s.pulseChecks.isNotEmpty;
+    final outcomeText = rosc ? 'ROSC DETECTED'
+        : hadChecks ? 'NO ROSC'
+        : 'NO PULSE DATA';
+    final outcomeColor = rosc ? _kEmgGreen : _kError;
+    final outcomeBg    = rosc ? _kEmgGreenBg : _kErrorLight;
+
+    final lastCheck = s.pulseChecks.isEmpty ? null : s.pulseChecks.last;
+
+    pw.Widget statPill(String label, String value, PdfColor color) =>
+        pw.Expanded(
+          child: pw.Container(
+            margin: const pw.EdgeInsets.symmetric(horizontal: 3),
+            padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: pw.BoxDecoration(
+              color: _kWhite.shade(0.08),
+              borderRadius: pw.BorderRadius.circular(8),
+              border: pw.Border.all(color: _kWhite.shade(0.15), width: 0.5),
+            ),
+            child: pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
+              pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 15,
+                  color: color), textAlign: pw.TextAlign.center),
+              pw.SizedBox(height: 2),
+              pw.Text(label, style: pw.TextStyle(font: font, fontSize: 7,
+                  color: _kWhite.shade(0.6)), textAlign: pw.TextAlign.center),
+            ]),
+          ),
+        );
+
+    return pw.Container(
+      width: double.infinity,
+      decoration: pw.BoxDecoration(
+        color: _kBrandDark,
+        borderRadius: pw.BorderRadius.circular(12),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Outcome banner row
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.fromLTRB(18, 14, 18, 14),
+            decoration: pw.BoxDecoration(
+              color: outcomeBg.shade(0.25),
+              borderRadius: const pw.BorderRadius.only(
+                topLeft:  pw.Radius.circular(12),
+                topRight: pw.Radius.circular(12),
+              ),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.Container(
+                  width: 10, height: 10,
+                  decoration: pw.BoxDecoration(
+                      color: outcomeColor, shape: pw.BoxShape.circle),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Text(outcomeText,
+                    style: pw.TextStyle(font: bold, fontSize: 16,
+                        color: outcomeColor)),
+                pw.Spacer(),
+                pw.Text('Emergency Session Record',
+                    style: pw.TextStyle(font: medium, fontSize: 8,
+                        color: _kWhite.shade(0.5))),
+              ],
+            ),
+          ),
+          // Stat pills row
+          pw.Padding(
+            padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 14),
+            child: pw.Row(
+              children: [
+                statPill('Time to 1st Comp.',
+                    s.timeToFirstCompression > 0
+                        ? '${s.timeToFirstCompression.toStringAsFixed(1)}s'
+                        : '—',
+                    s.timeToFirstCompression <= 10 && s.timeToFirstCompression > 0
+                        ? _kSuccess : _kWarning),
+                statPill('Compressions', '${s.compressionCount}', _kWhite),
+                statPill('Duration',     s.durationFormatted,    _kWhite),
+                statPill('Pulse Checks', '${s.pulseChecksPrompted}', _kWhite),
+                // Add a final compression count + pulse outcome already shown above.
+                // Now add patient vitals if any.
+                if (s.patientSpO2LastCheck != null)
+                  statPill('Patient SpO₂',
+                      '${s.patientSpO2LastCheck!.toStringAsFixed(0)}%',
+                      s.patientSpO2LastCheck! >= 95 ? _kSuccess
+                          : s.patientSpO2LastCheck! >= 85 ? _kWarning : _kError),
+                if (s.patientTemperature != null)
+                  statPill('Patient Temp',
+                      '${s.patientTemperature!.toStringAsFixed(1)} °C', _kWhite)
+
+                else if (lastCheck != null && lastCheck.detectedBpm > 0)
+                  statPill('Detected BPM',
+                      '${lastCheck.detectedBpm.toStringAsFixed(0)}', _kSuccess)
+                else
+                  statPill('CCF', '${(s.handsOnRatio * 100).round()}%', _kWhite),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2593,7 +3587,7 @@ class ExportService {
               _miniStat(bold, medium, s.durationFormatted, 'Duration'),
               if (s.patientTemperature != null)
                 _miniStat(bold, medium,
-                    '${s.patientTemperature!.toStringAsFixed(1)}  C', 'Patient Temp'),
+                    '${s.patientTemperature!.toStringAsFixed(1)} °C', 'Patient Temp'),
             ],
           ),
         ),
@@ -2624,7 +3618,7 @@ class ExportService {
             child: pw.Container(
               padding: const pw.EdgeInsets.symmetric(vertical: 14, horizontal: 8),
               decoration: pw.BoxDecoration(
-                  border: isLast ? null : const pw.Border(
+                  border: isLast ? null : pw.Border(
                       right: pw.BorderSide(color: _kWhite, width: 0.15))),
               child: pw.Column(children: [
                 pw.Text(c.value, style: pw.TextStyle(
@@ -2642,36 +3636,138 @@ class ExportService {
     );
   }
 
-  // ── Quality breakdown grid ─────────────────────────────────────────────────
 
-  static pw.Widget _qualityGrid(
+// ── Quality bar table — horizontal proportion bars per metric ──────────────
+
+  static pw.Widget _buildQualityBarTable(
       pw.Font bold, pw.Font medium, pw.Font font,
-      SessionDetail s, double n) {
-    final metrics = [
-      _Metric('Depth Consistency',
-          '${(s.correctDepth / n * 100).round()}%',
-          _gradeColorForPct(s.correctDepth / n)),
-      _Metric('Rate Consistency',
-          '${(s.correctFrequency / n * 100).round()}%',
-          _gradeColorForPct(s.correctFrequency / n)),
-      _Metric('Full Recoil',
-          '${(s.correctRecoil / n * 100).round()}%',
-          _gradeColorForPct(s.correctRecoil / n)),
-      _Metric('Depth + Rate',
-          '${(s.depthRateCombo / n * 100).round()}%',
-          _gradeColorForPct(s.depthRateCombo / n)),
-      _Metric('Correct Posture',
-          '${(s.correctPosture / n * 100).round()}%',
-          _gradeColorForPct(s.correctPosture / n)),
-      _Metric('Ventilation',
-          s.ventilationCount > 0
-              ? '${s.ventilationCompliance.round()}%' : 'N/A',
-          s.ventilationCount > 0
-              ? _gradeColorForPct(s.ventilationCompliance / 100)
-              : _kTextDisabled),
+      SessionDetail s, double n,
+      double depthMin, double depthMax) {
+
+    // Each entry: [label, target string, pct 0-100]
+    final rows = <(String, String, double, PdfColor)>[
+      ('Depth in target',
+      '${depthMin.toStringAsFixed(0)}–${depthMax.toStringAsFixed(0)} cm',
+      n > 0 ? s.correctDepth / n * 100 : 0,
+      _pctColor(n > 0 ? s.correctDepth / n : 0)),
+      ('Rate in target',
+      '100–120 BPM',
+      n > 0 ? s.correctFrequency / n * 100 : 0,
+      _pctColor(n > 0 ? s.correctFrequency / n : 0)),
+      ('Full recoil',
+      'No leaning',
+      n > 0 ? s.correctRecoil / n * 100 : 0,
+      _pctColor(n > 0 ? s.correctRecoil / n : 0)),
+      ('Correct posture',
+      '≤15° align / ≤10° flex',
+      n > 0 ? s.correctPosture / n * 100 : 0,
+      _pctColor(n > 0 ? s.correctPosture / n : 0)),
+      ('Depth + rate',
+      'Both correct',
+      n > 0 ? s.depthRateCombo / n * 100 : 0,
+      _pctColor(n > 0 ? s.depthRateCombo / n : 0)),
+      if (s.ventilationCount > 0)
+        ('Ventilation compliance',
+        '30:2 timing',
+        s.ventilationCompliance,
+        _pctColor(s.ventilationCompliance / 100)),
     ];
-    return _metricTileGrid(bold, font, metrics);
+    rows.sort((a, b) => a.$3.compareTo(b.$3));
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: _kBgGrey,
+        borderRadius: pw.BorderRadius.circular(10),
+        border: pw.Border.all(color: _kDivider, width: 0.5),
+      ),
+      child: pw.Column(
+        children: rows.asMap().entries.map((entry) {
+          final i = entry.key;
+          final (label, target, pct, color) = entry.value;
+          final isLast = i == rows.length - 1;
+          final pctClamped = pct.clamp(0.0, 100.0);
+          final fillFlex   = pctClamped.round().clamp(1, 99);
+          final emptyFlex  = (100 - fillFlex).clamp(1, 99);
+
+          return pw.Column(children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: pw.Row(
+                children: [
+                  // Label + target
+                  pw.SizedBox(
+                    width: 142,
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(label,
+                            style: pw.TextStyle(font: medium, fontSize: 9,
+                                color: _kTextPrimary)),
+                        pw.SizedBox(height: 1),
+                        pw.Text(target,
+                            style: pw.TextStyle(font: font, fontSize: 7,
+                                color: _kTextDisabled)),
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(width: 10),
+                  // Bar
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Stack(children: [
+                          pw.Container(
+                            height: 8,
+                            decoration: pw.BoxDecoration(
+                              color: _kDivider,
+                              borderRadius: pw.BorderRadius.circular(4),
+                            ),
+                          ),
+                          pw.Row(children: [
+                            pw.Expanded(
+                              flex: fillFlex,
+                              child: pw.Container(
+                                height: 8,
+                                decoration: pw.BoxDecoration(
+                                  color: color,
+                                  borderRadius: pw.BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: emptyFlex,
+                              child: pw.SizedBox(height: 8),
+                            ),
+                          ]),
+                        ]),
+                        pw.SizedBox(height: 2),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('0%', style: pw.TextStyle(font: font,
+                                fontSize: 6, color: _kTextDisabled)),
+                            pw.Text('${pct.toStringAsFixed(0)}%',
+                                style: pw.TextStyle(font: bold, fontSize: 8,
+                                    color: color)),
+                            pw.Text('100%', style: pw.TextStyle(font: font,
+                                fontSize: 6, color: _kTextDisabled)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isLast)
+              pw.Container(height: 0.5, color: _kDivider),
+          ]);
+        }).toList(),
+      ),
+    );
   }
+
 
   // ── Two-column metrics table ───────────────────────────────────────────────
   // Left: Depth | Right: Rate, timing, safety
@@ -2746,6 +3842,241 @@ class ExportService {
     );
   }
 
+  // ── Metric tile (single) ───────────────────────────────────────────────────
+//
+// Layout per tile (white card, brand-blue left accent bar):
+//   ┌──┬──────────────────────────────┐
+//   │  │ LABEL                        │
+//   │  │ VALUE • status dot           │
+//   │  │ ───────●──── (zone bar)      │
+//   │  │ target: 5–6 cm               │
+//   └──┴──────────────────────────────┘
+
+  static pw.Widget _metricTile({
+    required pw.Font   bold,
+    required pw.Font   medium,
+    required pw.Font   font,
+    required String    label,
+    required String    value,
+    required PdfColor  statusColor,
+    required String    target,
+    double?            currentVal,   // value position on zone bar
+    double?            zoneMin,      // bar full range
+    double?            zoneMax,
+    double?            targetMin,    // target band within zone
+    double?            targetMax,
+    bool               isAlert = false,
+  }) {
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: _kWhite,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+        // Left accent bar
+        pw.Container(width: 3,
+            decoration: pw.BoxDecoration(
+                color: statusColor,
+                borderRadius: const pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(8),
+                    bottomLeft: pw.Radius.circular(8)))),
+        pw.Expanded(
+          child: pw.Padding(
+            padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                // Label row
+                pw.Text(label.toUpperCase(),
+                    style: pw.TextStyle(font: medium, fontSize: 7,
+                        color: _kTextDisabled, letterSpacing: 0.4)),
+                pw.SizedBox(height: 2),
+                // Value + status dot
+                pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(value,
+                          style: pw.TextStyle(font: bold, fontSize: 15,
+                              color: isAlert ? _kError : _kTextPrimary)),
+                      pw.SizedBox(width: 6),
+                      pw.Container(width: 6, height: 6,
+                          decoration: pw.BoxDecoration(
+                              color: statusColor, shape: pw.BoxShape.circle)),
+                    ]),
+                pw.SizedBox(height: 6),
+                // Zone bar (optional)
+                if (currentVal != null && zoneMin != null && zoneMax != null)
+                  pw.SizedBox(
+                    height: 6,
+                    child: pw.CustomPaint(painter: (c, size) {
+                      // Track
+                      c.saveContext();
+                      c.setFillColor(_kDivider);
+                      c.drawRect(0, 0, size.x, size.y);
+                      c.fillPath();
+                      c.restoreContext();
+                      // Target band
+                      if (targetMin != null && targetMax != null) {
+                        final range = zoneMax - zoneMin;
+                        final tMinX = ((targetMin - zoneMin) / range)
+                            .clamp(0.0, 1.0) * size.x;
+                        final tMaxX = ((targetMax - zoneMin) / range)
+                            .clamp(0.0, 1.0) * size.x;
+                        c.saveContext();
+                        c.setFillColor(_kSuccess.shade(0.25));
+                        c.drawRect(tMinX, 0, tMaxX - tMinX, size.y);
+                        c.fillPath();
+                        c.restoreContext();
+                      }
+                      // Current value marker
+                      final range = zoneMax - zoneMin;
+                      final cx = ((currentVal - zoneMin) / range)
+                          .clamp(0.0, 1.0) * size.x;
+                      c.saveContext();
+                      c.setFillColor(statusColor);
+                      c.drawEllipse(cx, size.y / 2, 3.5, 3.5);
+                      c.fillPath();
+                      c.restoreContext();
+                    }),
+                  ),
+                if (currentVal != null) pw.SizedBox(height: 3),
+                pw.Text(target,
+                    style: pw.TextStyle(font: font, fontSize: 7,
+                        color: _kTextDisabled)),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+// ── Headline metric grid (2 cols × 3 rows = 6 tiles) ───────────────────────
+
+  static pw.Widget _buildMetricGrid(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      SessionDetail s, double depthMin, double depthMax) {
+
+    final n = s.compressionCount.toDouble();
+    final ccfPct  = s.handsOnRatio * 100;
+    final ttf     = s.timeToFirstCompression;
+
+    // ── Avg Depth ──
+    final depthOk    = s.averageDepth >= depthMin && s.averageDepth <= depthMax;
+    final depthHigh  = s.averageDepth > depthMax;
+    final depthColor = s.averageDepth == 0 ? _kTextDisabled
+        : depthOk            ? _kSuccess
+        : depthHigh          ? _kError
+        : _kWarning;
+    final depthTile = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Avg Depth',
+      value: s.averageDepth > 0
+          ? '${s.averageDepth.toStringAsFixed(1)} cm' : '—',
+      statusColor: depthColor,
+      target: 'Target ${depthMin.toStringAsFixed(0)}–${depthMax.toStringAsFixed(0)} cm',
+      currentVal: s.averageDepth > 0 ? s.averageDepth : null,
+      zoneMin: 0, zoneMax: 8,
+      targetMin: depthMin, targetMax: depthMax,
+    );
+
+    // ── Avg Rate ──
+    final rateOk    = s.averageFrequency >= 100 && s.averageFrequency <= 120;
+    final rateWarn  = s.averageFrequency >= 90 && s.averageFrequency <= 130;
+    final rateColor = s.averageFrequency == 0 ? _kTextDisabled
+        : rateOk                  ? _kSuccess
+        : rateWarn                ? _kWarning
+        : _kError;
+    final rateTile = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Avg Rate',
+      value: s.averageFrequency > 0
+          ? '${s.averageFrequency.round()} BPM' : '—',
+      statusColor: rateColor,
+      target: 'Target 100–120 BPM',
+      currentVal: s.averageFrequency > 0 ? s.averageFrequency : null,
+      zoneMin: 60, zoneMax: 160,
+      targetMin: 100, targetMax: 120,
+    );
+
+    // ── Recoil ──
+    final recoilPct   = n > 0 ? s.correctRecoil / n * 100 : 0.0;
+    final recoilColor = _pctColor(recoilPct / 100);
+    final recoilTile  = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Full Recoil',
+      value: n > 0 ? '${recoilPct.toStringAsFixed(0)}%' : '—',
+      statusColor: recoilColor,
+      target: 'Target ≥ 80% (no leaning)',
+      currentVal: recoilPct,
+      zoneMin: 0, zoneMax: 100,
+      targetMin: 80, targetMax: 100,
+    );
+
+    // ── CCF (Hands-on) ──
+    final ccfColor = _pctColor(ccfPct / 100);
+    final ccfTile  = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Hands-On (CCF)',
+      value: '${ccfPct.round()}%',
+      statusColor: ccfColor,
+      target: 'Target ≥ 80%',
+      currentVal: ccfPct,
+      zoneMin: 0, zoneMax: 100,
+      targetMin: 80, targetMax: 100,
+    );
+
+    // ── Time to first ──
+    final ttfColor = ttf <= 0 ? _kTextDisabled
+        : ttf <= 10 ? _kSuccess
+        : ttf <= 20 ? _kWarning
+        : _kError;
+    final ttfTile = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Time to 1st Comp',
+      value: ttf > 0 ? '${ttf.toStringAsFixed(1)}s' : '—',
+      statusColor: ttfColor,
+      target: 'Target < 10s',
+      currentVal: ttf > 0 ? ttf.clamp(0.0, 30.0) : null,
+      zoneMin: 0, zoneMax: 30,
+      targetMin: 0, targetMax: 10,
+    );
+
+    // ── Unplanned Pauses ──
+    final pauseTime  = s.unplannedPauseTime;
+    final pauseLimit = AppConstants.maxAcceptablePauseSec;
+    final pauseColor = pauseTime <= pauseLimit ? _kSuccess : _kWarning;
+    final pauseTile  = _metricTile(
+      bold: bold, medium: medium, font: font,
+      label: 'Unplanned Pauses',
+      value: pauseTime > 0 ? '${pauseTime.toStringAsFixed(1)}s' : '0s',
+      statusColor: pauseColor,
+      target: 'Target < ${pauseLimit.toStringAsFixed(0)}s · '
+          '${s.unplannedPauseCount}× this session',
+      currentVal: pauseTime.clamp(0.0, 15.0),
+      zoneMin: 0, zoneMax: 15,
+      targetMin: 0, targetMax: pauseLimit,
+      isAlert: s.unplannedPauseCount > 3,
+    );
+
+    pw.Widget row(pw.Widget a, pw.Widget b) => pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Expanded(child: a),
+        pw.SizedBox(width: 10),
+        pw.Expanded(child: b),
+      ],
+    );
+
+    return pw.Column(children: [
+      row(depthTile, rateTile),
+      pw.SizedBox(height: 10),
+      row(recoilTile, ccfTile),
+      pw.SizedBox(height: 10),
+      row(ttfTile, pauseTile),
+    ]);
+  }
+
   static pw.Widget _miniDetailTable(
       pw.Font medium, pw.Font font, String header, List<_Row> rows) {
     if (rows.isEmpty) return pw.SizedBox.shrink();
@@ -2758,10 +4089,11 @@ class ExportService {
           decoration: pw.BoxDecoration(
               color: _kBrandLight, borderRadius: pw.BorderRadius.circular(4)),
           child: pw.Text(header, style: pw.TextStyle(
-              font: medium, fontSize: 8, color: _kBrandBlue)),
+              font: medium, fontSize: 7, color: _kBrandBlue,
+              letterSpacing: 0.6)),
         ),
         pw.Table(
-          border: const pw.TableBorder(
+          border: pw.TableBorder(
               horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
           columnWidths: {
             0: const pw.FlexColumnWidth(2.2),
@@ -2792,7 +4124,7 @@ class ExportService {
                   padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                   child: pw.Text(r.value,
                       textAlign: pw.TextAlign.right,
-                      style: pw.TextStyle(font: medium, fontSize: 9,
+                      style: pw.TextStyle(font: medium, fontSize: 8,
                           color: r.isAlert ? _kError : _kTextPrimary)),
                 ),
               ],
@@ -2809,7 +4141,7 @@ class ExportService {
       pw.Font bold, pw.Font medium, pw.Font font,
       List<VentilationEvent> ventilations) {
     return pw.Table(
-      border: const pw.TableBorder(
+      border: pw.TableBorder(
           horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
       columnWidths: {
         0: const pw.FixedColumnWidth(28),
@@ -2819,7 +4151,7 @@ class ExportService {
       },
       children: [
         pw.TableRow(
-          decoration: const pw.BoxDecoration(color: _kBrandDark),
+          decoration: pw.BoxDecoration(color: _kBrandDark),
           children: [
             _tableCell(bold, 'Cycle', isHeader: true, isDark: true),
             _tableCell(bold, 'At (elapsed)', isHeader: true, isDark: true),
@@ -2848,7 +4180,7 @@ class ExportService {
                     decoration: pw.BoxDecoration(
                         color: v.compliant ? _kSuccessLight : _kErrorLight,
                         borderRadius: pw.BorderRadius.circular(4)),
-                    child: pw.Text(v.compliant ? '✓' : '✗',
+                    child: pw.Text(v.compliant ? '✓' : 'x',
                         style: pw.TextStyle(font: bold, fontSize: 8,
                             color: v.compliant ? _kSuccess : _kError)),
                   ),
@@ -2867,12 +4199,12 @@ class ExportService {
       pw.Font bold, pw.Font medium, pw.Font font,
       List<PulseCheckEvent> checks) {
     const classLabels = ['ABSENT', 'UNCERTAIN', 'PRESENT'];
-    const classColors = [_kError, _kWarning, _kSuccess];
-    const classBgs    = [_kErrorLight, _kWarningLight, _kSuccessLight];
+    final classColors = [_kError, _kWarning, _kSuccess];
+    final classBgs    = [_kErrorLight, _kWarningLight, _kSuccessLight];
 
     return pw.Column(children: [
       pw.Table(
-        border: const pw.TableBorder(
+        border: pw.TableBorder(
             horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
         columnWidths: {
           0: const pw.FixedColumnWidth(24),
@@ -2885,7 +4217,7 @@ class ExportService {
         },
         children: [
           pw.TableRow(
-            decoration: const pw.BoxDecoration(color: _kBrandDark),
+            decoration: pw.BoxDecoration(color: _kBrandDark),
             children: [
               _tableCell(bold, '#', isHeader: true, isDark: true),
               _tableCell(bold, 'At', isHeader: true, isDark: true),
@@ -2969,13 +4301,13 @@ class ExportService {
     final patientItems = <_Metric>[];
     if (s.patientTemperature != null)
       patientItems.add(_Metric('Patient Temperature',
-          '${s.patientTemperature!.toStringAsFixed(1)}  C', _kTextPrimary));
+          '${s.patientTemperature!.toStringAsFixed(1)} °C', _kTextPrimary));
     if (patSpO2 != null)
       patientItems.add(_Metric('Patient SpO₂ (best)',
           '${patSpO2.toStringAsFixed(0)}%', _kTextPrimary));
     if (s.rescuerWristTempStart != null)
       rescuerItems.add(_Metric('Wrist Temp (start)',
-          '${s.rescuerWristTempStart!.toStringAsFixed(1)}  C', _kTextSecond));
+          '${s.rescuerWristTempStart!.toStringAsFixed(1)} °C', _kTextSecond));
     if (s.rescuerWristTempEnd != null)
       rescuerItems.add(_Metric('Wrist Temp (end)',
           '${s.rescuerWristTempEnd!.toStringAsFixed(1)}  C', _kTextSecond));
@@ -3185,7 +4517,7 @@ class ExportService {
             margin:  const pw.EdgeInsets.only(right: 6, bottom: 6),
             padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
-                color: _kBgCard,
+                color: _kBgGrey,
                 borderRadius: pw.BorderRadius.circular(8),
                 border: pw.Border.all(color: _kDivider, width: 0.5)),
             child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
@@ -3225,70 +4557,949 @@ class ExportService {
     );
   }
 
-  // ── Grade sparkline panel ─────────────────────────────────────────────────
+// ── Trend banner card (dark gradient, matches app _TrendBanner) ────────────
 
-  static pw.Widget _gradeSparklinePanel(
-      pw.Font font, pw.Font medium, pw.Font bold,
-      List<SessionSummary> sessions, double trendDelta) {
+  static pw.Widget _buildTrendBannerCard(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions, double trendDelta,
+      double avgGrade, double bestGrade, double worstGrade) {
+
     if (sessions.length < 2) {
-      return pw.Container(height: 100, padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-              color: _kBgGrey, borderRadius: pw.BorderRadius.circular(8)),
-          child: pw.Center(child: pw.Text('Not enough sessions for trend',
-              style: pw.TextStyle(font: font, fontSize: 10, color: _kTextDisabled))));
+      return pw.Container(
+        height: 80,
+        padding: const pw.EdgeInsets.all(14),
+        decoration: pw.BoxDecoration(
+            color: _kBgGrey, borderRadius: pw.BorderRadius.circular(10)),
+        child: pw.Center(child: pw.Text('Not enough sessions for trend',
+            style: pw.TextStyle(font: font, fontSize: 10, color: _kTextDisabled))),
+      );
     }
 
-    final grades = sessions.map((s) => s.totalGrade).toList();
-    final trendColor = trendDelta >= 3 ? _kSuccess
-        : trendDelta <= -3 ? _kError : _kWarning;
-    final trendLabel = trendDelta >= 0
-        ? '+${trendDelta.toStringAsFixed(1)}%'
-        : '${trendDelta.toStringAsFixed(1)}%';
+    final improved  = trendDelta > 2;
+    final declined  = trendDelta < -2;
+    final grades    = sessions.map((s) => s.totalGrade).toList();
+    final first     = grades.first;
+    final last      = grades.last;
+    final spread    = grades.reduce((a, b) => a > b ? a : b) -
+        grades.reduce((a, b) => a < b ? a : b);
+
+    final lineColor = improved ? _kSuccess : declined ? _kError : _kWarning;
+    final stateLabel = improved ? 'IMPROVING'
+        : declined ? 'NEEDS WORK'
+        : spread < 5 ? 'STABLE' : 'FLUCTUATING';
+    final deltaStr  = trendDelta >= 0
+        ? '+${trendDelta.toStringAsFixed(0)} pts'
+        : '${trendDelta.toStringAsFixed(0)} pts';
+
+    pw.Widget statRow(String icon, String label, String value) =>
+        pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
+          pw.Text(icon, style: pw.TextStyle(font: bold, fontSize: 8,
+              color: _kWhite.shade(0.5))),
+          pw.SizedBox(width: 3),
+          pw.Text('$label ', style: pw.TextStyle(font: font, fontSize: 8,
+              color: _kWhite.shade(0.45))),
+          pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 9,
+              color: _kWhite)),
+        ]);
 
     return pw.Container(
-      padding: const pw.EdgeInsets.all(14),
       decoration: pw.BoxDecoration(
-          color: _kBgGrey, borderRadius: pw.BorderRadius.circular(8)),
+        gradient: pw.LinearGradient(
+            colors: [_kBrandBlue, _kBrandDark],
+            begin: pw.Alignment.topLeft, end: pw.Alignment.bottomRight),
+        borderRadius: pw.BorderRadius.circular(12),
+      ),
       child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('Grade Trend  (Training Sessions)',
-                style: pw.TextStyle(font: bold, fontSize: 10, color: _kTextPrimary)),
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: pw.BoxDecoration(
-                  color: trendColor.shade(0.15),
-                  borderRadius: pw.BorderRadius.circular(999)),
-              child: pw.Text(trendLabel,
-                  style: pw.TextStyle(font: bold, fontSize: 9, color: trendColor)),
+        // ── Header row ─────────────────────────────────────────────────────
+        pw.Padding(
+          padding: const pw.EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Left: delta + range
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('GRADE TREND',
+                        style: pw.TextStyle(font: bold, fontSize: 7,
+                            color: _kWhite.shade(0.5))),
+                    pw.SizedBox(height: 3),
+                    pw.Text(deltaStr,
+                        style: pw.TextStyle(font: bold, fontSize: 22,
+                            color: _kWhite)),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      '${first.toStringAsFixed(0)}% → ${last.toStringAsFixed(0)}%',
+                      style: pw.TextStyle(font: font, fontSize: 9,
+                          color: _kWhite.shade(0.55)),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Avg ${avgGrade.toStringAsFixed(1)}%  ·  '
+                          '${sessions.length} sessions',
+                      style: pw.TextStyle(font: medium, fontSize: 8,
+                          color: _kWhite.shade(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              // Right: state pill + best/worst
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                      color:        lineColor.shade(0.25),
+                      borderRadius: pw.BorderRadius.circular(999),
+                      border: pw.Border.all(color: lineColor, width: 0.8),
+                    ),
+                    child: pw.Text(stateLabel,
+                        style: pw.TextStyle(font: bold, fontSize: 8,
+                            color: lineColor)),
+                  ),
+                  pw.SizedBox(height: 10),
+                  statRow('★', 'Best',  '${bestGrade.toStringAsFixed(0)}%'),
+                  pw.SizedBox(height: 3),
+                  statRow('↓', 'Worst', '${worstGrade.toStringAsFixed(0)}%'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // ── Sparkline chart ─────────────────────────────────────────────────
+        pw.Padding(
+          padding: const pw.EdgeInsets.fromLTRB(8, 0, 8, 14),
+          child: pw.SizedBox(
+            height: 80,
+            child: pw.CustomPaint(
+              painter: (canvas, size) =>
+                  _paintGradeSparkline(canvas, size, grades),
             ),
-          ],
+          ),
         ),
-        pw.SizedBox(height: 8),
-        pw.SizedBox(
-          height: 80,
-          child: pw.CustomPaint(painter: (canvas, size) =>
-              _paintGradeSparkline(canvas, size, grades)),
+        // ── Date range footer ───────────────────────────────────────────────
+        pw.Padding(
+          padding: const pw.EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(sessions.first.dateFormatted,
+                  style: pw.TextStyle(font: font, fontSize: 7,
+                      color: _kWhite.shade(0.45))),
+              pw.Text(sessions.last.dateFormatted,
+                  style: pw.TextStyle(font: font, fontSize: 7,
+                      color: _kWhite.shade(0.45))),
+            ],
+          ),
         ),
-        pw.SizedBox(height: 4),
-        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-          pw.Text(sessions.first.dateFormatted,
-              style: pw.TextStyle(font: font, fontSize: 8, color: _kTextDisabled)),
-          pw.Text(sessions.last.dateFormatted,
-              style: pw.TextStyle(font: font, fontSize: 8, color: _kTextDisabled)),
-        ]),
       ]),
     );
   }
 
-  // ── All-sessions table ────────────────────────────────────────────────────
+  // ── Shared colour helper ───────────────────────────────────────────────────
 
-  static pw.Widget _sessionTable(
+  static PdfColor _pctColor(double fraction) {
+    if (fraction >= 0.80) return _kSuccess;
+    if (fraction >= 0.60) return _kWarning;
+    return _kError;
+  }
+
+  // ── Radar bar table — one row per axis, one bar per session ───────────────
+
+  static pw.Widget _buildRadarBarTable(
       pw.Font bold, pw.Font medium, pw.Font font,
-      List<SessionSummary> sessions) {
+      List<SessionSummary> sessions, List<PdfColor> slotColors) {
+
+    final axes = <(String, double Function(SessionSummary))>[
+      ('Depth',   (s) => s.compressionCount > 0
+          ? s.correctDepth / s.compressionCount * 100 : 0),
+      ('Rate',    (s) => s.compressionCount > 0
+          ? s.correctFrequency / s.compressionCount * 100 : 0),
+      ('Recoil',  (s) => s.compressionCount > 0
+          ? s.correctRecoil / s.compressionCount * 100 : 0),
+      ('Hands-on',(s) => s.handsOnRatio * 100),
+      ('Posture', (s) => s.compressionCount > 0
+          ? s.correctPosture / s.compressionCount * 100 : 0),
+    ];
+    // Comparison mode: show ALL selected sessions.
+// Capped at 4 because the chart isn't readable beyond that.
+    final show = sessions.take(4).toList();
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: _kWhite,
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      padding: const pw.EdgeInsets.all(12),
+      child: pw.Column(children: [
+        pw.SizedBox(
+          height: 200,
+          child: pw.Stack(
+            children: [
+              pw.Positioned.fill(
+                child: pw.CustomPaint(
+                  painter: (canvas, size) => _paintRadar(
+                      canvas, size, show, axes, slotColors),
+                ),
+              ),
+              // 5 axis labels positioned around the pentagon.
+              // Pentagon centre ≈ (centre, 100); r ≈ 76 (100-24).
+              for (int i = 0; i < axes.length; i++)
+                _radarLabel(font, axes[i].$1, i, axes.length, 200),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Wrap(
+          spacing: 14, runSpacing: 4,
+          children: [
+            for (int i = 0; i < show.length; i++)
+              pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
+                pw.Container(width: 8, height: 8,
+                    decoration: pw.BoxDecoration(
+                        color: slotColors[i % slotColors.length],
+                        shape: pw.BoxShape.circle)),
+                pw.SizedBox(width: 4),
+                pw.Text('S${show[i].sessionNumber ?? i + 1}',
+                    style: pw.TextStyle(
+                        font: medium, fontSize: 8, color: _kTextSecond)),
+              ]),
+          ],
+        ),
+      ]),
+    );
+  }
+
+  static pw.Widget _radarLabel(
+      pw.Font font, String text, int i, int n, double box) {
+    const pi = 3.141592653589793;
+    final ang = (pi / 2) - (2 * pi * i / n);
+    final cx  = box / 2;
+    final cy  = box / 2;
+    final r   = (box / 2) - 14;          // just outside the outer ring
+    final lx  = cx + r * math.cos(ang);
+    final ly  = cy - r * math.sin(ang);
+    return pw.Positioned(
+      left: lx - 26, top: ly - 5,
+      child: pw.SizedBox(
+        width: 52,
+        child: pw.Text(text, textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(font: font, fontSize: 7,
+                color: _kTextSecond)),
+      ),
+    );
+  }
+
+  /// Overlaid radar pentagon — one polygon per session. Mirrors the
+  /// in-app _RadarCard (Depth/Rate/Recoil/Hands-on/Posture, 0–100).
+  static void _paintRadar(
+      PdfGraphics canvas, PdfPoint size,
+      List<SessionSummary> sessions,
+      List<(String, double Function(SessionSummary))> axes,
+      List<PdfColor> slotColors) {
+    final n  = axes.length;
+    final cx = size.x / 2;
+    final cy = size.y / 2;
+    final r  = (size.y / 2) - 24; // leave room for axis labels
+
+    // angle for axis i (start at top, clockwise)
+    double ang(int i) => (3.141592653589793 / 2) - (2 * 3.141592653589793 * i / n);
+    double px(int i, double frac) => cx + r * frac * _cos(ang(i));
+    double py(int i, double frac) => cy - r * frac * _sin(ang(i));
+
+    // Grid rings at 25/50/75/100%
+    for (final ringFrac in [0.25, 0.5, 0.75, 1.0]) {
+      canvas.saveContext();
+      canvas.setStrokeColor(_kDivider);
+      canvas.setLineWidth(0.5);
+      for (int i = 0; i < n; i++) {
+        final a = px(i, ringFrac), b = py(i, ringFrac);
+        final a2 = px((i + 1) % n, ringFrac), b2 = py((i + 1) % n, ringFrac);
+        if (i == 0) canvas.moveTo(a, b);
+        canvas.lineTo(a2, b2);
+      }
+      canvas.strokePath();
+      canvas.restoreContext();
+    }
+
+    // Spokes
+    for (int i = 0; i < n; i++) {
+      canvas.saveContext();
+      canvas.setStrokeColor(_kDivider);
+      canvas.moveTo(cx, cy);
+      canvas.lineTo(px(i, 1.0), py(i, 1.0));
+      canvas.strokePath();
+      canvas.restoreContext();
+    }
+
+    // Session polygons
+    for (int s = 0; s < sessions.length; s++) {
+      final col = slotColors[s % slotColors.length];
+      final fracs = [
+        for (final ax in axes)
+          (ax.$2(sessions[s]).clamp(0.0, 100.0)) / 100.0,
+      ];
+      // fill
+      if (sessions.length <= 2) {
+        canvas.saveContext();
+        canvas.setFillColor(col.shade(0.10));
+        for (int i = 0; i < n; i++) {
+          final x = px(i, fracs[i]),
+              y = py(i, fracs[i]);
+          if (i == 0)
+            canvas.moveTo(x, y);
+          else
+            canvas.lineTo(x, y);
+        }
+        canvas.closePath();
+        canvas.fillPath();
+        canvas.restoreContext();
+      }
+
+      // outline
+      canvas.saveContext();
+      canvas.setStrokeColor(col);
+      canvas.setLineWidth(1.4);
+      for (int i = 0; i < n; i++) {
+        final x = px(i, fracs[i]), y = py(i, fracs[i]);
+        if (i == 0) canvas.moveTo(x, y);
+        else canvas.lineTo(x, y);
+      }
+      canvas.lineTo(px(0, fracs[0]), py(0, fracs[0]));
+      canvas.strokePath();
+      canvas.restoreContext();
+    }
+  }
+
+  static double _cos(double x) {
+    // Use dart:math via the file's existing import if present;
+    // otherwise this references math.cos — see EX-A note.
+    return math.cos(x);
+  }
+  static double _sin(double x) => math.sin(x);
+
+  // ── Phase depth card (single session) ─────────────────────────────────────
+
+  static pw.Widget _buildPhaseDepthCard(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<CompressionEvent> compressions,
+      double depthMin, double depthMax) {
+
+    final third = (compressions.length / 3).ceil();
+    final early = compressions.take(third).toList();
+    final mid   = compressions.skip(third).take(third).toList();
+    final late  = compressions.skip(third * 2).toList();
+
+    double avg(List<CompressionEvent> sl) => sl.isEmpty
+        ? 0
+        : sl.map((c) => c.depth).reduce((a, b) => a + b) / sl.length;
+
+    double avgRate(List<CompressionEvent> sl) => sl.isEmpty
+        ? 0
+        : sl.map((c) => c.instantaneousRate > 0
+        ? c.instantaneousRate : c.frequency)
+        .reduce((a, b) => a + b) / sl.length;
+
+    final phases = [
+      ('Early', avg(early), avgRate(early), _kBrandBlue),
+      ('Mid',   avg(mid),   avgRate(mid),   _kBrandMid),
+      ('Late',  avg(late),  avgRate(late),  _kWarning),
+    ];
+
+    pw.Widget phaseBar(String label, double depth, double rate, PdfColor color) {
+      final depthColor  = depth >= depthMin && depth <= depthMax ? _kSuccess
+          : depth >= depthMin - 0.5 && depth <= depthMax + 0.5 ? _kWarning
+          : _kError;
+      final rateColor   = rate >= 100 && rate <= 120 ? _kSuccess
+          : rate >= 90 && rate <= 130 ? _kWarning : _kError;
+      final barFraction = (depth / 9.0).clamp(0.0, 1.0);
+      final fillFlex    = (barFraction * 100).round().clamp(1, 99);
+      final emptyFlex   = (100 - fillFlex).clamp(1, 99);
+
+      return pw.Expanded(
+        child: pw.Container(
+          margin: const pw.EdgeInsets.symmetric(horizontal: 4),
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            color: _kBgGrey,
+            borderRadius: pw.BorderRadius.circular(8),
+            border: pw.Border.all(color: color.shade(0.4), width: 1),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(children: [
+                pw.Container(width: 8, height: 8,
+                    decoration: pw.BoxDecoration(
+                        color: color, shape: pw.BoxShape.circle)),
+                pw.SizedBox(width: 4),
+                pw.Text(label, style: pw.TextStyle(font: bold, fontSize: 9,
+                    color: _kTextPrimary)),
+              ]),
+              pw.SizedBox(height: 8),
+              // Depth bar
+              pw.Text('Depth', style: pw.TextStyle(font: font, fontSize: 7,
+                  color: _kTextDisabled)),
+              pw.SizedBox(height: 2),
+              pw.Stack(children: [
+                pw.Container(height: 7, decoration: pw.BoxDecoration(
+                    color: _kDivider, borderRadius: pw.BorderRadius.circular(3))),
+                pw.Row(children: [
+                  pw.Expanded(flex: fillFlex, child: pw.Container(
+                      height: 7,
+                      decoration: pw.BoxDecoration(color: depthColor,
+                          borderRadius: pw.BorderRadius.circular(3)))),
+                  pw.Expanded(flex: emptyFlex, child: pw.SizedBox(height: 7)),
+                ]),
+              ]),
+              pw.SizedBox(height: 2),
+              pw.Text('${depth.toStringAsFixed(1)} cm',
+                  style: pw.TextStyle(font: bold, fontSize: 10,
+                      color: depthColor)),
+              pw.SizedBox(height: 8),
+              // Rate
+              pw.Text('Rate', style: pw.TextStyle(font: font, fontSize: 7,
+                  color: _kTextDisabled)),
+              pw.SizedBox(height: 1),
+              pw.Text('${rate.toStringAsFixed(0)} BPM',
+                  style: pw.TextStyle(font: bold, fontSize: 10,
+                      color: rateColor)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return pw.Column(children: [
+      pw.Row(
+        children: phases
+            .map((p) => phaseBar(p.$1, p.$2, p.$3, p.$4))
+            .toList(),
+      ),
+      pw.SizedBox(height: 6),
+      // Target reminder
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: pw.BoxDecoration(
+          color: _kSuccessLight,
+          borderRadius: pw.BorderRadius.circular(5),
+        ),
+        child: pw.Text(
+          'Target: ${depthMin.toStringAsFixed(1)}–${depthMax.toStringAsFixed(1)} cm  ·  100–120 BPM  ·  '
+              'Consistent across all phases indicates good stamina',
+          style: pw.TextStyle(font: font, fontSize: 7, color: _kSuccess),
+        ),
+      ),
+    ]);
+  }
+
+
+
+  // ─────────────────────────────────────────────────────────────────────────────
+// SESSION TIMELINE (single-session event timeline)
+//
+// Mirrors the in-app _SessionTimelineSection. One row per event:
+//   [ mm:ss ] [ dot ] [ title / subtitle / tip ]
+// A vertical connector line links all dots. Last event ("Session ended")
+// has a square cap to indicate the end.
+// ─────────────────────────────────────────────────────────────────────────────
+
+  static String _mmssFromSec(double secs) {
+    final m = (secs ~/ 60).toString();
+    final s = (secs % 60).toInt().toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  static List<_TLEventPdf> _buildTimelineEvents(SessionDetail d) {
+    final events = <_TLEventPdf>[];
+
+    // ── Session start ──────────────────────────────────────────────────────
+    events.add(_TLEventPdf(
+      sortKey:   -1,
+      time:      '0:00',
+      title:     'Session started',
+      subtitle:  d.timeToFirstCompression > 0
+          ? 'First compression at ${d.timeToFirstCompression.toStringAsFixed(1)} s'
+          : 'Compressions begun immediately',
+      dotColor:  _kBrandMid,
+      isBookend: true,
+      tip:       d.timeToFirstCompression > 10
+          ? 'Slow start — target under 10 s'
+          : null,
+    ));
+
+    // ── Fatigue onset ──────────────────────────────────────────────────────
+    if (d.fatigueOnsetIndex > 0 &&
+        d.compressions.length >= d.fatigueOnsetIndex) {
+      final t = d.compressions[d.fatigueOnsetIndex - 1].timestampSec;
+      events.add(_TLEventPdf(
+        sortKey:  t,
+        time:     _mmssFromSec(t),
+        title:    'Fatigue onset',
+        subtitle: 'Detected at compression #${d.fatigueOnsetIndex}',
+        dotColor: _kWarning,
+      ));
+    }
+
+    // ── Unplanned pauses (scan gaps just like the app) ────────────────────
+    void scan(double gapStart, double gapEnd) {
+      final gap = gapEnd - gapStart;
+      if (gap <= 2.0) return;
+      const tol = AppConstants.plannedWindowAssocToleranceSec;
+      final isPlanned = d.ventilations.any((v) =>
+      v.timestampSec >= gapStart - tol && v.timestampSec <= gapEnd) ||
+          d.pulseChecks.any((p) =>
+          p.timestampSec >= gapStart - tol && p.timestampSec <= gapEnd);
+      if (!isPlanned) {
+        events.add(_TLEventPdf(
+          sortKey:  gapStart,
+          time:     _mmssFromSec(gapStart),
+          title:    'Unplanned pause',
+          subtitle: '${gap.toStringAsFixed(1)} s with no compressions',
+          dotColor: _kError,
+          tip:      'Keep pauses under '
+              '${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s',
+        ));
+      } else if (gap > AppConstants.maxAcceptablePauseSec) {
+        final excess = gap - AppConstants.maxAcceptablePauseSec;
+        events.add(_TLEventPdf(
+          sortKey:  gapEnd - 0.001,
+          time:     _mmssFromSec(gapStart + AppConstants.maxAcceptablePauseSec),
+          title:    'Unplanned pause',
+          subtitle: '${excess.toStringAsFixed(1)} s over the '
+              '${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s allowance',
+          dotColor: _kError,
+        ));
+      }
+    }
+    if (d.compressions.isNotEmpty) {
+      scan(0.0, d.compressions.first.timestampSec);
+      for (int i = 1; i < d.compressions.length; i++) {
+        scan(d.compressions[i - 1].timestampSec,
+            d.compressions[i].timestampSec);
+      }
+      scan(d.compressions.last.timestampSec, d.sessionDuration.toDouble());
+    }
+
+    // ── Ventilations ───────────────────────────────────────────────────────
+    for (final v in d.ventilations) {
+      events.add(_TLEventPdf(
+        sortKey:  v.timestampSec,
+        time:     _mmssFromSec(v.timestampSec),
+        title:    'Ventilation · cycle ${v.cycleNumber}',
+        subtitle: v.compliant
+            ? '${v.durationSec.toStringAsFixed(1)} s pause'
+            : 'Prompt ignored · CPR continued',
+        dotColor:  v.compliant ? _kBrandMid : _kTextDisabled,
+        isIgnored: !v.compliant,
+      ));
+    }
+
+    // ── Pulse checks (emergency mode usually) ─────────────────────────────
+    for (final p in d.pulseChecks) {
+      final detected = p.detected && p.detectedBpm > 0;
+      events.add(_TLEventPdf(
+        sortKey:   p.timestampSec,
+        time:      _mmssFromSec(p.timestampSec),
+        title:     'Pulse check #${p.intervalNumber}',
+        subtitle:  !p.compliant
+            ? 'Prompt ignored · CPR continued'
+            : detected
+            ? '${p.detectedBpm.round()} bpm · ${p.confidence}% confidence'
+            : 'No pulse found',
+        dotColor:  !p.compliant   ? _kTextDisabled
+            : detected      ? _kSuccess
+            : _kError,
+        isIgnored: !p.compliant,
+      ));
+    }
+
+    // ── Rescuer swaps ──────────────────────────────────────────────────────
+    for (int i = 0; i < d.rescuerSwapCount; i++) {
+      final t = (i + 1) * 120.0;
+      events.add(_TLEventPdf(
+        sortKey:  t,
+        time:     _mmssFromSec(t),
+        title:    'Rescuer swap · alert ${i + 1}',
+        subtitle: '2-minute interval prompt',
+        dotColor: _kWarning,
+      ));
+    }
+
+    events.sort((a, b) => a.sortKey.compareTo(b.sortKey));
+
+    // ── Session end ────────────────────────────────────────────────────────
+    events.add(_TLEventPdf(
+      sortKey:   d.sessionDuration.toDouble() + 1,
+      time:      d.durationFormatted,
+      title:     'Session ended',
+      subtitle:  () {
+        final parts = ['${d.compressionCount} compressions'];
+        if (d.unplannedPauseCount > 0) {
+          parts.add('${d.unplannedPauseCount} unplanned '
+              'pause${d.unplannedPauseCount == 1 ? '' : 's'}');
+        }
+        return parts.join(' · ');
+      }(),
+      dotColor:  _kBrandMid,
+      isBookend: true,
+    ));
+
+    return events;
+  }
+
+// ── Build the timeline widget ────────────────────────────────────────────────
+
+  static pw.Widget _buildSessionTimeline(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      SessionDetail d) {
+
+    final events = _buildTimelineEvents(d);
+    if (events.length <= 2) {
+      // Just start + end → not worth rendering.
+      return pw.SizedBox.shrink();
+    }
+
+    // Row layout (PDF can't do IntrinsicHeight cleanly, so each row has
+    // fixed-height connector segments stitched together):
+    //
+    // [ 0:42  ]   ●          Unplanned pause
+    //              │          3.4 s with no compressions
+    //              │          [ tip pill ]
+    // [ 0:55  ]   ●          Ventilation · cycle 3
+    //              │          1.4 s pause
+    //              │
+    //
+    // Connector line is drawn by a small CustomPaint behind each row's dot.
+
+    pw.Widget row(_TLEventPdf e, bool isFirst, bool isLast) {
+      final dotSize     = e.isBookend ? 18.0 : 12.0;
+      final dotColumnW  = 22.0;
+
+      // Build the optional tip pill
+      pw.Widget? tip;
+      if (e.tip != null) {
+        tip = pw.Container(
+          margin:  const pw.EdgeInsets.only(top: 4),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: pw.BoxDecoration(
+            color: _kWarningLight,
+            borderRadius: pw.BorderRadius.circular(99),
+          ),
+          child: pw.Text(e.tip!,
+              style: pw.TextStyle(font: medium, fontSize: 7,
+                  color: _kWarning)),
+        );
+      }
+
+      return pw.Container(
+        // No fixed height — let content drive it.
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Time column
+            pw.SizedBox(
+              width: 32,
+              child: pw.Padding(
+                padding: const pw.EdgeInsets.only(top: 2),
+                child: pw.Text(e.time,
+                    textAlign: pw.TextAlign.right,
+                    style: pw.TextStyle(font: medium, fontSize: 7,
+                        color: _kTextDisabled)),
+              ),
+            ),
+            pw.SizedBox(width: 6),
+            // Dot + connector column
+            pw.SizedBox(
+              width: dotColumnW,
+              child: pw.Stack(
+                alignment: pw.Alignment.topCenter,
+                children: [
+                  // Connector segments — drawn behind the dot.
+                  // Top half (above the dot) — skip on first row.
+                  if (!isFirst)
+                    pw.Positioned(
+                      top: 0,
+                      child: pw.Container(
+                          width: 1.5, height: 8, color: _kDivider),
+                    ),
+                  // Bottom half (below the dot) — skip on last row.
+                  if (!isLast)
+                    pw.Positioned(
+                      top: 8 + dotSize - 1,
+                      bottom: 0,
+                      child: pw.Container(
+                          width: 1.5, color: _kDivider),
+                    ),
+                  // The dot itself
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 6),
+                    child: e.isIgnored
+                        ? pw.Container(
+                      width: dotSize, height: dotSize,
+                      decoration: pw.BoxDecoration(
+                        color: _kBgGrey,
+                        shape: pw.BoxShape.circle,
+                        border: pw.Border.all(
+                            color: _kTextDisabled, width: 0.8),
+                      ),
+                    )
+                        : pw.Container(
+                      width: dotSize, height: dotSize,
+                      decoration: pw.BoxDecoration(
+                        color: e.dotColor,
+                        shape: pw.BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            // Content
+            pw.Expanded(
+              child: pw.Padding(
+                padding: pw.EdgeInsets.only(
+                    top: 3,
+                    bottom: isLast ? 0 : 10),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(e.title,
+                        style: pw.TextStyle(
+                            font: e.isBookend ? bold : medium,
+                            fontSize: 9,
+                            color: e.isIgnored
+                                ? _kTextDisabled : _kTextPrimary)),
+                    pw.SizedBox(height: 1),
+                    pw.Text(e.subtitle,
+                        style: pw.TextStyle(font: font, fontSize: 7,
+                            color: e.isIgnored
+                                ? _kTextDisabled
+                                : _kTextSecond)),
+                    if (tip != null) tip,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Stat strip below the timeline (like _TimelineStatGrid) ──────────────
+    final activeCprTime = (d.sessionDuration - d.noFlowTime).clamp(0.0, double.infinity);
+    final compliantVent = d.ventilations.where((v) => v.compliant).length;
+    final pauseColor    = d.unplannedPauseTime > AppConstants.maxAcceptablePauseSec
+        ? _kWarning : _kSuccess;
+
+    final chips = <(String, String, PdfColor)>[
+      ('Total time',   d.durationFormatted, _kTextSecond),
+      if (d.unplannedPauseCount > 0)
+        ('Active CPR',  _mmssFromSec(activeCprTime.toDouble()), _kBrandBlue),
+      ('Compressions', '${d.compressionCount}', _kTextPrimary),
+      if (d.unplannedPauseCount > 0)
+        ('Unplanned pauses',
+        '${d.unplannedPauseTime.toStringAsFixed(1)}s '
+            '(${d.unplannedPauseCount}×)', pauseColor),
+      if (d.ventilations.isNotEmpty)
+        ('Ventilations',
+        '$compliantVent/${d.ventilations.length} compliant',
+        compliantVent == d.ventilations.length ? _kBrandBlue : _kWarning),
+      if (d.pulseChecks.isNotEmpty)
+        ('Pulse checks',
+        '${d.pulseChecks.where((p) => p.compliant).length}/${d.pulseChecks.length} completed',
+        d.pulseDetectedFinal ? _kSuccess : _kTextSecond),
+    ];
+
+    // Render chips as 2-column grid
+    pw.Widget chipWidget((String, String, PdfColor) c) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(c.$1,
+              style: pw.TextStyle(font: font, fontSize: 7,
+                  color: _kTextSecond)),
+          pw.SizedBox(height: 1),
+          pw.Text(c.$2,
+              style: pw.TextStyle(font: bold, fontSize: 9, color: c.$3)),
+        ],
+      ),
+    );
+
+    final chipRows = <pw.Widget>[];
+    for (int i = 0; i < chips.length; i += 2) {
+      chipRows.add(pw.Row(children: [
+        pw.Expanded(child: chipWidget(chips[i])),
+        if (i + 1 < chips.length) ...[
+          pw.Container(width: 0.5, height: 28, color: _kDivider),
+          pw.Expanded(child: chipWidget(chips[i + 1])),
+        ] else
+          pw.Expanded(child: pw.SizedBox()),
+      ]));
+    }
+
+    return pw.Container(
+      width: double.infinity,
+      decoration: pw.BoxDecoration(
+        color: _kWhite,
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 10),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Timeline rows
+          for (int i = 0; i < events.length; i++)
+            row(events[i], i == 0, i == events.length - 1),
+
+          // Divider before stats
+          pw.SizedBox(height: 6),
+          pw.Container(height: 0.5, color: _kDivider),
+          pw.SizedBox(height: 6),
+
+          // Stats grid
+          pw.Container(
+            decoration: pw.BoxDecoration(
+              color: _kBrandLight.shade(0.4),
+              borderRadius: pw.BorderRadius.circular(6),
+            ),
+            padding: const pw.EdgeInsets.symmetric(vertical: 4),
+            child: pw.Column(children: chipRows),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  // ── Multi-session phase comparison table ───────────────────────────────────
+
+  static pw.Widget _buildMultiPhaseTable(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions,
+      List<SessionDetail?> details,
+      List<PdfColor> slotColors) {
+
+    List<double> phases(SessionDetail d) {
+      final c     = d.compressions;
+      if (c.isEmpty) return [0, 0, 0, 0, 0, 0];
+      final third = (c.length / 3).ceil();
+      final early = c.take(third).toList();
+      final mid   = c.skip(third).take(third).toList();
+      final late  = c.skip(third * 2).toList();
+      double ad(List<CompressionEvent> sl) => sl.isEmpty ? 0
+          : sl.map((e) => e.depth).reduce((a, b) => a + b) / sl.length;
+      double ar(List<CompressionEvent> sl) => sl.isEmpty ? 0
+          : sl.map((e) => e.instantaneousRate > 0
+          ? e.instantaneousRate : e.frequency)
+          .reduce((a, b) => a + b) / sl.length;
+      return [ad(early), ad(mid), ad(late), ar(early), ar(mid), ar(late)];
+    }
+
+    final withDetail = [
+      for (int i = 0; i < sessions.length && i < details.length; i++)
+        if (details[i] != null && details[i]!.compressions.length >= 9)
+          (i, sessions[i], details[i]!),
+    ];
+
+    if (withDetail.isEmpty) return pw.SizedBox.shrink();
+
+    pw.Widget cell(String text, {pw.TextAlign align = pw.TextAlign.center,
+      PdfColor? color}) =>
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: pw.Text(text, textAlign: align,
+              style: pw.TextStyle(font: medium, fontSize: 8,
+                  color: color ?? _kTextSecond)),
+        );
+
     return pw.Table(
-      border: const pw.TableBorder(
+      border: pw.TableBorder(
+          horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(20),
+        1: const pw.FlexColumnWidth(1.6),
+        2: const pw.FlexColumnWidth(1),
+        3: const pw.FlexColumnWidth(1),
+        4: const pw.FlexColumnWidth(1),
+        5: const pw.FlexColumnWidth(1),
+        6: const pw.FlexColumnWidth(1),
+        7: const pw.FlexColumnWidth(1),
+      },
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: _kBrandDark),
+          children: [
+            _tableCell(bold, '#',       isHeader: true, isDark: true),
+            _tableCell(bold, 'Session', isHeader: true, isDark: true),
+            _tableCell(bold, 'D-Early', isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+            _tableCell(bold, 'D-Mid',   isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+            _tableCell(bold, 'D-Late',  isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+            _tableCell(bold, 'R-Early', isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+            _tableCell(bold, 'R-Mid',   isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+            _tableCell(bold, 'R-Late',  isHeader: true, isDark: true,
+                align: pw.TextAlign.center),
+          ],
+        ),
+        for (final (idx, s, d) in withDetail) ...[
+              () {
+            final p     = phases(d);
+            final isPed = s.scenario == 'pediatric';
+            final dMin  = isPed ? CprTargets.depthMinPediatric : CprTargets.depthMin;
+            final dMax  = isPed ? CprTargets.depthMaxPediatric : CprTargets.depthMax;
+            PdfColor dc(double v) => v >= dMin && v <= dMax ? _kSuccess
+                : v >= dMin - 0.5 && v <= dMax + 0.5 ? _kWarning : _kError;
+            PdfColor rc(double v) => v >= 100 && v <= 120 ? _kSuccess
+                : v >= 90 && v <= 130 ? _kWarning : _kError;
+            return pw.TableRow(
+              decoration: pw.BoxDecoration(
+                  color: idx.isOdd ? _kBgGrey : _kWhite),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 6),
+                  child: pw.Container(
+                    width: 10, height: 10,
+                    decoration: pw.BoxDecoration(
+                        color: slotColors[idx % slotColors.length],
+                        shape: pw.BoxShape.circle),
+                  ),
+                ),
+                _tableCell(font, s.dateFormatted),
+                cell('${p[0].toStringAsFixed(1)}', color: dc(p[0])),
+                cell('${p[1].toStringAsFixed(1)}', color: dc(p[1])),
+                cell('${p[2].toStringAsFixed(1)}', color: dc(p[2])),
+                cell('${p[3].toStringAsFixed(0)}', color: rc(p[3])),
+                cell('${p[4].toStringAsFixed(0)}', color: rc(p[4])),
+                cell('${p[5].toStringAsFixed(0)}', color: rc(p[5])),
+              ],
+            );
+          }(),
+        ],
+      ],
+    );
+  }
+
+  // ── Enhanced all-sessions table with slot colour dots ─────────────────────
+
+  static pw.Widget _buildAllSessionsTable(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions,
+      List<PdfColor> slotColors) {
+
+    return pw.Table(
+      border: pw.TableBorder(
           horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
       columnWidths: {
         0: const pw.FixedColumnWidth(22),
@@ -3303,7 +5514,601 @@ class ExportService {
       },
       children: [
         pw.TableRow(
-          decoration: const pw.BoxDecoration(color: _kBrandDark),
+          decoration: pw.BoxDecoration(color: _kBrandDark),
+          children: [
+            _tableCell(bold, '#',        isHeader: true, isDark: true),
+            _tableCell(bold, 'Date',     isHeader: true, isDark: true),
+            _tableCell(bold, 'Mode',     isHeader: true, isDark: true),
+            _tableCell(bold, 'Scenario', isHeader: true, isDark: true),
+            _tableCell(bold, 'Duration', isHeader: true, isDark: true,
+                align: pw.TextAlign.right),
+            _tableCell(bold, 'Compr.',   isHeader: true, isDark: true,
+                align: pw.TextAlign.right),
+            _tableCell(bold, 'Depth',    isHeader: true, isDark: true,
+                align: pw.TextAlign.right),
+            _tableCell(bold, 'CCF',      isHeader: true, isDark: true,
+                align: pw.TextAlign.right),
+            _tableCell(bold, 'Grade',    isHeader: true, isDark: true,
+                align: pw.TextAlign.right),
+          ],
+        ),
+        ...sessions.asMap().entries.map((e) {
+          final i          = e.key;
+          final s          = e.value;
+          final isAlt      = i.isOdd;
+          final gradeColor = s.isEmergency ? _kTextDisabled : _gradeColor(s.totalGrade);
+          final slotColor  = slotColors[i % slotColors.length];
+
+          return pw.TableRow(
+            decoration: pw.BoxDecoration(
+                color: isAlt ? _kBgGrey : _kWhite),
+            children: [
+              // Slot colour dot
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 7),
+                child: pw.Container(
+                  width: 8, height: 8,
+                  decoration: pw.BoxDecoration(
+                      color: slotColor, shape: pw.BoxShape.circle),
+                ),
+              ),
+              _tableCell(font, s.dateFormatted),
+              _tableModeCell(bold, s),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 5, vertical: 5),
+                child: pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 1),
+                  decoration: pw.BoxDecoration(
+                      color: s.scenario == 'pediatric'
+                          ? _kPediatricBg : _kBrandLight,
+                      borderRadius: pw.BorderRadius.circular(3)),
+                  child: pw.Text(
+                      s.scenario == 'pediatric' ? 'Ped.' : 'Adult',
+                      style: pw.TextStyle(font: bold, fontSize: 7,
+                          color: s.scenario == 'pediatric'
+                              ? _kPediatric : _kBrandBlue)),
+                ),
+              ),
+              _tableCell(font, s.durationFormatted,
+                  align: pw.TextAlign.right),
+              _tableCell(font, '${s.compressionCount}',
+                  align: pw.TextAlign.right),
+              _tableCell(font,
+                  s.averageDepth > 0
+                      ? '${s.averageDepth.toStringAsFixed(1)} cm' : '—',
+                  align: pw.TextAlign.right),
+              _tableCell(font, '${(s.handsOnRatio * 100).round()}%',
+                  align: pw.TextAlign.right,
+                  color: s.handsOnRatio >= 0.80 ? _kSuccess : _kWarning),
+              _tableCell(bold,
+                  s.isEmergency ? '—' : '${s.totalGrade.toStringAsFixed(1)}%',
+                  align: pw.TextAlign.right, color: gradeColor),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+
+  // ─────────────────────────────────────────────────────────────────────────────
+// COMPARISON METRICS TABLE
+//
+// One row per metric, one column per slot. The "best" value per row is
+// highlighted in bold + colored.
+// ─────────────────────────────────────────────────────────────────────────────
+
+  static pw.Widget _buildComparisonMetricsTable(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions,
+      List<SessionDetail?>? details,
+      List<PdfColor> slotColors) {
+
+    final n = sessions.length;
+    double? safeAvg(List<double> v) => v.isEmpty
+        ? null : v.reduce((a, b) => a + b) / v.length;
+
+    SessionDetail? detailFor(int i) {
+      if (details == null) return null;
+      if (i >= details.length) return null;
+      return details[i];
+    }
+
+    // ── Define rows ────────────────────────────────────────────────────────
+    final rows = <_CompareRow>[
+      // ── Session Info group ──
+      _CompareRow(
+        label: 'Duration',
+        group: 'Session',
+        values: [for (final s in sessions) s.sessionDuration.toDouble()],
+        format: (v) => v == null ? '—' : Duration(seconds: v.toInt()).mmss,
+        noWinner: true,
+      ),
+      _CompareRow(
+        label: 'Compressions',
+        group: 'Session',
+        values: [for (final s in sessions) s.compressionCount.toDouble()],
+        format: (v) => v == null ? '—' : v.toInt().toString(),
+        noWinner: true,
+      ),
+      _CompareRow(
+        label: 'Grade',
+        hint:  'higher is better',
+        group: 'Session',
+        values: [for (final s in sessions)
+          s.isEmergency ? null : s.totalGrade],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+
+      // ── Depth group ──
+      _CompareRow(
+        label: 'Avg Depth',
+        hint:  '5–6 cm target',
+        group: 'Depth',
+        values: [for (final s in sessions) s.averageDepth > 0
+            ? s.averageDepth : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(1)} cm',
+        // "Best" means closest to 5.5 (or 4.5 pediatric)
+        higherIsBetter: false,    // handled with distance — see below
+      ),
+      _CompareRow(
+        label: 'Peak Depth',
+        group: 'Depth',
+        values: [for (final s in sessions) s.peakDepth > 0
+            ? s.peakDepth : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(1)} cm',
+        noWinner: true,
+      ),
+      _CompareRow(
+        label: 'Depth in Target',
+        hint:  'higher is better',
+        group: 'Depth',
+        values: [for (final s in sessions) s.compressionCount > 0
+            ? s.correctDepth / s.compressionCount * 100 : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+
+      // ── Rate group ──
+      _CompareRow(
+        label: 'Avg Rate',
+        hint:  '100–120 BPM',
+        group: 'Rate',
+        values: [for (final s in sessions) s.averageFrequency > 0
+            ? s.averageFrequency : null],
+        format: (v) => v == null ? '—' : '${v.round()} BPM',
+        higherIsBetter: false,    // distance from 110 — see logic below
+      ),
+      _CompareRow(
+        label: 'Rate in Target',
+        hint:  'higher is better',
+        group: 'Rate',
+        values: [for (final s in sessions) s.compressionCount > 0
+            ? s.correctFrequency / s.compressionCount * 100 : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+
+      // ── Quality group ──
+      _CompareRow(
+        label: 'Recoil',
+        hint:  'higher is better',
+        group: 'Quality',
+        values: [for (final s in sessions) s.compressionCount > 0
+            ? s.correctRecoil / s.compressionCount * 100 : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+      _CompareRow(
+        label: 'CCF (Hands-On)',
+        hint:  'target ≥ 80%',
+        group: 'Quality',
+        values: [for (final s in sessions) s.handsOnRatio * 100],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+      _CompareRow(
+        label: 'Posture',
+        hint:  'higher is better',
+        group: 'Quality',
+        values: [for (final s in sessions) s.compressionCount > 0
+            ? s.correctPosture / s.compressionCount * 100 : null],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
+        higherIsBetter: true,
+      ),
+
+      // ── Timing group ──
+      _CompareRow(
+        label: 'Time to 1st',
+        hint:  '< 10 s',
+        group: 'Timing',
+        values: [for (int i = 0; i < n; i++) detailFor(i)?.timeToFirstCompression],
+        format: (v) => v == null || v <= 0 ? '—' : '${v.toStringAsFixed(1)} s',
+        higherIsBetter: false,
+      ),
+      _CompareRow(
+        label: 'Unplanned Pauses',
+        hint:  'fewer is better',
+        group: 'Timing',
+        values: [for (int i = 0; i < n; i++)
+          detailFor(i)?.unplannedPauseTime],
+        format: (v) => v == null ? '—' : '${v.toStringAsFixed(1)} s',
+        higherIsBetter: false,
+      ),
+    ];
+
+    // ── Determine winner per row ───────────────────────────────────────────
+    int? winnerIdx(_CompareRow r) {
+      if (r.noWinner) return null;
+      final entries = <(int, double)>[];
+      for (int i = 0; i < r.values.length; i++) {
+        final v = r.values[i];
+        if (v != null) entries.add((i, v));
+      }
+      if (entries.length < 2) return null;
+      // Depth: closest to 5.5; Rate: closest to 110. Detect by label.
+      if (r.label == 'Avg Depth') {
+        final target = sessions.first.scenario == 'pediatric' ? 4.5 : 5.5;
+        entries.sort((a, b) =>
+            (a.$2 - target).abs().compareTo((b.$2 - target).abs()));
+        return entries.first.$1;
+      }
+      if (r.label == 'Avg Rate') {
+        entries.sort((a, b) =>
+            (a.$2 - 110).abs().compareTo((b.$2 - 110).abs()));
+        return entries.first.$1;
+      }
+      entries.sort((a, b) => r.higherIsBetter
+          ? b.$2.compareTo(a.$2) : a.$2.compareTo(b.$2));
+      return entries.first.$1;
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    // Group by `group` field, render section header then rows.
+    final groupOrder = <String>[];
+    final byGroup = <String, List<_CompareRow>>{};
+    for (final r in rows) {
+      if (!groupOrder.contains(r.group)) groupOrder.add(r.group);
+      byGroup.putIfAbsent(r.group, () => []).add(r);
+    }
+
+    final children = <pw.Widget>[];
+    for (final g in groupOrder) {
+      // Group header
+      children.add(pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: pw.BoxDecoration(
+          color: _kBrandLight,
+          borderRadius: pw.BorderRadius.circular(4),
+        ),
+        child: pw.Text(g.toUpperCase(),
+            style: pw.TextStyle(font: bold, fontSize: 8,
+                color: _kBrandBlue, letterSpacing: 0.6)),
+      ));
+      children.add(pw.SizedBox(height: 4));
+      // Group rows
+      for (final r in byGroup[g]!) {
+        final winner = winnerIdx(r);
+        children.add(pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              // Label column
+              pw.SizedBox(
+                width: 110,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(r.label,
+                        style: pw.TextStyle(font: medium, fontSize: 9,
+                            color: _kTextPrimary)),
+                    if (r.hint.isNotEmpty)
+                      pw.Text(r.hint,
+                          style: pw.TextStyle(font: font, fontSize: 7,
+                              color: _kTextDisabled)),
+                  ],
+                ),
+              ),
+              // Value columns
+              for (int i = 0; i < r.values.length; i++)
+                pw.Expanded(
+                  child: pw.Container(
+                    margin: const pw.EdgeInsets.symmetric(horizontal: 3),
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 5),
+                    decoration: pw.BoxDecoration(
+                      color: winner == i
+                          ? slotColors[i].shade(0.85)
+                          : null,
+                      borderRadius: pw.BorderRadius.circular(4),
+                      border: winner == i
+                          ? pw.Border.all(color: slotColors[i], width: 0.5)
+                          : null,
+                    ),
+                    child: pw.Text(r.format(r.values[i]),
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                            font: winner == i ? bold : medium,
+                            fontSize: 9,
+                            color: winner == i
+                                ? slotColors[i]
+                                : (r.values[i] == null
+                                ? _kTextDisabled
+                                : _kTextPrimary))),
+                  ),
+                ),
+            ],
+          ),
+        ));
+      }
+      children.add(pw.SizedBox(height: 8));
+    }
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: _kWhite,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      padding: const pw.EdgeInsets.all(10),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+
+
+  // ─────────────────────────────────────────────────────────────────────────────
+// MULTI-SESSION TIMELINE
+//
+// One row per session in chronological order. Shows:
+//   [ date ] [ dot — grade color ] [ mode/scenario · grade · key stat ]
+// A vertical connector links all sessions visually as a "training journey".
+// ─────────────────────────────────────────────────────────────────────────────
+
+  static pw.Widget _buildMultiSessionTimeline(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions) {
+
+    if (sessions.isEmpty) return pw.SizedBox.shrink();
+
+    // Sort oldest first — timeline reads top → bottom = past → present.
+    final sorted = [...sessions]
+      ..sort((a, b) =>
+          (a.sessionStart ?? DateTime(2000))
+              .compareTo(b.sessionStart ?? DateTime(2000)));
+
+    // Compute best/worst for highlighting
+    final trainingGrades = sorted
+        .where((s) => s.isTraining && s.totalGrade > 0)
+        .map((s) => s.totalGrade)
+        .toList();
+    final maxG = trainingGrades.isEmpty
+        ? 0.0 : trainingGrades.reduce((a, b) => a > b ? a : b);
+    final minG = trainingGrades.isEmpty
+        ? 0.0 : trainingGrades.reduce((a, b) => a < b ? a : b);
+
+    pw.Widget sessionRow(SessionSummary s, int idx, bool isFirst, bool isLast,
+        double? prevGrade) {
+
+      final isEmg     = s.isEmergency;
+      final dotColor  = isEmg ? _kEmgGreen : _gradeColor(s.totalGrade);
+      final isBest    = !isEmg && trainingGrades.length > 1 && s.totalGrade == maxG;
+      final isWorst   = !isEmg && trainingGrades.length > 1 && s.totalGrade == minG;
+
+      // Delta from previous training session
+      String? deltaStr;
+      PdfColor? deltaColor;
+      if (!isEmg && prevGrade != null && prevGrade > 0) {
+        final d = s.totalGrade - prevGrade;
+        if (d.abs() >= 1) {
+          deltaStr   = d > 0 ? '+${d.toStringAsFixed(0)} pts'
+              : '${d.toStringAsFixed(0)} pts';
+          deltaColor = d > 0 ? _kSuccess : _kError;
+        }
+      }
+
+      // Badge
+      String? badge;
+      PdfColor? badgeColor, badgeBg;
+      if (isBest) {
+        badge = 'BEST';   badgeColor = _kSuccess;  badgeBg = _kSuccessLight;
+      } else if (isWorst) {
+        badge = 'WEAKEST'; badgeColor = _kWarning; badgeBg = _kWarningLight;
+      }
+
+      // Subtitle: scenario · stats
+      final scenario = s.scenario == 'pediatric' ? 'Pediatric' : 'Adult';
+      final modeStr  = isEmg ? 'Emergency' : 'Training';
+      final keyStat  = isEmg
+          ? '${s.compressionCount} compressions · '
+          '${s.durationFormatted}'
+          : 'Grade ${s.totalGrade.toStringAsFixed(0)}% · '
+          'CCF ${(s.handsOnRatio * 100).round()}%';
+
+      return pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Date column
+          pw.SizedBox(
+            width: 56,
+            child: pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 4),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(s.dateFormatted,
+                      textAlign: pw.TextAlign.right,
+                      style: pw.TextStyle(font: medium, fontSize: 8,
+                          color: _kTextPrimary)),
+                  pw.Text(
+                      s.sessionStart != null
+                          ? '${s.sessionStart!.hour.toString().padLeft(2, '0')}:'
+                          '${s.sessionStart!.minute.toString().padLeft(2, '0')}'
+                          : '',
+                      textAlign: pw.TextAlign.right,
+                      style: pw.TextStyle(font: font, fontSize: 7, color: _kTextDisabled)),
+                ],
+              ),
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          // Dot + connector
+          pw.SizedBox(
+            width: 22,
+            child: pw.Stack(
+              alignment: pw.Alignment.topCenter,
+              children: [
+                if (!isFirst)
+                  pw.Positioned(top: 0,
+                      child: pw.Container(width: 1.5, height: 10,
+                          color: _kDivider)),
+                if (!isLast)
+                  pw.Positioned(top: 24, bottom: 0,
+                      child: pw.Container(width: 1.5, color: _kDivider)),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 8),
+                  child: pw.Container(
+                    width: 14, height: 14,
+                    decoration: pw.BoxDecoration(
+                      color: dotColor,
+                      shape: pw.BoxShape.circle,
+                      border: pw.Border.all(color: _kWhite, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(width: 10),
+          // Content
+          pw.Expanded(
+            child: pw.Container(
+              margin: pw.EdgeInsets.only(top: 4, bottom: isLast ? 0 : 12),
+              padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: pw.BoxDecoration(
+                color: _kWhite,
+                borderRadius: pw.BorderRadius.circular(8),
+                border: pw.Border.all(color: _kDivider, width: 0.5),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center,
+                      children: [
+                        // Mode pill
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: pw.BoxDecoration(
+                            color: isEmg ? _kEmgGreenBg : _kBrandLight,
+                            borderRadius: pw.BorderRadius.circular(3),
+                          ),
+                          child: pw.Text(modeStr,
+                              style: pw.TextStyle(font: bold, fontSize: 7,
+                                  color: isEmg ? _kEmgGreen : _kBrandBlue)),
+                        ),
+                        pw.SizedBox(width: 4),
+                        // Scenario pill
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: pw.BoxDecoration(
+                            color: s.scenario == 'pediatric'
+                                ? _kPediatricBg : _kBgGrey,
+                            borderRadius: pw.BorderRadius.circular(3),
+                          ),
+                          child: pw.Text(scenario,
+                              style: pw.TextStyle(font: medium, fontSize: 7,
+                                  color: s.scenario == 'pediatric'
+                                      ? _kPediatric : _kTextSecond)),
+                        ),
+                        if (badge != null) ...[
+                          pw.SizedBox(width: 4),
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: pw.BoxDecoration(
+                              color: badgeBg,
+                              borderRadius: pw.BorderRadius.circular(3),
+                            ),
+                            child: pw.Text(badge!,
+                                style: pw.TextStyle(font: bold, fontSize: 7,
+                                    color: badgeColor)),
+                          ),
+                        ],
+                        pw.Spacer(),
+                        if (deltaStr != null)
+                          pw.Text(deltaStr,
+                              style: pw.TextStyle(font: bold, fontSize: 8,
+                                  color: deltaColor)),
+                      ]),
+                  pw.SizedBox(height: 4),
+                  pw.Text(keyStat,
+                      style: pw.TextStyle(font: medium, fontSize: 9,
+                          color: _kTextPrimary)),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    '${s.compressionCount} compressions · '
+                        '${s.averageDepth > 0
+                        ? '${s.averageDepth.toStringAsFixed(1)} cm depth · ' : ''}'
+                        '${s.averageFrequency > 0
+                        ? '${s.averageFrequency.round()} BPM' : '—'}',
+                    style: pw.TextStyle(font: font, fontSize: 7,
+                        color: _kTextSecond),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Walk sessions, track previous TRAINING grade for delta calculation.
+    final widgets = <pw.Widget>[];
+    double? prevTrainingGrade;
+    for (int i = 0; i < sorted.length; i++) {
+      final s = sorted[i];
+      widgets.add(sessionRow(s, i, i == 0, i == sorted.length - 1,
+          prevTrainingGrade));
+      if (s.isTraining && s.totalGrade > 0) {
+        prevTrainingGrade = s.totalGrade;
+      }
+    }
+
+    return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: widgets);
+  }
+
+  // ── All-sessions table ────────────────────────────────────────────────────
+
+  static pw.Widget _sessionTable(
+      pw.Font bold, pw.Font medium, pw.Font font,
+      List<SessionSummary> sessions) {
+    return pw.Table(
+      border: pw.TableBorder(
+          horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(22),
+        1: const pw.FlexColumnWidth(1.8),
+        2: const pw.FixedColumnWidth(62),
+        3: const pw.FixedColumnWidth(52),
+        4: const pw.FixedColumnWidth(50),
+        5: const pw.FlexColumnWidth(1.2),
+        6: const pw.FlexColumnWidth(1),
+        7: const pw.FlexColumnWidth(1),
+        8: const pw.FlexColumnWidth(1),
+      },
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: _kBrandDark),
           children: [
             _tableCell(bold, '#',            isHeader: true, isDark: true),
             _tableCell(bold, 'Date',         isHeader: true, isDark: true),
@@ -3357,54 +6162,23 @@ class ExportService {
     );
   }
 
-  // ── Chart card wrapper ─────────────────────────────────────────────────────
-
-  static pw.Widget _chartCard({
-    required pw.Widget        child,
-    required List<_LegendItem> legendItems,
-    required pw.Font          font,
-  }) {
-    return pw.Container(
-      width:   double.infinity,
-      padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
-      decoration: pw.BoxDecoration(
-        color:        _kBgCard,
-        borderRadius: pw.BorderRadius.circular(8),
-        border:       pw.Border.all(color: _kDivider, width: 0.5),
-      ),
-      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        child,
-        pw.SizedBox(height: 6),
-        pw.Row(
-          children: legendItems.map((item) => pw.Padding(
-            padding: const pw.EdgeInsets.only(right: 14),
-            child: pw.Row(
-              mainAxisSize: pw.MainAxisSize.min,
-              children: [
-                pw.Container(width: 10, height: 3,
-                    decoration: pw.BoxDecoration(
-                        color: item.color, borderRadius: pw.BorderRadius.circular(2))),
-                pw.SizedBox(width: 4),
-                pw.Text(item.label,
-                    style: pw.TextStyle(font: font, fontSize: 8, color: _kTextSecond)),
-              ],
-            ),
-          )).toList(),
-        ),
-      ]),
-    );
-  }
-
   // ── Section title ──────────────────────────────────────────────────────────
 
   static pw.Widget _sectionTitle(pw.Font bold, String title) {
-    return pw.Row(children: [
-      pw.Container(width: 3, height: 14,
-          decoration: pw.BoxDecoration(
-              color: _kBrandBlue, borderRadius: pw.BorderRadius.circular(2))),
-      pw.SizedBox(width: 6),
-      pw.Text(title, style: pw.TextStyle(font: bold, fontSize: 11, color: _kTextPrimary)),
-    ]);
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        pw.Container(width: 3, height: 14,
+            decoration: pw.BoxDecoration(
+                color: _kBrandBlue,
+                borderRadius: pw.BorderRadius.circular(1.5))),
+        pw.SizedBox(width: 7),
+        pw.Text(title,
+            style: pw.TextStyle(
+                font: bold, fontSize: 11, color: _kTextPrimary,
+                letterSpacing: 0.3)),
+      ],
+    );
   }
 
   // ── Table cell helpers ─────────────────────────────────────────────────────
@@ -3452,6 +6226,373 @@ class ExportService {
   // typedef: Function(PdfGraphics canvas, PdfPoint size)
   // ═══════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+  // CONSOLIDATED TIME-SERIES CHART
+  // One builder replaces _chartCard + all 7 hand-rolled painters.
+  // Axis LABELS are real pw.Text (canvas drawString is unusable here);
+  // the CustomPaint draws only the plot: gridlines, band, lines, dots.
+  // X axis = time (m:ss) from timestampSec — matches the in-app charts.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// One data line in a chart.
+  /// `points` are (timeSec, value) pairs already filtered/clamped by the caller.
+  static List<List<double>> _series<T>(
+      Iterable<T> items,
+      double Function(T) t,
+      double Function(T) v, {
+        bool Function(T)? where,
+      }) {
+    final out = <List<double>>[];
+    for (final it in items) {
+      if (where != null && !where(it)) continue;
+      out.add([t(it), v(it)]);
+    }
+    return out;
+  }
+
+  static pw.Widget _buildOverlaidComparisonChart({
+    required pw.Font font,
+    required pw.Font fontBold,
+    required String title,
+    required String? subtitle,
+    required String? caption,
+    required List<SessionSummary> sessions,
+    required List<SessionDetail?>? details,
+    required List<PdfColor> slotColors,
+    required double Function(CompressionEvent) yExtractor,
+    required double minY,
+    required double maxY,
+    double? yTickInterval,
+    required String Function(double) yLabel,
+    _ChartBand? band,
+    List<_ChartGuide> guides = const [],
+  }) {
+    if (details == null) return pw.SizedBox.shrink();
+
+    final lines = <_ChartLine>[];
+    final legend = <_LegendItem>[];
+    for (int i = 0; i < sessions.length; i++) {
+      final d = i < details.length ? details[i] : null;
+      if (d == null || d.compressions.isEmpty) continue;
+      lines.add(_ChartLine(
+          _series(d.compressions, (c) => c.timestampSec, yExtractor),
+          slotColors[i],
+          fill: false));   // never fill on overlay — that's the difference
+      legend.add(_LegendItem('Slot ${i + 1}', slotColors[i]));
+    }
+    if (band != null) {
+      legend.add(_LegendItem('Target band', _kSuccess));
+    }
+    if (lines.isEmpty) return pw.SizedBox.shrink();
+
+    return _buildTimeChart(
+      font: font, fontBold: fontBold,
+      title: title,
+      subtitle: subtitle,
+      caption: caption,
+      lines: lines,
+      minY: minY, maxY: maxY, yTickInterval: yTickInterval, yLabel: yLabel,
+      band: band, guides: guides, legend: legend,
+      plotHeight: 110,
+      dotColor: null,   // no dots on overlaid charts — too noisy
+    );
+  }
+
+  /// Builds a complete chart card: left value-axis labels + plot + bottom
+  /// time-axis labels + legend. This is the ONLY chart entry point.
+  static pw.Widget _buildTimeChart({
+    required pw.Font font,
+    required pw.Font fontBold,
+    required String  title,
+    String?         subtitle,            // optional one-liner under the title
+    String?         caption,             // optional explanation under the legend
+    required List<_ChartLine> lines,
+    required double minY,
+    required double maxY,
+    required String Function(double) yLabel,
+    double? yTickInterval,
+    _ChartBand? band,
+    List<_ChartGuide> guides = const [],
+    required List<_LegendItem> legend,
+    double plotHeight = 100,
+    PdfColor? Function(int, double)? dotColor,
+  }) {
+    const double kLeftGutter   = 26;
+    const double kBottomGutter = 14;
+
+    // Overall session span for the x axis (max t across all lines).
+    double tMax = 0;
+    for (final l in lines) {
+      for (final p in l.points) { if (p[0] > tMax) tMax = p[0]; }
+    }
+    if (tMax <= 0) tMax = 1;
+
+    final ticks = yTickInterval != null
+        ? <double>[
+      for (double y = minY; y <= maxY + 0.001; y += yTickInterval) y
+    ]
+        : <double>[
+      minY,
+      minY + (maxY - minY) * 0.33,
+      minY + (maxY - minY) * 0.66,
+      maxY,
+    ];
+
+    // X tick times (5 evenly spaced m:ss labels).
+    final xTicks = <double>[
+      for (int i = 0; i <= 4; i++) tMax * i / 4,
+    ];
+
+    return pw.Container(
+      width:   double.infinity,
+      padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
+      decoration: pw.BoxDecoration(
+        color:        _kBgGrey,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(title,
+              style: pw.TextStyle(
+                  font: fontBold, fontSize: 10, color: _kTextPrimary,
+                  letterSpacing: 0.2)),
+          if (subtitle != null) ...[
+            pw.SizedBox(height: 1),
+            pw.Text(subtitle,
+                style: pw.TextStyle(font: font, fontSize: 7,
+                    color: _kTextDisabled)),
+          ],
+          pw.SizedBox(height: 6),
+
+          // Plot row: [ y labels ] [ plot ]
+          pw.SizedBox(
+            height: plotHeight,
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                // Left value axis
+                pw.SizedBox(
+                  width: kLeftGutter,
+                  child: pw.Stack(
+                    children: [
+                      for (final ty in ticks)
+                        pw.Positioned(
+                          right: 3,
+                          top: (1 - (ty - minY) / (maxY - minY)) *
+                              plotHeight - 4,
+                          child: pw.Text(yLabel(ty),
+                              style: pw.TextStyle(
+                                  font: font,
+                                  fontSize: 6.5,
+                                  color: _kTextDisabled)),
+                        ),
+                    ],
+                  ),
+                ),
+                // Plot
+                pw.Expanded(
+                  child: pw.CustomPaint(
+                    painter: (canvas, size) => _paintPlot(
+                      canvas, size,
+                      lines: lines,
+                      minY: minY, maxY: maxY, tMax: tMax,
+                      ticks: ticks,
+                      band: band, guides: guides,
+                      dotColor: dotColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Bottom time axis (aligned under the plot, offset by gutter)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(left: kLeftGutter, top: 2),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                for (final tx in xTicks)
+                  pw.Text(_mmss(tx.round()),
+                      style: pw.TextStyle(
+                          font: font,
+                          fontSize: 6.5,
+                          color: _kTextDisabled)),
+              ],
+            ),
+          ),
+
+          pw.SizedBox(height: 6),
+          pw.Wrap(
+            spacing: 14, runSpacing: 3,
+            children: legend.map((item) => pw.Row(
+              mainAxisSize: pw.MainAxisSize.min,
+              children: [
+                pw.Container(width: 10, height: 3,
+                    decoration: pw.BoxDecoration(
+                        color: item.color,
+                        borderRadius:
+                        pw.BorderRadius.circular(2))),
+                pw.SizedBox(width: 4),
+                pw.Text(item.label,
+                    style: pw.TextStyle(
+                        font: font, fontSize: 8, color: _kTextSecond)),
+              ],
+            )).toList(),
+          ),
+          if (caption != null) ...[
+            pw.SizedBox(height: 4),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: pw.BoxDecoration(
+                color: _kBrandLight.shade(0.3),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(caption,
+                  style: pw.TextStyle(font: font, fontSize: 7,
+                      color: _kTextSecond, lineSpacing: 1.5)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The single plot painter — gridlines, band, guides, every line, dots.
+  /// Replaces _paintDepthChart/_paintRateChart/_paintForceChart/
+  /// _paintPostureChart/_paintVitalsChart/_paintGradeSparkline/
+  /// _paintGenericSparkline.
+  static void _paintPlot(
+      PdfGraphics canvas, PdfPoint size, {
+        required List<_ChartLine> lines,
+        required double minY,
+        required double maxY,
+        required double tMax,
+        required List<double> ticks,
+        _ChartBand? band,
+        List<_ChartGuide> guides = const [],
+        PdfColor? Function(int, double)? dotColor,
+      }) {
+    double xOf(double tSec) => (tSec / tMax).clamp(0.0, 1.0) * size.x;
+    double yOf(double v) =>
+        size.y - ((v - minY) / (maxY - minY)).clamp(0.0, 1.0) * size.y;
+
+    // Horizontal gridlines at each y tick (very light).
+    canvas.saveContext();
+    canvas.setStrokeColor(_kDivider);
+    canvas.setLineWidth(0.4);
+    for (final ty in ticks) {
+      final y = yOf(ty);
+      canvas.moveTo(0, y);
+      canvas.lineTo(size.x, y);
+      canvas.strokePath();
+    }
+    canvas.restoreContext();
+
+    // Target band.
+    if (band != null) {
+      final top = yOf(band.max);
+      final h   = yOf(band.min) - top;
+      if (h > 0) {
+        // Filled rect
+        canvas.saveContext();
+        canvas.setFillColor(band.fill);
+        canvas.drawRect(0, top, size.x, h);
+        canvas.fillPath();
+        canvas.restoreContext();
+        // Top edge
+        canvas.saveContext();
+        canvas.setStrokeColor(band.edge);
+        canvas.setLineWidth(0.5);
+        canvas.moveTo(0, top);
+        canvas.lineTo(size.x, top);
+        canvas.strokePath();
+        canvas.restoreContext();
+        // Bottom edge
+        canvas.saveContext();
+        canvas.setStrokeColor(band.edge);
+        canvas.setLineWidth(0.5);
+        canvas.moveTo(0, top + h);
+        canvas.lineTo(size.x, top + h);
+        canvas.strokePath();
+        canvas.restoreContext();
+      }
+    }
+
+    // Dashed guide lines.
+    for (final g in guides) {
+      final gy = yOf(g.y);
+      var dx = 0.0;
+      while (dx < size.x) {
+        canvas.saveContext();
+        canvas.setStrokeColor(g.color);
+        canvas.setLineWidth(0.6);
+        canvas.moveTo(dx, gy);
+        canvas.lineTo((dx + 4.0) < size.x ? dx + 4.0 : size.x, gy);
+        canvas.strokePath();
+        canvas.restoreContext();
+        dx += 7.0;
+      }
+    }
+
+    // Lines (+ optional area fill on the first line only).
+    for (int li = 0; li < lines.length; li++) {
+      final l = lines[li];
+      if (l.points.length < 2) continue;
+
+      if (l.fill) {
+        canvas.saveContext();
+        canvas.setFillColor(l.color.shade(0.08));
+        canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
+        for (final p in l.points) canvas.lineTo(xOf(p[0]), yOf(p[1]));
+        canvas.lineTo(xOf(l.points.last[0]), 0);
+        canvas.lineTo(xOf(l.points.first[0]), 0);
+        canvas.closePath();
+        canvas.fillPath();
+        canvas.restoreContext();
+      }
+
+      canvas.saveContext();
+      canvas.setStrokeColor(l.color);
+      canvas.setLineWidth(l.width);
+      canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
+      for (final p in l.points) canvas.lineTo(xOf(p[0]), yOf(p[1]));
+      canvas.strokePath();
+      canvas.restoreContext();
+
+      if (dotColor != null) {
+        // Decimate dots if the series is dense — keeps the chart readable.
+        final n        = l.points.length;
+        final stride   = n > 300 ? (n / 200).ceil()
+            : n > 100 ? (n / 100).ceil()
+            : 1;
+        for (int idx = 0; idx < n; idx += stride) {
+          final p = l.points[idx];
+          final c = dotColor(li, p[1]);
+          if (c == null) continue;
+          canvas.saveContext();
+          canvas.setFillColor(c);
+          canvas.drawEllipse(xOf(p[0]), yOf(p[1]), 2.0, 2.0);
+          canvas.fillPath();
+          canvas.restoreContext();
+        }
+        // Always draw the last dot so the line ends with one.
+        if (n > 1 && (n - 1) % stride != 0) {
+          final p = l.points.last;
+          final c = dotColor(li, p[1]);
+          if (c != null) {
+            canvas.saveContext();
+            canvas.setFillColor(c);
+            canvas.drawEllipse(xOf(p[0]), yOf(p[1]), 2.0, 2.0);
+            canvas.fillPath();
+            canvas.restoreContext();
+          }
+        }
+      }
+    }
+  }
+
   /// Grade sparkline with colored grade-band background zones.
   static void _paintGradeSparkline(
       PdfGraphics canvas, PdfPoint size, List<double> grades) {
@@ -3464,9 +6605,11 @@ class ExportService {
 
     // Grade band backgrounds (bottom to top: <55 red, 55-75 orange, 75-90 blue, ≥90 green)
     void band(double lo, double hi, PdfColor color) {
+      canvas.saveContext();
       canvas.setFillColor(color.shade(0.08));
       canvas.drawRect(0, yOf(hi), size.x, yOf(lo) - yOf(hi));
       canvas.fillPath();
+      canvas.restoreContext();
     }
     band(0,   55,  _kError);
     band(55,  75,  _kWarning);
@@ -3474,28 +6617,34 @@ class ExportService {
     band(90,  100, _kSuccess);
 
     // Fill under line
+    canvas.saveContext();
     canvas.setFillColor(_kBrandBlue.shade(0.12));
     canvas.moveTo(xOf(0), yOf(grades[0]));
     for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(grades[i]));
-    canvas.lineTo(xOf(n - 1), size.y);
-    canvas.lineTo(0, size.y);
+    canvas.lineTo(xOf(n - 1), 0);
+    canvas.lineTo(0, 0);
     canvas.closePath();
     canvas.fillPath();
+    canvas.restoreContext();
 
     // Line
+    canvas.saveContext();
     canvas.setStrokeColor(_kBrandBlue);
     canvas.setLineWidth(1.5);
     canvas.moveTo(xOf(0), yOf(grades[0]));
     for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(grades[i]));
     canvas.strokePath();
+    canvas.restoreContext();
 
     // Dots — colored by grade band
     for (int i = 0; i < n; i++) {
       final g     = grades[i];
       final color = g >= 90 ? _kSuccess : g >= 75 ? _kBrandBlue : g >= 55 ? _kWarning : _kError;
+      canvas.saveContext();
       canvas.setFillColor(color);
       canvas.drawEllipse(xOf(i), yOf(g), 3.0, 3.0);
       canvas.fillPath();
+      canvas.restoreContext();
     }
   }
 
@@ -3519,274 +6668,60 @@ class ExportService {
     double yOf(double v) => size.y - ((v - lo) / (hi - lo)).clamp(0.0, 1.0) * size.y;
 
     // Target band
-    canvas.setFillColor(_kSuccess.shade(0.12));
     final bandTop    = yOf(targetMax);
     final bandHeight = yOf(targetMin) - bandTop;
     if (bandHeight > 0) {
+      canvas.saveContext();
+      canvas.setFillColor(_kSuccess.shade(0.12));
       canvas.drawRect(0, bandTop, size.x, bandHeight);
       canvas.fillPath();
+      canvas.restoreContext();
+
+      canvas.saveContext();
       canvas.setStrokeColor(_kSuccess.shade(0.4));
       canvas.setLineWidth(0.5);
-      canvas.moveTo(0, bandTop); canvas.lineTo(size.x, bandTop); canvas.strokePath();
-      canvas.moveTo(0, bandTop + bandHeight); canvas.lineTo(size.x, bandTop + bandHeight);
+      canvas.moveTo(0, bandTop);
+      canvas.lineTo(size.x, bandTop);
       canvas.strokePath();
+      canvas.restoreContext();
+
+      canvas.saveContext();
+      canvas.setStrokeColor(_kSuccess.shade(0.4));
+      canvas.setLineWidth(0.5);
+      canvas.moveTo(0, bandTop + bandHeight);
+      canvas.lineTo(size.x, bandTop + bandHeight);
+      canvas.strokePath();
+      canvas.restoreContext();
     }
 
     // Fill
+    canvas.saveContext();
     canvas.setFillColor(lineColor.shade(0.1));
     canvas.moveTo(xOf(0), yOf(values[0]));
     for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(values[i]));
-    canvas.lineTo(xOf(n - 1), size.y);
-    canvas.lineTo(0, size.y);
+    canvas.lineTo(xOf(n - 1), 0);
+    canvas.lineTo(0, 0);
     canvas.closePath(); canvas.fillPath();
+    canvas.restoreContext();
 
     // Line
+    canvas.saveContext();
     canvas.setStrokeColor(lineColor);
     canvas.setLineWidth(1.2);
     canvas.moveTo(xOf(0), yOf(values[0]));
     for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(values[i]));
     canvas.strokePath();
+    canvas.restoreContext();
 
     // Dots — colored by in/out target
     for (int i = 0; i < n; i++) {
       final v     = values[i];
       final color = (v >= targetMin && v <= targetMax) ? _kSuccess : _kWarning;
+      canvas.saveContext();
       canvas.setFillColor(color);
       canvas.drawEllipse(xOf(i), yOf(v), 2.5, 2.5);
       canvas.fillPath();
-    }
-  }
-
-  /// Depth chart — colored dots and target band.
-  static void _paintDepthChart(
-      PdfGraphics canvas, PdfPoint size,
-      List<CompressionEvent> compressions,
-      double targetMin, double targetMax) {
-    if (compressions.isEmpty) return;
-
-    const maxDepth = 9.0;
-    final n = compressions.length;
-
-    double xOf(int i) => i / (n == 1 ? 1 : n - 1) * size.x;
-    double yOf(double d) => size.y - (d / maxDepth).clamp(0.0, 1.0) * size.y;
-
-    // Target band
-    canvas.setFillColor(_kSuccess.shade(0.12));
-    final bandTop    = yOf(targetMax);
-    final bandHeight = yOf(targetMin) - bandTop;
-    canvas.drawRect(0, bandTop, size.x, bandHeight);
-    canvas.fillPath();
-    canvas.setStrokeColor(_kSuccess.shade(0.5));
-    canvas.setLineWidth(0.5);
-    canvas.moveTo(0, bandTop); canvas.lineTo(size.x, bandTop); canvas.strokePath();
-    canvas.moveTo(0, bandTop + bandHeight); canvas.lineTo(size.x, bandTop + bandHeight); canvas.strokePath();
-
-    final depths = compressions.map((c) => c.depth).toList();
-
-    // Fill
-    canvas.setFillColor(_kBrandBlue.shade(0.08));
-    canvas.moveTo(xOf(0), yOf(depths[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(depths[i]));
-    canvas.lineTo(xOf(n - 1), size.y);
-    canvas.lineTo(0, size.y);
-    canvas.closePath(); canvas.fillPath();
-
-    // Line
-    canvas.setStrokeColor(_kBrandBlue);
-    canvas.setLineWidth(1.2);
-    canvas.moveTo(xOf(0), yOf(depths[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(depths[i]));
-    canvas.strokePath();
-
-    // Colored dots
-    for (int i = 0; i < n; i++) {
-      final d     = depths[i];
-      final color = d >= targetMin && d <= targetMax ? _kSuccess
-          : (d >= targetMin * 0.85 && d <= targetMax * 1.1) ? _kWarning : _kError;
-      canvas.setFillColor(color);
-      canvas.drawEllipse(xOf(i), yOf(d), 2.0, 2.0);
-      canvas.fillPath();
-    }
-  }
-
-  /// Rate chart — colored dots, 100-120 BPM target band.
-  static void _paintRateChart(
-      PdfGraphics canvas, PdfPoint size,
-      List<CompressionEvent> compressions) {
-    if (compressions.isEmpty) return;
-
-    const targetMin = 100.0;
-    const targetMax = 120.0;
-    const minY = 60.0;
-    const maxY = 160.0;
-    final n = compressions.length;
-
-    double xOf(int i) => i / (n == 1 ? 1 : n - 1) * size.x;
-    double yOf(double r) => size.y - ((r - minY) / (maxY - minY)).clamp(0.0, 1.0) * size.y;
-
-    // Band
-    canvas.setFillColor(_kSuccess.shade(0.12));
-    final bandTop    = yOf(targetMax);
-    final bandHeight = yOf(targetMin) - bandTop;
-    canvas.drawRect(0, bandTop, size.x, bandHeight); canvas.fillPath();
-    canvas.setStrokeColor(_kSuccess.shade(0.5)); canvas.setLineWidth(0.5);
-    canvas.moveTo(0, bandTop); canvas.lineTo(size.x, bandTop); canvas.strokePath();
-    canvas.moveTo(0, bandTop + bandHeight); canvas.lineTo(size.x, bandTop + bandHeight); canvas.strokePath();
-
-    final rates = compressions
-        .map((c) => c.instantaneousRate > 0 ? c.instantaneousRate : c.frequency)
-        .toList();
-
-    // Fill
-    canvas.setFillColor(_kBrandMid.shade(0.08));
-    canvas.moveTo(xOf(0), yOf(rates[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(rates[i]));
-    canvas.lineTo(xOf(n - 1), size.y); canvas.lineTo(0, size.y);
-    canvas.closePath(); canvas.fillPath();
-
-    // Line
-    canvas.setStrokeColor(_kBrandMid); canvas.setLineWidth(1.2);
-    canvas.moveTo(xOf(0), yOf(rates[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(rates[i]));
-    canvas.strokePath();
-
-    // Colored dots
-    for (int i = 0; i < n; i++) {
-      final r     = rates[i];
-      final color = r >= targetMin && r <= targetMax ? _kSuccess
-          : (r >= 85 && r <= 135) ? _kWarning : _kError;
-      canvas.setFillColor(color);
-      canvas.drawEllipse(xOf(i), yOf(r), 2.0, 2.0);
-      canvas.fillPath();
-    }
-  }
-
-  /// Force chart — 600 N danger line, average line.
-  static void _paintForceChart(
-      PdfGraphics canvas, PdfPoint size,
-      List<CompressionEvent> compressions, double avgForce) {
-    if (compressions.isEmpty) return;
-
-    const dangerN = 600.0;
-    const maxN    = 700.0;
-    final n       = compressions.length;
-    final forces  = compressions.map((c) => c.force).toList();
-    final lo      = 0.0;
-    final hi      = forces.any((f) => f > dangerN) ? maxN : dangerN * 1.1;
-
-    double xOf(int i) => i / (n == 1 ? 1 : n - 1) * size.x;
-    double yOf(double f) => size.y - ((f - lo) / (hi - lo)).clamp(0.0, 1.0) * size.y;
-
-    // Danger threshold line — dashed via short segments
-    canvas.setStrokeColor(_kError.shade(0.6)); canvas.setLineWidth(0.8);
-    { var dx = 0.0; while (dx < size.x) {
-      canvas.moveTo(dx, yOf(dangerN));
-      canvas.lineTo((dx + 4.0) < size.x ? dx + 4.0 : size.x, yOf(dangerN));
-      canvas.strokePath(); dx += 7.0; } }
-
-    // Average line
-    canvas.setStrokeColor(_kTextDisabled.shade(0.6)); canvas.setLineWidth(0.6);
-    canvas.moveTo(0, yOf(avgForce)); canvas.lineTo(size.x, yOf(avgForce)); canvas.strokePath();
-
-    // Fill
-    canvas.setFillColor(_kBrandMid.shade(0.07));
-    canvas.moveTo(xOf(0), yOf(forces[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(forces[i]));
-    canvas.lineTo(xOf(n - 1), size.y); canvas.lineTo(0, size.y);
-    canvas.closePath(); canvas.fillPath();
-
-    // Line
-    canvas.setStrokeColor(_kBrandMid); canvas.setLineWidth(1.2);
-    canvas.moveTo(xOf(0), yOf(forces[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(forces[i]));
-    canvas.strokePath();
-
-    // Colored dots — red if over danger
-    for (int i = 0; i < n; i++) {
-      final f     = forces[i];
-      final color = f > dangerN ? _kError : _kBrandMid;
-      canvas.setFillColor(color);
-      canvas.drawEllipse(xOf(i), yOf(f), 2.0, 2.0);
-      canvas.fillPath();
-    }
-  }
-
-  /// Posture chart — wrist alignment + flexion angle over time.
-  static void _paintPostureChart(
-      PdfGraphics canvas, PdfPoint size,
-      List<CompressionEvent> compressions) {
-    if (compressions.isEmpty) return;
-
-    const maxAngle = 45.0;
-    const alignTarget = 15.0;
-    const flexTarget  = 10.0;
-    final n           = compressions.length;
-
-    double xOf(int i) => i / (n == 1 ? 1 : n - 1) * size.x;
-    double yOf(double a) => size.y - (a / maxAngle).clamp(0.0, 1.0) * size.y;
-
-    // Target lines — dashed via short segments
-    canvas.setStrokeColor(_kSuccess.shade(0.5)); canvas.setLineWidth(0.5);
-    for (final targetY in [yOf(alignTarget), yOf(flexTarget)]) {
-      var dx = 0.0; while (dx < size.x) {
-        canvas.moveTo(dx, targetY);
-        canvas.lineTo((dx + 3.0) < size.x ? dx + 3.0 : size.x, targetY);
-        canvas.strokePath(); dx += 5.0; } }
-
-    // Wrist alignment line (blue)
-    final alignAngles = compressions.map((c) => c.wristAlignmentAngle).toList();
-    canvas.setStrokeColor(_kBrandBlue); canvas.setLineWidth(1.0);
-    canvas.moveTo(xOf(0), yOf(alignAngles[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(alignAngles[i]));
-    canvas.strokePath();
-
-    // Wrist flexion line (mid blue, absolute value)
-    final flexAngles = compressions.map((c) => c.wristFlexionAngle.abs()).toList();
-    canvas.setStrokeColor(_kBrandMid); canvas.setLineWidth(1.0);
-    canvas.moveTo(xOf(0), yOf(flexAngles[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(flexAngles[i]));
-    canvas.strokePath();
-  }
-
-  /// Rescuer vitals chart — HR (red) and fatigue score (orange) over time.
-  static void _paintVitalsChart(
-      PdfGraphics canvas, PdfPoint size,
-      List<RescuerVitalSnapshot> vitals) {
-    if (vitals.length < 2) return;
-
-    final n   = vitals.length;
-    // HR: 40-200 BPM. Fatigue: 0-100.
-    // Normalize both to 0-1 for the same axis, with labels explained in legend.
-    final hrs      = vitals.map((v) => v.heartRate).toList();
-    final fatigues = vitals.map((v) => v.fatigueScore.toDouble()).toList();
-
-    final hrMax    = hrs.reduce((a, b) => a > b ? a : b).clamp(80.0, 200.0);
-    final hrMin    = hrs.reduce((a, b) => a < b ? a : b).clamp(40.0, hrMax - 20);
-
-    double xOf(int i)      => i / (n - 1) * size.x;
-    double yOfHR(double h) => size.y - ((h - hrMin) / (hrMax - hrMin)).clamp(0.0, 1.0) * size.y;
-    double yOfFat(double f)=> size.y - (f / 100).clamp(0.0, 1.0) * size.y;
-
-    // HR line (red)
-    canvas.setStrokeColor(_kError); canvas.setLineWidth(1.2);
-    canvas.moveTo(xOf(0), yOfHR(hrs[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOfHR(hrs[i]));
-    canvas.strokePath();
-
-    // Fatigue line (orange) — draw segment by segment to simulate dashes
-    canvas.setStrokeColor(_kWarning); canvas.setLineWidth(1.0);
-    for (int i = 1; i < n; i++) {
-      if (i.isOdd) { // draw every other segment to get a dashed effect
-        canvas.moveTo(xOf(i - 1), yOfFat(fatigues[i - 1]));
-        canvas.lineTo(xOf(i), yOfFat(fatigues[i]));
-        canvas.strokePath(); } }
-
-    // Dots
-    for (int i = 0; i < n; i++) {
-      canvas.setFillColor(_kError);
-      canvas.drawEllipse(xOf(i), yOfHR(hrs[i]), 1.8, 1.8); canvas.fillPath();
-      canvas.setFillColor(_kWarning);
-      canvas.drawEllipse(xOf(i), yOfFat(fatigues[i]), 1.8, 1.8); canvas.fillPath();
+      canvas.restoreContext();
     }
   }
 
@@ -3874,7 +6809,7 @@ class ExportService {
 
   static PdfColor _gradeColor(double grade) {
     if (grade >= 90) return _kSuccess;
-    if (grade >= 75) return const PdfColor.fromInt(0xFF1976D2);
+    if (grade >= 75) return _kBrandMid;
     if (grade >= 55) return _kWarning;
     return _kError;
   }
@@ -3954,4 +6889,66 @@ class _LegendItem {
   final String   label;
   final PdfColor color;
   const _LegendItem(this.label, this.color);
+}
+
+class _ChartLine {
+  final List<List<double>> points; // each [tSec, value]
+  final PdfColor color;
+  final double   width;
+  final bool     fill;
+  const _ChartLine(this.points, this.color,
+      {this.width = 1.2, this.fill = false});
+}
+
+class _ChartBand {
+  final double   min, max;
+  final PdfColor fill, edge;
+  const _ChartBand(this.min, this.max, this.fill, this.edge);
+}
+
+class _ChartGuide {
+  final double   y;
+  final PdfColor color;
+  const _ChartGuide(this.y, this.color);
+}
+
+class _TLEventPdf {
+  final double    sortKey;
+  final String    time;
+  final String    title;
+  final String    subtitle;
+  final PdfColor  dotColor;
+  final String?   tip;
+  final bool      isBookend;
+  final bool      isIgnored;
+  const _TLEventPdf({
+    required this.sortKey,
+    required this.time,
+    required this.title,
+    required this.subtitle,
+    required this.dotColor,
+    this.tip,
+    this.isBookend = false,
+    this.isIgnored = false,
+  });
+}
+
+
+class _CompareRow {
+  final String  label;
+  final String  hint;          // e.g. "5–6 cm target"
+  final String  group;         // section grouping
+  final List<double?> values;  // raw numeric per slot — null if not applicable
+  final String Function(double?) format;
+  final bool higherIsBetter;
+  final bool noWinner;         // for descriptive rows (no highlighting)
+  const _CompareRow({
+    required this.label,
+    this.hint = '',
+    required this.group,
+    required this.values,
+    required this.format,
+    this.higherIsBetter = true,
+    this.noWinner = false,
+  });
 }

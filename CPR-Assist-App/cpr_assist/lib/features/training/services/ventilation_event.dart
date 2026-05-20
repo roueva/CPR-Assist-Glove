@@ -4,11 +4,9 @@
 // One 30:2 ventilation cycle. Created when VENTILATION_WINDOW (0x03) fires.
 // Stored in SessionDetail.ventilations[].
 //
-// NOTE: the firmware does not currently count actual breaths given —
-// the glove has no breath sensor. Only the *target* count (always 2 for adult)
-// is sent over BLE, and that's a live-UI instruction (handled separately by
-// VentilationOverlay), not a per-window measurement. The "ventilationsGiven"
-// field was removed because it was never populated.
+// NOTE: durationSec is the *measured* no-flow gap that contains this prompt
+// (computed post-session from the compression timeline), not a firmware value.
+// "compliant" is true when that measured duration <= maxAcceptablePauseSec.
 //
 // File location: features/training/services/ventilation_event.dart
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,4 +49,12 @@ class VentilationEvent {
     'duration_sec': durationSec,
     'compliant':    compliant,
   };
+
+  VentilationEvent copyWith({double? durationSec, bool? compliant}) =>
+      VentilationEvent(
+        timestampMs: timestampMs,
+        cycleNumber: cycleNumber,
+        durationSec: durationSec ?? this.durationSec,
+        compliant:   compliant   ?? this.compliant,
+      );
 }

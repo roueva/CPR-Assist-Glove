@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -12,7 +10,7 @@ import 'package:cpr_assist/core/core.dart';
 // same pattern as VentilationOverlay.
 //
 // The card contains:
-//   • Header row  — "Pulse Check #N" pill  +  countdown ring (10 s)
+//   • Header row  — "Pulse Check #N" pill  +  assessing / confidence pill
 //   • ECG graph   — scrolling PPG waveform, full width, visible on white
 //   • Status area — pulsing dot while pending; icon + label after result
 //   • Vitals row  — BPM / SpO₂ / Temp chips, shown when pulse detected
@@ -21,7 +19,7 @@ import 'package:cpr_assist/core/core.dart';
 //   • Footer      — end-condition hint
 //
 // classification values (matches PULSE_CHECK_RESULT byte 1):
-//   null — still assessing (10-second window in progress)
+//   null — still assessing (window open until rescuer resumes)
 //   0    — ABSENT (no pulse)
 //   1    — UNCERTAIN (weak / manual verify)
 //   2    — PRESENT  (pulse detected)
@@ -88,9 +86,6 @@ class PulseCheckOverlay extends StatefulWidget {
 class _PulseCheckOverlayState extends State<PulseCheckOverlay>
     with TickerProviderStateMixin {
 
-  // ── Countdown ─────────────────────────────────────────────────────────────
-  late final Timer _countdownTimer;
-  int _secondsRemainingMs = 10000; // milliseconds, ticks at 100ms
 
   // ── Heartbeat animation — plays once pulse is confirmed ───────────────────
   late final AnimationController _heartCtrl;
@@ -108,13 +103,6 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
       CurvedAnimation(parent: _heartCtrl, curve: Curves.easeInOut),
     );
 
-    _countdownTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (!mounted) return;
-      if (widget.classification != null) return;
-      if (_secondsRemainingMs > 0) {
-        setState(() => _secondsRemainingMs -= 100);
-      }
-    });
   }
 
   @override
@@ -127,7 +115,6 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
 
   @override
   void dispose() {
-    _countdownTimer.cancel();
     _heartCtrl.dispose();
     super.dispose();
   }
@@ -214,9 +201,15 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
             bg:        AppColors.primaryLight,
           ),
           const Spacer(),
-          // Right side: countdown while pending, confidence badge after result
+          // Right side: an "assessing" pill while pending (the window is
+          // open-ended and firmware-driven now — no countdown), then the
+          // confidence badge once a result arrives.
           if (_isPending)
-            _CountdownRing(secondsRemainingMs: _secondsRemainingMs)
+            const _Pill(
+              label:     'Assessing…',
+              textColor: AppColors.primary,
+              bg:        AppColors.primaryLight,
+            )
           else if (widget.confidence != null)
             _Pill(
               label:     '${widget.confidence}% confidence',
@@ -419,63 +412,9 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
         ),
         border: Border(top: BorderSide(color: AppColors.divider)),
       ),
-      child: Text('Ends automatically after 10s or when compressions resume',
+      child: Text('Stays open until you resume compressions',
         style:     AppTypography.caption(color: AppColors.textDisabled),
         textAlign: TextAlign.center,
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _CountdownRing — circular 10-second countdown shown in the header
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CountdownRing extends StatelessWidget {
-  final int secondsRemainingMs;
-  const _CountdownRing({required this.secondsRemainingMs});
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = (secondsRemainingMs / 10000.0).clamp(0.0, 1.0);
-    final secs     = secondsRemainingMs / 1000.0;
-
-    final Color trackColor;
-    final Color arcColor;
-
-    if (secs > 5) {
-      arcColor   = AppColors.primary;
-      trackColor = AppColors.divider;
-    } else if (secs > 2) {
-      arcColor   = AppColors.warning;
-      trackColor = AppColors.warningBg;
-    } else {
-      arcColor   = AppColors.emergency;
-      trackColor = AppColors.errorBg;
-    }
-
-    return SizedBox(
-      width:  48,
-      height: 48,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CircularProgressIndicator(
-            value:           progress,
-            strokeWidth:     3.5,
-            strokeCap:       StrokeCap.round,
-            backgroundColor: trackColor,
-            valueColor:      AlwaysStoppedAnimation<Color>(arcColor),
-          ),
-          Text(
-            secs.toStringAsFixed(1),
-            style: AppTypography.poppins(
-              size:   11,
-              weight: FontWeight.w800,
-              color:  arcColor,
-            ),
-          ),
-        ],
       ),
     );
   }

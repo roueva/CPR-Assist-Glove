@@ -62,6 +62,7 @@ class AppSpacing {
 
   // Inputs
   static const double inputRadius      = 12.0;
+  static const double radiusXs = 2.0; // hairline radius (scrollbars, micro-pills)
   static const double inputPaddingH    = 16.0;
   static const double inputPaddingV    = 14.0;
 

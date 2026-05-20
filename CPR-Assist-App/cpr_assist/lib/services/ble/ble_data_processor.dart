@@ -48,8 +48,8 @@ const int kCmdSetScenario = 0xFD;
 
 const int kCmdModeSet          = 0xF1;
 const int kCmdFeedbackSet      = 0xF2;
-const int kCmdStart            = 0xF3;
-const int kCmdStop             = 0xF4;
+// const int kCmdStart            = 0xF3;
+// const int kCmdStop             = 0xF4;
 const int kCmdRequestSession   = 0xF5;
 const int kCmdConfirmReceived  = 0xF6;
 const int kCmdCalibrate        = 0xF7;
@@ -180,7 +180,8 @@ class BLEDataProcessor {
 
       final rescuerPI            = b.getUint8(84);
       final rescuerHumidityRaw   = b.getUint8(85);
-      // bytes 86–87 reserved
+      final inVentilationWindow  = b.getUint8(86) == 1;
+      // byte 87 reserved
 
       // ── SESSION STATE ─────────────────────────────────────────────────────
       final sessionActive     = b.getUint8(88) == 1;
@@ -192,6 +193,7 @@ class BLEDataProcessor {
       // COMPRESSION TIMESTAMPS (94–101)
       final peakTimestampMs   = b.getUint32(94, Endian.little);
       final valleyTimestampMs = b.getUint32(98, Endian.little);
+      final lastPeakDepthCm = b.getFloat32(102, Endian.little);
 
       // ── Derived: effective depth ──────────────────────────────────────────
       final axisRad    = compressionAxisDeviation * 3.141592653589793 / 180.0;
@@ -256,12 +258,14 @@ class BLEDataProcessor {
         // Session state
         sessionActive:      sessionActive,
         pulseCheckActive:   pulseCheckActive,
+        inVentilationWindow: inVentilationWindow,
         currentMode:        currentMode,
         feedbackEnabled:    feedbackEnabled,
         batteryPercentage:  battPct,
         isCharging:         battPct != null ? isCharging : null,
         peakTimestampMs:   peakTimestampMs,
         valleyTimestampMs: valleyTimestampMs,
+        lastPeakDepthCm:   lastPeakDepthCm,
       );
     } catch (e) {
       debugPrint('BLEDataProcessor: LIVE_STREAM parse error — $e');
@@ -563,6 +567,7 @@ class ParsedBLEData {
   // ── LIVE_STREAM: session state ────────────────────────────────────────────
   final bool  sessionActive;
   final bool  pulseCheckActive;
+  final bool  inVentilationWindow;
   final int   currentMode;          // 0=Emergency 1=Training 2=No-Feedback
   final bool  feedbackEnabled;
   final int?  batteryPercentage;
@@ -570,6 +575,7 @@ class ParsedBLEData {
 
   final int peakTimestampMs;
   final int valleyTimestampMs;
+  final double lastPeakDepthCm;
 
   // ── SESSION_END summary fields ────────────────────────────────────────────
   final int    totalCompressions;
@@ -689,12 +695,14 @@ class ParsedBLEData {
     this.rescuerHumidity,
     this.sessionActive         = false,
     this.pulseCheckActive      = false,
+    this.inVentilationWindow = false,
     this.currentMode           = 0,
     this.feedbackEnabled       = true,
     this.batteryPercentage,
     this.isCharging,
     this.peakTimestampMs   = 0,
     this.valleyTimestampMs = 0,
+    this.lastPeakDepthCm = 0,
     this.totalCompressions     = 0,
     this.correctDepth          = 0,
     this.correctFrequency      = 0,

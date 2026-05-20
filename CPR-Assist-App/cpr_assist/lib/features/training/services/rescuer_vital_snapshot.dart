@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // RescuerVitalSnapshot
 //
-// Sampled from LIVE_STREAM whenever rescuerSignalQuality >= 40.
 // Stored in SessionDetail.rescuerVitals[].
 //
 // File location: features/training/services/rescuer_vital_snapshot.dart

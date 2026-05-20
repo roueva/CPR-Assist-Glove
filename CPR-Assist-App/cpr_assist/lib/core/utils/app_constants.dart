@@ -172,6 +172,11 @@ class AppConstants {
   static const Duration pulseCheckWindow        = Duration(seconds: 10);
   static const double   routeDeviationThreshold = 50.0;
   static const int      maxLocalSessions        = 20;
+  static const double maxAcceptablePauseSec = 10.0;
+  static const double minCompliantPauseSec = 3.0;
+  static const double plannedWindowAssocToleranceSec = 3.0;
+  /// Above this many unplanned pauses, session pause quality is flagged.
+  static const int maxAcceptableUnplannedPauseCount = 2;
 
   // ═══════════════════════════════════════════════════════
   // LOCATION STALENESS

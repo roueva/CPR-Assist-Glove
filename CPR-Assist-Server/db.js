@@ -112,8 +112,8 @@ async function ensureSessionTables() {
                 user_id                 BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 mode                    VARCHAR(25)  DEFAULT 'emergency',
                 scenario                VARCHAR(40)  DEFAULT 'standard_adult',
-                session_start           TIMESTAMP    NOT NULL,
-                session_end             TIMESTAMP,
+                session_start           TIMESTAMPTZ  NOT NULL,
+		session_end             TIMESTAMPTZ,
                 compression_count       INT          DEFAULT 0,
                 correct_depth           INT          DEFAULT 0,
                 correct_frequency       INT          DEFAULT 0,
@@ -366,6 +366,10 @@ END $$`,
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS peak_ts  INTEGER DEFAULT 0`,
             `ALTER TABLE session_compressions ADD COLUMN IF NOT EXISTS valley_ts INTEGER DEFAULT 0`,
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS humidity INT`,
+`ALTER TABLE cpr_sessions ALTER COLUMN session_start TYPE TIMESTAMPTZ
+   USING session_start AT TIME ZONE 'UTC'`,
+`ALTER TABLE cpr_sessions ALTER COLUMN session_end TYPE TIMESTAMPTZ
+   USING session_end AT TIME ZONE 'UTC'`,
             // Unique index required for ON CONFLICT upsert in POST /sessions/detail
             `CREATE UNIQUE INDEX IF NOT EXISTS uq_user_session_start
              ON cpr_sessions (user_id, session_start)`,

@@ -18,6 +18,8 @@ class AnimatedDepthBar extends StatefulWidget {
   final double targetDepthCm;   // where DEPTH pill starts  (adult=5, peds=4)
   final double targetDepthMaxCm;// where DEPTH pill ends    (adult=6, peds=5)
   final double maxDepthCm;      // absolute max shown       (default 8)
+  final bool sessionActive;
+
 
   const AnimatedDepthBar({
     super.key,
@@ -26,6 +28,8 @@ class AnimatedDepthBar extends StatefulWidget {
     required this.targetDepthMaxCm,
     this.recoilAchieved    = false,
     this.maxDepthCm        = 6.5,
+    this.sessionActive = false,
+
   });
 
   @override
@@ -43,7 +47,6 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
   late AnimationController _pillPulse;
   late Animation<double>   _anim;
   double _displayed = 0.0;
-  bool   _hasData   = false;
 
   @override
   void initState() {
@@ -60,23 +63,12 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
     )..repeat(reverse: true);
     _anim = const AlwaysStoppedAnimation(0.0);
 
-    // Set _hasData immediately if widget starts with depth already > 0
-    if (widget.depth > 0.05) {
-      _hasData = true;
-      _displayed = widget.depth.clamp(0.0, widget.maxDepthCm);
-      _anim = AlwaysStoppedAnimation(_displayed);
-    }
   }
 
   @override
   void didUpdateWidget(covariant AnimatedDepthBar old) {
     super.didUpdateWidget(old);
-    if (!_hasData && widget.depth > 0.05) {
-      setState(() => _hasData = true);
-    }
-    final double target = widget.recoilAchieved
-        ? 0.0
-        : widget.depth.clamp(0.0, widget.maxDepthCm);
+    final double target = widget.depth.clamp(0.0, widget.maxDepthCm);
     if ((target - _displayed).abs() < 0.01) return;
     _anim = Tween<double>(begin: _displayed, end: target)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
@@ -117,9 +109,9 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
           final double v = _anim.value;
 
           // ── State flags ─────────────────────────────────────────────────
-          final bool releaseActive = _hasData && (widget.recoilAchieved || v < 1.0);
-          final bool depthActive   = _hasData && v >= widget.targetDepthCm;
-          final bool isExcessive   = _hasData && v > widget.targetDepthMaxCm;
+          final bool releaseActive = widget.sessionActive && (widget.recoilAchieved || v < 1.0);
+          final bool depthActive   = widget.sessionActive && v >= widget.targetDepthCm;
+          final bool isExcessive   = widget.sessionActive && v > widget.targetDepthMaxCm;
 
           // ── Current line Y position ─────────────────────────────────────
           final double lineY = cmToY(v.clamp(0.0, widget.maxDepthCm));
@@ -151,7 +143,7 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
               overflowTop:     overflowTop,
               overflowFillBot: overflowFillBot,
               lineY:           lineY,
-              hasData:         _hasData,
+              hasData:         widget.sessionActive,
               releaseActive:   releaseActive,
               depthActive:     depthActive,
               isExcessive:     isExcessive,

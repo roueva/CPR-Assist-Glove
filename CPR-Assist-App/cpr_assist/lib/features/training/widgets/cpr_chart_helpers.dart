@@ -10,6 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../screens/session_service.dart';
+import '../services/compression_event.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -28,6 +29,42 @@ String fmtChartTime(double secs) {
   final m = (secs ~/ 60).toString();
   final s = (secs % 60).toInt().toString().padLeft(2, '0');
   return '$m:$s';
+}
+
+
+double cprChartGridInterval(double minX, double maxX) {
+  final span = (maxX - minX).abs();
+
+  if (span <= 10) return 2;
+  if (span <= 20) return 5;
+  if (span <= 60) return 10;
+  if (span <= 180) return 30;
+  return 60;
+}
+
+FlGridData cprChartGridData({
+  required double minX,
+  required double maxX,
+  double? horizontalInterval,
+}) {
+  return FlGridData(
+    show: true,
+    drawVerticalLine: true,
+    horizontalInterval: horizontalInterval,
+    verticalInterval: cprChartGridInterval(minX, maxX),
+    getDrawingHorizontalLine: (_) => FlLine(
+      color: AppColors.divider,
+      strokeWidth: AppSpacing.dividerThickness,
+    ),
+    getDrawingVerticalLine: (_) => FlLine(
+      color: AppColors.divider.withValues(alpha: 0.45),
+      strokeWidth: AppSpacing.dividerThickness,
+    ),
+  );
+}
+
+Color cprChartBackgroundColor() {
+  return AppColors.screenBgGrey.withValues(alpha: 0.5);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,14 +131,8 @@ class CprWindowDropdown extends StatelessWidget {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.primaryLight,
-          borderRadius:
-          BorderRadius.circular(AppSpacing.buttonRadiusLg),
-          border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.25)),
-        ),
+            horizontal: AppSpacing.sm, vertical: AppSpacing.xxs + 1),
+        decoration: AppDecorations.dropdownPill(),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -147,19 +178,13 @@ class CprScrollBar extends StatelessWidget {
         final thumbW = trackW * thumbFrac;
         final thumbL = (trackW - thumbW) * progress;
         return Stack(children: [
-          Container(
-              height: 4,
-              decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2))),
+          Container(height: 4, decoration: AppDecorations.scrollTrack()),
           Positioned(
             left: thumbL,
             child: Container(
                 width: thumbW,
                 height: 4,
-                decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(2))),
+                decoration: AppDecorations.scrollThumb()),
           ),
         ]);
       }),
@@ -313,7 +338,9 @@ List<FlSpot> buildCprWaveform(List<dynamic> events) {
   for (int i = 0; i < events.length; i++) {
     final e      = events[i];
     final t      = (e.timestampSec as double);
-    final peak   = (e.depth as double).clamp(0.0, 10.0);
+    final rawDepth = e.depth as double;
+    if (!rawDepth.isFinite || rawDepth <= 0) continue;  // skip unmeasured comp
+    final peak   = rawDepth.clamp(0.0, 10.0);
     final rawVal = e.valleyDepth as double;
     final valley = rawVal > 0
         ? rawVal.clamp(0.0, (peak - 0.05).clamp(0.0, 10.0))
@@ -341,6 +368,83 @@ List<FlSpot> buildCprWaveform(List<dynamic> events) {
   }
   return spots;
 }
+
+// ── Series model ──────────────────────────────────────────────────────────
+class CprSeries {
+  final String label;          // "S3" (compare) or "" (single)
+  final Color  color;
+  final List<FlSpot> spots;
+  final List<dynamic>? comps;  // compression events for tooltip #, nullable
+  const CprSeries({required this.label, required this.color,
+    required this.spots, this.comps});
+}
+
+// ── Band/threshold constants (the magic numbers, named once) ──────────────
+const double kCprRateClampLo = 60.0;
+const double kCprRateClampHi = 200.0;
+const double kCprHrClampLo   = 40.0;
+const double kCprHrClampHi   = 200.0;
+
+// ── Shared spot builders — the ONE place each rule lives ──────────────────
+// M28: capture stores every snapshot with its signalQuality; the display
+// filters, it does not hard-drop. Plot all real HR readings; low-signal
+// points are visually de-emphasized by the dot builder (see _HeartRateChartCard),
+// never removed — an empty/sparse chart would hide real fatigue data.
+List<FlSpot> buildHrSpots(List<dynamic> vitals) => vitals
+    .where((v) => v.heartRate > 0)
+    .map((v) => FlSpot(v.timestampSec as double,
+    (v.heartRate as double).clamp(kCprHrClampLo, kCprHrClampHi)))
+    .toList();
+
+List<FlSpot> buildRateSpots(List<dynamic> events) => events.map((c) {
+  final r = (c.instantaneousRate as double) > 0
+      ? c.instantaneousRate as double : c.frequency as double;
+  return FlSpot(c.timestampSec as double, r.clamp(kCprRateClampLo, kCprRateClampHi));
+}).toList();
+
+List<FlSpot> buildDepthTrendSpots(List<dynamic> events, {int window = 5}) {
+  if (events.length < window) return [];
+  final out = <FlSpot>[];
+  for (int i = window - 1; i < events.length; i++) {
+    double sum = 0;
+    int cnt = 0;
+    for (int j = i - window + 1; j <= i; j++) {
+      final d = events[j].depth as double;
+      if (d.isFinite && d > 0) {        // skip unmeasured (NaN sentinel) comps
+        sum += d;
+        cnt++;
+      }
+    }
+    if (cnt == 0) continue;             // whole window unmeasured — no point
+    out.add(FlSpot(events[i].timestampSec as double,
+        (sum / cnt).clamp(0.0, 10.0)));
+  }
+  return out;
+}
+
+List<FlSpot> buildPostureSpots(List<dynamic> events) => events
+    .where((c) => (c.wristAlignmentAngle as double) > 0)
+    .map((c) => FlSpot(c.timestampSec as double,
+    (c.wristAlignmentAngle as double).clamp(0.0, 45.0)))
+    .toList();
+
+// ── Shared grade colour/label (kills the 4 copies — item 4) ───────────────
+Color cprGradeColor(double g) {
+  if (g >= 90) return AppColors.success;
+  if (g >= 75) return AppColors.primaryAlt;
+  if (g >= 55) return AppColors.warning;
+  return AppColors.error;
+}
+String cprGradeLabel(double g) {
+  if (g >= 90) return 'Excellent';
+  if (g >= 75) return 'Good';
+  if (g >= 55) return 'Fair';
+  return 'Poor';
+}
+double cprDepthMin(String scenario) =>
+    scenario == 'pediatric' ? CprTargets.depthMinPediatric : CprTargets.depthMin;
+double cprDepthMax(String scenario) =>
+    scenario == 'pediatric' ? CprTargets.depthMaxPediatric : CprTargets.depthMax;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CprChartTooltip — white tooltip with time header, session label,
@@ -374,7 +478,7 @@ LineTouchTooltipData buildCprTooltip({
   Color Function(int barIndex, FlSpot spot)? valueColorBuilder,
   bool dark = false,
 }) {
-  final bg       = dark ? const Color(0xFF0A0E1A) : AppColors.white;
+  final bg       = dark ? AppColors.tooltipDark : AppColors.white;
   final divColor = dark ? AppColors.textOnDark.withValues(alpha: 0.12) : AppColors.divider;
 
   return LineTouchTooltipData(
@@ -453,6 +557,181 @@ LineTouchTooltipData buildCprTooltip({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CprScrollableChart — the ONE scrollable multi-series line chart.
+// Single-session passes 1 series; compare passes N. Owns horizontal-scroll
+// state; window size is controlled by the parent card's dropdown.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CprScrollableChart extends StatefulWidget {
+  final List<CprSeries> series;
+  final double  minY;
+  final double  maxY;
+  final double  sessionLength;
+  final double? windowSecs;            // null = All
+  final double  windowStart;
+  final void Function(double) onWindowStartChanged;
+  final List<SessionSummary>? sessions; // tooltip S# labels (compare)
+  final AxisTitles leftAxis;
+  final List<HorizontalRangeAnnotation> bands;
+  final List<HorizontalLine> guideLines;
+  final double? horizontalGridInterval;
+  final String Function(int barIndex, FlSpot spot) tooltipValue;
+  final Color Function(int barIndex, FlSpot spot)? tooltipValueColor;
+  final double  leftReserved;
+  final double  height;
+  final bool    curved;
+  final FlDotPainter Function(int barIndex, FlSpot spot)? dotBuilder;
+  final bool Function(double effectiveWindow)? showDotsWhen;
+
+  const CprScrollableChart({
+    super.key,
+    required this.series,
+    required this.minY,
+    required this.maxY,
+    required this.sessionLength,
+    required this.windowSecs,
+    required this.windowStart,
+    required this.onWindowStartChanged,
+    required this.leftAxis,
+    required this.tooltipValue,
+    this.sessions,
+    this.bands = const [],
+    this.guideLines = const [],
+    this.horizontalGridInterval,
+    this.tooltipValueColor,
+    this.leftReserved = 28.0,
+    this.height = 140.0,
+    this.curved = true,
+    this.dotBuilder,
+    this.showDotsWhen,
+  });
+
+  @override
+  State<CprScrollableChart> createState() => _CprScrollableChartState();
+}
+
+class _CprScrollableChartState extends State<CprScrollableChart> {
+  double get _effectiveWindow => widget.windowSecs ?? widget.sessionLength;
+  double get _windowEnd => widget.windowSecs == null
+      ? widget.sessionLength
+      : widget.windowStart + widget.windowSecs!;
+  bool get _canScroll =>
+      widget.windowSecs != null && widget.sessionLength > widget.windowSecs!;
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (!_canScroll) return;
+    final secsPerPx =
+        (widget.sessionLength - _effectiveWindow) / 260.0;
+    final newStart = (widget.windowStart - d.delta.dx * secsPerPx)
+        .clamp(0.0, widget.sessionLength - _effectiveWindow);
+    widget.onWindowStartChanged(newStart);
+  }
+
+  int _barIndexOf(FlSpot spot) {
+    for (int i = 0; i < widget.series.length; i++) {
+      if (widget.series[i].spots.contains(spot)) return i;
+    }
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.series.every((s) => s.spots.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+    final minX = widget.windowStart;
+    final maxX = _windowEnd;
+
+    final bars = [
+      for (int i = 0; i < widget.series.length; i++)
+        LineChartBarData(
+          spots:    widget.series[i].spots,
+          color:    widget.series[i].color,
+          barWidth: widget.series.length > 1 ? 1.5 : 2,
+          isCurved: widget.curved,
+          curveSmoothness: 0.25,
+          preventCurveOverShooting: true,
+          preventCurveOvershootingThreshold: 0.5,
+          dotData: widget.dotBuilder == null
+              ? const FlDotData(show: false)
+              : FlDotData(
+            show: true,
+            checkToShowDot: (spot, _) {
+              final inWindow = spot.x >= minX && spot.x <= maxX;
+              final allowed = widget.showDotsWhen
+                  ?.call(_effectiveWindow) ??
+                  true;
+              return inWindow && allowed;
+            },
+            getDotPainter: (spot, _, __, ___) =>
+                widget.dotBuilder!(_barIndexOf(spot), spot),
+          ),
+          belowBarData: BarAreaData(show: false),
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onHorizontalDragUpdate: _canScroll ? _onDragUpdate : null,
+          child: SizedBox(
+            height: context.isLandscape ? widget.height * 0.7 : widget.height,
+            child: LineChart(LineChartData(
+              minX: minX, maxX: maxX,
+              minY: widget.minY, maxY: widget.maxY,
+              clipData: const FlClipData.all(),
+              backgroundColor: cprChartBackgroundColor(),
+              lineBarsData: bars,
+              rangeAnnotations:
+              RangeAnnotations(horizontalRangeAnnotations: widget.bands),
+              extraLinesData:
+              ExtraLinesData(horizontalLines: widget.guideLines),
+              gridData: cprChartGridData(
+                minX: minX, maxX: maxX,
+                horizontalInterval: widget.horizontalGridInterval,
+              ),
+              borderData: FlBorderData(show: false),
+              lineTouchData: LineTouchData(
+                touchTooltipData: buildCprTooltip(
+                  sessions: widget.sessions,
+                  compressionsPerBar: widget.series.any((s) => s.comps != null)
+                      ? [for (final s in widget.series) s.comps ?? const []]
+                      : null,
+                  valueLabel: widget.tooltipValue,
+                  valueColorBuilder: widget.tooltipValueColor,
+                ),
+              ),
+              titlesData: FlTitlesData(
+                topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: buildCprTimeAxis(
+                  minX: minX, maxX: maxX,
+                  sessionLength: widget.sessionLength,
+                  windowStart: widget.windowStart,
+                  windowSecs: widget.windowSecs,
+                ),
+                leftTitles: widget.leftAxis,
+              ),
+            )),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.only(left: widget.leftReserved),
+          child: CprScrollBar(
+            windowStart:   widget.windowStart,
+            sessionLength: widget.sessionLength,
+            windowSecs:    _effectiveWindow,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CprChartCard — shared chart card wrapper used by session results,
 // compare screen, and leaderboard stats tab.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -463,6 +742,7 @@ class CprChartCard extends StatelessWidget {
   final Color   lineColor;
   final Widget  child;
   final Widget? dropdown;
+  final Widget? legend;
 
   const CprChartCard({
     super.key,
@@ -471,6 +751,7 @@ class CprChartCard extends StatelessWidget {
     required this.lineColor,
     required this.child,
     this.dropdown,
+    this.legend,
   });
 
   void _showExpanded(BuildContext context) {
@@ -570,11 +851,7 @@ class CprChartCard extends StatelessWidget {
                 onTap: () => _showExpanded(context),
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius:
-                    BorderRadius.circular(AppSpacing.cardRadiusSm),
-                  ),
+                  decoration: AppDecorations.iconChipPrimary(),
                   child: const Icon(
                     Icons.open_in_full_rounded,
                     size: 14,
@@ -584,6 +861,10 @@ class CprChartCard extends StatelessWidget {
               ),
             ],
           ),
+          if (legend != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            legend!,
+          ],
           const SizedBox(height: AppSpacing.md),
           child,
         ],

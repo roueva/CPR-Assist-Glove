@@ -35,10 +35,10 @@ class _TrainingOverviewTab extends ConsumerWidget {
 
     final compressions    = d?.compressionCount ?? s?.compressionCount ?? 0;
     final duration        = d?.durationFormatted ?? s?.durationFormatted ?? '—';
-    final noFlowTime      = d?.noFlowTime ?? 0.0;
-    final handsOnPct      = d?.handsOnPct ?? '—';
-    final handsOnOk       = (d?.handsOnRatio ?? 0) >= 0.80;
-    final noFlowIntervals = d?.noFlowIntervals ?? s?.noFlowIntervals ?? 0;
+    final pauseCount      = d?.unplannedPauseCount ?? 0;
+    final pauseTime       = d?.unplannedPauseTime  ?? 0.0;
+    final noFlowSecs      = d?.noFlowTime  ?? 0.0;
+    final ttf             = d?.timeToFirstCompression ?? 0.0;
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -72,10 +72,10 @@ class _TrainingOverviewTab extends ConsumerWidget {
           // ── Quality grid: 2×2 ──────────────────────────────────────────
           _OverviewGrid(
             compressions:    compressions,
-            noFlowTime:      noFlowTime,
-            noFlowIntervals: noFlowIntervals,
-            handsOnPct:      handsOnPct,
-            handsOnOk:       handsOnOk,
+            unplannedTime:   pauseTime,
+            unplannedCount:  pauseCount,
+            noFlowSecs:      noFlowSecs,
+            ttf:             ttf,
             detail:          d,
             summary:         s,
             targetDepthMin: targetDepthMin,
@@ -108,10 +108,10 @@ class _TrainingOverviewTab extends ConsumerWidget {
 
 class _OverviewGrid extends StatelessWidget {
   final int     compressions;
-  final double  noFlowTime;
-  final int     noFlowIntervals;
-  final String  handsOnPct;
-  final bool    handsOnOk;
+  final double  unplannedTime;
+  final int     unplannedCount;
+  final double  noFlowSecs;
+  final double  ttf;
   final SessionDetail?  detail;
   final SessionSummary? summary;
   final double targetDepthMin;
@@ -120,10 +120,10 @@ class _OverviewGrid extends StatelessWidget {
 
   const _OverviewGrid({
     required this.compressions,
-    required this.noFlowTime,
-    required this.noFlowIntervals,
-    required this.handsOnPct,
-    required this.handsOnOk,
+    required this.unplannedTime,
+    required this.unplannedCount,
+    required this.noFlowSecs,
+    required this.ttf,
     required this.detail,
     required this.summary,
     this.targetDepthMin = 5.0,
@@ -138,8 +138,10 @@ class _OverviewGrid extends StatelessWidget {
     final depthOk    = avgDepth >= targetDepthMin && avgDepth <= targetDepthMax;
     final depthHigh  = avgDepth > targetDepthMax;
     final rateOk     = avgFreq >= 100 && avgFreq <= 120;
-    final handsDouble = double.tryParse(
-        handsOnPct.replaceAll('%', '').trim()) ?? 0.0;
+    final ttfColor = ttf <= 0 ? AppColors.textDisabled
+        : ttf <= 10 ? AppColors.success
+        : ttf <= 20 ? AppColors.warning
+        : AppColors.error;
 
     final tiles = [
       _GridStatTile(
@@ -171,30 +173,33 @@ class _OverviewGrid extends StatelessWidget {
         ) : null,
       ),
       _GridStatTile(
-        label:    'Hands-On',
-        value:    handsOnPct,
-        dotColor: handsOnOk ? AppColors.success : AppColors.warning,
-        zoneBar: handsOnPct != '—' ? _ZoneBarConfig(
-          minVal: 0, maxVal: 100,
-          targetMin: 80, targetMax: 100,
-          currentVal: handsDouble,
-          dotColor: handsOnOk ? AppColors.success : AppColors.warning,
-          targetLabel: '≥ 80%',
+        label:    'Time to 1st Comp',
+        value:    ttf > 0 ? '${ttf.toStringAsFixed(1)} s' : '—',
+        dotColor: ttfColor,
+        zoneBar: ttf > 0 ? _ZoneBarConfig(
+          minVal: 0, maxVal: 30,
+          targetMin: 0, targetMax: 10,
+          currentVal: ttf.clamp(0.0, 30.0),
+          dotColor: ttfColor,
+          targetLabel: '< 10 s',
         ) : null,
       ),
       _GridStatTile(
-        label:    'Pause Time',
-        value:    noFlowTime > 0 ? '${noFlowTime.toStringAsFixed(1)}s' : '0s',
-        note:     '$noFlowIntervals pause(s)',
-        dotColor: noFlowTime <= 5 ? AppColors.success
-            : AppColors.warning,
+        label:    'Unplanned Pauses',
+        value:    unplannedTime > 0 ? '${unplannedTime.toStringAsFixed(1)}s' : '0s',
+        note:     unplannedCount > 0
+            ? '$unplannedCount× · no-flow ${noFlowSecs.toStringAsFixed(0)}s'
+            : (noFlowSecs > 0
+            ? 'no-flow ${noFlowSecs.toStringAsFixed(0)}s' : null),
+        dotColor: unplannedTime <= AppConstants.maxAcceptablePauseSec
+            ? AppColors.success : AppColors.warning,
         zoneBar: _ZoneBarConfig(
           minVal: 0, maxVal: 15,
-          targetMin: 0, targetMax: 5,
-          currentVal: noFlowTime.clamp(0.0, 15.0),
-          dotColor: noFlowTime <= 5 ? AppColors.success
-              : AppColors.warning,
-          targetLabel: '< 5s',
+          targetMin: 0, targetMax: AppConstants.maxAcceptablePauseSec,
+          currentVal: unplannedTime.clamp(0.0, 15.0),
+          dotColor: unplannedTime <= AppConstants.maxAcceptablePauseSec
+              ? AppColors.success : AppColors.warning,
+          targetLabel: '< ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)}s',
         ),
       ),
     ];
@@ -1623,25 +1628,59 @@ class _SessionTimelineSection extends StatelessWidget {
       ));
     }
 
-    // No-flow pauses
-    double? lastTs;
-    for (final c in detail.compressions) {
-      final ts = c.timestampSec;
-      if (lastTs != null) {
-        final gap = ts - lastTs;
-        if (gap > 2.0) {
-          events.add(_TLEvent(
-            sortKey:  lastTs,
-            time:     _fmt(lastTs),
-            title:    'Unplanned pause',
-            subtitle: '${gap.toStringAsFixed(1)} s with no compressions',
-            dotColor: AppColors.error,
-            icon:     Icons.pause_circle_outline_rounded,
-            tip:      'Keep pauses under 2 s',
-          ));
-        }
+    // Mirror _calculatePauseMetrics exactly (single source of truth): scan the
+    // leading gap, every inter-compression gap, and the trailing gap. A fully
+    // unplanned gap → one "Unplanned pause" event. A planned gap that overran
+    // → the excess shows as its own "Unplanned pause" event (Behavior Y), so
+    // the timeline can never disagree with the stat chips.
+    void scanTimelineGap(double gapStart, double gapEnd) {
+      final gap = gapEnd - gapStart;
+      if (gap <= 2.0) return;
+      const tol = AppConstants.plannedWindowAssocToleranceSec;
+      final isPlanned = detail.ventilations.any((v) =>
+      v.timestampSec >= gapStart - tol &&
+          v.timestampSec <= gapEnd) ||
+          detail.pulseChecks.any((p) =>
+          p.timestampSec >= gapStart - tol &&
+              p.timestampSec <= gapEnd);
+      if (!isPlanned) {
+        events.add(_TLEvent(
+          sortKey:  gapStart,
+          time:     _fmt(gapStart),
+          title:    'Unplanned pause',
+          subtitle: '${gap.toStringAsFixed(1)} s with no compressions',
+          dotColor: AppColors.error,
+          icon:     Icons.pause_circle_outline_rounded,
+          tip:      'Keep pauses under ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s',
+        ));
+      } else if (gap > AppConstants.maxAcceptablePauseSec) {
+        final excess = gap - AppConstants.maxAcceptablePauseSec;
+        events.add(_TLEvent(
+          sortKey:  gapEnd - 0.001,
+          time:     _fmt(gapStart + AppConstants.maxAcceptablePauseSec),
+          title:    'Unplanned pause',
+          subtitle: '${excess.toStringAsFixed(1)} s over the '
+              '${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s allowance',
+          dotColor: AppColors.error,
+          icon:     Icons.pause_circle_outline_rounded,
+          tip:      'Resume compressions within '
+              '${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s of a ventilation or pulse check',
+        ));
       }
-      lastTs = ts;
+    }
+
+    if (detail.compressions.isNotEmpty) {
+      scanTimelineGap(0.0, detail.compressions.first.timestampSec);
+      for (int i = 1; i < detail.compressions.length; i++) {
+        scanTimelineGap(
+          detail.compressions[i - 1].timestampSec,
+          detail.compressions[i].timestampSec,
+        );
+      }
+      scanTimelineGap(
+        detail.compressions.last.timestampSec,
+        detail.sessionDuration.toDouble(),
+      );
     }
 
     // Ventilation cycles
@@ -1665,7 +1704,9 @@ class _SessionTimelineSection extends StatelessWidget {
     // Pulse check events
     for (final p in detail.pulseChecks) {
       final t         = p.timestampSec;
-      final completed = p.userDecision != null;
+      // Compliant = rescuer actually paused >= 3 s for the check (same rule
+      // as ventilation), not merely whether a UI button was tapped.
+      final completed = p.compliant;
 
       final dotColor = p.detected    ? AppColors.success
           : p.isUncertain            ? AppColors.warning
@@ -1682,7 +1723,7 @@ class _SessionTimelineSection extends StatelessWidget {
             : p.isUncertain
             ? 'Weak signal · Verify manually'
             : 'No pulse found',
-        dotColor:    dotColor,
+        dotColor:    completed ? dotColor : AppColors.textDisabled,
         icon:        !completed          ? Icons.monitor_heart_outlined
             : p.detected                 ? Icons.favorite_rounded
             : p.isUncertain              ? Icons.help_outline_rounded
@@ -1745,30 +1786,6 @@ class _SessionTimelineSection extends StatelessWidget {
     final compliantVentCount =
         detail.ventilations.where((v) => v.compliant).length;
 
-    // True unplanned pause seconds (excludes ventilation + pulse check gaps)
-    double unplannedSecs = 0;
-    void sumGap(double gapStart, double gapEnd) {
-      final dur = gapEnd - gapStart;
-      if (dur <= 2.0) return;
-      final inVent = detail.ventilations.any((v) {
-        final vs = v.timestampSec;
-        return gapStart < (vs + v.durationSec) && gapEnd > vs;
-      });
-      final inPulse = detail.pulseChecks.any((p) {
-        return gapStart < (p.timestampSec + 10.0) && gapEnd > p.timestampSec;
-      });
-      if (!inVent && !inPulse) unplannedSecs += dur;
-    }
-    if (detail.compressions.isNotEmpty) {
-      sumGap(0, detail.compressions.first.timestampSec);
-      for (int i = 1; i < detail.compressions.length; i++) {
-        sumGap(detail.compressions[i - 1].timestampSec,
-            detail.compressions[i].timestampSec);
-      }
-      sumGap(detail.compressions.last.timestampSec,
-          detail.sessionDuration.toDouble());
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1780,15 +1797,15 @@ class _SessionTimelineSection extends StatelessWidget {
         _TimelineStatGrid(
           detail:             detail,
           activeCprTime:      activeCprTime,
-          noFlowTime:         unplannedSecs,
-          noFlowIntervals:    detail.unplannedPauseCount,
+          unplannedTime:      detail.unplannedPauseTime,
+          unplannedCount:     detail.unplannedPauseCount,
           compliantVentCount: compliantVentCount,
           isEmergency:        isEmergency,
         ),
       ],
     );
-  }}
-
+  }
+}
 
 class _StatChip {
   final IconData icon;
@@ -1991,16 +2008,16 @@ class _StrikethroughDotPainter extends CustomPainter {
 class _TimelineStatGrid extends StatelessWidget {
   final SessionDetail detail;
   final double activeCprTime;
-  final double noFlowTime;
-  final int    noFlowIntervals;
+  final double unplannedTime;
+  final int    unplannedCount;
   final int    compliantVentCount;
   final bool   isEmergency;
 
   const _TimelineStatGrid({
     required this.detail,
     required this.activeCprTime,
-    required this.noFlowTime,
-    required this.noFlowIntervals,
+    required this.unplannedTime,
+    required this.unplannedCount,
     required this.compliantVentCount,
     this.isEmergency = false,
   });
@@ -2017,7 +2034,7 @@ class _TimelineStatGrid extends StatelessWidget {
     _StatChip? pulseChip;
     if (detail.pulseChecks.isNotEmpty) {
       final total = detail.pulseChecks.length;
-      final completed = detail.pulseChecks.where((p) => p.userDecision != null).length;
+      final completed = detail.pulseChecks.where((p) => p.compliant).length;
       final lastDetected = detail.pulseChecks.lastWhere(
             (p) => p.detected && p.detectedBpm > 0,
         orElse: () => detail.pulseChecks.first,
@@ -2033,8 +2050,8 @@ class _TimelineStatGrid extends StatelessWidget {
     }
 
     // ── Colors ──────────────────────────────────────────────────────────────
-    final unplanned = detail.unplannedPauseCount;
-    final pauseColor = (noFlowTime > 5 || unplanned > 2)
+    final pauseColor = (unplannedTime > AppConstants.maxAcceptablePauseSec ||
+        unplannedCount > AppConstants.maxAcceptableUnplannedPauseCount)
         ? AppColors.warning : AppColors.success;
     final ventColor = compliantVentCount == detail.ventilations.length
         ? AppColors.primary : AppColors.warning;
@@ -2045,14 +2062,14 @@ class _TimelineStatGrid extends StatelessWidget {
     final stats = <_StatChip>[
       _StatChip(Icons.timer_outlined,   'Total time',
           detail.durationFormatted,         AppColors.textSecondary),
-      if (unplanned > 0 && !isEmergency)
+      if (unplannedCount > 0 && !isEmergency)
         _StatChip(Icons.favorite_rounded, 'Active CPR',
             _fmtDuration(activeCprTime),    AppColors.primary),
       _StatChip(Icons.compress_rounded, 'Compressions',
           '${detail.compressionCount}',     AppColors.textPrimary),
-      if (unplanned > 0)
+      if (unplannedCount > 0)
         _StatChip(Icons.pause_rounded,  'Unplanned pauses',
-            '${noFlowTime.toStringAsFixed(1)} s ($unplanned×)',
+            '${unplannedTime.toStringAsFixed(1)} s ($unplannedCount×)',
             pauseColor),
       if (detail.ventilations.isNotEmpty)
         _StatChip(Icons.air_rounded,    'Ventilations',
@@ -2318,28 +2335,6 @@ class _RescuerVitalsSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-      ],
-    );
-  }
-
-  void _showInfo(
-      BuildContext context,
-      String label,
-      IconData icon,
-      Color color,
-      String body, {
-        List<_DetailRow2> rows = const [],
-        String? footer,
-      }) {
-    _MetricDetailSheet.show(
-      context,
-      label:       label,
-      icon:        icon,
-      accentColor: color,
-      sections: [
-        _DetailSection('', body: body, rows: rows),
-        if (footer != null)
-          _DetailSection('', body: footer),
       ],
     );
   }

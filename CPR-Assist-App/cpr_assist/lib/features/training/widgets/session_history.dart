@@ -10,6 +10,7 @@ import '../screens/session_service.dart';
 import '../services/export_service.dart';
 import '../services/session_detail.dart';
 import '../services/session_local_storage.dart';
+import 'cpr_chart_helpers.dart';
 import 'export_bottom_sheet.dart';
 import 'session_results.dart';
 import 'session_compare_screen.dart';
@@ -30,12 +31,7 @@ import 'session_compare_screen.dart';
 
 // ── Shared grade colour helper ─────────────────────────────────────────────
 
-Color gradeColor(double grade) {
-  if (grade >= 90) return AppColors.success;
-  if (grade >= 75) return AppColors.primaryAlt;
-  if (grade >= 55) return AppColors.warning;
-  return AppColors.error;
-}
+Color gradeColor(double grade) => cprGradeColor(grade);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionHistoryScreen
@@ -49,11 +45,42 @@ class SessionHistoryScreen extends ConsumerStatefulWidget {
       _SessionHistoryScreenState();
 }
 
-class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
-  String _filter = 'All';
+class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
+    with TickerProviderStateMixin {
+  late TabController _modeTabController;
+
+  String _filter     = 'All';
+  int    _modeIndex  = 0; // 0=All, 1=Training, 2=Emergency
+  String _sortOrder  = 'newest';
+  String _searchQuery = '';
 
   bool             _selectionMode = false;
   Set<String>      _selectedIds   = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _modeTabController = TabController(length: 3, vsync: this)
+      ..addListener(() {
+        if (!_modeTabController.indexIsChanging) {
+          setState(() {
+            _modeIndex = _modeTabController.index;
+            _filter    = 'All';
+            // Reset grade sort when switching to Emergency — no grades there
+            if (_modeTabController.index == 2 &&
+                (_sortOrder == 'grade_high' || _sortOrder == 'grade_low')) {
+              _sortOrder = 'newest';
+            }
+          });
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _modeTabController.dispose();
+    super.dispose();
+  }
 
   void _enterSelectionMode(String id) {
     setState(() {
@@ -79,6 +106,11 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
       _selectedIds   = {};
     });
   }
+  void _deselectAll() {
+    setState(() {
+      _selectedIds = {};
+    });
+  }
 
   void _selectAll(List<SessionSummary> all) {
     setState(() {
@@ -89,17 +121,72 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
     });
   }
 
-  static const _filters = ['All', 'Recent', 'Emergency', 'Training', 'No-Feedback', 'Excellent', 'Good'];
-
   List<SessionSummary> _apply(List<SessionSummary> all) {
+    // 1. Mode tab pre-filter
+    List<SessionSummary> base;
+    switch (_modeIndex) {
+      case 1: base = all.where((s) => s.isTraining).toList(); break;
+      case 2: base = all.where((s) => s.isEmergency).toList(); break;
+      default: base = List.of(all);
+    }
+
+    // 2. Search
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      base = base.where((s) =>
+      s.dateTimeFormatted.toLowerCase().contains(q) ||
+          (s.note?.toLowerCase().contains(q) ?? false) ||
+          (s.sessionNumber?.toString().contains(q) ?? false)
+      ).toList();
+    }
+
+    // 3. Pill filter
     switch (_filter) {
-      case 'Excellent': return all.where((s) => s.totalGrade >= 90).toList();
-      case 'Good':      return all.where((s) => s.totalGrade >= 75 && s.totalGrade < 90).toList();
-      case 'Recent':    return all.take(10).toList();
-      case 'Emergency': return all.where((s) => s.isEmergency).toList();
-      case 'No-Feedback': return all.where((s) => s.isNoFeedback).toList();
-      case 'Training':    return all.where((s) => s.isTraining && !s.isNoFeedback).toList();
-      default:          return all;
+      case 'Pediatric':
+        base = base.where((s) => s.scenario == 'pediatric').toList();
+        break;
+      case 'Adult':
+        base = base.where((s) => s.scenario != 'pediatric').toList();
+        break;
+      case 'No-Feedback':
+        base = base.where((s) => s.isNoFeedback).toList();
+        break;
+      default:
+        break;
+    }
+
+    // 4. Sort
+    switch (_sortOrder) {
+      case 'oldest':
+        base.sort((a, b) => (a.sessionStart ?? DateTime(0)).compareTo(b.sessionStart ?? DateTime(0)));
+        break;
+      case 'grade_high':
+        base.sort((a, b) => b.totalGrade.compareTo(a.totalGrade));
+        break;
+      case 'grade_low':
+        base.sort((a, b) => a.totalGrade.compareTo(b.totalGrade));
+        break;
+      case 'duration_desc':
+        base.sort((a, b) => b.sessionDuration.compareTo(a.sessionDuration));
+        break;
+      case 'duration_asc':
+        base.sort((a, b) => a.sessionDuration.compareTo(b.sessionDuration));
+        break;
+      default: // newest
+        base.sort((a, b) => (b.sessionStart ?? DateTime(0)).compareTo(a.sessionStart ?? DateTime(0)));
+    }
+
+    return base;
+  }
+
+  List<String> get _filtersForMode {
+    switch (_modeIndex) {
+      case 1: // Training
+        return ['All', 'Adult', 'Pediatric', 'No-Feedback'];
+      case 2: // Emergency
+        return ['All', 'Adult', 'Pediatric'];
+      default: // All
+        return ['All', 'Adult', 'Pediatric', 'No-Feedback'];
     }
   }
 
@@ -192,10 +279,10 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
     final summaries = ref.watch(sessionSummariesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.screenBgGrey,
+      backgroundColor: AppColors.white,
         appBar: _selectionMode
             ? AppBar(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.cprCardBg,
           foregroundColor: AppColors.textOnDark,
           elevation: 0,
           scrolledUnderElevation: 0,
@@ -209,14 +296,28 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
           ),
             actions: [
               // Select all
-              IconButton(
-                icon:    const Icon(Icons.select_all_rounded, color: AppColors.textOnDark),
-                tooltip: 'Select all',
-                onPressed: () {
-                  final all = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-                  _selectAll(all);
-                },
-              ),
+              Builder(builder: (ctx) {
+                final all = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+                final allSelected = all
+                    .where((s) => s.id != null)
+                    .every((s) => _selectedIds.contains(s.id.toString()));
+                return IconButton(
+                  icon: Icon(
+                    allSelected
+                        ? Icons.deselect_rounded
+                        : Icons.select_all_rounded,
+                    color: AppColors.textOnDark,
+                  ),
+                  tooltip: allSelected ? 'Deselect all' : 'Select all',
+                  onPressed: () {
+                    if (allSelected) {
+                      _deselectAll();
+                    } else {
+                      _selectAll(all);
+                    }
+                  },
+                );
+              }),
               if (_selectedIds.length >= 2 && _selectedIds.length <= 4)
                 IconButton(
                   icon:    const Icon(Icons.compare_arrows_rounded, color: AppColors.textOnDark),
@@ -236,7 +337,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
             ],
         )
             : AppBar(
-          backgroundColor: AppColors.primaryLight,
+          backgroundColor: AppColors.white,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
@@ -247,45 +348,70 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
             'Session History',
             style: AppTypography.heading(size: 20, color: AppColors.primary),
           ),
-          actions: [
-            IconButton(
-              icon:    const Icon(Icons.download_outlined, color: AppColors.primary),
-              tooltip: 'Export all sessions',
-              onPressed: () {
-                final all = summaries.valueOrNull ?? [];
-                if (all.isEmpty) return;
-                ExportBottomSheet.showForMultipleSessions(context, sessions: all);
-              },
-            ),
-
-            IconButton(
-              icon:    const Icon(Icons.delete_outline_rounded, color: AppColors.primary),
-              tooltip: 'Delete all sessions',
-              onPressed: () async {
-                final all = summaries.valueOrNull ?? [];
-                if (all.isEmpty) return;
-                final confirmed = await AppDialogs.showDestructiveConfirm(
-                  context,
-                  icon:         Icons.delete_outline_rounded,
-                  iconColor:    AppColors.emergency,
-                  iconBg:       AppColors.errorBg,
-                  title:        'Delete all sessions?',
-                  message:      'This permanently removes all ${all.length} sessions.',
-                  confirmLabel: 'Delete All',
-                  confirmColor: AppColors.emergency,
-                  cancelLabel:  'Cancel',
-                );
-                if (confirmed != true || !mounted) return;
-                final service = ref.read(sessionServiceProvider);
-                for (final s in all) {
-                  if (s.id != null) await service.deleteSession(s.id!);
-                }
-                ref.invalidate(sessionSummariesProvider);
-              },
-            ),
-          ],
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, color: AppColors.primary),
+                color: AppColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
+                ),
+                onSelected: (value) async {
+                  final all = summaries.valueOrNull ?? [];
+                  if (all.isEmpty) return;
+                  if (value == 'export') {
+                    ExportBottomSheet.showForMultipleSessions(context, sessions: all);
+                  } else if (value == 'delete') {
+                    final confirmed = await AppDialogs.showDestructiveConfirm(
+                      context,
+                      icon:         Icons.delete_outline_rounded,
+                      iconColor:    AppColors.emergency,
+                      iconBg:       AppColors.errorBg,
+                      title:        'Delete all sessions?',
+                      message:      'This permanently removes all ${all.length} sessions.',
+                      confirmLabel: 'Delete All',
+                      confirmColor: AppColors.emergency,
+                      cancelLabel:  'Cancel',
+                    );
+                    if (confirmed != true || !mounted) return;
+                    final service = ref.read(sessionServiceProvider);
+                    for (final s in all) {
+                      if (s.id != null) await service.deleteSession(s.id!);
+                    }
+                    ref.invalidate(sessionSummariesProvider);
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'export',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.download_outlined,
+                            size: AppSpacing.iconSm, color: AppColors.primary),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text('Export all',
+                            style: AppTypography.body(color: AppColors.textPrimary)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delete_outline_rounded,
+                            size: AppSpacing.iconSm, color: AppColors.emergency),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text('Delete all',
+                            style: AppTypography.body(color: AppColors.emergency)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
         ),
-      body: summaries.when(
+      body: SafeArea(
+        top: false,
+        child: summaries.when(
         loading: () => const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
@@ -297,17 +423,24 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
         ),
         data: (all) {
           if (all.isEmpty) {
-            final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
+            final isLoggedIn = ref
+                .watch(authStateProvider)
+                .isLoggedIn;
             return RefreshIndicator(
               onRefresh: () async {
-                final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                final isLoggedIn = ref
+                    .read(authStateProvider)
+                    .isLoggedIn;
                 if (isLoggedIn) {
                   final service = ref.read(sessionServiceProvider);
-                  final locals  = await SessionLocalStorage.loadAll();
-                  final pending = locals.where((d) => !d.syncedToBackend).toList();
+                  final locals = await SessionLocalStorage.loadAll();
+                  final pending = locals
+                      .where((d) => !d.syncedToBackend)
+                      .toList();
                   for (final detail in pending) {
                     final id = await service.saveDetail(detail);
-                    if (id != null) await SessionLocalStorage.markSynced(detail);
+                    if (id != null) await SessionLocalStorage.markSynced(
+                        detail);
                   }
                 }
                 ref.invalidate(sessionSummariesProvider);
@@ -321,14 +454,18 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
                     child: _EmptyState(
                       isLoggedIn: isLoggedIn,
                       onRefresh: () async {
-                        final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                        final isLoggedIn = ref
+                            .read(authStateProvider)
+                            .isLoggedIn;
                         if (isLoggedIn) {
                           final service = ref.read(sessionServiceProvider);
-                          final locals  = await SessionLocalStorage.loadAll();
-                          final pending = locals.where((d) => !d.syncedToBackend).toList();
+                          final locals = await SessionLocalStorage.loadAll();
+                          final pending = locals.where((d) =>
+                          !d.syncedToBackend).toList();
                           for (final detail in pending) {
                             final id = await service.saveDetail(detail);
-                            if (id != null) await SessionLocalStorage.markSynced(detail);
+                            if (id != null) await SessionLocalStorage
+                                .markSynced(detail);
                           }
                         }
                         ref.invalidate(sessionSummariesProvider);
@@ -340,19 +477,25 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen> {
             );
           }
           return _SessionsList(
-              all:           all,
-              filtered:      _apply(all),
-              filter:        _filter,
-              filters:       _filters,
-              onFilter:      (f) => setState(() => _filter = f),
-              selectionMode: _selectionMode,
-              selectedIds:   _selectedIds,
-              onLongPress:   _enterSelectionMode,
-              onToggle:      _toggleSelection,
-              onRefresh: () => ref.invalidate(sessionSummariesProvider),
-            );
-          },
+            all: all,
+            filtered: _apply(all),
+            filter: _filter,
+            filters: _filtersForMode,
+            onFilter: (f) => setState(() => _filter = f),
+            sortOrder: _sortOrder,
+            onSortChanged: (v) => setState(() => _sortOrder = v),
+            searchQuery: _searchQuery,
+            onSearchChanged: (v) => setState(() => _searchQuery = v),
+            modeTabController: _modeTabController,
+            selectionMode: _selectionMode,
+            selectedIds: _selectedIds,
+            onLongPress: _enterSelectionMode,
+            onToggle: _toggleSelection,
+            onRefresh: () => ref.invalidate(sessionSummariesProvider),
+          );
+        },
       ),
+    ),
     );
   }
 }
@@ -365,7 +508,12 @@ class _SessionsList extends StatelessWidget {
   final String                  filter;
   final List<String>            filters;
   final void Function(String)   onFilter;
-  final VoidCallback onRefresh;
+  final String                  sortOrder;
+  final void Function(String)   onSortChanged;
+  final String                  searchQuery;
+  final void Function(String)   onSearchChanged;
+  final TabController           modeTabController;
+  final VoidCallback            onRefresh;
   final bool                    selectionMode;
   final Set<String>             selectedIds;
   final void Function(String)   onLongPress;
@@ -377,6 +525,11 @@ class _SessionsList extends StatelessWidget {
     required this.filter,
     required this.filters,
     required this.onFilter,
+    required this.sortOrder,
+    required this.onSortChanged,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.modeTabController,
     required this.selectionMode,
     required this.selectedIds,
     required this.onLongPress,
@@ -389,46 +542,121 @@ class _SessionsList extends StatelessWidget {
     return Column(
       children: [
         _EvictionWarningBanner(sessionCount: all.length),
-        _StatsHeader(sessions: all),
-        _FilterBar(filters: filters, selected: filter, onSelect: onFilter),
-    Expanded(
-    child: RefreshIndicator(
-      onRefresh: () async => onRefresh(),
-      color: AppColors.primary,
-    child: ListView.builder(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.md, AppSpacing.md, AppSpacing.md,
-        AppSpacing.md + MediaQuery.paddingOf(context).bottom,
-      ),
-      itemCount: filtered.length,
-            itemBuilder: (context, i) {
-              final session   = filtered[i];
-              final idStr     = session.id?.toString() ?? '';
-              final isSelected = selectionMode && selectedIds.contains(idStr);
-              final idx          = all.indexOf(session);
-              final sessionNumber = session.sessionNumber ?? (all.length - all.indexOf(session));
-              // Previous session in chronological order = next item in the list (older)
-              final prevGrade = (idx + 1 < all.length && all[idx + 1].isTraining)
-                  ? all[idx + 1].totalGrade
-                  : null;
+        _StatsHeader(sessions: filtered),
 
-              final card = SessionCard(
-                session:       session,
-                sessionNumber: sessionNumber,
-                prevGrade:     prevGrade,
-                selectionMode: selectionMode,
-                isSelected:    isSelected,
-                onLongPress:   session.id != null
-                    ? () => onLongPress(idStr)
-                    : null,
-                onToggle:      session.id != null
-                    ? () => onToggle(idStr)
-                    : null,
-              );
-              return card;
-            },
+        // ── Mode tabs ──────────────────────────────────────────────────────
+        Container(
+          color: AppColors.white,
+          child: TabBar(
+            controller: modeTabController,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 2.0,
+            dividerColor: AppColors.divider.withValues(alpha: 0.45),
+            labelStyle: AppTypography.label(color: AppColors.primary),
+            unselectedLabelStyle: AppTypography.caption(
+              color: AppColors.textSecondary,
+            ),
+            tabs: const [
+              Tab(text: 'ALL'),
+              Tab(text: 'TRAINING'),
+              Tab(text: 'EMERGENCY'),
+            ],
           ),
-    ),
+        ),
+
+        // ── Filters + search/sort + list background ────────────────────────
+        Expanded(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: AppColors.screenBgGrey,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _FilterBar(
+                  filters: filters,
+                  selected: filter,
+                  onSelect: onFilter,
+                ),
+
+                _SearchSortRow(
+                  count:           filtered.length,
+                  sortOrder:       sortOrder,
+                  onSortChanged:   onSortChanged,
+                  searchQuery:     searchQuery,
+                  onSearchChanged: onSearchChanged,
+                  showGradeSort:   modeTabController.index != 2,
+                ),
+
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async => onRefresh(),
+                    color: AppColors.primary,
+                    child: filtered.isEmpty
+                        ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 300,
+                          child: Center(
+                            child: Text(
+                              'No sessions match this filter.',
+                              style: AppTypography.body(
+                                color: AppColors.textDisabled,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                        : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                        AppSpacing.md,
+                        AppSpacing.md + MediaQuery.viewPaddingOf(context).bottom,
+                      ),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) {
+                        final session = filtered[i];
+                        final idStr = session.id?.toString() ?? '';
+                        final isSelected =
+                            selectionMode && selectedIds.contains(idStr);
+                        final idx = all.indexOf(session);
+                        final sessionNumber =
+                            session.sessionNumber ?? (all.length - idx);
+                        final prevGrade =
+                        (idx + 1 < all.length && all[idx + 1].isTraining)
+                            ? all[idx + 1].totalGrade
+                            : null;
+
+                        return SessionCard(
+                          session: session,
+                          sessionNumber: sessionNumber,
+                          prevGrade: prevGrade,
+                          selectionMode: selectionMode,
+                          isSelected: isSelected,
+                          onLongPress:
+                          session.id != null ? () => onLongPress(idStr) : null,
+                          onToggle:
+                          session.id != null ? () => onToggle(idStr) : null,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -454,10 +682,7 @@ Future<void> _showContextMenu(
               margin:     const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               width:      40,
               height:     4,
-              decoration: BoxDecoration(
-                color:        AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: AppDecorations.dragHandle(),
             ),
           ),
           ListTile(
@@ -550,31 +775,52 @@ Future<void> _showContextMenu(
 
 class _StatsHeader extends StatelessWidget {
   final List<SessionSummary> sessions;
+
   const _StatsHeader({required this.sessions});
 
   @override
   Widget build(BuildContext context) {
-    final trainingSessions = sessions.where((s) => s.isTraining).toList();
-    final avg = trainingSessions.isEmpty
-        ? 0.0
-        : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a + b) /
-        trainingSessions.length;
-    final total =
+    final totalCompressions =
     sessions.fold<int>(0, (sum, s) => sum + s.compressionCount);
-    final avgDisplay = trainingSessions.isEmpty ? 'No data' : '${avg.toStringAsFixed(0)}%';
+
+    final totalSeconds =
+    sessions.fold<int>(0, (sum, s) => sum + s.sessionDuration);
+
+    final timeDisplay = _formatDuration(totalSeconds);
+    final totalDisplay = _formatCount(totalCompressions);
 
     return Container(
-      margin:  const EdgeInsets.all(AppSpacing.md),
+      margin: const EdgeInsets.all(AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppDecorations.primaryAltCard(),
+      decoration: AppDecorations.statsHeaderCard(),
       child: Row(
         children: [
-          Expanded(child: _StatItem('Total Sessions', '${sessions.length}')),
-          Expanded(child: _StatItem('Avg Training Grade', avgDisplay)),
-          Expanded(child: _StatItem('Compressions',   '$total')),
+          Expanded(child: _StatItem('Sessions', '${sessions.length}')),
+          Expanded(child: _StatItem('CPR Time', timeDisplay)),
+          Expanded(child: _StatItem('Compressions', totalDisplay)),
         ],
       ),
     );
+  }
+
+  static String _formatCount(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+    return '$n';
+  }
+
+  static String _formatDuration(int seconds) {
+    if (seconds <= 0) return '—';
+
+    final minutes = seconds ~/ 60;
+    final hours = minutes ~/ 60;
+
+    if (hours > 0) {
+      final remainingMinutes = minutes % 60;
+      return '${hours}h ${remainingMinutes}m';
+    }
+
+    return '${minutes}m';
   }
 }
 
@@ -619,33 +865,279 @@ class _FilterBar extends StatelessWidget {
     required this.onSelect,
   });
 
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: AppSpacing.touchTargetLarge,
+      height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding:         const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        itemCount:       filters.length,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.xs,
+        ),
+        itemCount: filters.length,
         itemBuilder: (context, i) {
-          final f          = filters[i];
+          final f = filters[i];
           final isSelected = f == selected;
+
           return Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: FilterChip(
-              label:           Text(f),
-              selected:        isSelected,
-              onSelected:      (_) => onSelect(f),
+            padding: const EdgeInsets.only(right: AppSpacing.xs),
+            child:
+            FilterChip(
+              label: Text(f),
+              selected: isSelected,
+              showCheckmark: false,
+              onSelected: (_) => onSelect(f),
+
+              elevation: 0,
+              pressElevation: 0,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+
               backgroundColor: AppColors.white,
-              selectedColor:   AppColors.primary,
+              selectedColor: AppColors.primary,
+
+              side: BorderSide(
+                color: isSelected
+                    ? AppColors.primary.withValues(alpha: 0.35)
+                    : AppColors.divider.withValues(alpha: 0.75),
+                width: 1,
+              ),
+
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+
               labelStyle: isSelected
-                  ? AppTypography.label(color: AppColors.textOnDark)
-                  : AppTypography.label(color: AppColors.primary),
+                  ? AppTypography.label(
+                size: 12,
+                color: AppColors.textOnDark,
+              )
+                  : AppTypography.label(
+                size: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
           );
         },
       ),
     );
+  }
+}
+
+class _SearchSortRow extends StatefulWidget {
+  final int                    count;
+  final String                 sortOrder;
+  final void Function(String)  onSortChanged;
+  final String                 searchQuery;
+  final void Function(String)  onSearchChanged;
+  final bool                   showGradeSort;
+
+
+  const _SearchSortRow({
+    required this.count,
+    required this.sortOrder,
+    required this.onSortChanged,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.showGradeSort,
+  });
+
+  @override
+  State<_SearchSortRow> createState() => _SearchSortRowState();
+}
+
+class _SearchSortRowState extends State<_SearchSortRow> {
+  bool _showSearch = false;
+  late final TextEditingController _ctrl;
+  final _sortLayerLink = LayerLink();
+  OverlayEntry? _sortOverlay;
+  bool get _sortOpen => _sortOverlay != null;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.searchQuery);
+  }
+
+  @override
+  void dispose() {
+    _sortOverlay?.remove();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+
+  void _openSortOverlay() {
+    _sortOverlay?.remove();
+    String liveSortOrder = widget.sortOrder;
+    _sortOverlay = OverlayEntry(
+      builder: (ctx) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _closeSortOverlay,
+        child: Stack(
+          children: [
+            Positioned.fill(child: Container(color: Colors.transparent)),
+            CompositedTransformFollower(
+              link:           _sortLayerLink,
+              showWhenUnlinked: false,
+              targetAnchor:   Alignment.bottomRight,
+              followerAnchor: Alignment.topRight,
+              offset:         const Offset(0, 6),
+              child: Material(
+                color: Colors.transparent,
+                child: _SortPopup(
+                  current:       liveSortOrder,
+                  showGradeSort: widget.showGradeSort,
+                  onSelect: (v) {
+                    widget.onSortChanged(v);
+                    liveSortOrder = v;              // update local copy
+                    _sortOverlay?.markNeedsBuild(); // rebuild overlay with new value
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_sortOverlay!);
+    setState(() {});
+  }
+
+  void _closeSortOverlay() {
+    _sortOverlay?.remove();
+    _sortOverlay = null;
+    setState(() {});
+  }
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '${widget.count} session${widget.count == 1 ? '' : 's'}',
+                style: AppTypography.caption(color: AppColors.textSecondary),
+              ),
+              const Spacer(),
+              // Search toggle
+              GestureDetector(
+                onTap: () => setState(() {
+                  _showSearch = !_showSearch;
+                  if (!_showSearch) {
+                    _ctrl.clear();
+                    widget.onSearchChanged('');
+                  }
+                }),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xs),
+                  child: Icon(
+                    Icons.search_rounded,
+                    size:  AppSpacing.iconSm,
+                    color: _showSearch ? AppColors.primary : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              // Sort dropdown
+      CompositedTransformTarget(
+        link: _sortLayerLink,
+          child: GestureDetector(
+            onTap: _sortOpen ? _closeSortOverlay : _openSortOverlay,
+            child: Builder(builder: (_) {
+              final active = widget.sortOrder != 'newest' || _sortOpen;
+              final fg = active ? AppColors.primary : AppColors.textSecondary;
+              return SizedBox(
+                width: 130,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sort_rounded, size: AppSpacing.iconSm, color: fg),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text('Sort: ${_sortLabel(widget.sortOrder)}',
+                          style: AppTypography.caption(color: fg)),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+      ),
+            ],
+          ),
+          if (_showSearch) ...[
+            const SizedBox(height: AppSpacing.xs),
+            TextField(
+              controller:    _ctrl,
+              autofocus:     true,
+              onChanged:     widget.onSearchChanged,
+              style:         AppTypography.body(size: 12),
+              decoration: InputDecoration(
+                hintText:        'Search by date or note…',
+                hintStyle:       AppTypography.body(
+                    size: 12, color: AppColors.textDisabled),
+                prefixIcon:      const Icon(Icons.search_rounded,
+                    size: AppSpacing.iconSm, color: AppColors.textSecondary),
+                suffixIcon: _ctrl.text.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      size: AppSpacing.iconSm, color: AppColors.textSecondary),
+                  onPressed: () {
+                    _ctrl.clear();
+                    widget.onSearchChanged('');
+                    setState(() {});
+                  },
+                )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.sm),
+                filled:          true,
+                fillColor:       AppColors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  borderSide:   BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  borderSide:   BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                  borderSide:   BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _sortLabel(String order) {
+    switch (order) {
+      case 'oldest':        return 'Date ↑';
+      case 'grade_high':    return 'Grade ↓';
+      case 'grade_low':     return 'Grade ↑';
+      case 'duration_desc': return 'Duration ↓';
+      case 'duration_asc':  return 'Duration ↑';
+      default:              return 'Date ↓';
+    }
   }
 }
 
@@ -806,6 +1298,12 @@ class SessionCard extends ConsumerWidget {
     this.onToggle,
   });
 
+  String _formatDurationShort(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes}m ${seconds}s';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final color = gradeColor(session.totalGrade);
@@ -814,160 +1312,196 @@ class SessionCard extends ConsumerWidget {
       duration: const Duration(milliseconds: 150),
       margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
       decoration: isSelected
-          ? AppDecorations.card(shadowOpacity: 0.10).copyWith(
+          ? AppDecorations.selectedCard().copyWith(
         border: Border.all(color: AppColors.primary, width: 2),
       )
-          : AppDecorations.card(shadowOpacity: 0.10),
-      child: Material(
-        color:        AppColors.white,
+          : AppDecorations.card(),
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        child: InkWell(
+        child: Material(
+          color: AppColors.white,
+          child: InkWell(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           onLongPress: onLongPress,
           onTap: selectionMode
               ? onToggle
               : () => openSessionResults(context, ref, summary: session),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ───────────────────────────────────────────────
-                Row(
-                  mainAxisAlignment: selectionMode
-                      ? MainAxisAlignment.start
-                      : MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Colour accent bar ─────────────────────────────────────
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(AppSpacing.cardRadius),
+                  topRight: Radius.circular(AppSpacing.cardRadius),
+                ),
+                child: Container(
+                  height: 4,
+                  color: session.isEmergency
+                      ? AppColors.emergencyMode
+                      : session.isNoFeedback
+                      ? AppColors.primaryAlt
+                      : AppColors.primary,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (selectionMode) ...[
-                      Icon(
-                        isSelected
-                            ? Icons.check_circle_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        color: isSelected ? AppColors.primary : AppColors.textDisabled,
-                        size:  AppSpacing.iconSm,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                    ],
-                    Expanded(
-                      child: Text(
-                        'Session $sessionNumber',
-                        style: AppTypography.subheading(color: AppColors.primary),
-                      ),
-                    ),
-                    session.isEmergency
-                        ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.chipPaddingH,
-                        vertical:   AppSpacing.chipPaddingV,
-                      ),
-                      decoration: AppDecorations.chip(
-                        color: AppColors.emergencyMode,
-                        bg:    AppColors.emergencyModeBg,
-                      ),
-                      child: Text('EMERGENCY', style: AppTypography.label(color: AppColors.emergencyMode)),
-                    )
-                        : Row(
-                      mainAxisSize: MainAxisSize.min,
+                    // ── Header: selection tick · title · badges · right ──
+                    Row(
                       children: [
-                        // Trend arrow — only for training sessions with a previous grade
-                        if (!session.isEmergency && prevGrade != null) ...[
+                        if (selectionMode) ...[
                           Icon(
-                            session.totalGrade > prevGrade!
-                                ? Icons.arrow_upward_rounded
-                                : session.totalGrade < prevGrade!
-                                ? Icons.arrow_downward_rounded
-                                : Icons.remove_rounded,
-                            size:  AppSpacing.iconSm - 4,
-                            color: session.totalGrade > prevGrade!
-                                ? AppColors.success
-                                : session.totalGrade < prevGrade!
-                                ? AppColors.error
+                            isSelected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: isSelected
+                                ? AppColors.primary
                                 : AppColors.textDisabled,
+                            size: AppSpacing.iconSm,
                           ),
-                          const SizedBox(width: AppSpacing.xxs),
+                          const SizedBox(width: AppSpacing.sm),
                         ],
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.chipPaddingH,
-                            vertical:   AppSpacing.chipPaddingV,
-                          ),
-                          decoration: AppDecorations.chip(
-                            color: color,
-                            bg:    color.withValues(alpha: 0.12),
-                          ),
-                          child: Text(
-                            '${session.totalGrade.toStringAsFixed(0)}%',
-                            style: AppTypography.label(color: color),
-                          ),
+              Expanded(
+                child: Text(
+                  'Session $sessionNumber',
+                  style: AppTypography.subheading(
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+                        const SizedBox(width: AppSpacing.sm),
+                        _SessionOutcome(
+                          session:   session,
+                          prevGrade: prevGrade,
                         ),
                       ],
                     ),
+                    const SizedBox(height: AppSpacing.xs),
+
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xxs,
+                      children: [
+                        _ModeBadge(
+                          label: session.isEmergency ? 'Emergency' : 'Training',
+                          color: session.isEmergency
+                              ? AppColors.emergencyMode
+                              : AppColors.primary,
+                          bg: session.isEmergency
+                              ? AppColors.emergencyModeBg
+                              : AppColors.primaryLight,
+                        ),
+
+                        if (!session.isEmergency && session.isNoFeedback)
+                          _ModeBadge(
+                            label: 'No feedback',
+                            color: AppColors.primaryAlt,
+                            bg: AppColors.primaryAlt.withValues(alpha: 0.10),
+                          ),
+
+                        _ModeBadge(
+                          label: session.scenario == 'pediatric' ? 'Pediatric' : 'Adult',
+                          color: session.scenario == 'pediatric'
+                              ? AppColors.pediatric
+                              : AppColors.textSecondary,
+                          bg: session.scenario == 'pediatric'
+                              ? AppColors.pediatricLight
+                              : AppColors.screenBgGrey,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: AppSpacing.xs),
+
+                    // ── Subtitle: date · time · duration ───────────────
+                    Text(
+                      '${session.relativeDateLabel} · ${session.timeLabel} · ${_formatDurationShort(session.sessionDuration)}',
+                      style: AppTypography.caption(
+                          color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // ── 3 metrics ──────────────────────────────────────
+                    Row(
+                      children: [
+                        _CardMetric(
+                          value: '${session.compressionCount}',
+                          label: 'Compressions',
+                          color: AppColors.textPrimary,
+                        ),
+                        _CardMetric(
+                          value: session.averageDepth > 0
+                              ? '${session.averageDepth.toStringAsFixed(1)} cm'
+                              : '—',
+                          label: 'Avg Depth',
+                          color: session.averageDepth >= 5.0 &&
+                              session.averageDepth <= 6.0
+                              ? AppColors.success
+                              : session.averageDepth > 0
+                              ? AppColors.warning
+                              : AppColors.textDisabled,
+                        ),
+                        _CardMetric(
+                          value: session.averageFrequency > 0
+                              ? '${session.averageFrequency.round()} bpm'
+                              : '—',
+                          label: 'Avg Rate',
+                          color: session.averageFrequency >= 100 &&
+                              session.averageFrequency <= 120
+                              ? AppColors.success
+                              : session.averageFrequency > 0
+                              ? AppColors.warning
+                              : AppColors.textDisabled,
+                        ),
+                      ],
+                    ),
+
+                    // ── Note snippet ──────────────────────────────────
+                    if ((session.note ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: AppColors.divider.withValues(alpha: 0.50),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.notes_rounded,
+                            size: 13,
+                            color: AppColors.textSecondary.withValues(alpha: 0.80),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              session.note!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption(
+                                color: AppColors.textSecondary.withValues(alpha: 0.95),
+                              ).copyWith(
+                                fontSize: 11,
+                                height: 1.15,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-
-                // ── Date ─────────────────────────────────────────────────
-                Text(
-                  session.dateTimeFormatted,
-                  style: AppTypography.caption(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                // ── Quick stats ──────────────────────────────────────────
-// For training sessions: show consistency metrics
-                if (session.isTraining) ...[
-                  Row(
-                    children: [
-                      _QuickStat(Icons.compress_rounded,   'Compressions', '${session.compressionCount}'),
-                      _QuickStat(Icons.straighten_rounded, 'Depth',        '${session.depthConsistency.toStringAsFixed(0)}%'),
-                      _QuickStat(Icons.speed_rounded,      'Rate',         '${session.frequencyConsistency.toStringAsFixed(0)}%'),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Row(
-                    children: [
-                      _QuickStat(Icons.timer_outlined,     'Duration',     session.durationFormatted),
-                      _QuickStat(Icons.trending_up_rounded,'Avg Depth',    '${session.averageDepth.toStringAsFixed(1)} cm'),
-                      _QuickStat(Icons.av_timer_rounded,   'Avg Rate',     '${session.averageFrequency.toStringAsFixed(0)} bpm'),
-                    ],
-                  ),
-                ] else ...[
-                  // Emergency: compressions, duration, avg depth
-                  Row(
-                    children: [
-                      _QuickStat(Icons.compress_rounded,   'Compressions', '${session.compressionCount}'),
-                      _QuickStat(Icons.timer_outlined,     'Duration',     session.durationFormatted),
-                      _QuickStat(Icons.trending_up_rounded,'Avg Depth',    '${session.averageDepth.toStringAsFixed(1)} cm'),
-                    ],
-                  ),
-                ],
-
-                // ── Note snippet ─────────────────────────────────────────────────────
-                if (session.note?.isNotEmpty == true) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.notes_rounded,
-                        size:  AppSpacing.iconSm - 4,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Text(
-                          session.note!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.caption(color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
       ),
     );
     return card;
@@ -1043,32 +1577,109 @@ class PersonalBestCard extends StatelessWidget {
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _QuickStat extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final String   value;
-  const _QuickStat(this.icon, this.label, this.value);
+// Mode-aware prominent right element: grade (training) or pulse outcome
+// (emergency). Mirrors the _LegendCard pattern in session_compare_screen.
+class _SessionOutcome extends StatelessWidget {
+  final SessionSummary session;
+  final double?         prevGrade;
+  const _SessionOutcome({required this.session, this.prevGrade});
+
+  @override
+  Widget build(BuildContext context) {
+    if (session.isEmergency) {
+      final detected = session.pulseDetectedFinal;
+      final prompted = session.pulseChecksPrompted > 0;
+      final text  = detected
+          ? 'Pulse Detected'
+          : prompted ? 'No Pulse' : 'Pulse Uncertain';
+      final color = detected
+          ? AppColors.success
+          : prompted ? AppColors.error : AppColors.textDisabled;
+      return Text(text,
+          style: AppTypography.label(color: color),
+          textAlign: TextAlign.end);
+    }
+
+    // Training
+    if (session.totalGrade <= 0) {
+      return Text('—',
+          style: AppTypography.label(color: AppColors.textDisabled));
+    }
+    final c = gradeColor(session.totalGrade);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (prevGrade != null) ...[
+          Icon(
+            session.totalGrade > prevGrade!
+                ? Icons.arrow_upward_rounded
+                : session.totalGrade < prevGrade!
+                ? Icons.arrow_downward_rounded
+                : Icons.remove_rounded,
+            size: AppSpacing.iconSm - 4,
+            color: session.totalGrade > prevGrade!
+                ? AppColors.success
+                : session.totalGrade < prevGrade!
+                ? AppColors.error
+                : AppColors.textDisabled,
+          ),
+          const SizedBox(width: AppSpacing.xxs),
+        ],
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.chipPaddingH,
+            vertical:   AppSpacing.chipPaddingV,
+          ),
+          decoration: BoxDecoration(
+            color: c.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text('${session.totalGrade.toStringAsFixed(0)}%',
+              style: AppTypography.label(color: c)),
+        ),
+      ],
+    );
+  }
+}
+
+class _CardMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  final Color color;
+
+  const _CardMetric({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon,
-            size:  AppSpacing.iconSm - AppSpacing.xxs,
-            color: AppColors.textSecondary,
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodyBold(
+              size: 15,
+              color: color,
+            ).copyWith(
+              height: 1.1,
+            ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: AppTypography.bodyMedium(size: 13)),
-                Text(
-                  label,
-                  style: AppTypography.caption(color: AppColors.textSecondary),
-                ),
-              ],
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption(
+              color: AppColors.textSecondary,
+            ).copyWith(
+              fontSize: 11,
+              height: 1.1,
             ),
           ),
         ],
@@ -1088,13 +1699,49 @@ class _Pill extends StatelessWidget {
         horizontal: AppSpacing.chipPaddingH,
         vertical:   AppSpacing.chipPaddingV,
       ),
-      decoration: BoxDecoration(
-        color:        AppColors.textOnDark.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+      decoration: AppDecorations.pill(
+        bg:     AppColors.textOnDark.withValues(alpha: 0.15),
+        radius: AppSpacing.buttonRadiusLg,
       ),
       child: Text(
         label,
         style: AppTypography.label(size: 12, color: AppColors.textOnDark),
+      ),
+    );
+  }
+}
+
+class _ModeBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+
+  const _ModeBadge({
+    required this.label,
+    required this.color,
+    required this.bg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 7,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.caption(
+          color: color,
+        ).copyWith(
+          fontSize: 10.5,
+          height: 1.05,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -1132,6 +1779,136 @@ class _EvictionWarningBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SortPopup extends StatelessWidget {
+  final String                current;
+  final bool                  showGradeSort;
+  final void Function(String) onSelect;
+
+  const _SortPopup({
+    required this.current,
+    required this.showGradeSort,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = [
+      ('date',     'Date',     Icons.calendar_today_rounded),
+      if (showGradeSort)
+        ('grade',  'Grade',    Icons.workspace_premium_rounded),
+      ('duration', 'Duration', Icons.timer_outlined),
+    ];
+
+    String _resolveValue(String chip) {
+      switch (chip) {
+        case 'date':
+          return (current == 'oldest') ? 'newest' : 'oldest';
+        case 'grade':
+          return (current == 'grade_high') ? 'grade_low' : 'grade_high';
+        case 'duration':
+          return (current == 'duration_desc') ? 'duration_asc' : 'duration_desc';
+        default: return 'newest';
+      }
+    }
+
+    String? _activeChip() {
+      if (current == 'newest' || current == 'oldest') return 'date';
+      if (current == 'grade_high' || current == 'grade_low') return 'grade';
+      if (current == 'duration_desc' || current == 'duration_asc') return 'duration';
+      return null;
+    }
+
+    IconData? _arrowIcon(String chip) {
+      if (_activeChip() != chip) return null;
+      switch (chip) {
+        case 'date':     return current == 'newest' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+        case 'grade':    return current == 'grade_high' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+        case 'duration': return current == 'duration_desc' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+        default: return null;
+      }
+    }
+
+    return Container(
+      width: 140,
+      decoration: BoxDecoration(
+        color:        AppColors.white,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
+        boxShadow: const [
+          BoxShadow(
+            color:      AppColors.shadowMedium,
+            blurRadius: 20,
+            offset:     Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+            children: [
+              for (int i = 0; i < chips.length; i++) ...[
+                _SortOption(
+                  label:    chips[i].$2,
+                  selected: _activeChip() == chips[i].$1,
+                  arrow:    _arrowIcon(chips[i].$1),
+                  onTap:    () => onSelect(_resolveValue(chips[i].$1)),
+                ),
+                if (i < chips.length - 1)
+                  const Divider(height: 1, color: AppColors.divider),
+              ],
+            ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SortOption extends StatelessWidget {
+  final String     label;
+  final bool       selected;
+  final IconData?  arrow;
+  final VoidCallback onTap;
+
+  const _SortOption({
+    required this.label,
+    required this.selected,
+    required this.arrow,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        color: selected ? AppColors.primaryLight : AppColors.white,
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: AppTypography.body(
+                color: selected ? AppColors.primary : AppColors.textPrimary,
+              ).copyWith(
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 13,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: AppSpacing.iconSm,
+              child: arrow != null
+                  ? Icon(arrow, size: AppSpacing.iconSm, color: AppColors.primary)
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -231,6 +231,7 @@ class AppColors {
   static const Color divider = Color(0xFFE8EEF6);
 
   // Overlays
+  static const Color tooltipDark  = Color(0xFF0A0E1A); // dark chart tooltip bg
   static const Color overlayDark  = Color(0x80000000);
   static const Color overlayLight = Color(0x1A000000);
 

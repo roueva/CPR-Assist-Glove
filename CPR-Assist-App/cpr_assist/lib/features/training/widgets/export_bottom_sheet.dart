@@ -47,9 +47,10 @@ class ExportBottomSheet extends ConsumerStatefulWidget {
         SessionDetail?          detail,
       }) {
     return showModalBottomSheet<void>(
-      context:         context,
+      context:            context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:    Colors.transparent,
+      useSafeArea:        true,
       builder: (_) => ExportBottomSheet._(
         detail:  detail,
         summary: summary,
@@ -62,9 +63,10 @@ class ExportBottomSheet extends ConsumerStatefulWidget {
         required List<SessionSummary> sessions,
       }) {
     return showModalBottomSheet<void>(
-      context:         context,
+      context:            context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:    Colors.transparent,
+      useSafeArea:        true,
       builder: (_) => ExportBottomSheet._(sessions: sessions),
     );
   }
@@ -819,7 +821,7 @@ class _FormatDescription extends StatelessWidget {
             'Two-column metrics: depth/force group + rate/timing group',
             'Ventilation cycle table with compliance per cycle',
             if (hasDetail) 'Pulse check table with ABSENT/UNCERTAIN/PRESENT classification',
-            if (hasDetail) 'Biometrics: rescuer HR, SpO₂, RMSSD, fatigue — patient temp, SpO₂, rescuer wrist temp',
+            if (hasDetail) 'Biometrics: rescuer HR, SpO₂, RMSSD, fatigue and patient temp, SpO₂, rescuer wrist temp',
             'Session note (if any) · Session ID for traceability',
           ];
         } else {

@@ -380,6 +380,28 @@ class AppDecorations {
             : const [],
       );
 
+
+  // ── Chart infra (cpr_chart_helpers) ──────────────────────────────────────
+  static BoxDecoration dropdownPill() => BoxDecoration(
+    color: AppColors.primaryLight,
+    borderRadius: BorderRadius.circular(AppSpacing.buttonRadiusLg),
+  );
+
+  static BoxDecoration scrollTrack() => BoxDecoration(
+    color: AppColors.divider,
+    borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+  );
+
+  static BoxDecoration scrollThumb() => BoxDecoration(
+    color: AppColors.primary.withValues(alpha: 0.55),
+    borderRadius: BorderRadius.circular(AppSpacing.radiusXs),
+  );
+
+  static BoxDecoration iconChipPrimary() => BoxDecoration(
+    color: AppColors.primaryLight,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+  );
+
   /// Subtle dark inner container — status bar and gauge overlays on the
   /// dark CPR metrics card.
   static BoxDecoration darkInnerContainer({
@@ -604,6 +626,48 @@ class AppDecorations {
     color:        c.withValues(alpha: 0.18),
     borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
     border:       Border.all(color: c.withValues(alpha: 0.35)),
+  );
+
+  static BoxDecoration selectedCard({double shadowOpacity = 0.10}) =>
+      card(shadowOpacity: shadowOpacity).copyWith(
+        color: AppColors.primaryLight,
+      );
+
+  // ═══════════════════════════════════════════════════════
+  // SESSION HISTORY
+  // ═══════════════════════════════════════════════════════
+
+  /// Generic flat coloured pill — used for icon toggles, sort dropdowns,
+  /// and small inline badges on light or dark surfaces.
+  static BoxDecoration pill({
+    required Color bg,
+    double radius = AppSpacing.cardRadiusSm,
+  }) =>
+      BoxDecoration(
+        color:        bg,
+        borderRadius: BorderRadius.circular(radius),
+      );
+
+  /// Bottom-sheet / dialog drag handle bar.
+  static BoxDecoration dragHandle() => BoxDecoration(
+    color:        AppColors.divider,
+    borderRadius: BorderRadius.circular(2),
+  );
+
+  /// Thin coloured accent strip rounded only on the top corners,
+  /// used on the top edge of session cards.
+  static BoxDecoration cardTopAccent({required Color color}) => BoxDecoration(
+    color: color,
+    borderRadius: const BorderRadius.only(
+      topLeft:  Radius.circular(AppSpacing.cardRadius),
+      topRight: Radius.circular(AppSpacing.cardRadius),
+    ),
+  );
+
+  /// Dark stats summary header card (session history top banner).
+  static BoxDecoration statsHeaderCard() => BoxDecoration(
+    color:        AppColors.cprCardBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
   );
 
 }

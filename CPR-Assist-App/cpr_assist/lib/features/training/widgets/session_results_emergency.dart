@@ -37,10 +37,11 @@ class _EmergencySummaryTab extends ConsumerWidget {
     final duration        = d?.durationFormatted ?? s?.durationFormatted ?? '—';
     final avgDepth        = d?.averageDepth      ?? s?.averageDepth      ?? 0.0;
     final avgFreq         = d?.averageFrequency  ?? s?.averageFrequency  ?? 0.0;
-    final noFlowTime      = d?.noFlowTime        ?? 0.0;
+    final unplannedTime      = d?.unplannedPauseTime ?? 0.0;
     final handsOnPct      = d?.handsOnPct        ?? '—';
     final handsOnOk       = (d?.handsOnRatio     ?? 0) >= 0.80;
-    final noFlowIntervals = d?.unplannedPauseCount ?? 0;
+    final unplannedCount = d?.unplannedPauseCount ?? 0;
+    final noFlowSecs     = d?.noFlowTime ?? 0.0;
     final handsDouble     = double.tryParse(
         handsOnPct.replaceAll('%', '').trim()) ?? 0.0;
 
@@ -135,20 +136,22 @@ class _EmergencySummaryTab extends ConsumerWidget {
           Row(
             children: [
               Expanded(child: _GridStatTile(
-                label:    'Pause Time',
-                value:    noFlowTime > 0
-                    ? '${noFlowTime.toStringAsFixed(1)}s' : '0s',
-                note:     noFlowIntervals > 0
-                    ? '$noFlowIntervals pause(s)' : null,
-                dotColor: noFlowTime <= 5
+                label:    'Unplanned Pauses',
+                value:    unplannedTime > 0
+                    ? '${unplannedTime.toStringAsFixed(1)}s' : '0s',
+                note:     unplannedCount > 0
+                    ? '$unplannedCount× · no-flow ${noFlowSecs.toStringAsFixed(0)}s'
+                    : (noFlowSecs > 0
+                    ? 'no-flow ${noFlowSecs.toStringAsFixed(0)}s' : null),
+                dotColor: unplannedTime <= AppConstants.maxAcceptablePauseSec
                     ? AppColors.success : AppColors.warning,
                 zoneBar: _ZoneBarConfig(
                   minVal: 0, maxVal: 15,
-                  targetMin: 0, targetMax: 5,
-                  currentVal: noFlowTime.clamp(0.0, 15.0),
-                  dotColor: noFlowTime <= 5
+                  targetMin: 0, targetMax: AppConstants.maxAcceptablePauseSec,
+                  currentVal: unplannedTime.clamp(0.0, 15.0),
+                  dotColor: unplannedTime <= AppConstants.maxAcceptablePauseSec
                       ? AppColors.success : AppColors.warning,
-                  targetLabel: '< 5s',
+                  targetLabel: '< ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)}s',
                 ),
               )),
               const SizedBox(width: AppSpacing.sm),
@@ -1581,156 +1584,6 @@ class _PatientEnvironmentSection extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// EMERGENCY HEADER
-// ═════════════════════════════════════════════════════════════════════════════
-
-class _EmergencyHeader extends StatelessWidget {
-  final String  durationFormatted;
-  final int     compressionCount;
-  final bool    isPediatric;
-  final String  handsOnPct;
-  final bool    handsOnOk;
-  final double  avgBpm;
-  final double  avgDepth;
-  final String  targetDepthLabel;
-  final double  targetDepthMin;
-  final double  targetDepthMax;
-  final double  noFlowTime;
-
-  const _EmergencyHeader({
-    required this.durationFormatted,
-    required this.compressionCount,
-    required this.isPediatric,
-    required this.handsOnPct,
-    required this.handsOnOk,
-    required this.avgBpm,
-    required this.avgDepth,
-    required this.targetDepthLabel,
-    required this.targetDepthMin,
-    required this.targetDepthMax,
-    required this.noFlowTime,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final depthOk = avgDepth >= targetDepthMin && avgDepth <= targetDepthMax;
-    final rateOk  = avgBpm >= CprTargets.rateMin && avgBpm <= CprTargets.rateMax;
-
-    return Container(
-      width: double.infinity,
-      decoration: AppDecorations.emergencyGradient(),
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.lg),
-      child: Column(
-        children: [
-          // Icon + label row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 52, height: 52,
-                decoration: AppDecorations.iconCircle(
-                    bg: AppColors.textOnDark.withValues(alpha: 0.15)),
-                child: const Icon(Icons.emergency_rounded,
-                    color: AppColors.textOnDark, size: AppSpacing.iconMd),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('CPR Session Complete',
-                      style: AppTypography.poppins(
-                          size: 18, weight: FontWeight.w700,
-                          color: AppColors.textOnDark)),
-                  if (isPediatric)
-                    Container(
-                      margin: const EdgeInsets.only(top: AppSpacing.xxs),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
-                      decoration: AppDecorations.chip(
-                        color: AppColors.textOnDark,
-                        bg:    AppColors.textOnDark.withValues(alpha: 0.2),
-                      ),
-                      child: Text('👶 PEDIATRIC CPR',
-                          style: AppTypography.badge(
-                              size: 9, color: AppColors.textOnDark)),
-                    ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppSpacing.lg),
-
-          // Main stat strip: Duration / Compressions / CCF
-          Container(
-            decoration: AppDecorations.darkStatTile(),
-            child: IntrinsicHeight(
-              child: Row(
-                children: [
-                  _SummaryCell(value: durationFormatted,   label: 'DURATION'),
-                  _VDivider(),
-                  _SummaryCell(value: '$compressionCount', label: 'COMPRESSIONS'),
-                  _VDivider(),
-                  _SummaryCell(value: handsOnPct,          label: 'HANDS-ON'),
-                  _VDivider(),
-                  _SummaryCell(
-                    value: noFlowTime > 0
-                        ? '${noFlowTime.toStringAsFixed(0)}s' : '0s',
-                    label: 'PAUSE TIME',
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: AppSpacing.md),
-
-          // Quality tiles: 2×2 grid
-          Row(
-            children: [
-              _EmergencyTile(
-                label:   'AVG DEPTH',
-                value:   avgDepth > 0
-                    ? '${avgDepth.toStringAsFixed(1)} cm' : '—',
-                ok:      depthOk,
-                note:    targetDepthLabel,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              _EmergencyTile(
-                label:   'AVG RATE',
-                value:   avgBpm > 0 ? '${avgBpm.round()} bpm' : '—',
-                ok:      rateOk,
-                note:    '100–120 bpm',
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              _EmergencyTile(
-                label:   'HANDS-ON TIME',
-                value:   handsOnPct,
-                ok:      handsOnOk,
-                note:    'Target ≥ 80%',
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              _EmergencyTile(
-                label:   'PAUSE TIME',
-                value:   noFlowTime > 0
-                    ? '${noFlowTime.toStringAsFixed(1)}s' : '0s',
-                ok:      noFlowTime <= 5,
-                note:    'Unplanned pauses',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmergencyTile extends StatelessWidget {
   final String  label;
   final String  value;
@@ -1966,9 +1819,8 @@ class _EmergencyQualitySection extends StatelessWidget {
             icon:       Icons.pause_circle_outline_rounded,
             label:      'No-Flow Time',
             value:      '${detail!.noFlowTime.toStringAsFixed(1)}s',
-            note:       'Unplanned pauses > 2 s',
-            valueColor: detail!.noFlowTime > 5
-                ? AppColors.warning : AppColors.success,
+            note:       'Includes ventilation & pulse-check pauses',
+            valueColor: AppColors.textPrimary,
           ),
         if ((detail?.leaningCount ?? 0) > 0)
           _DetailRow(

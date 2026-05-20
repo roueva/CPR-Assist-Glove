@@ -110,10 +110,6 @@ class BLEConnection {
   Timer? _debounceTimer;
   Timer? _reconnectTimer;
 
-  // Separate receive buffers — packets from each characteristic are
-  // independent streams with different expected sizes.
-  final List<int> _liveBuffer  = [];
-  final List<int> _eventBuffer = [];
 
   // ── Dependencies ──────────────────────────────────────────────────────────
   final SharedPreferences prefs;
@@ -373,17 +369,12 @@ class BLEConnection {
       await liveChar.setNotifyValue(true);
 
       _liveStreamSub?.cancel();
-      _liveStreamSub = liveChar.lastValueStream.listen(
+      _liveStreamSub = liveChar.onValueReceived.listen(
             (data) {
-          _liveBuffer.addAll(data);
-          while (_liveBuffer.length >= kLiveStreamSize) {
-            final packet = _liveBuffer.sublist(0, kLiveStreamSize);
-            _liveBuffer.removeRange(0, kLiveStreamSize);
-            _handleLivePacket(packet);
-          }
-          if (_liveBuffer.length > AppConstants.bleBufferOverflowThreshold) {
-            debugPrint('BLE: LIVE_STREAM buffer overflow — clearing');
-            _liveBuffer.clear();
+          if (data.length == kLiveStreamSize) {
+            _handleLivePacket(data);
+          } else {
+            debugPrint('BLE: LIVE_STREAM unexpected length ${data.length}');
           }
         },
         onError: (Object e) {
@@ -402,17 +393,12 @@ class BLEConnection {
       // (write capability is already on the characteristic; no extra setup needed)
 
       _eventChanSub?.cancel();
-      _eventChanSub = eventChar.lastValueStream.listen(
+      _eventChanSub = eventChar.onValueReceived.listen(
             (data) {
-          _eventBuffer.addAll(data);
-          while (_eventBuffer.length >= kEventChannelSize) {
-            final packet = _eventBuffer.sublist(0, kEventChannelSize);
-            _eventBuffer.removeRange(0, kEventChannelSize);
-            _handleEventPacket(packet);
-          }
-          if (_eventBuffer.length > AppConstants.bleBufferOverflowThreshold) {
-            debugPrint('BLE: EVENT_CHANNEL buffer overflow — clearing');
-            _eventBuffer.clear();
+          if (data.length == kEventChannelSize) {
+            _handleEventPacket(data);
+          } else {
+            debugPrint('BLE: EVENT_CHANNEL unexpected length ${data.length}');
           }
         },
         onError: (Object e) {
@@ -474,6 +460,9 @@ class BLEConnection {
     if (_sessionActive && parsed.isContinuousData) {
       if (parsed.depth > _pendingPeakDepth) {
         _pendingPeakDepth = parsed.depth;
+        debugPrint('[DBG-APP] liveDepth=${parsed.depth.toStringAsFixed(2)} '
+            'pendingPeak=${_pendingPeakDepth.toStringAsFixed(2)} '
+            'cnt=${parsed.compressionCount} peakTs=${parsed.peakTimestampMs}');
       }
       if (parsed.force > _pendingPeakForce) {
         _pendingPeakForce = parsed.force;
@@ -486,7 +475,9 @@ class BLEConnection {
       _lastCompressionCount = parsed.compressionCount;
       final recordDepth = _pendingPeakDepth > 0
           ? _pendingPeakDepth
-          : (parsed.depthTrend > 0 ? parsed.depthTrend : 0.1);
+          : (parsed.depthTrend > 0
+          ? parsed.depthTrend
+          : (parsed.depth > 0 ? parsed.depth : 0.0));
       final recordPeakForce = _pendingPeakForce > 0
           ? _pendingPeakForce
           : parsed.force;
@@ -604,6 +595,7 @@ class BLEConnection {
       'perfusionIndex':     parsed.perfusionIndex,
       'patientTemperature': parsed.patientTemperature,
       'pulseCheckActive':   parsed.pulseCheckActive,
+      'inVentilationWindow': parsed.inVentilationWindow,
       // Rescuer vitals
       'heartRateUser':        parsed.heartRateUser,
       'spO2User':             parsed.spO2User,
@@ -620,6 +612,7 @@ class BLEConnection {
       'isCharging':         parsed.isCharging,
       'peakTimestampMs':   parsed.peakTimestampMs,
       'valleyTimestampMs': parsed.valleyTimestampMs,
+      'lastPeakDepthCm':   parsed.lastPeakDepthCm,
     });
   }
 
@@ -935,13 +928,13 @@ class BLEConnection {
   Future<bool> sendFeedbackSet({required bool enabled}) =>
       _writeCommand([kCmdFeedbackSet, enabled ? 1 : 0]);
 
-  /// 0xF3 — Trigger session start (equivalent to physical button press).
-  Future<bool> sendStart() =>
-      _writeCommand([kCmdStart]);
-
-  /// 0xF4 — Trigger session end.
-  Future<bool> sendStop() =>
-      _writeCommand([kCmdStop]);
+  // /// 0xF3 — Trigger session start (equivalent to physical button press).
+  // Future<bool> sendStart() =>
+  //     _writeCommand([kCmdStart]);
+  //
+  // /// 0xF4 — Trigger session end.
+  // Future<bool> sendStop() =>
+  //     _writeCommand([kCmdStop]);
 
   /// 0xF5 — Request a locally stored offline session by index.
   Future<bool> sendRequestSession(int index) =>
@@ -1051,8 +1044,6 @@ class BLEConnection {
     _eventChanSub?.cancel();
     _connStateSub?.cancel();
     _debounceTimer?.cancel();
-    _liveBuffer.clear();
-    _eventBuffer.clear();
     _eventCharacteristic = null;
 
     _connectedDevice?.disconnect().catchError(

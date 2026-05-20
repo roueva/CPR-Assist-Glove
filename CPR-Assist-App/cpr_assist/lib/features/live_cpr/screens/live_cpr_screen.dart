@@ -84,7 +84,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   // ── Ventilation window state ───────────────────────────────────────────────
   bool _showVentilationOverlay = false;
   int  _ventilationCycleNumber = 0;
-  int  _ventilationsExpected   = 2;
+  int _ventilationsExpected = 2;
+  int? _ventilationOpenedAtCount; // compressionCount when overlay opened; null = closed
 
   final List<double> _ppgBuffer = []; // ring buffer for ECG waveform
   static const int   _ppgBufferMax = 60;
@@ -345,6 +346,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _showFatigueBadge        = false;
         _fatigueScore     = 0;
         _showVentilationOverlay = false;
+        _ventilationOpenedAtCount = null;
         _ventilationCycleNumber = 0;
         _pulseCheckActive        = false;
         _pulseClassification     = null;
@@ -359,7 +361,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _spO2User = null;
         _rescuerTemperature = null;
         _rescuerHumidity = null;
-        _rescuerSignalQuality = 0;
         _rescuerSignalQuality = 0;
         _ppgBuffer.clear();
       });
@@ -385,6 +386,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayDepth        = 0.0;
         _displayFrequency    = 0.0;
         _showVentilationOverlay = false;
+        _ventilationOpenedAtCount = null;
         _pulseCheckActive    = false;
         _showSwapBanner      = false;
         _showFatigueBadge    = false;
@@ -425,6 +427,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _showVentilationOverlay = true;
         _ventilationCycleNumber = (data['cycleNumber'] as int?) ?? 1;
         _ventilationsExpected   = (data['ventilationsExpected'] as int?) ?? 2;
+        // Record the compression count at the moment the window opened so we
+        // can auto-dismiss once the rescuer resumes (≥2 new compressions),
+        // matching the firmware which closes its window on the same condition.
+        _ventilationOpenedAtCount = _displayCompressionCount;
       });
       return;
     }
@@ -494,20 +500,17 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── PULSE_CHECK_RESULT ─────────────────────────────────────────────────
     if (data['isPulseCheckResult'] == true) {
-      _pulseResultTimer?.cancel();
+      // Firmware owns the window lifecycle now. The RESULT only updates the
+      // displayed classification/BPM — it does NOT dismiss the overlay and
+      // does NOT start any app-side timer. The overlay stays until the
+      // firmware sends pulseCheckActive == false (rescuer resumed / backstop)
+      // or the user explicitly taps continue.
       setState(() {
         _hasCompletedPulseCheck = true;
         _pulseClassification = data['pulseClassification'] as int? ?? 0;
         _pulseCheckDetectedBpm = (data['detectedBPM'] as num?)?.toDouble();
         _pulseCheckConfidence = data['confidencePct'] as int?;
       });
-      // Auto-dismiss only for absent/uncertain — PRESENT stays until user decides
-      final classification = data['pulseClassification'] as int? ?? 0;
-      if (classification != 2) {
-        _pulseResultTimer = Timer(const Duration(seconds: 120), () {
-          if (mounted) setState(() => _pulseCheckActive = false);
-        });
-      }
     }
 
     // ── LIVE_STREAM data ───────────────────────────────────────────────────
@@ -544,7 +547,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       ref.read(cprSessionActiveProvider.notifier).state = true;
     }
 
-    // Display rule: rescuer vitals shown only when signalQuality ≥ 40.
     // Patient vitals only shown during pulse check (and quality ≥ 40 internally).
     // Values are always measured + streamed; display is what filters.
     final rescuerSq = (data['rescuerSignalQuality'] as int?) ?? 0;
@@ -553,16 +555,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     final hrP    = (inPulseCheck && patientSq >= 40) ? readPositive('heartRatePatient') : null;
     final spo2P  = (inPulseCheck && patientSq >= 40) ? readPositive('spO2Patient')      : null;
-    final tempP  = (inPulseCheck && patientSq >= 40) ? readPositive('patientTemperature') : null;
-    final hrU    = (rescuerSq >= 40) ? readPositive('heartRateUser') : null;
-    final spo2U  = (rescuerSq >= 40) ? readPositive('spO2User')      : null;
+// patientTemperature is from MAX30205, gated on skin contact (IR DC) in
+    // firmware — NOT on PPG pulse quality. A pulseless patient still has a
+    // valid skin temp, so do not couple it to ppgSignalQuality. Show it
+    // whenever a pulse-check window provided a reading.
+    final tempP  = inPulseCheck ? readPositive('patientTemperature') : null;
+    final hrU    = readPositive('heartRateUser');
+    final spo2U  = readPositive('spO2User');
     final tempU  = readPositive('rescuerTemperature');  // GXHT30, always valid
     final humU   = readPositiveInt('rescuerHumidity');
 
-    // Auto-dismiss is handled inside the overlay (tap to dismiss) and by
-    // the next VENTILATION_WINDOW or SESSION_END event. We don't dismiss on
-    // the first compression-in-cycle because the firmware now keeps the
-    // window open for a guaranteed minimum time.
 
     if (!mounted) return;
     setState(() {
@@ -588,6 +590,20 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayCompressionCount = data['compressionCount'] as int;
       }
 
+      // Ventilation overlay visibility is now firmware-driven: the glove
+      // streams inVentilationWindow in LIVE_STREAM byte 86 and owns the
+      // open/close/compliant logic. The app only mirrors that flag — it
+      // does NOT run its own compression-count dismiss (which drifted from
+      // the firmware). Open is still triggered by the 0x03 event so we get
+      // cycleNumber/ventilationsExpected; close follows the streamed flag.
+      if (data.containsKey('inVentilationWindow')) {
+        final fwVentOpen = data['inVentilationWindow'] == true;
+        if (!fwVentOpen && _showVentilationOverlay) {
+          _showVentilationOverlay = false;
+          _ventilationOpenedAtCount = null;
+        }
+      }
+
       if (data.containsKey('recoilAchieved')) {
         _recoilAchieved = data['recoilAchieved'] as bool;
       }
@@ -600,14 +616,19 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         if (data.containsKey('depth')) {
           _displayDepth = (data['depth'] as num).toDouble();
         }
-        if (data.containsKey('frequency')) {
-          _displayFrequency = (data['frequency'] as num).toDouble();
+        // Live rate arc must react to every compression, so it reads the
+        // last-2-comp instantaneousRate, not the smoothed 5-comp frequency.
+        // 3 wrong-rate compressions must show as wrong immediately.
+        if (data.containsKey('instantaneousRate')) {
+          _displayFrequency = (data['instantaneousRate'] as num).toDouble();
         }
-        // Update peak depth only when a new compression is detected
+        // Peak depth = the firmware's LOCKED peak for the last completed
+        // compression (not a sample of the noisy live signal).
         final newCount = data['compressionCount'] as int? ?? _displayCompressionCount;
-        if (newCount > _lastSeenCompressionCount && _displayDepth > 0) {
+        if (newCount > _lastSeenCompressionCount) {
           _lastSeenCompressionCount = newCount;
-          _peakDepth = _displayDepth;
+          final lp = (data['lastPeakDepthCm'] as num?)?.toDouble() ?? 0.0;
+          if (lp > 0) _peakDepth = lp;
         }
       }
 
@@ -636,13 +657,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (data.containsKey('rescuerSignalQuality')) {
         _rescuerSignalQuality = (data['rescuerSignalQuality'] as int?) ?? 0;
       }
-      if (_rescuerSignalQuality >= 20) {
-        if (hrU   != null) _heartRateUser = hrU;
-        if (spo2U != null) _spO2User      = spo2U;
-      } else {
-        _heartRateUser = null;
-        _spO2User      = null;
-      }
+      // Capture always; let the display widget show a "low signal" state
+      // based on _rescuerSignalQuality instead of hard-nulling the value.
+      if (hrU   != null && hrU   > 0) _heartRateUser = hrU;
+      if (spo2U != null && spo2U > 0) _spO2User      = spo2U;
       if (tempU != null) _rescuerTemperature = tempU;
       if (humU != null) _rescuerHumidity = humU;
     });
@@ -677,6 +695,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       fatigueAlertScore: bleConn.fatigueAlertScore,
     );
 
+    // ALWAYS persist locally first — before any dialog or navigation — so the
+    // session can never be lost to a login race or a backend failure.
+    final localOk = await service.saveLocalOnly(detail);
+    container.invalidate(sessionSummariesProvider);
+    if (!localOk && mounted) {
+      UIHelper.showWarning(
+        context, 'Session could not be saved on this device.',
+      );
+    }
+
     // Emergency + not logged in: offer login once, non-blocking
     if (currentMode == AppMode.emergency && !isLoggedIn) {
       if (!mounted) return;
@@ -691,13 +719,12 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
           .read(authStateProvider)
           .isLoggedIn;
       if (!nowLoggedIn) {
-        await service.saveLocalOnly(detail);
-        container.invalidate(sessionSummariesProvider);  // ← add this
         if (mounted) {
           context.push(SessionResultsScreen(detail: detail));
         }
         return;
       }
+      // logged in just now → fall through to backend push below
     }
 
     if (!mounted) return;
@@ -710,12 +737,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     container.invalidate(sessionSummariesProvider);
 
     if (savedId == null) {
-      await service.saveLocalOnly(detail);
       if (mounted) {
         UIHelper.showWarning(
           context, 'Could not sync to server — session saved locally.',
         );
       }
+    } else {
+      await SessionLocalStorage.markSynced(detail);
     }
     if (mounted) context.push(SessionResultsScreen(detail: detail));
   }
@@ -832,6 +860,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                           showFatigueBadge:   _showFatigueBadge,
                           fatigueScore:       _fatigueScore,
                           compressionInCycle: _compressionInCycle,
+                          isVentilationWindow: _showVentilationOverlay,
                           isNoFeedback:       currentMode.isNoFeedback,
                         ),
                         const SizedBox(height: AppSpacing.md),
@@ -858,7 +887,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               child: VentilationOverlay(
                 cycleNumber:          _ventilationCycleNumber,
                 ventilationsExpected: _ventilationsExpected,
-                onDismiss: () => setState(() => _showVentilationOverlay = false),
+                onDismiss: () => setState(() {
+                  _ventilationOpenedAtCount = null;
+                }),
               ),
             ),
 

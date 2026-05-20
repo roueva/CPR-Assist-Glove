@@ -54,6 +54,18 @@ class PulseCheckEvent {
   /// 0.0 if not available.
   final double patientSpO2;
 
+  /// Measured no-flow gap (s) that contained this pulse-check prompt,
+  /// reconstructed post-session from the compression timeline by
+  /// SessionDetail.applyPauseModel. Capped at the 10 s allowance for display
+  /// (overrun excess surfaces as a separate unplanned pause). 0.0 if the
+  /// rescuer never paused for this prompt.
+  final double durationSec;
+
+  /// True when the measured pause was >= 3 s (rescuer actually stopped,
+  /// matching firmware WINDOW_PAUSE_COMPLIANT_MS) AND <= 10 s allowance.
+  /// Same rule as VentilationEvent.compliant.
+  final bool compliant;
+
   PulseCheckEvent({
     required this.timestampMs,
     required this.intervalNumber,
@@ -66,6 +78,8 @@ class PulseCheckEvent {
     this.userDecision,
     this.ppgSamples = const [],
     this.patientSpO2 = 0.0,
+    this.durationSec = 0.0,
+    this.compliant   = false,
   });
 
   double get timestampSec => timestampMs / 1000.0;
@@ -84,6 +98,8 @@ class PulseCheckEvent {
       perfusionIndex: (json['perfusion_index']  as num?)?.toInt()    ?? 0,
       userDecision:    json['user_decision']    as String?,
       patientSpO2: (json['patient_spo2'] as num?)?.toDouble() ?? 0.0,
+      durationSec: (json['duration_sec'] as num?)?.toDouble() ?? 0.0,
+      compliant:    json['compliant']    as bool?             ?? false,
       ppgSamples: (json['ppg_samples'] as List<dynamic>?)
           ?.map((v) => (v as num).toDouble()).toList() ?? const [],
     );
@@ -101,6 +117,25 @@ class PulseCheckEvent {
     'detector_b_count': detectorBCount,
     if (userDecision != null) 'user_decision': userDecision,
     if (patientSpO2 > 0) 'patient_spo2': patientSpO2,
+    'duration_sec': durationSec,
+    'compliant':    compliant,
     if (ppgSamples.isNotEmpty) 'ppg_samples': ppgSamples,
   };
+
+  PulseCheckEvent copyWith({double? durationSec, bool? compliant}) =>
+      PulseCheckEvent(
+        timestampMs:    timestampMs,
+        intervalNumber: intervalNumber,
+        classification: classification,
+        detectorACount: detectorACount,
+        detectorBCount: detectorBCount,
+        detectedBpm:    detectedBpm,
+        confidence:     confidence,
+        perfusionIndex: perfusionIndex,
+        userDecision:   userDecision,
+        ppgSamples:     ppgSamples,
+        patientSpO2:    patientSpO2,
+        durationSec:    durationSec ?? this.durationSec,
+        compliant:      compliant   ?? this.compliant,
+      );
 }

@@ -116,30 +116,42 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
             ),
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(AppSpacing.xxl + AppSpacing.xxs),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TabBar(
-                controller:           _tabController,
-                labelColor:           AppColors.primary,
-                unselectedLabelColor: AppColors.textDisabled,
-                indicatorColor:       AppColors.primary,
-                indicatorWeight:      2.5,
-                labelStyle: AppTypography.label(
-                    size: 13, color: AppColors.primary),
-                unselectedLabelStyle: AppTypography.label(
-                    size: 13, color: AppColors.textDisabled),
-                tabs: const [
-                  Tab(text: 'Global'),
-                  Tab(text: 'Friends'),
-                  Tab(text: 'My Stats'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(AppSpacing.xxl + AppSpacing.xxs),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: AppColors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                    spreadRadius: -4,
+                  ),
                 ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TabBar(
+                    controller:           _tabController,
+                    labelColor:           AppColors.primary,
+                    unselectedLabelColor: AppColors.textDisabled,
+                    indicatorColor:       AppColors.primary,
+                    indicatorWeight:      2.5,
+                    dividerColor:         Colors.transparent,
+                    labelStyle: AppTypography.label(size: 13, color: AppColors.primary),
+                    unselectedLabelStyle: AppTypography.label(size: 13, color: AppColors.textDisabled),
+                    tabs: const [
+                      Tab(text: 'Global'),
+                      Tab(text: 'Friends'),
+                      Tab(text: 'My Stats'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
       ),
       body: TabBarView(
         controller: _tabController,
@@ -1070,22 +1082,23 @@ class _StatsHeroCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
                     // ── Trend chip ───────────────────────────────────────────
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
                         vertical:   AppSpacing.xxs,
                       ),
-                      decoration: AppDecorations.darkTrendPill(chipColor),
+                      decoration: AppDecorations.darkTrendPill(chipColor).copyWith(
+                        border: Border.all(color: Colors.transparent, width: 0),
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(trendIcon, size: 11, color: chipColor),
+                          Icon(trendIcon, size: 10, color: chipColor),
                           const SizedBox(width: AppSpacing.xxs),
                           Text(trendLabel,
-                              style: AppTypography.badge(
-                                  size: 11, color: chipColor)),
+                              style: AppTypography.badge(size: 10, color: chipColor)),
                         ],
                       ),
                     ),
@@ -1782,7 +1795,6 @@ class _PersonalRecordsCard extends ConsumerWidget {
                         style: AppTypography.numericDisplay(
                             size: 36, color: AppColors.pbGoldText),
                       ),
-                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         'Session #${bestSession.sessionNumber ?? (allSessions.length - (allSessions.contains(bestSession) ? allSessions.indexOf(bestSession) : 0))}'
                             '  ·  ${bestSession.dateTimeFormatted}',
@@ -2114,30 +2126,42 @@ class _SimulatedLeaderboardPreviewState
         ),
         title: Text('Leaderboard (simulated)',
             style: AppTypography.heading(size: 18)),
-        bottom: PreferredSize(
-          preferredSize:
-          const Size.fromHeight(AppSpacing.xxl + AppSpacing.xxs),
-          child: Column(
-            children: [
-              TabBar(
-                controller: _tabController,
-                labelColor:           AppColors.primary,
-                unselectedLabelColor: AppColors.textDisabled,
-                indicatorColor:       AppColors.primary,
-                indicatorWeight:      2.5,
-                labelStyle: AppTypography.label(
-                    size: 13, color: AppColors.primary),
-                unselectedLabelStyle: AppTypography.label(
-                    size: 13, color: AppColors.textDisabled),
-                tabs: const [
-                  Tab(text: 'Global'),
-                  Tab(text: 'Friends'),
-                  Tab(text: 'My Stats'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(AppSpacing.xxl + AppSpacing.xxs),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: AppColors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                    spreadRadius: -4,
+                  ),
                 ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TabBar(
+                    controller:           _tabController,
+                    labelColor:           AppColors.primary,
+                    unselectedLabelColor: AppColors.textDisabled,
+                    indicatorColor:       AppColors.primary,
+                    indicatorWeight:      2.5,
+                    dividerColor:         Colors.transparent,
+                    labelStyle: AppTypography.label(size: 13, color: AppColors.primary),
+                    unselectedLabelStyle: AppTypography.label(size: 13, color: AppColors.textDisabled),
+                    tabs: const [
+                      Tab(text: 'Global'),
+                      Tab(text: 'Friends'),
+                      Tab(text: 'My Stats'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
       ),
       body: Stack(
         children: [

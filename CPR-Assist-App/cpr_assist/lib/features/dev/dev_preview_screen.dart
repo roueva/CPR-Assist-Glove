@@ -574,9 +574,13 @@ SessionSummary _mockSummary({
       correctFrequency: correctFrequency,
       correctRecoil:    correctRecoil,
       depthRateCombo:   depthRateCombo,
+      correctVentilations:    8,            // ADD
       averageDepth:     avgDepth,
       averageFrequency: avgFrequency,
-      sessionDuration:  durationSecs,
+      sessionDuration:        durationSecs,
+      timeToFirstCompression: 3.5,          // ADD
+      rateVariability:        80.0,         // ADD
+      consecutiveGoodPeak:    12,           // ADD
       sessionStart:     DateTime.now().subtract(const Duration(hours: 2)),
       rescuerHRLastPause: userHr,
       mode:             mode,

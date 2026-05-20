@@ -94,8 +94,9 @@ class OfflineSessionParser {
       ventilations.add(VentilationEvent(
         timestampMs: b.getUint32(off + 0, Endian.little),
         cycleNumber: b.getUint16(off + 4, Endian.little),
-        durationSec: b.getUint32(off + 7, Endian.little) / 1000.0,
-        compliant: b.getUint8(off + 11) == 1,
+        // durationSec / compliant intentionally NOT read from firmware
+        // windowMs — recomputed in SessionDetail.applyPauseModel from the
+        // compression timeline (single source of truth, matches live path).
       ));
 
       off += _ventilationSize;
@@ -116,11 +117,29 @@ class OfflineSessionParser {
       off += _pulseCheckSize;
     }
 
-    final start = DateTime.fromMillisecondsSinceEpoch(sessionStartMs);
-    final end   = DateTime.fromMillisecondsSinceEpoch(sessionEndMs);
+    // A glove that was never time-synced this power cycle stores start = 0
+    // (epoch 1970). Detect that — and any other pre-2020 garbage — and
+    // substitute the receipt time (now), preserving the real duration that
+    // the glove always records correctly from millis(). Such sessions are
+    // timestamp-approximate: the duration is exact, the wall-clock start is
+    // our best estimate (when we received it).
+    const _minValidMs = 1577836800000; // 2020-01-01T00:00:00Z
+    final bool timeApproximate = sessionStartMs < _minValidMs;
+    final int realDurationMs =
+    (sessionEndMs > sessionStartMs) ? (sessionEndMs - sessionStartMs) : 0;
+
+    final DateTime start;
+    final DateTime end;
+    if (timeApproximate) {
+      end   = DateTime.now();
+      start = end.subtract(Duration(milliseconds: realDurationMs));
+    } else {
+      start = DateTime.fromMillisecondsSinceEpoch(sessionStartMs);
+      end   = DateTime.fromMillisecondsSinceEpoch(sessionEndMs);
+    }
     final durationSec = (end.difference(start).inSeconds).clamp(0, 1 << 30);
 
-    return SessionDetail(
+    final detail = SessionDetail(
       sessionStart:    start,
       sessionEnd:      end,
       mode:            _modeFromInt(modeRaw),
@@ -155,6 +174,8 @@ class OfflineSessionParser {
       pulseChecks:         pulseChecks,
       syncedToBackend:     false,
     );
+
+    return SessionDetail.applyPauseModel(detail);
   }
 
   static String _modeFromInt(int v) {

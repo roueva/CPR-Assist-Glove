@@ -10,16 +10,12 @@ import '../services/compression_event.dart';
 import 'cpr_chart_helpers.dart';
 import 'export_bottom_sheet.dart';
 
+part 'session_compare_charts.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionCompareScreen — side-by-side comparison of 2–4 sessions
 // Entry: SessionHistoryScreen selection mode → Compare icon
 // ─────────────────────────────────────────────────────────────────────────────
-Color _gradeColor(double grade) {
-  if (grade >= 90) return AppColors.success;
-  if (grade >= 75) return AppColors.primaryAlt;
-  if (grade >= 55) return AppColors.warning;
-  return AppColors.error;
-}
 
 class SessionCompareScreen extends ConsumerStatefulWidget {
   final List<SessionSummary> sessions;
@@ -136,23 +132,10 @@ class _SessionCompareScreenState
             Text('Compare Sessions',
                 style: AppTypography.heading(
                     size: 16, color: AppColors.textPrimary)),
-        Builder(builder: (context) {
-          final s = sessions.first;
-          final mode = s.isEmergency
-              ? 'Emergency'
-              : s.isNoFeedback
-              ? 'No-Feedback'
-              : 'Training';
-          final isPediatric = s.scenario == 'pediatric';
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('$mode · ${sessions.length} sessions',
-                  style: AppTypography.caption(
-                      color: AppColors.textSecondary)),
-            ],
-          );
-        }),
+        Text(
+          '${sessions.first.isEmergency ? 'Emergency' : sessions.first.isNoFeedback ? 'No-Feedback' : 'Training'} · ${sessions.length} sessions',
+          style: AppTypography.caption(color: AppColors.textSecondary),
+        ),
           ],
         ),
         actions: [
@@ -195,37 +178,45 @@ class _SessionCompareScreenState
                   activeIndices: _activeIndices,
                   onToggle:      _toggleSession),
             ),
-            const Divider(height: 1, color: AppColors.divider),
+            const Divider(height: 1, color: AppColors.white),
 
             // ── Tab bar ────────────────────────────────────────────────────────
-            Container(
-              color: AppColors.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_anyLoading)
-                    const LinearProgressIndicator(minHeight: 2)
-                  else
-                    const SizedBox(height: 2),
-                  TabBar(
-                    controller: _tabController,
-                    labelColor:           AppColors.primary,
-                    unselectedLabelColor: AppColors.textSecondary,
-                    indicatorColor:       AppColors.primary,
-                    indicatorWeight:      2.0,
-                    labelStyle:           AppTypography.label(
-                        color: AppColors.primary),
-                    unselectedLabelStyle: AppTypography.caption(
-                        color: AppColors.textSecondary),
-                    tabs: const [
-                      Tab(text: 'OVERVIEW'),
-                      Tab(text: 'METRICS'),
-                      Tab(text: 'CHARTS'),
-                    ],
-                  ),
-                ],
-              ),
+      DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 6,
+              offset: Offset(0, 3),
             ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_anyLoading)
+              const LinearProgressIndicator(minHeight: 2)
+            else
+              const SizedBox(height: 2),
+            TabBar(
+              controller: _tabController,
+              labelColor:           AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor:       AppColors.primary,
+              indicatorWeight:      2.0,
+              dividerColor:         Colors.transparent,
+              labelStyle:           AppTypography.label(color: AppColors.primary),
+              unselectedLabelStyle: AppTypography.caption(color: AppColors.textSecondary),
+              tabs: const [
+                Tab(text: 'OVERVIEW'),
+                Tab(text: 'METRICS'),
+                Tab(text: 'CHARTS'),
+              ],
+            ),
+          ],
+        ),
+      ),
             // ── Tab content — fills remaining space ────────────────────────────
             Expanded(
               child: TabBarView(
@@ -354,14 +345,37 @@ class _LegendCard extends StatelessWidget {
                         }(),
                         style: AppTypography.caption(color: AppColors.textDisabled),
                       ),
-                    if (session.isTraining && session.totalGrade > 0) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '${session.totalGrade.toStringAsFixed(0)}%',
-                        style: AppTypography.subheading(
-                            color: _gradeColor(session.totalGrade)),
+                    const SizedBox(height: AppSpacing.xs),
+
+                    SizedBox(
+                      height: 30,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: session.isTraining && session.totalGrade > 0
+                            ? Text(
+                          '${session.totalGrade.toStringAsFixed(0)}%',
+                          style: AppTypography.subheading(
+                            color: cprGradeColor(session.totalGrade),
+                          ),
+                        )
+                            : session.isEmergency
+                            ? Text(
+                          session.pulseDetectedFinal
+                              ? 'Pulse Detected'
+                              : session.pulseChecksPrompted > 0
+                              ? 'No Pulse Detected'
+                              : 'Pulse Uncertain',
+                          style: AppTypography.label(
+                            color: session.pulseDetectedFinal
+                                ? AppColors.success
+                                : session.pulseChecksPrompted > 0
+                                ? AppColors.error
+                                : AppColors.textDisabled,
+                          ),
+                        )
+                            : const SizedBox.shrink(),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -369,26 +383,6 @@ class _LegendCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ScenarioBadge extends StatelessWidget {
-  final SessionSummary session;
-  const _ScenarioBadge({required this.session});
-
-  @override
-  Widget build(BuildContext context) {
-    final isPediatric = session.scenario == 'pediatric';
-    final label = isPediatric ? 'Pediatric' : 'Adult';
-    final color = isPediatric ? AppColors.pediatric : AppColors.textDisabled;
-    final bg    = isPediatric ? AppColors.pediatricLight : AppColors.screenBgGrey;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xs, vertical: AppSpacing.xxs),
-      decoration: AppDecorations.chip(color: color, bg: bg),
-      child: Text(label,
-          style: AppTypography.badge(size: 8, color: color)),
     );
   }
 }
@@ -412,6 +406,7 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final allTraining = sessions.every((s) => s.isTraining);
+    final anyEmergency = sessions.any((s) => s.isEmergency);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
@@ -431,6 +426,15 @@ class _OverviewTab extends StatelessWidget {
           // ── Key stats strip ──────────────────────────────────────────────
           _KeyStatsCard(sessions: sessions, slotColors: slotColors),
           const SizedBox(height: AppSpacing.md),
+
+          if (anyEmergency) ...[
+            _EmergencyOutcomeCard(
+              sessions: sessions,
+              details: details,
+              slotColors: slotColors,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
 
           // ── Radar chart (training only) ──────────────────────────────────
           if (allTraining) ...[
@@ -525,7 +529,7 @@ class _ScoreRingTile extends StatelessWidget {
                   strokeWidth: 6,
                   backgroundColor: AppColors.divider,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                      hasGrade ? _gradeColor(grade) : AppColors.divider),
+                      hasGrade ? cprGradeColor(grade) : AppColors.divider),
                 ),
               ),
               Column(
@@ -537,12 +541,12 @@ class _ScoreRingTile extends StatelessWidget {
                         : '—',
                     style: AppTypography.subheading(
                         color: hasGrade
-                            ? _gradeColor(grade)
+                            ? cprGradeColor(grade)
                             : AppColors.textDisabled),
                   ),
                   if (hasGrade)
                     Text(
-                      _gradeLabel(grade),
+                      cprGradeLabel(grade),
                       style: AppTypography.caption(
                           color: AppColors.textDisabled),
                     ),
@@ -572,12 +576,142 @@ class _ScoreRingTile extends StatelessWidget {
       ],
     );
   }
+}
 
-  String _gradeLabel(double g) {
-    if (g >= 90) return 'Excellent';
-    if (g >= 75) return 'Good';
-    if (g >= 55) return 'Fair';
-    return 'Poor';
+class _EmergencyOutcomeCard extends StatelessWidget {
+  final List<SessionSummary> sessions;
+  final Map<int, SessionDetail?> details;
+  final List<Color> slotColors;
+
+  const _EmergencyOutcomeCard({
+    required this.sessions,
+    required this.details,
+    required this.slotColors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final emergencySessions = sessions.where((s) => s.isEmergency).toList();
+
+    if (emergencySessions.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      decoration: AppDecorations.card(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Emergency Outcome',
+            style: AppTypography.subheading(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            'Pulse check result and CPR flow summary',
+            style: AppTypography.caption(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          for (int i = 0; i < emergencySessions.length; i++) ...[
+            _EmergencyOutcomeRow(
+              session: emergencySessions[i],
+              detail: details[emergencySessions[i].id],
+              color: slotColors[sessions.indexOf(emergencySessions[i])],
+              index: sessions.indexOf(emergencySessions[i]),
+            ),
+            if (i < emergencySessions.length - 1)
+              const Divider(height: AppSpacing.lg, color: AppColors.divider),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmergencyOutcomeRow extends StatelessWidget {
+  final SessionSummary session;
+  final SessionDetail? detail;
+  final Color color;
+  final int index;
+
+  const _EmergencyOutcomeRow({
+    required this.session,
+    required this.detail,
+    required this.color,
+    required this.index,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPulseChecks = detail?.pulseChecks.isNotEmpty ?? false;
+    final lastPulse = hasPulseChecks ? detail!.pulseChecks.last : null;
+
+    final String pulseText;
+    final Color pulseColor;
+
+    if (lastPulse != null) {
+      if (lastPulse.classification == 2) {
+        pulseText = 'Pulse detected';
+        pulseColor = AppColors.success;
+      } else if (lastPulse.classification == 1) {
+        pulseText = 'Uncertain';
+        pulseColor = AppColors.warning;
+      } else {
+        pulseText = 'No pulse';
+        pulseColor = AppColors.error;
+      }
+    } else if (session.pulseDetectedFinal) {
+      pulseText = 'Pulse detected';
+      pulseColor = AppColors.success;
+    } else if (session.pulseChecksPrompted > 0) {
+      pulseText = 'No pulse';
+      pulseColor = AppColors.error;
+    } else {
+      pulseText = 'Not checked';
+      pulseColor = AppColors.textDisabled;
+    }
+
+    final compliance = session.pulseChecksPrompted > 0
+        ? session.pulseChecksComplied / session.pulseChecksPrompted * 100
+        : null;
+
+    return Row(
+      children: [
+        Container(
+          width: AppSpacing.sm,
+          height: AppSpacing.sm,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+
+        Expanded(
+          child: Text(
+            'S${session.sessionNumber ?? index + 1}',
+            style: AppTypography.label(color: AppColors.textPrimary),
+          ),
+        ),
+
+        Expanded(
+          flex: 2,
+          child: Text(
+            pulseText,
+            textAlign: TextAlign.center,
+            style: AppTypography.label(color: pulseColor),
+          ),
+        ),
+
+        Expanded(
+          flex: 2,
+          child: Text(
+            compliance != null
+                ? '${compliance.toStringAsFixed(0)}% checks'
+                : '—',
+            textAlign: TextAlign.end,
+            style: AppTypography.caption(color: AppColors.textSecondary),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1790,7 +1924,7 @@ class _MetricsTab extends StatelessWidget {
               s.isEmergency ? null : s.totalGrade).toList(),
               format: (v) => v != null ? '${v.toStringAsFixed(0)}%' : '—',
               colorFn: (v) => v == null
-                  ? AppColors.textDisabled : _gradeColor(v),
+                  ? AppColors.textDisabled : cprGradeColor(v),
               bestHighlight: true,
             ),
         ],
@@ -2652,138 +2786,6 @@ class _MetricGroup extends StatelessWidget {
 //   • Per-session target bands derived from scenario
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Per-session depth targets ─────────────────────────────────────────────────
-
-double _depthMin(SessionSummary s) =>
-    s.scenario == 'pediatric' ? CprTargets.depthMinPediatric : CprTargets.depthMin;
-double _depthMax(SessionSummary s) =>
-    s.scenario == 'pediatric' ? CprTargets.depthMaxPediatric : CprTargets.depthMax;
-
-
-// ── Shared chart card wrapper ─────────────────────────────────────────────────
-
-class _ComparChartCard extends StatelessWidget {
-  final String              title;
-  final String?             subtitle;
-  final Widget?             dropdown;
-  final Widget              chart;
-  final List<SessionSummary> sessions;
-  final List<Color>         slotColors;
-
-  const _ComparChartCard({
-    required this.title,
-    required this.chart,
-    required this.sessions,
-    required this.slotColors,
-    this.subtitle,
-    this.dropdown,
-  });
-
-  void _showExpanded(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.all(AppSpacing.md),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadius)),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Expanded(
-                  child: Text(title,
-                      style: AppTypography.subheading(
-                          color: AppColors.textPrimary)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.textSecondary, size: 20),
-                  onPressed: () => context.pop(),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ]),
-              const SizedBox(height: AppSpacing.sm),
-              SizedBox(height: 300, child: chart),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: AppDecorations.card(),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(title,
-                    style: AppTypography.subheading(
-                        color: AppColors.textPrimary)),
-              ),
-              if (dropdown != null) ...[
-                dropdown!,
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              GestureDetector(
-                onTap: () => _showExpanded(context),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius:
-                    BorderRadius.circular(AppSpacing.cardRadiusSm),
-                  ),
-                  child: const Icon(Icons.open_in_full_rounded,
-                      size: 14, color: AppColors.primary),
-                ),
-              ),
-            ],
-          ),
-          // Session legend dots
-          const SizedBox(height: AppSpacing.xs),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.xxs,
-            children: [
-              for (int i = 0; i < sessions.length; i++)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    width: AppSpacing.sm,
-                    height: AppSpacing.sm,
-                    decoration: BoxDecoration(
-                        color: slotColors[i], shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: AppSpacing.xxs),
-                  Text('S${sessions[i].sessionNumber ?? i + 1}',
-                      style: AppTypography.caption(
-                          color: AppColors.textSecondary)),
-                ]),
-            ],
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: AppSpacing.xxs),
-            Text(subtitle!,
-                style: AppTypography.caption(
-                    color: AppColors.textSecondary)),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          chart,
-        ],
-      ),
-    );
-  }
-}
 
 class _ChartsTab extends StatelessWidget {
   final List<SessionSummary>     sessions;
@@ -2836,7 +2838,7 @@ class _ChartsTab extends StatelessWidget {
             // Rescuer HR — only if any session has vitals
             if (withDetail.any((s) => (details[s.id]?.rescuerVitals.isNotEmpty ?? false))) ...[
               const SizedBox(height: AppSpacing.md),
-              _CompareVitalsChart(
+              _CompareHrChartCard(
                 sessions:   withDetail,
                 details:    details,
                 slotColors: slotColors,
@@ -2849,1001 +2851,3 @@ class _ChartsTab extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Depth waveform — valley→peak waveform per session, scrollable
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CompareDepthChart extends StatefulWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _CompareDepthChart({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  State<_CompareDepthChart> createState() => _CompareDepthChartState();
-}
-
-class _CompareDepthChartState extends State<_CompareDepthChart> {
-  double  _windowStart = 0.0;
-  double? _windowSecs  = kCprDefaultWindowSecs;
-
-  // Use the longest session for scroll range
-  double get _sessionLength => widget.sessions
-      .map((s) {
-    final d = widget.details[s.id];
-    return d == null || d.compressions.isEmpty
-        ? 0.0
-        : d.compressions.last.timestampSec;
-  })
-      .fold(0.0, (a, b) => a > b ? a : b);
-
-  double get _effectiveWindow => _windowSecs ?? _sessionLength;
-
-  void _onWindowChanged(double? v) {
-    setState(() {
-      _windowSecs = v;
-      if (v != null && _sessionLength > v) {
-        _windowStart = _windowStart.clamp(0.0, _sessionLength - v);
-      } else {
-        _windowStart = 0.0;
-      }
-    });
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_windowSecs == null) return;
-    final secsPerPx = (_sessionLength - _effectiveWindow) / 260.0;
-    final newStart = (_windowStart - d.delta.dx * secsPerPx)
-        .clamp(0.0, _sessionLength - _effectiveWindow);
-    setState(() => _windowStart = newStart);
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    const kReserved = 28.0;
-    final minX = _windowStart;
-    final maxX = _windowSecs == null
-        ? _sessionLength
-        : _windowStart + _windowSecs!;
-    final canScroll = _windowSecs != null && _sessionLength > _windowSecs!;
-
-    // Build line bars — one per session
-    final lineBars = <LineChartBarData>[];
-    // Collect all target bounds for annotation (use first session's scenario
-    // since they're all the same scenario — enforced at entry point)
-    final tMin = _depthMin(widget.sessions.first);
-    final tMax = _depthMax(widget.sessions.first);
-
-    for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
-      if (d == null) continue;
-      final waveform = buildCprWaveform(d.compressions);
-      if (waveform.isEmpty) continue;
-      lineBars.add(LineChartBarData(
-        spots:           waveform,
-        color:           widget.slotColors[i],
-        barWidth:        1.5,
-        isCurved:        true,
-        curveSmoothness: 0.25,
-        preventCurveOverShooting: true,
-        preventCurveOvershootingThreshold: 0.5,
-        dotData:      const FlDotData(show: false),
-        belowBarData: BarAreaData(show: false),
-      ));
-    }
-
-    return _ComparChartCard(
-      title:     'Compression Depth',
-      sessions:  widget.sessions,
-      slotColors: widget.slotColors,
-      dropdown: CprWindowDropdown(
-        value:         _windowSecs,
-        sessionLength: _sessionLength,
-        onChanged:     _onWindowChanged,
-      ),
-      chart: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onHorizontalDragUpdate: canScroll ? _onDragUpdate : null,
-            child: SizedBox(
-              height: 160,
-              child: LineChart(LineChartData(
-                minX: minX,
-                maxX: maxX,
-                minY: 0,
-                maxY: 9,
-                clipData: const FlClipData.all(),
-                backgroundColor:
-                AppColors.screenBgGrey.withValues(alpha: 0.5),
-                lineBarsData: lineBars,
-                rangeAnnotations: RangeAnnotations(
-                  horizontalRangeAnnotations: [
-                    HorizontalRangeAnnotation(
-                      y1: tMin, y2: tMax,
-                      color: AppColors.success.withValues(alpha: 0.08),
-                    ),
-                    HorizontalRangeAnnotation(
-                      y1: 0, y2: 0.5,
-                      color: AppColors.warning.withValues(alpha: 0.08),
-                    ),
-                  ],
-                ),
-                extraLinesData: ExtraLinesData(horizontalLines: [
-                  HorizontalLine(y: tMin,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                  HorizontalLine(y: tMax,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                ]),
-                gridData: FlGridData(
-                  show: true, drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                      color: AppColors.divider, strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: buildCprTooltip(
-                    sessions: widget.sessions,
-                    compressionsPerBar: List.generate(widget.sessions.length,
-                            (i) => widget.details[widget.sessions[i].id]?.compressions ?? []),
-                    valueLabel: (barIdx, spot) {
-                      final isPeak = spot.y > kCprRecoilThresholdCm;
-                      return '${spot.y.toStringAsFixed(1)} cm ${isPeak ? 'p' : 'r'}';
-                    },
-                    valueColorBuilder: (barIdx, spot) =>
-                    spot.y > kCprRecoilThresholdCm
-                        ? AppColors.textPrimary
-                        : AppColors.textDisabled,
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: buildCprTimeAxis(
-                    minX: minX, maxX: maxX,
-                    sessionLength: _sessionLength,
-                    windowStart: _windowStart,
-                    windowSecs: _windowSecs,
-                  ),
-                    leftTitles: buildCprDepthLeftAxis(
-                      targetMin: tMin,
-                      targetMax: tMax,
-                      reservedSize: kReserved,
-                    ),
-                ),
-              )),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: kReserved),
-            child: CprScrollBar(
-              windowStart:   _windowStart,
-              sessionLength: _sessionLength,
-              windowSecs:    _effectiveWindow,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Rate chart — instantaneous rate per compression, scrollable
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CompareRateChart extends StatefulWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _CompareRateChart({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  State<_CompareRateChart> createState() => _CompareRateChartState();
-}
-
-class _CompareRateChartState extends State<_CompareRateChart> {
-  double  _windowStart = 0.0;
-  double? _windowSecs  = kCprDefaultWindowSecs;
-
-  double get _sessionLength => widget.sessions
-      .map((s) {
-    final d = widget.details[s.id];
-    return d == null || d.compressions.isEmpty
-        ? 0.0
-        : d.compressions.last.timestampSec;
-  })
-      .fold(0.0, (a, b) => a > b ? a : b);
-
-  double get _effectiveWindow => _windowSecs ?? _sessionLength;
-
-  void _onWindowChanged(double? v) {
-    setState(() {
-      _windowSecs = v;
-      if (v != null && _sessionLength > v) {
-        _windowStart = _windowStart.clamp(0.0, _sessionLength - v);
-      } else {
-        _windowStart = 0.0;
-      }
-    });
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_windowSecs == null) return;
-    final secsPerPx = (_sessionLength - _effectiveWindow) / 260.0;
-    final newStart = (_windowStart - d.delta.dx * secsPerPx)
-        .clamp(0.0, _sessionLength - _effectiveWindow);
-    setState(() => _windowStart = newStart);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const kReserved = 28.0;
-    final minX     = _windowStart;
-    final maxX     = _windowSecs == null
-        ? _sessionLength
-        : _windowStart + _windowSecs!;
-    final canScroll = _windowSecs != null && _sessionLength > _windowSecs!;
-
-    final lineBars = <LineChartBarData>[];
-    for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
-      if (d == null || d.compressions.isEmpty) continue;
-      final spots = d.compressions.map((c) {
-        final rate = c.instantaneousRate > 0
-            ? c.instantaneousRate : c.frequency;
-        return FlSpot(c.timestampSec, rate.clamp(60.0, 200.0));
-      }).toList();
-      lineBars.add(LineChartBarData(
-        spots:    spots,
-        color:    widget.slotColors[i],
-        barWidth: 1.5,
-        isCurved: false,
-        dotData:  FlDotData(
-          show: true,
-          checkToShowDot: (spot, _) =>
-          _effectiveWindow <= 20.0 &&
-              spot.x >= minX && spot.x <= maxX,
-          getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-            radius: 3,
-            color: spot.y >= CprTargets.rateMin &&
-                spot.y <= CprTargets.rateMax
-                ? widget.slotColors[i]
-                : AppColors.error,
-            strokeWidth: 1,
-            strokeColor: AppColors.white,
-          ),
-        ),
-      ));
-    }
-
-    return _ComparChartCard(
-      title:    'Compression Rate',
-      sessions:  widget.sessions,
-      slotColors: widget.slotColors,
-      dropdown: CprWindowDropdown(
-        value:         _windowSecs,
-        sessionLength: _sessionLength,
-        onChanged:     _onWindowChanged,
-      ),
-      chart: Column(
-        children: [
-          GestureDetector(
-            onHorizontalDragUpdate: canScroll ? _onDragUpdate : null,
-            child: SizedBox(
-              height: 160,
-              child: LineChart(LineChartData(
-                minX: minX, maxX: maxX,
-                minY: 80,  maxY: 140,
-                clipData: const FlClipData.all(),
-                backgroundColor:
-                AppColors.screenBgGrey.withValues(alpha: 0.5),
-                lineBarsData: lineBars,
-                rangeAnnotations: RangeAnnotations(
-                  horizontalRangeAnnotations: [
-                    HorizontalRangeAnnotation(
-                      y1: CprTargets.rateMin,
-                      y2: CprTargets.rateMax,
-                      color: AppColors.success.withValues(alpha: 0.08),
-                    ),
-                  ],
-                ),
-                extraLinesData: ExtraLinesData(horizontalLines: [
-                  HorizontalLine(y: CprTargets.rateMin,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                  HorizontalLine(y: CprTargets.rateMax,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                ]),
-                gridData: FlGridData(
-                  show: true, drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                      color: AppColors.divider, strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: buildCprTooltip(
-                    sessions: widget.sessions,
-                    compressionsPerBar: List.generate(widget.sessions.length,
-                            (i) => widget.details[widget.sessions[i].id]?.compressions ?? []),
-                    valueLabel: (_, spot) => '${spot.y.round()} cpm',
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: buildCprTimeAxis(
-                    minX: minX, maxX: maxX,
-                    sessionLength: _sessionLength,
-                    windowStart: _windowStart,
-                    windowSecs: _windowSecs,
-                  ),
-                    leftTitles: buildCprRateLeftAxis(),
-                ),
-              )),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: kReserved),
-            child: CprScrollBar(
-              windowStart:   _windowStart,
-              sessionLength: _sessionLength,
-              windowSecs:    _effectiveWindow,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Depth trend — 5-compression rolling avg, dots, scrollable, default All
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CompareDepthTrendChart extends StatefulWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _CompareDepthTrendChart({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  State<_CompareDepthTrendChart> createState() =>
-      _CompareDepthTrendChartState();
-}
-
-class _CompareDepthTrendChartState extends State<_CompareDepthTrendChart> {
-  double  _windowStart = 0.0;
-  double? _windowSecs; // null = All
-
-  double get _sessionLength => widget.sessions
-      .map((s) {
-    final d = widget.details[s.id];
-    return d == null || d.compressions.isEmpty
-        ? 0.0
-        : d.compressions.last.timestampSec;
-  })
-      .fold(0.0, (a, b) => a > b ? a : b);
-
-  double get _effectiveWindow => _windowSecs ?? _sessionLength;
-
-  void _onWindowChanged(double? v) {
-    setState(() {
-      _windowSecs = v;
-      if (v != null && _sessionLength > v) {
-        _windowStart = _windowStart.clamp(0.0, _sessionLength - v);
-      } else {
-        _windowStart = 0.0;
-      }
-    });
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_windowSecs == null) return;
-    final secsPerPx = (_sessionLength - _effectiveWindow) / 260.0;
-    final newStart = (_windowStart - d.delta.dx * secsPerPx)
-        .clamp(0.0, _sessionLength - _effectiveWindow);
-    setState(() => _windowStart = newStart);
-  }
-
-  List<FlSpot> _buildTrend(List<CompressionEvent> events) {
-    const window = 5;
-    if (events.length < window) return [];
-    final spots = <FlSpot>[];
-    for (int i = window - 1; i < events.length; i++) {
-      double sum = 0;
-      for (int j = i - window + 1; j <= i; j++) sum += events[j].depth;
-      spots.add(FlSpot(events[i].timestampSec, sum / window));
-    }
-    return spots;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const kReserved = 28.0;
-    final minX     = _windowStart;
-    final maxX     = _windowSecs == null
-        ? _sessionLength
-        : _windowStart + _windowSecs!;
-    final canScroll = _windowSecs != null && _sessionLength > _windowSecs!;
-    final tMin = _depthMin(widget.sessions.first);
-    final tMax = _depthMax(widget.sessions.first);
-
-    final lineBars = <LineChartBarData>[];
-    int totalVisible = 0;
-    for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
-      if (d == null) continue;
-      final spots = _buildTrend(d.compressions);
-      if (spots.isEmpty) continue;
-      totalVisible += spots.where((s) => s.x >= minX && s.x <= maxX).length;
-      lineBars.add(LineChartBarData(
-        spots:    spots,
-        color:    widget.slotColors[i],
-        barWidth: 2,
-        isCurved: true,
-        dotData: FlDotData(
-          show: true,
-          checkToShowDot: (spot, _) =>
-          totalVisible <= 20 &&
-              spot.x >= minX && spot.x <= maxX,
-          getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-            radius: 3,
-            color: spot.y >= tMin && spot.y <= tMax
-                ? widget.slotColors[i]
-                : AppColors.warning,
-            strokeWidth: 1,
-            strokeColor: AppColors.white,
-          ),
-        ),
-      ));
-    }
-
-    return _ComparChartCard(
-      title:    'Depth Trend',
-      sessions:  widget.sessions,
-      slotColors: widget.slotColors,
-      dropdown: CprWindowDropdown(
-        value:         _windowSecs,
-        sessionLength: _sessionLength,
-        onChanged:     _onWindowChanged,
-      ),
-      chart: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('5-compression rolling average',
-              style:
-              AppTypography.caption(color: AppColors.textSecondary)),
-          const SizedBox(height: AppSpacing.xs),
-          GestureDetector(
-            onHorizontalDragUpdate: canScroll ? _onDragUpdate : null,
-            child: SizedBox(
-              height: 160,
-              child: LineChart(LineChartData(
-                minX: minX, maxX: maxX,
-                minY: 0,   maxY: 9,
-                clipData: const FlClipData.all(),
-                backgroundColor:
-                AppColors.screenBgGrey.withValues(alpha: 0.5),
-                lineBarsData: lineBars,
-                rangeAnnotations: RangeAnnotations(
-                  horizontalRangeAnnotations: [
-                    HorizontalRangeAnnotation(
-                      y1: tMin, y2: tMax,
-                      color: AppColors.success.withValues(alpha: 0.08),
-                    ),
-                  ],
-                ),
-                extraLinesData: ExtraLinesData(horizontalLines: [
-                  HorizontalLine(y: tMin,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                  HorizontalLine(y: tMax,
-                      color: AppColors.success.withValues(alpha: 0.5),
-                      strokeWidth: 1, dashArray: [4, 4]),
-                ]),
-                gridData: FlGridData(
-                  show: true, drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                      color: AppColors.divider, strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: buildCprTooltip(
-                    sessions: widget.sessions,
-                    compressionsPerBar: List.generate(widget.sessions.length,
-                            (i) => widget.details[widget.sessions[i].id]?.compressions ?? []),
-                    valueLabel: (_, spot) => '${spot.y.toStringAsFixed(1)} cm',
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: buildCprTimeAxis(
-                    minX: minX, maxX: maxX,
-                    sessionLength: _sessionLength,
-                    windowStart: _windowStart,
-                    windowSecs: _windowSecs,
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: kReserved,
-                      interval: 1,
-                      getTitlesWidget: (v, meta) {
-                        if (v < 0 || v > 8) return const SizedBox.shrink();
-                        if ((v - v.roundToDouble()).abs() > 0.01)
-                          return const SizedBox.shrink();
-                        final isTarget =
-                            (v - tMin).abs() < 0.05 ||
-                                (v - tMax).abs() < 0.05;
-                        return Text(
-                          v.toStringAsFixed(1),
-                          style: AppTypography.caption(
-                            color: isTarget
-                                ? AppColors.success
-                                : AppColors.textDisabled,
-                          ).copyWith(
-                              fontWeight: isTarget
-                                  ? FontWeight.bold
-                                  : FontWeight.normal),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              )),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: kReserved),
-            child: CprScrollBar(
-              windowStart:   _windowStart,
-              sessionLength: _sessionLength,
-              windowSecs:    _effectiveWindow,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Posture / wrist alignment chart — no window (full session), clean y axis
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ComparePostureChart extends StatefulWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _ComparePostureChart({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  State<_ComparePostureChart> createState() => _ComparePostureChartState();
-}
-
-class _ComparePostureChartState extends State<_ComparePostureChart> {
-  double  _windowStart = 0.0;
-  double? _windowSecs;
-
-  double get _sessionLength {
-    double max = 0;
-    for (final s in widget.sessions) {
-      final d = widget.details[s.id];
-      if (d != null && d.compressions.isNotEmpty) {
-        final t = d.compressions.last.timestampSec;
-        if (t > max) max = t;
-      }
-    }
-    return max;
-  }
-
-  double get _effectiveWindow => _windowSecs ?? _sessionLength;
-
-  void _onWindowChanged(double? v) {
-    setState(() {
-      _windowSecs = v;
-      if (v != null && _sessionLength > v) {
-        _windowStart = _windowStart.clamp(0.0, _sessionLength - v);
-      } else {
-        _windowStart = 0.0;
-      }
-    });
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_windowSecs == null) return;
-    final secsPerPx = (_sessionLength - _effectiveWindow) / 260.0;
-    final newStart = (_windowStart - d.delta.dx * secsPerPx)
-        .clamp(0.0, _sessionLength - _effectiveWindow);
-    setState(() => _windowStart = newStart);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lineBars = <LineChartBarData>[];
-    double maxX = _sessionLength; // use the stateful getter instead
-
-    for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
-      if (d == null || d.compressions.isEmpty) continue;
-      if (d.compressions.every((c) => c.wristAlignmentAngle == 0)) continue;
-      final spots = d.compressions
-          .map((c) => FlSpot(c.timestampSec, c.wristAlignmentAngle))
-          .toList();
-      lineBars.add(LineChartBarData(
-        spots:           spots,
-        color:           widget.slotColors[i],
-        barWidth:        1.5,
-        isCurved:        true,
-        curveSmoothness: 0.2,
-        dotData: FlDotData(
-          show: true,
-          checkToShowDot: (spot, _) =>
-          _effectiveWindow <= 20.0 &&
-              spot.x >= _windowStart &&
-              spot.x <= (_windowSecs == null ? maxX : (_windowStart + _windowSecs!).clamp(0.0, maxX)),
-          getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-            radius: 3,
-            color: spot.y <= CprTargets.alignmentMaxDeg
-                ? widget.slotColors[i]
-                : AppColors.warning,
-            strokeWidth: 1,
-            strokeColor: AppColors.white,
-          ),
-        ),
-      ));
-    }
-
-    if (lineBars.isEmpty) return const SizedBox.shrink();
-
-    final minX      = _windowStart;
-    final maxX2     = _windowSecs == null ? maxX : (_windowStart + _windowSecs!).clamp(0.0, maxX);
-    final canScroll = _windowSecs != null && maxX > _windowSecs!;
-    final double maxAngle = lineBars.isEmpty ? 20.0 : lineBars
-        .expand((b) => b.spots)
-        .map((s) => s.y)
-        .fold(0.0, (a, b) => a > b ? a : b);
-    final double chartMaxY = (maxAngle + 5).clamp(20.0, 45.0);
-
-    return _ComparChartCard(
-        title:     'Wrist Alignment',
-        sessions:  widget.sessions,
-        slotColors: widget.slotColors,
-        dropdown: CprWindowDropdown(
-          value:         _windowSecs,
-          sessionLength: _sessionLength,
-          onChanged:     _onWindowChanged,
-        ),
-        chart: Column(
-          children: [
-        GestureDetector(
-        onHorizontalDragUpdate: canScroll ? _onDragUpdate : null,
-          child: SizedBox(
-            height: 140,
-            child: LineChart(LineChartData(
-              minX: minX, maxX: maxX2,
-          minY: 0, maxY: chartMaxY,
-          clipData: const FlClipData.all(),
-          lineBarsData: lineBars,
-          extraLinesData: ExtraLinesData(horizontalLines: [
-            HorizontalLine(
-              y: CprTargets.alignmentMaxDeg,
-              color: AppColors.warning.withValues(alpha: 0.6),
-              strokeWidth: 1, dashArray: [6, 4],
-            ),
-          ]),
-          gridData: FlGridData(
-            show: true, drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => const FlLine(
-                color: AppColors.divider, strokeWidth: 1),
-          ),
-          borderData: FlBorderData(show: false),
-              lineTouchData: LineTouchData(
-                touchTooltipData: buildCprTooltip(
-                  sessions: widget.sessions,
-                  compressionsPerBar: List.generate(widget.sessions.length,
-                          (i) => widget.details[widget.sessions[i].id]?.compressions ?? []),
-                  valueLabel: (_, spot) => '${spot.y.toStringAsFixed(0)}°',
-                ),
-              ),
-          titlesData: FlTitlesData(
-            topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false)),
-            bottomTitles: buildCprTimeAxis(
-              minX: minX, maxX: maxX2,
-              sessionLength: _sessionLength,
-              windowStart: _windowStart,
-              windowSecs: _windowSecs,
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 28,
-                getTitlesWidget: (v, _) {
-                  if (v != 0 && v != 15 && (v - chartMaxY).abs() > 0.5)
-                    return const SizedBox.shrink();
-                  final isTarget = (v - CprTargets.alignmentMaxDeg).abs() < 0.5;
-                  return Text('${v.toInt()}°',
-                      style: AppTypography.caption(
-                        color: isTarget
-                            ? AppColors.warning
-                            : AppColors.textDisabled,
-                      ).copyWith(
-                          fontWeight: isTarget
-                              ? FontWeight.bold
-                              : FontWeight.normal));
-                },
-              ),
-            ),
-          ),
-        )),
-      ),
-        ),
-            Padding(
-              padding: const EdgeInsets.only(left: 28),
-              child: CprScrollBar(
-                windowStart:   _windowStart,
-                sessionLength: _sessionLength,
-                windowSecs:    _effectiveWindow,
-              ),
-            ),
-          ],
-        ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Rescuer vitals — HR overlay, one line per session
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CompareVitalsChart extends StatefulWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _CompareVitalsChart({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  State<_CompareVitalsChart> createState() => _CompareVitalsChartState();
-}
-
-class _CompareVitalsChartState extends State<_CompareVitalsChart> {
-  double  _windowStart = 0.0;
-  double? _windowSecs;
-
-  double get _sessionLength {
-    double max = 0;
-    for (final s in widget.sessions) {
-      final d = widget.details[s.id];
-      if (d != null && d.rescuerVitals.isNotEmpty) {
-        final t = d.rescuerVitals.last.timestampMs / 1000.0;
-        if (t > max) max = t;
-      }
-    }
-    return max;
-  }
-
-  double get _effectiveWindow => _windowSecs ?? _sessionLength;
-
-  void _onWindowChanged(double? v) {
-    setState(() {
-      _windowSecs = v;
-      if (v != null && _sessionLength > v) {
-        _windowStart = _windowStart.clamp(0.0, _sessionLength - v);
-      } else {
-        _windowStart = 0.0;
-      }
-    });
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_windowSecs == null) return;
-    final secsPerPx = (_sessionLength - _effectiveWindow) / 260.0;
-    final newStart = (_windowStart - d.delta.dx * secsPerPx)
-        .clamp(0.0, _sessionLength - _effectiveWindow);
-    setState(() => _windowStart = newStart);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lineBars = <LineChartBarData>[];
-    double maxX = 0;
-    double maxY = 180;
-
-    for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
-      if (d == null || d.rescuerVitals.isEmpty) continue;
-      final spots = d.rescuerVitals
-          .where((v) => v.heartRate > 0)
-          .map((v) => FlSpot(v.timestampMs / 1000.0, v.heartRate))
-          .toList();
-      if (spots.isEmpty) continue;
-      if (spots.last.x > maxX) maxX = spots.last.x;
-      final sessionMax = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-      if (sessionMax > maxY) maxY = sessionMax + 10;
-      lineBars.add(LineChartBarData(
-        spots:    spots,
-        color:    widget.slotColors[i],
-        barWidth: 1.5,
-        isCurved: true,
-          dotData: FlDotData(
-            show: true,
-            checkToShowDot: (spot, _) =>
-            _effectiveWindow <= 20.0 &&
-                spot.x >= _windowStart &&
-                spot.x <= (_windowSecs == null ? maxX : _windowStart + _windowSecs!),
-            getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-              radius: 3,
-              color: spot.y >= 160
-                  ? AppColors.error
-                  : spot.y >= 140
-                  ? AppColors.warning
-                  : AppColors.success,
-              strokeWidth: 1,
-              strokeColor: AppColors.white,
-            ),
-          ),
-      ));
-    }
-
-    if (lineBars.isEmpty) return const SizedBox.shrink();
-
-    final minX  = _windowStart;
-    final maxX2 = _windowSecs == null ? maxX : (_windowStart + _windowSecs!).clamp(0.0, maxX);
-    final canScroll = _windowSecs != null && maxX > _windowSecs!;
-
-    return _ComparChartCard(
-      title:    'Rescuer Heart Rate',
-      sessions:  widget.sessions,
-      slotColors: widget.slotColors,
-      dropdown: CprWindowDropdown(
-        value:         _windowSecs,
-        sessionLength: _sessionLength,
-        onChanged:     _onWindowChanged,
-      ),
-      chart: Column(
-        children: [
-          GestureDetector(
-            onHorizontalDragUpdate: canScroll ? _onDragUpdate : null,
-            child: SizedBox(
-              height: 140,
-              child: LineChart(LineChartData(
-                minX: minX, maxX: maxX2,
-                minY: 50, maxY: maxY,
-                clipData: const FlClipData.all(),
-                lineBarsData: lineBars,
-                extraLinesData: ExtraLinesData(horizontalLines: [
-                  HorizontalLine(
-                    y: 160,
-                    color: AppColors.error.withValues(alpha: 0.4),
-                    strokeWidth: 1, dashArray: [6, 4],
-                    label: HorizontalLineLabel(
-                      show: true,
-                      alignment: Alignment.topRight,
-                      labelResolver: (_) => 'swap rescuer',
-                      style: AppTypography.badge(
-                          size: 9, color: AppColors.error.withValues(alpha: 0.7)),
-                    ),
-                  ),
-                ]),
-                gridData: FlGridData(
-                  show: true, drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                      color: AppColors.divider, strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: buildCprTooltip(
-                      sessions: widget.sessions,
-                      // No compressions — HR is time-only, no compression number
-                      valueLabel: (_, spot) {
-                        final bpm = spot.y.round();
-                        final tag = bpm >= 160 ? ' ▲' : bpm >= 140 ? ' ↑' : '';
-                        return '$bpm bpm$tag';
-                      },
-                    ),
-                  ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: buildCprTimeAxis(
-                    minX: minX, maxX: maxX2,
-                    sessionLength: _sessionLength,
-                    windowStart: _windowStart,
-                    windowSecs: _windowSecs,
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      interval: 30,
-                      getTitlesWidget: (v, _) {
-                        if (v % 30 != 0) return const SizedBox.shrink();
-                        return Text(
-                          v.toInt().toString(),
-                          style: AppTypography.caption(color: AppColors.textDisabled),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              )),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 28),
-            child: CprScrollBar(
-              windowStart:   _windowStart,
-              sessionLength: _sessionLength,
-              windowSecs:    _effectiveWindow,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NoDetailPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin:     const EdgeInsets.only(top: AppSpacing.xl),
-      padding:    const EdgeInsets.all(AppSpacing.xl),
-      decoration: AppDecorations.card(),
-      child: Column(children: [
-        const Icon(Icons.hourglass_top_rounded,
-            color: AppColors.textDisabled, size: AppSpacing.iconXl),
-        const SizedBox(height: AppSpacing.md),
-        Text('Loading chart data…',
-            style: AppTypography.subheading(
-                color: AppColors.textSecondary),
-            textAlign: TextAlign.center),
-        const SizedBox(height: AppSpacing.xs),
-        Text('Per-compression data is being fetched.',
-            style: AppTypography.caption(color: AppColors.textDisabled),
-            textAlign: TextAlign.center),
-      ]),
-    );
-  }
-}

@@ -48,7 +48,16 @@ class _MainNavigationScreenState
         if (!mounted) return;
         if (data['isStartPing'] == true) {
           final autoSwitch = ref.read(settingsProvider).autoSwitchToCPR;
-          if (autoSwitch && _currentIndex != 1) _onTabTapped(1);
+          if (autoSwitch) {
+            // A session can start while the user is on a pushed route
+            // (Session History, results, settings...). Pop back to the
+            // navigation shell first, then switch to the Live CPR tab.
+            final nav = Navigator.of(context);
+            while (nav.canPop()) {
+              nav.pop();
+            }
+            if (_currentIndex != 1) _onTabTapped(1);
+          }
         }
       });
     });
