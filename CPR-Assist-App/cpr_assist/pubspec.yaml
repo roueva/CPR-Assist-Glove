@@ -94,6 +94,8 @@ dependencies:
   #Keep screen awake
   wakelock_plus: ^1.2.8
 
+  flutter_foreground_task: ^8.13.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -131,6 +133,13 @@ flutter:
   # ASSETS CONFIGURATION
   assets:
     - .env
+    - assets/icons/guide/chain_of_survival.png
+    - assets/icons/guide/hub_compressions.png
+    - assets/icons/guide/hub_aed.png
+    - assets/icons/guide/hub_steps.png
+    - assets/icons/guide/hub_pediatric.png
+    - assets/icons/guide/hub_recovery.png
+    - assets/icons/guide/detail_hand_placement.png
     - assets/map_style.json
     - assets/icons/AEDs.png
     - assets/icons/AEDs_c.png
@@ -153,3 +162,4 @@ flutter:
     - assets/icons/live.svg
     - assets/icons/training.svg
     - assets/icons/emergency.svg
+    - assets/icons/glove_icon.svg

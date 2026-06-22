@@ -36,6 +36,7 @@ class SessionDetail {
 
   /// "standard_adult" | "pediatric"
   final String scenario;
+  final String ventilationRatio; // '30:2', '15:2', or 'compressions_only'
 
   // ── Glove-side totals (from SESSION_END packet) ───────────────────────────
   final int compressionCount;
@@ -155,6 +156,7 @@ class SessionDetail {
     this.sessionEnd,
     this.mode                    = 'emergency',
     this.scenario                = 'standard_adult',
+    this.ventilationRatio = '30:2',
     required this.compressionCount,
     required this.correctDepth,
     required this.correctFrequency,
@@ -303,8 +305,7 @@ class SessionDetail {
       // allowance. A sub-3 s blip is too short to have delivered breaths.
       return v.copyWith(
         durationSec: cappedDur,
-        compliant:   dur >= AppConstants.minCompliantPauseSec &&
-            dur <= AppConstants.maxAcceptablePauseSec,
+        compliant:   dur >= AppConstants.minCompliantPauseSec,
       );
     }).toList();
 
@@ -321,8 +322,7 @@ class SessionDetail {
           : AppConstants.maxAcceptablePauseSec;
       return p.copyWith(
         durationSec: cappedDur,
-        compliant:   dur >= AppConstants.minCompliantPauseSec &&
-            dur <= AppConstants.maxAcceptablePauseSec,
+        compliant:   dur >= AppConstants.minCompliantPauseSec,
       );
     }).toList();
 
@@ -368,6 +368,7 @@ class SessionDetail {
     required double                     totalGrade,
     String mode     = 'emergency',
     String scenario = 'standard_adult',
+    String ventilationRatio = '30:2',
     int? fatigueAlertTimestampMs,
     int? fatigueAlertScore,
     List<int> twoMinAlertTimestampsMs = const [],
@@ -487,6 +488,7 @@ class SessionDetail {
       sessionEnd:             sessionEnd,
       mode:                   mode,
       scenario:               scenario,
+      ventilationRatio: ventilationRatio,
       compressionCount:       summaryPacket['totalCompressions']  as int?    ?? 0,
       correctDepth:           summaryPacket['correctDepth']        as int?    ?? 0,
       correctFrequency:       summaryPacket['correctFrequency']    as int?    ?? 0,
@@ -548,6 +550,7 @@ class SessionDetail {
           : null,
       mode:                   json['mode']                      as String? ?? 'emergency',
       scenario:               json['scenario']                  as String? ?? 'standard_adult',
+      ventilationRatio: json['ventilationRatio'] as String? ?? '30:2',
       compressionCount:       (json['compression_count'] as num?)?.toInt() ?? 0,
       correctDepth:           (json['correct_depth'] as num?)?.toInt() ?? 0,
       correctFrequency:       (json['correct_frequency'] as num?)?.toInt() ?? 0,
@@ -626,6 +629,7 @@ class SessionDetail {
         .toIso8601String(),
     'mode':                     mode,
     'scenario':                 scenario,
+    'ventilationRatio': ventilationRatio,
     'compression_count':        compressionCount,
     'correct_depth':            correctDepth,
     'correct_frequency':        correctFrequency,
@@ -706,6 +710,7 @@ class SessionDetail {
         sessionEnd:             sessionEnd,
         mode:                   mode,
         scenario:               scenario,
+        ventilationRatio:       ventilationRatio,
         compressionCount:       compressionCount,
         correctDepth:           correctDepth,
         correctFrequency:       correctFrequency,
@@ -773,6 +778,7 @@ class SessionDetail {
         sessionEnd:             sessionEnd,
         mode:                   mode,
         scenario:               scenario,
+        ventilationRatio:       ventilationRatio,
         compressionCount:       compressionCount,
         correctDepth:           correctDepth,
         correctFrequency:       correctFrequency,

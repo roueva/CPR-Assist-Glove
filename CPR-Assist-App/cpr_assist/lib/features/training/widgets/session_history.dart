@@ -55,7 +55,16 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
   String _searchQuery = '';
 
   bool             _selectionMode = false;
+  /// Selection key = sessionStart truncated to seconds, as a string.
+  /// Stable across backend/local: works for local-only sessions too.
   Set<String>      _selectedIds   = {};
+
+  /// Build the selection key for a summary. Empty string if no sessionStart
+  /// (which shouldn't happen for any displayable session).
+  static String _selKey(SessionSummary s) =>
+      s.sessionStart == null
+          ? ''
+          : SessionLocalStorage.keyMsFromStart(s.sessionStart!).toString();
 
   @override
   void initState() {
@@ -115,8 +124,8 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
   void _selectAll(List<SessionSummary> all) {
     setState(() {
       _selectedIds = all
-          .where((s) => s.id != null)
-          .map((s) => s.id.toString())
+          .where((s) => s.sessionStart != null)
+          .map(_selKey)
           .toSet();
     });
   }
@@ -193,7 +202,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
   Future<void> _exportSelected() async {
     final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
     final selected  = summaries
-        .where((s) => s.id != null && _selectedIds.contains(s.id.toString()))
+        .where((s) => _selectedIds.contains(_selKey(s)))
         .toList();
     if (selected.isEmpty) return;
     _clearSelection();
@@ -228,43 +237,101 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
 
 
   Future<void> _deleteSelected(BuildContext context) async {
+    final selectedCount = _selectedIds.length;
     final confirmed = await AppDialogs.showDestructiveConfirm(
       context,
       icon:         Icons.delete_outline_rounded,
       iconColor:    AppColors.emergency,
       iconBg:       AppColors.errorBg,
-      title:        'Delete ${_selectedIds.length} sessions?',
-      message:      'This permanently removes the selected sessions.',
+      title:        'Delete $selectedCount session${selectedCount == 1 ? '' : 's'}?',
+      message:      'This permanently removes the selected session${selectedCount == 1 ? '' : 's'}.',
       confirmLabel: 'Delete',
       confirmColor: AppColors.emergency,
       cancelLabel:  'Cancel',
     );
     if (confirmed != true || !mounted) return;
+
     final service = ref.read(sessionServiceProvider);
-    for (final id in _selectedIds) {
-      await service.deleteSession(int.parse(id));
+    final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+    final toDelete  = summaries
+        .where((s) => _selectedIds.contains(_selKey(s)))
+        .toList();
+
+    int succeeded = 0;
+    int failed    = 0;
+    for (final summary in toDelete) {
+      final ok = await service.deleteSummary(summary);
+      if (ok) {
+        succeeded++;
+      } else {
+        failed++;
+      }
     }
+
+    if (!mounted) return;
     ref.invalidate(sessionSummariesProvider);
     _clearSelection();
+
+    if (failed == 0) {
+      UIHelper.showSuccess(
+        context,
+        '$succeeded session${succeeded == 1 ? '' : 's'} deleted',
+      );
+    } else if (succeeded == 0) {
+      UIHelper.showError(
+        context,
+        'Failed to delete. Check your connection.',
+      );
+    } else {
+      UIHelper.showWarning(
+        context,
+        '$succeeded deleted, $failed failed — check your connection.',
+      );
+    }
+  }
+
+  /// Returns null if the current selection is comparable.
+  /// Returns a user-facing reason string if it isn't.
+  /// Checks are ordered cheap → expensive so the first failure wins.
+  String? _compareDisabledReason(List<SessionSummary> selected) {
+    final n = selected.length;
+    if (n == 0)  return 'Select 2–4 sessions to compare';
+    if (n == 1)  return 'Select at least 2 sessions to compare';
+    if (n > 4)   return 'Can\'t compare more than 4 sessions';
+
+    // Mode must match (Emergency vs Training vs Training-No-Feedback).
+    final firstMode = selected.first.mode;
+    final modeMismatch = selected.any((s) => s.mode != firstMode);
+    if (modeMismatch) {
+      return 'Can\'t compare. All sessions must be the same mode '
+          '(Training or Emergency)';
+    }
+
+    // Scenario must match (standard_adult vs pediatric).
+    final firstScenario = selected.first.scenario;
+    final scenarioMismatch = selected.any((s) => s.scenario != firstScenario);
+    if (scenarioMismatch) {
+      return 'Can\'t compare. All sessions must be the same scenario '
+          '(Adult or Pediatric)';
+    }
+
+    return null;
   }
 
   void _compareSelected() {
     final all      = ref.read(sessionSummariesProvider).valueOrNull ?? [];
     final selected = all
-        .where((s) => s.id != null && _selectedIds.contains(s.id.toString()))
+        .where((s) => _selectedIds.contains(_selKey(s)))
         .toList();
-    if (selected.length < 2) return;
 
-    // All sessions must share the same mode and scenario
-    final firstMode     = selected.first.mode;
-    final firstScenario = selected.first.scenario;
-    final mismatch = selected.any(
-          (s) => s.mode != firstMode || s.scenario != firstScenario,
-    );
-    if (mismatch) {
+    // The action button is disabled whenever this returns a reason, so under
+    // normal taps we won't get here with an invalid selection. This is a
+    // defensive guard in case the selection changes mid-tap.
+    final reason = _compareDisabledReason(selected);
+    if (reason != null) {
       UIHelper.showSnackbar(
         context,
-        message: 'Sessions must be the same mode and scenario to compare.',
+        message: reason,
         icon: Icons.warning_amber_rounded,
       );
       return;
@@ -298,9 +365,9 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
               // Select all
               Builder(builder: (ctx) {
                 final all = ref.read(sessionSummariesProvider).valueOrNull ?? [];
-                final allSelected = all
-                    .where((s) => s.id != null)
-                    .every((s) => _selectedIds.contains(s.id.toString()));
+                final selectable = all.where((s) => s.sessionStart != null);
+                final allSelected = selectable.isNotEmpty &&
+                    selectable.every((s) => _selectedIds.contains(_selKey(s)));
                 return IconButton(
                   icon: Icon(
                     allSelected
@@ -318,12 +385,28 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                   },
                 );
               }),
-              if (_selectedIds.length >= 2 && _selectedIds.length <= 4)
-                IconButton(
-                  icon:    const Icon(Icons.compare_arrows_rounded, color: AppColors.textOnDark),
-                  tooltip: 'Compare sessions',
-                  onPressed: _compareSelected,
-                ),
+              // Compare button — always visible during selection mode.
+              // Grays out + tooltip explains why when the selection isn't
+              // comparable (count out of range, mode/scenario mismatch,
+              // or includes an un-synced local-only session).
+              Builder(builder: (ctx) {
+                final all = ref.read(sessionSummariesProvider).valueOrNull ?? [];
+                final selected = all
+                    .where((s) => _selectedIds.contains(_selKey(s)))
+                    .toList();
+                final disabledReason = _compareDisabledReason(selected);
+                final enabled = disabledReason == null;
+                return IconButton(
+                  icon: Icon(
+                    Icons.compare_arrows_rounded,
+                    color: enabled
+                        ? AppColors.textOnDark
+                        : AppColors.textOnDark.withValues(alpha: 0.4),
+                  ),
+                  tooltip: enabled ? 'Compare sessions' : disabledReason,
+                  onPressed: enabled ? _compareSelected : null,
+                );
+              }),
               IconButton(
                 icon:    const Icon(Icons.download_outlined, color: AppColors.textOnDark),
                 tooltip: 'Export selected',
@@ -374,10 +457,23 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                     );
                     if (confirmed != true || !mounted) return;
                     final service = ref.read(sessionServiceProvider);
-                    for (final s in all) {
-                      if (s.id != null) await service.deleteSession(s.id!);
+                    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+
+                    // Route through deleteAllSummaries when possible (single
+                    // backend round-trip + local wipe). Falls back to a
+                    // per-item loop if not logged in or it fails.
+                    bool wipedInBulk = false;
+                    if (isLoggedIn) {
+                      wipedInBulk = await service.deleteAllSummaries();
                     }
+                    if (!wipedInBulk) {
+                      for (final s in all) {
+                        await service.deleteSummary(s);
+                      }
+                    }
+                    if (!mounted) return;
                     ref.invalidate(sessionSummariesProvider);
+                    UIHelper.showSuccess(context, 'All sessions deleted');
                   }
                 },
                 itemBuilder: (_) => [
@@ -437,10 +533,12 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                   final pending = locals
                       .where((d) => !d.syncedToBackend)
                       .toList();
-                  for (final detail in pending) {
+                  for (var detail in pending) {
                     final id = await service.saveDetail(detail);
-                    if (id != null) await SessionLocalStorage.markSynced(
-                        detail);
+                    if (id != null) {
+                      detail = detail.withId(id);
+                      await SessionLocalStorage.markSynced(detail);
+                    }
                   }
                 }
                 ref.invalidate(sessionSummariesProvider);
@@ -462,10 +560,12 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                           final locals = await SessionLocalStorage.loadAll();
                           final pending = locals.where((d) =>
                           !d.syncedToBackend).toList();
-                          for (final detail in pending) {
+                          for (var detail in pending) {
                             final id = await service.saveDetail(detail);
-                            if (id != null) await SessionLocalStorage
-                                .markSynced(detail);
+                            if (id != null) {
+                              detail = detail.withId(id);
+                              await SessionLocalStorage.markSynced(detail);
+                            }
                           }
                         }
                         ref.invalidate(sessionSummariesProvider);
@@ -628,7 +728,15 @@ class _SessionsList extends StatelessWidget {
                       itemCount: filtered.length,
                       itemBuilder: (context, i) {
                         final session = filtered[i];
-                        final idStr = session.id?.toString() ?? '';
+                        // Selection key = sessionStart truncated to seconds.
+                        // Matches _selKey() in _SessionHistoryScreenState so
+                        // backend-tracked and local-only sessions are both
+                        // selectable and uniquely identified.
+                        final idStr = session.sessionStart == null
+                            ? ''
+                            : SessionLocalStorage
+                            .keyMsFromStart(session.sessionStart!)
+                            .toString();
                         final isSelected =
                             selectionMode && selectedIds.contains(idStr);
                         final idx = all.indexOf(session);
@@ -645,10 +753,14 @@ class _SessionsList extends StatelessWidget {
                           prevGrade: prevGrade,
                           selectionMode: selectionMode,
                           isSelected: isSelected,
-                          onLongPress:
-                          session.id != null ? () => onLongPress(idStr) : null,
-                          onToggle:
-                          session.id != null ? () => onToggle(idStr) : null,
+                          // Local-only sessions are now selectable too —
+                          // gated on sessionStart, which every real session has.
+                          onLongPress: session.sessionStart != null
+                              ? () => onLongPress(idStr)
+                              : null,
+                          onToggle: session.sessionStart != null
+                              ? () => onToggle(idStr)
+                              : null,
                         );
                       },
                     ),

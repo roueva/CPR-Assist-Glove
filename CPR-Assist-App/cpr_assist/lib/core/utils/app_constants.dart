@@ -19,12 +19,10 @@ class AppConstants {
 
   /// Real-world path complexity multipliers vs straight-line distance
   static const double walkingMultiplier   = 1.3;  // 30% longer
-  static const double bicyclingMultiplier = 1.2;  // 20% longer
   static const double drivingMultiplier   = 1.4;  // 40% longer
 
   /// Average speeds for ETA calculation (km/h)
   static const double walkingSpeed   = 5.0;
-  static const double bicyclingSpeed = 15.0;
   static const double drivingSpeed   = 40.0;
 
   // ═══════════════════════════════════════════════════════
@@ -139,7 +137,7 @@ class AppConstants {
   static const String bleEventChannelUuid    = '19b10002-e8f2-537e-4f6c-d104768a1214';
 
   /// LIVE_STREAM packet size in bytes (v3.0)
-  static const int bleLiveStreamPacketSize   = 100;
+  static const int bleLiveStreamPacketSize = 108;
   static const int bleEventChannelPacketSize = 96;
 
   /// Legacy alias — kept so any remaining callers compile without change.
@@ -154,6 +152,93 @@ class AppConstants {
   static const int bleBufferOverflowThreshold = 500;
 
   static const Duration bleDisconnectDebounce = Duration(milliseconds: 300);
+
+  /// How long to wait, after a mid-session BLE disconnect, before giving up on
+  /// reconnect-and-recover and synthesising a SESSION_END locally. The glove
+  /// keeps recording standalone; this only governs the app-side UI flow.
+  static const Duration bleDisconnectSessionTimeout = Duration(seconds: 60);
+
+  /// Below this many compressions, the firmware and the app both treat the
+  /// session as trivial — no save, no grade screen, just exit. Must match
+  /// STORAGE_MIN_COMPRESSIONS_TO_SAVE in firmware config.h (currently 3).
+  static const int minCompressionsToSave = 3;
+
+// ═══════════════════════════════════════════════════════
+// GLOVE DIAGNOSTIC
+// ═══════════════════════════════════════════════════════
+  /// DFPlayer volume range (matches firmware 0–30)
+  static const int audioVolumeMin     = 0;
+  static const int audioVolumeMax     = 30;
+  static const int audioVolumeDefault = 22;
+
+  static const int hapticIntensityDefault = 100;
+
+  /// NeoPixel brightness range (matches firmware 0–255)
+  static const int diagLedBrightnessMin     = 0;
+  static const int diagLedBrightnessMax     = 255;
+  static const int diagLedBrightnessDefault = 180;
+
+  /// CSV ring buffer size (seconds of data at 25Hz = 40ms packets)
+  static const int diagCsvBufferSeconds = 30;
+  static const int diagCsvMaxRows       = 750;   // 30s × 25Hz
+
+  /// Expected WHO_AM_I value for LSM6DSOX
+  static const int lsm6dsoxWhoAmIExpected = 0x6C;
+
+  /// I2C scan channel bit positions
+  static const int diagI2cBitPalmImu    = 0;   // CH0 → 0x6B
+  static const int diagI2cBitWristImu   = 1;   // CH1 → 0x6A
+  static const int diagI2cBitMax30205   = 2;   // CH2 → 0x48
+  static const int diagI2cBitGxht30     = 3;   // CH3 → 0x44
+  static const int diagI2cBitMax30102R  = 4;   // CH4 → 0x57
+  static const int diagI2cBitMax30102P  = 5;   // CH5 → 0x57
+
+  // ═══════════════════════════════════════════════════════
+  // DIAGNOSTIC TEST THRESHOLDS
+  // Used by the guided "press now / tilt now / breathe on sensor"
+  // checks in the glove diagnostic sheet. These are intentionally
+  // generous — the goal is to confirm the sensor responds at all,
+  // not to verify clinical accuracy.
+  // ═══════════════════════════════════════════════════════
+
+  /// Guided-test capture window (how long we record after the user taps Start)
+  static const Duration diagTestWindow         = Duration(seconds: 6);
+  static const Duration diagTestWindowLong     = Duration(seconds: 15); // PPG, depth integration
+
+  /// History card row count (rolling table of recent samples)
+  static const int diagHistoryRows             = 6;
+
+  /// FSR — minimum peak force during "press now" test (N)
+  static const double diagFsrTestMinForceN     = 50.0;
+
+  /// IMU — minimum angle swing during "tilt / rotate" test (degrees)
+  static const double diagImuTestMinSwingDeg   = 30.0;
+
+  /// MAX30102 patient — minimum quality reached during "cover sensor" test
+  static const int    diagPpgPatientTestMinQuality = 40;
+
+  /// MAX30102 rescuer — acceptable HR range during "wear glove" test (BPM)
+  static const double diagPpgRescuerTestMinBpm = 40.0;
+  static const double diagPpgRescuerTestMaxBpm = 200.0;
+
+  /// MAX30205 — minimum temperature rise during "hold sensor" test (°C)
+  static const double diagTempPatientTestMinRiseC = 1.0;
+
+  /// GXHT30 — minimum humidity rise during "breathe on sensor" test (%RH)
+  static const double diagHumidityTestMinRise  = 10.0;
+
+  /// Depth integration — required number of force peaks during "5 compressions" test
+  static const int    diagDepthTestRequiredPeaks = 5;
+  /// Force level (N) that counts as a "peak" for the depth integration test
+  static const double diagDepthTestPeakForceN  = 50.0;
+  /// Force level (N) below which we consider a peak "complete" (the user released)
+  static const double diagDepthTestReleaseN    = 20.0;
+
+  /// Button — required number of presses during the button test
+  static const int    diagButtonTestRequiredPresses = 3;
+
+  /// Sparkline visible duration (last N seconds)
+  static const int    diagSparklineWindowSec   = 10;
 
   // ═══════════════════════════════════════════════════════
   // BATTERY THRESHOLDS (percentage)
@@ -205,6 +290,7 @@ class AEDMapUIConstants {
 
   static const double portraitNavInitial     = 0.48;
   static const double portraitNavMin         = 0.20;
+  static const double portraitNavMinSm   = 0.17;  // 1-line title
   static const double portraitNavMax         = 0.60;
 
   static const double portraitActiveNavInitial = 0.28;

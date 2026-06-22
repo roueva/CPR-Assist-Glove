@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:cpr_assist/core/core.dart';
 
@@ -8,7 +9,6 @@ import 'package:cpr_assist/core/core.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const _kAppVersion  = '1.0.0';
-const _kBuildNumber = '42';
 
 class HelpAboutScreen extends StatefulWidget {
   const HelpAboutScreen({super.key});
@@ -25,11 +25,13 @@ class _HelpAboutScreenState extends State<HelpAboutScreen> {
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
       appBar: _buildAppBar(context),
-      body: ListView(
-        padding: EdgeInsets.only(
-          top: AppSpacing.sm,
-          bottom: AppSpacing.sm + MediaQuery.paddingOf(context).bottom,
-        ),
+        body: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.only(
+              top: AppSpacing.sm,
+              bottom: AppSpacing.md,
+            ),
         children: [
           // ── App identity ─────────────────────────────────────────────────
           _AppIdentityCard(
@@ -102,21 +104,14 @@ class _HelpAboutScreenState extends State<HelpAboutScreen> {
             ),
           ]),
 
-          // ── CPR Quick Reference ──────────────────────────────────────────
-          const _SectionHeader(label: 'CPR Quick Reference'),
-          const _ReferenceCard(),
-
           // ── Support ──────────────────────────────────────────────────────
           const _SectionHeader(label: 'Support'),
           _SupportCard(),
 
-          // ── About ────────────────────────────────────────────────────────
-          const _SectionHeader(label: 'About'),
-          const _AboutCard(),
-
           const SizedBox(height: AppSpacing.xl),
         ],
       ),
+        ),
     );
   }
 
@@ -182,7 +177,7 @@ class _AppIdentityCard extends StatelessWidget {
           Text('CPR Assist', style: AppTypography.heading(size: 20)),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Version $_kAppVersion (build $_kBuildNumber)',
+            'Version $_kAppVersion',
             style: AppTypography.label(),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -309,78 +304,6 @@ class _FaqCardState extends State<_FaqCard> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CPR Quick Reference card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ReferenceCard extends StatelessWidget {
-  const _ReferenceCard();
-
-  static const _specs = [
-    ('Compression rate',      '100–120 / min'),
-    ('Compression depth',     '5–6 cm'),
-    ('Hand position',         'Centre of chest'),
-    ('Ratio (CPR:breaths)',   '30 : 2'),
-    ('Chest recoil',          'Full between compressions'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin:     const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: AppDecorations.card(),
-      child: Column(
-        children: _specs.asMap().entries.map((e) {
-          final isLast = e.key == _specs.length - 1;
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical:   AppSpacing.sm + AppSpacing.xs,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        e.value.$1,
-                        style: AppTypography.body(size: 13),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm + AppSpacing.xxs,
-                        vertical:   AppSpacing.xs,
-                      ),
-                      decoration: AppDecorations.tintedCard(
-                        radius: AppSpacing.cardRadiusSm,
-                      ),
-                      child: Text(
-                        e.value.$2,
-                        style: AppTypography.bodyBold(
-                          size:  13,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isLast)
-                const Divider(
-                  height:    AppSpacing.dividerThickness,
-                  color:     AppColors.divider,
-                  indent:    AppSpacing.md,
-                  endIndent: AppSpacing.md,
-                ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Support card
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -390,35 +313,17 @@ class _SupportCard extends StatelessWidget {
     return Container(
       margin:     const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: AppDecorations.card(),
-      child: Column(
-        children: [
-          _LinkTile(
-            icon:  Icons.email_outlined,
-            label: 'Contact Support',
-            onTap: () => UIHelper.showSnackbar(
-              context,
-              message: 'support@cprassist.app',
-              icon:    Icons.email_outlined,
+        child: Column(
+          children: [
+            _LinkTile(
+              icon:  Icons.email_outlined,
+              label: 'Contact Support',
+              onTap: () => launchUrl(
+                Uri.parse('mailto:noreply.cprassist@gmail.com'),
+              ),
             ),
-          ),
-          const Divider(height: AppSpacing.dividerThickness, color: AppColors.divider, indent: AppSpacing.md),
-          _LinkTile(
-            icon:  Icons.bug_report_outlined,
-            label: 'Report a Bug',
-            onTap: () => UIHelper.showSnackbar(
-              context,
-              message: 'Bug report coming soon',
-              icon:    Icons.bug_report_outlined,
-            ),
-          ),
-          const Divider(height: AppSpacing.dividerThickness, color: AppColors.divider, indent: AppSpacing.md),
-          _LinkTile(
-            icon:  Icons.privacy_tip_outlined,
-            label: 'Privacy Policy',
-            onTap: () {}, // TODO: launch URL
-          ),
-        ],
-      ),
+          ],
+        ),
     );
   }
 }
@@ -458,72 +363,6 @@ class _LinkTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// About card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AboutCard extends StatelessWidget {
-  const _AboutCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin:   const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      padding:  const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.card(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _AboutRow(label: 'Version',    value: '$_kAppVersion (build $_kBuildNumber)'),
-          const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
-          const _AboutRow(label: 'Built with', value: 'Flutter · Riverpod · BLE'),
-          const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
-          const Divider(height: AppSpacing.dividerThickness, color: AppColors.divider),
-          const SizedBox(height: AppSpacing.cardPadding - AppSpacing.xxs),
-          Text('Research Project', style: AppTypography.label()),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'CPR Assist Glove — Master\'s Thesis',
-            style: AppTypography.bodyMedium(size: 14),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            'Developed by Evanthia Rouka as part of a Master\'s thesis in Biomedical '
-                'Engineering at the Aristotle University of Thessaloniki (AUTH), '
-                'under the supervision of Prof. Panagiotis Bamidis.',
-            style: AppTypography.body(size: 13),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'The system is designed for use in a controlled research study approved '
-                'by the Research Ethics Committee (ΕΗΔΕ) of AUTH. Participation is '
-                'voluntary and data is anonymised.',
-            style: AppTypography.body(size: 13, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AboutRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _AboutRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.label()),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(value,  style: AppTypography.bodyMedium(size: 14)),
-      ],
     );
   }
 }

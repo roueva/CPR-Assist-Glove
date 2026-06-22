@@ -251,6 +251,7 @@ class _EmergencyPatientTab extends StatelessWidget {
               rescuerHR:   rescuerHR,
               rescuerSpO2: rescuerSpO2,
               detail:      d,
+              isEmergency: true,
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -1570,14 +1571,6 @@ class _PatientEnvironmentSection extends StatelessWidget {
             value:     '${detail.patientTemperature!.toStringAsFixed(1)} °C',
             note: 'Glove sensor, carotid contact',
             iconColor: AppColors.error,
-          ),
-        if (detail.rescuerWristTempStart != null)
-          _DetailRow(
-            icon:      Icons.device_thermostat_rounded,
-            label:     'Room Temperature',
-            value:     '${detail.rescuerWristTempStart!.toStringAsFixed(1)} °C',
-            note:      'At session start',
-            iconColor: AppColors.textSecondary,
           ),
       ],
     );

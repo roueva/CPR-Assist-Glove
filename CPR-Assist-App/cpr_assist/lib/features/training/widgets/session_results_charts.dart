@@ -128,7 +128,7 @@ class _DepthRecoilChartCardState extends State<_DepthRecoilChartCard> {
     if (spots.isEmpty) {
       return CprChartCard(
         title:    'Compression Depth',
-        subtitle: 'Green band = target depth · Amber band = recoil',
+        subtitle: 'Depth per compression · Target depth and recoil',
         lineColor: AppColors.primary,
         child: const SizedBox.shrink(),
       );
@@ -136,7 +136,7 @@ class _DepthRecoilChartCardState extends State<_DepthRecoilChartCard> {
 
     return CprChartCard(
       title:    'Compression Depth',
-      subtitle: 'Green band = target depth · Amber band = recoil',
+      subtitle: 'Depth per compression · Target depth and recoil',
       lineColor: AppColors.primary,
       dropdown: CprWindowDropdown(
         value:         _windowSecs,
@@ -187,11 +187,11 @@ class _DepthRecoilChartCardState extends State<_DepthRecoilChartCard> {
           reservedSize: 28,
         ),
         tooltipValue: (_, spot) {
-          final isPeak = spot.y > kCprRecoilThresholdCm;
+          final isPeak = spot.y > 3.0;
           return '${spot.y.toStringAsFixed(1)} cm ${isPeak ? 'depth' : 'recoil'}';
         },
         tooltipValueColor: (_, spot) {
-          final isPeak = spot.y > kCprRecoilThresholdCm;
+          final isPeak = spot.y > 3.0;
           if (isPeak) {
             return (spot.y >= tMin && spot.y <= tMax)
                 ? AppColors.success : AppColors.error;

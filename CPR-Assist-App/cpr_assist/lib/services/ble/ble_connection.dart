@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_foreground_task/models/notification_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -14,6 +15,7 @@ import '../../features/training/services/pulse_check_event.dart';
 import '../../features/training/services/rescuer_vital_snapshot.dart';
 import 'ble_data_processor.dart';
 import 'offline_session_parser.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BLEConnection  —  BLE Spec v3.0
@@ -69,6 +71,7 @@ class BLEConnection {
 
   final List<double> _ppgBuffer = [];   // accumulates ppgRaw during pulse check window
   double _bestPatientSpO2 = 0.0;        // best spO2Patient reading during pulse check
+  int    _bestLivePulseClass = 0;       // best classification inferred during window
 
   // ── Rescuer vital sampling state ──────────────────────────────────────────
   int _lastVitalSnapshotMs = 0;
@@ -95,6 +98,7 @@ class BLEConnection {
   bool _bluetoothWasOff  = false;
   int  _reconnectAttempts = 0;
   int _scanAttempts = 0;
+  bool _diagActive = false;
   static const int _maxScanAttempts = 8; // 8 × 15s ≈ 2 min
 
   BluetoothDevice?                        _connectedDevice;
@@ -109,6 +113,8 @@ class BLEConnection {
 
   Timer? _debounceTimer;
   Timer? _reconnectTimer;
+  Timer? _disconnectSessionWatchdog;
+  Map<String, dynamic>? _lastLiveStreamSnapshot;
 
 
   // ── Dependencies ──────────────────────────────────────────────────────────
@@ -415,6 +421,7 @@ class BLEConnection {
       _reconnectAttempts = 0;
       _scanAttempts      = 0;
       _updateStatus('Connected');
+      _cancelDisconnectSessionWatchdog();
       // Sync wall-clock time so offline sessions have correct timestamps
       unawaited(sendSyncTime());
       // Re-sync mode and scenario so glove state matches app state after reboot/reconnect.
@@ -440,7 +447,7 @@ class BLEConnection {
 
   // ── LIVE_STREAM packet handler ────────────────────────────────────────────
   void _handleLivePacket(List<int> packet) {
-    final parsed = _processor.parseLiveStream(packet);
+    final parsed = _processor.parseLiveStream(packet, diagActive: _diagActive);
     if (parsed == null) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -458,11 +465,36 @@ class BLEConnection {
     // when compressionCount increments we have the real peak, not whatever
     // the instantaneous depth happens to be at that exact packet.
     if (_sessionActive && parsed.isContinuousData) {
+
+      _lastLiveStreamSnapshot = {
+        'totalCompressions':  parsed.totalCompressions ?? 0,
+        'correctDepth':       parsed.correctDepth ?? 0,
+        'correctFrequency':   parsed.correctFrequency ?? 0,
+        'correctRecoil':      parsed.correctRecoil ?? 0,
+        'depthRateCombo':     parsed.depthRateCombo ?? 0,
+        'correctPosture':     parsed.correctPosture ?? 0,
+        'leaningCount':       parsed.leaningCount ?? 0,
+        'overForceCount':     parsed.overForceCount ?? 0,
+        'tooDeepCount':       parsed.tooDeepCount ?? 0,
+        'currentMode':        parsed.currentMode,
+        // Fields needed so the watchdog-synthesised SESSION_END has real values:
+        'peakDepth':          _latchedLastPeakDepthCm > 0 ? _latchedLastPeakDepthCm : _lastRecordedPeakDepth,
+        'compressionDepthSD': 0.0,
+        'fatigueOnsetIndex':  0,
+        'rescuerSwapCount':   0,
+        'timeToFirstCompressionMs': 0,
+        'noFlowIntervals':    0,
+        'pulseDetected':      null,
+      };
+
       if (parsed.depth > _pendingPeakDepth) {
         _pendingPeakDepth = parsed.depth;
         debugPrint('[DBG-APP] liveDepth=${parsed.depth.toStringAsFixed(2)} '
             'pendingPeak=${_pendingPeakDepth.toStringAsFixed(2)} '
             'cnt=${parsed.compressionCount} peakTs=${parsed.peakTimestampMs}');
+      }
+      if (parsed.lastPeakDepthCm > 0) {
+        _latchedLastPeakDepthCm = parsed.lastPeakDepthCm;
       }
       if (parsed.force > _pendingPeakForce) {
         _pendingPeakForce = parsed.force;
@@ -473,15 +505,47 @@ class BLEConnection {
     if (_sessionActive && parsed.isContinuousData &&
         parsed.compressionCount > _lastCompressionCount) {
       _lastCompressionCount = parsed.compressionCount;
-      final recordDepth = _pendingPeakDepth > 0
-          ? _pendingPeakDepth
-          : (parsed.depthTrend > 0
-          ? parsed.depthTrend
-          : (parsed.depth > 0 ? parsed.depth : 0.0));
+      // The valleyDepth in this packet is the recoil of the PREVIOUS compression
+      // (the inter-compression minimum between comp N-1 and comp N, captured at
+      // the start of comp N's downstroke in depth.cpp). Patch it retroactively
+      // onto the last stored event so each compression holds its own valley.
+      if (_compressionEvents.isNotEmpty && parsed.valleyDepth > 0) {
+        final last = _compressionEvents.last;
+        _compressionEvents[_compressionEvents.length - 1] = CompressionEvent(
+          timestampMs:         last.timestampMs,
+          depth:               last.depth,
+          valleyDepth: parsed.valleyDepth,
+          instantaneousRate:   last.instantaneousRate,
+          frequency:           last.frequency,
+          force:               last.force,
+          peakForce:           last.peakForce,
+          recoilAchieved:      last.recoilAchieved,
+          overForce:           last.overForce,
+          postureOk:           last.postureOk,
+          leaningDetected:     last.leaningDetected,
+          wristAlignmentAngle: last.wristAlignmentAngle,
+          wristFlexionAngle:   last.wristFlexionAngle,
+          compressionAxisDev:  last.compressionAxisDev,
+          effectiveDepth:      last.effectiveDepth,
+          downstrokeTimeMs:    last.downstrokeTimeMs,
+          peakTimestampMs:     last.peakTimestampMs,
+          valleyTimestampMs:   parsed.valleyTimestampMs,
+        );
+      }
+// lastPeakDepthCm is the fused, calibrated depth from the firmware's
+// cycle-completion block. This is always more accurate than the live bar max.
+      // Always use the firmware's fused peak (lastPeakDepthCm), never the live bar.
+// The live bar (_pendingPeakDepth) is the raw uncorrected integrator max and
+// is systematically too high. If the latch somehow has no value yet, record
+// 0 rather than substituting the wrong (live-bar) number.
+      final recordDepth = _latchedLastPeakDepthCm;
+// Do NOT zero the latch — keep it until the firmware sends the next
+// compression's fused value. Zeroing caused the fallback to the live bar.
       final recordPeakForce = _pendingPeakForce > 0
           ? _pendingPeakForce
           : parsed.force;
       _pendingPeakDepth = 0.0; // reset for next compression
+      _lastRecordedPeakDepth = recordDepth;
       _pendingPeakForce = 0.0;
       final compressionTimestampMs = parsed.peakTimestampMs > 0
           ? parsed.peakTimestampMs
@@ -497,7 +561,6 @@ class BLEConnection {
       _compressionEvents.add(CompressionEvent(
         timestampMs:         compressionTimestampMs,
         depth:               recordDepth,
-        valleyDepth:         parsed.valleyDepth,
         instantaneousRate:   parsed.instantaneousRate,
         frequency:           parsed.frequency,
         force:               parsed.force,
@@ -514,7 +577,7 @@ class BLEConnection {
         ),
         downstrokeTimeMs:    downstrokeMs,
         peakTimestampMs:     parsed.peakTimestampMs,
-        valleyTimestampMs:   parsed.valleyTimestampMs,
+        valleyTimestampMs:   0,
       ));
 
       // Remember this valley for next compression's downstroke calc
@@ -555,6 +618,18 @@ class BLEConnection {
     if (_sessionActive && _pulseCheckOpen &&
         parsed.spO2Patient > 0 && parsed.spO2Patient > _bestPatientSpO2) {
       _bestPatientSpO2 = parsed.spO2Patient;
+    }
+// Track best live classification during window (best wins for storage)
+    if (_sessionActive && _pulseCheckOpen) {
+      final sq = parsed.ppgSignalQuality;
+      final hr = parsed.heartRatePatient;
+      int liveClass = 0;
+      if (sq >= 60 && hr >= 30.0 && hr <= 180.0) {
+        liveClass = 2;
+      } else if (sq >= 40) {
+        liveClass = 1;
+      }
+      if (liveClass > _bestLivePulseClass) _bestLivePulseClass = liveClass;
     }
 
     // Broadcast everything to UI screens
@@ -612,17 +687,31 @@ class BLEConnection {
       'isCharging':         parsed.isCharging,
       'peakTimestampMs':   parsed.peakTimestampMs,
       'valleyTimestampMs': parsed.valleyTimestampMs,
-      'lastPeakDepthCm':   parsed.lastPeakDepthCm,
+      'lastPeakDepthCm':   _lastRecordedPeakDepth,
+
+      'diagRawFsrAdc':     parsed.diagRawFsrAdc,
+      'diagPalmWhoAmI':    parsed.diagPalmWhoAmI,
+      'diagWristWhoAmI':   parsed.diagWristWhoAmI,
+      'diagI2cScanMask':   parsed.diagI2cScanMask,
+      'diagActionResult':  parsed.diagActionResult,
+      'diagPalmAccelMag':   parsed.diagPalmAccelMag,
+      'diagWristAccelMag':  parsed.diagWristAccelMag,
+      'diagRescuerPpgFiltered': parsed.diagRescuerPpgFiltered,
+      'diagActive':         parsed.diagActive,
     });
   }
 
   // Track last compression count to detect new compressions in live stream
   int _lastCompressionCount = 0;
   int _lastVentilationCount = 0;
+  double _lastRecordedPeakDepth = 0.0;
   double _pendingPeakDepth = 0.0;
   // Track per-compression peak force and downstroke timing
   double _pendingPeakForce       = 0.0;  // max force seen since last compression
   int _prevValleyTimestampMs = 0;    // valley_ts of current compression (for downstroke calc)
+  double _latchedLastPeakDepthCm = 0.0;
+
+  static int _bestOf(int a, int b) => a > b ? a : b;
 
   // ── EVENT_CHANNEL packet handler ──────────────────────────────────────────
   void _handleEventPacket(List<int> packet) {
@@ -636,6 +725,7 @@ class BLEConnection {
 
     // ── SESSION_START ────────────────────────────────────────────────────────
     if (parsed.isStartPing) {
+      _cancelDisconnectSessionWatchdog();
       _compressionEvents.clear();
       _ventilationEvents.clear();
       _pulseCheckEvents.clear();
@@ -647,11 +737,14 @@ class BLEConnection {
       _sessionStartMs         = now;
       _sessionMode            = parsed.currentMode;
       _sessionActive          = true;
+      _startForegroundTask();
       _pulseCheckOpen         = false;
       _lastCompressionCount   = 0;
       _ppgBuffer.clear();
       _bestPatientSpO2 = 0.0;
       _pendingPeakDepth       = 0.0;
+      _lastRecordedPeakDepth  = 0.0;
+      _latchedLastPeakDepthCm = 0.0;
       _lastVentilationCount   = 0;
       _lastVitalSnapshotMs    = 0;
       debugPrint('BLE: SESSION_START mode=${parsed.currentMode}');
@@ -666,7 +759,9 @@ class BLEConnection {
 
     // ── SESSION_END ──────────────────────────────────────────────────────────
     if (parsed.isEndPing) {
+      _cancelDisconnectSessionWatchdog();
       _sessionActive = false;
+      _stopForegroundTask();
       debugPrint('BLE: SESSION_END totalCompressions=${parsed.totalCompressions}');
       _dataController.add({
         'isStartPing':        false,
@@ -750,7 +845,7 @@ class BLEConnection {
       _pulseCheckEvents.add(PulseCheckEvent(
         timestampMs:    timestampMs,
         intervalNumber: parsed.intervalNumber ?? _pulseCheckEvents.length + 1,
-        classification: parsed.pulseClassification ?? 0,
+        classification: _bestOf(parsed.pulseClassification ?? 0, _bestLivePulseClass),
         detectedBpm:    parsed.detectedBPM ?? 0.0,
         confidence:     parsed.confidencePct ?? 0,
         detectorACount: parsed.detectorACount ?? 0,
@@ -760,6 +855,7 @@ class BLEConnection {
       ));
       _ppgBuffer.clear();
       _bestPatientSpO2 = 0.0;
+      _bestLivePulseClass = 0;
       debugPrint(
         'BLE: PULSE_CHECK_RESULT classification=${parsed.pulseClassification} '
             'bpm=${parsed.detectedBPM}',
@@ -818,6 +914,7 @@ class BLEConnection {
 
     // ── PENDING_LOCAL_DATA ───────────────────────────────────────────────────
     if (parsed.isPendingLocalData) {
+      _cancelDisconnectSessionWatchdog();
       debugPrint('BLE: PENDING_LOCAL_DATA count=${parsed.pendingSessionCount}');
       _dataController.add({
         'isPendingLocalData':  true,
@@ -885,6 +982,10 @@ class BLEConnection {
         'selftestWarnMask':     parsed.selftestWarnMask,
         'selftestCriticalMask': parsed.selftestCriticalMask,
         'selftestBatteryPct':   parsed.selftestBatteryPct,
+        'selftestI2cScanMask':  parsed.selftestI2cScanMask,
+        'selftestPalmWhoAmI':   parsed.selftestPalmWhoAmI,
+        'selftestWristWhoAmI':  parsed.selftestWristWhoAmI,
+        'selftestReasonCodes':  parsed.selftestReasonCodes,
       };
 
       _dataController.add(result);
@@ -927,6 +1028,32 @@ class BLEConnection {
   /// 0xF2 — Toggle haptic/audio/LED feedback. true=on false=off.
   Future<bool> sendFeedbackSet({required bool enabled}) =>
       _writeCommand([kCmdFeedbackSet, enabled ? 1 : 0]);
+  /// 0xFE — Per-channel feedback control.
+  /// Bit 0 = audio (DFPlayer), bit 1 = haptic (motor), bit 2 = visual (NeoPixels).
+  Future<bool> sendSetFeedbackChannels({
+    required bool audio,
+    required bool haptic,
+    required bool visual,
+  }) {
+    final mask = (audio  ? 0x01 : 0)
+    | (haptic ? 0x02 : 0)
+    | (visual ? 0x04 : 0);
+    return _writeCommand([kCmdSetFeedbackCh, mask]);
+  }
+
+  /// 0xFF — Set audio volume (0–30) and motor intensity (0–100).
+  Future<bool> sendSetIntensity({
+    required int audioVolume,
+    required int motorPercent,
+  }) {
+    final av = audioVolume.clamp(0, 30);
+    final mp = motorPercent.clamp(0, 100);
+    return _writeCommand([kCmdSetVolume, av, mp]);
+  }
+
+  /// 0xEB — Set NeoPixel master brightness (0–255). 0 = LEDs off.
+  Future<bool> sendSetLedBrightness(int brightness) =>
+      _writeCommand([kCmdSetLedBrightness, brightness.clamp(0, 255)]);
 
   // /// 0xF3 — Trigger session start (equivalent to physical button press).
   // Future<bool> sendStart() =>
@@ -944,7 +1071,7 @@ class BLEConnection {
   Future<bool> sendConfirmReceived(int index) =>
       _writeCommand([kCmdConfirmReceived, index]);
 
-  /// 0xF7 — Trigger brightness sweep + force baseline recalibration.
+  /// 0xF7 — Reset force baseline and force→depth k. Glove re-learns on next session.
   Future<bool> sendCalibrate() =>
       _writeCommand([kCmdCalibrate]);
 
@@ -988,10 +1115,28 @@ class BLEConnection {
   Future<bool> sendSetScenario(int scenario) =>
       _writeCommand([kCmdSetScenario, scenario.clamp(0, 1)]);
 
+  Future<bool> sendDiagStart() async {
+    _diagActive = true;
+    return _writeCommand([kCmdDiagStart]);
+  }
+
+  /// 0xFF — Exit diagnostic mode.
+  Future<bool> sendDiagStop() async {
+    _diagActive = false;
+    return _writeCommand([kCmdDiagStop]);
+  }
+
+  /// 0xEE — Trigger a one-shot diagnostic action.
+  Future<bool> sendDiagAction(int action, {int param = 0}) =>
+      _writeCommand([kCmdDiagAction, action, param]);
+
   // ── Disconnection handling ────────────────────────────────────────────────
   void _handleDisconnection() {
     if (_connectionState == BluetoothConnectionState.connected) return;
     _debounceTimer?.cancel();
+    _chunkBuffers.clear();
+    _chunkTotals.clear();
+    _diagActive = false;
     _debounceTimer = Timer(
       AppConstants.bleDisconnectDebounce,
       _processDisconnection,
@@ -1003,8 +1148,12 @@ class BLEConnection {
     if (_userDisconnected) {
       _sessionActive = false;
       _pulseCheckOpen = false;
+      _stopForegroundTask();
       _updateStatus('Disconnected');
     } else {
+      if (_sessionActive) {
+        _startDisconnectSessionWatchdog();
+      }
       _updateStatus('Disconnected — Reconnecting…');
       _autoReconnect();
     }
@@ -1016,8 +1165,12 @@ class BLEConnection {
 
     if (_reconnectAttempts >= AppConstants.bleMaxReconnectAttempts) {
       debugPrint('BLE: max reconnect attempts reached');
-      _updateStatus('Connection Lost — Tap to Retry');
       _reconnectAttempts = 0;
+      if (_sessionActive) {
+        _updateStatus('Connection Lost — Session Running on Glove');
+      } else {
+        _updateStatus('Connection Lost — Tap to Retry');
+      }
       return;
     }
 
@@ -1038,12 +1191,44 @@ class BLEConnection {
     });
   }
 
+  // ── Disconnect-mid-session watchdog ──────────────────────────────────────
+// If the glove disconnects while a session is active, give it 60s to either
+// (a) reconnect and stream the saved session via PENDING_LOCAL_DATA, or
+// (b) fail entirely. On (b), synthesise a SESSION_END from the last
+// LIVE_STREAM snapshot so the live screen can navigate to the grade screen
+// instead of hanging.
+  void _startDisconnectSessionWatchdog() {
+    _disconnectSessionWatchdog?.cancel();
+    _disconnectSessionWatchdog = Timer(
+      AppConstants.bleDisconnectSessionTimeout,
+          () {
+        if (!_sessionActive) return;  // already recovered or ended cleanly
+        debugPrint('BLE: disconnect-session watchdog fired — '
+            'synthesising SESSION_END');
+        _sessionActive = false;
+        final snap = _lastLiveStreamSnapshot ?? <String, dynamic>{};
+        _dataController.add({
+          ...snap,
+          'isStartPing':     false,
+          'isEndPing':       true,
+          'wasInterrupted':  true,
+        });
+      },
+    );
+  }
+
+  void _cancelDisconnectSessionWatchdog() {
+    _disconnectSessionWatchdog?.cancel();
+    _disconnectSessionWatchdog = null;
+  }
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   void _cleanupConnection() {
     _liveStreamSub?.cancel();
     _eventChanSub?.cancel();
     _connStateSub?.cancel();
     _debounceTimer?.cancel();
+    _diagActive = false;
     _eventCharacteristic = null;
 
     _connectedDevice?.disconnect().catchError(
@@ -1116,6 +1301,7 @@ class BLEConnection {
 
   void dispose() {
     _debounceTimer?.cancel();
+    _disconnectSessionWatchdog?.cancel();
     _reconnectTimer?.cancel();
     _scanSub?.cancel();
     _liveStreamSub?.cancel();
@@ -1129,4 +1315,30 @@ class BLEConnection {
   // ── Helpers ───────────────────────────────────────────────────────────────
   Future<bool> _isBluetoothOn() async =>
       await FlutterBluePlus.adapterState.first == BluetoothAdapterState.on;
+
+  void _startForegroundTask() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'cpr_session',
+        channelName: 'CPR Session',
+        channelDescription: 'Keeps BLE connection alive during CPR session',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.nothing(),
+        autoRunOnBoot: false,
+      ),
+    );
+    FlutterForegroundTask.startService(
+      serviceId: 1,
+      notificationTitle: 'CPR Session Active',
+      notificationText: 'Glove connected — recording in progress',
+    );
+  }
+
+  void _stopForegroundTask() {
+    FlutterForegroundTask.stopService();
+  }
 }

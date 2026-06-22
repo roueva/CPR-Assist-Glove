@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/utils/app_constants.dart';
 import '../features/aed_map/services/aed_service.dart';
+import '../features/training/screens/session_service.dart';
+import '../features/training/services/session_local_storage.dart';
 import '../models/aed_models.dart';
 import '../services/ble/ble_connection.dart';
 import '../services/network/network_service.dart';
@@ -51,10 +54,52 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
       maxBpm: scenario.targetRateMax,
     );
     final settings = ref.read(settingsProvider);
-    // ⚠️ TODO(firmware): when 0xFE SET_FEEDBACK_CHANNELS is implemented, send
-// per-channel bitmask instead of single boolean.
-    final feedbackOn = settings.hapticFeedback || settings.audioFeedback || settings.visualFeedback;
-    connection.sendFeedbackSet(enabled: feedbackOn);
+    connection.sendSetFeedbackChannels(
+      audio:  settings.audioVolume       > 0,
+      haptic: settings.hapticIntensity   > 0,
+      visual: settings.gloveLedBrightness > 0,
+    );
+    connection.sendSetIntensity(
+      audioVolume:  settings.audioVolume,
+      motorPercent: settings.hapticIntensity,
+    );
+    // Always sync LED brightness — glove boots at NEOPIXEL_DEFAULT_BRIGHTNESS (180)
+    // which may not match the user's saved preference.
+    connection.sendSetLedBrightness(settings.gloveLedBrightness);
+
+    // Ventilation cycle
+    final ventRatio = settings.ventilationRatio;
+    int ventComps = 30, ventBreaths = 2;
+    if      (ventRatio == '15:2')              { ventComps = 15; ventBreaths = 2; }
+    else if (ventRatio == 'compressions_only') { ventComps = 0;  ventBreaths = 0; }
+    connection.sendSetVentilation(
+      compressionsPerCycle: ventComps,
+      ventilationsPerPause: ventBreaths,
+    );
+    // Persistent offline-session handler — runs regardless of which screen is
+    // visible. When the glove sends PENDING_LOCAL_DATA on connect, BLEConnection
+    // parses each chunk and calls this. The live screen may override this with its
+    // own handler (which also shows a snackbar); that is fine — the live screen
+    // clears it in dispose() and this provider-level handler takes over again.
+    connection.onOfflineSessionParsed = (detail, sessionIndex) async {
+      final service = SessionService(ref.read(networkServiceProvider));
+      if (detail.mode != 'emergency') {
+        detail = detail.withGrade(service.calculateGradeFromDetail(detail));
+      }
+      await service.saveLocalOnly(detail);
+      final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+      if (isLoggedIn) {
+        final savedId = await service.saveDetail(detail);
+        if (savedId != null) {
+          detail = detail.withId(savedId);
+          await SessionLocalStorage.markSynced(detail);
+        }
+      }
+      await connection.sendConfirmReceived(sessionIndex);
+      debugPrint('BLE: offline session $sessionIndex saved '
+          '(${detail.compressionCount} compressions)');
+    };
+
   });
   return connection;
 });
@@ -248,13 +293,11 @@ enum CprScenario {
 }
 
 final scenarioProvider = StateNotifierProvider<ScenarioNotifier, CprScenario>((ref) {
-  final defaultScenario = ref.watch(settingsProvider).defaultScenario;
-  return ScenarioNotifier(defaultScenario);
+  return ScenarioNotifier(CprScenario.standardAdult);
 });
 
 class ScenarioNotifier extends StateNotifier<CprScenario> {
-  ScenarioNotifier(String defaultScenario)
-      : super(CprScenario.fromString(defaultScenario));
+  ScenarioNotifier(CprScenario initial) : super(initial);
 
   void setScenario(CprScenario s) => state = s;
 
@@ -552,81 +595,49 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppSettings {
-  final bool   hapticFeedback;
-  final bool   audioFeedback;
-  // ⚠️ TODO(firmware): visualFeedback currently maps to the same 0xF2 sendFeedbackSet
-  // as haptic+audio (single boolean). When firmware adds 0xFE SET_FEEDBACK_CHANNELS
-  // bitmask command, update bleConnectionProvider reconnect sync and all sendFeedbackSet
-  // calls to send per-channel bytes instead.
-  final bool   visualFeedback;
-  final bool   showCprMetrics;    // false = hide entire CPR metrics card on live screen
   final bool   keepScreenOn;
   final bool   autoSwitchToCPR;
   final bool   notifyOnDisconnect;
-  final String compressionUnit;
-  final bool   showChecklist;
-  final String defaultScenario;
-  final String defaultMode;       // 'emergency' | 'training'
-  final bool   noFeedbackMode;
-  final bool   trainingReminders;
-  final String reminderFrequency; // 'daily' | 'weekly'
-  final bool   achievementAlerts;
-  final bool   nearbyEmergencyAlerts;
+  final int  gloveLedBrightness;   // 0–255
+  /// Ventilation cycle: '30:2', '15:2', or 'compressions_only'.
+  final String ventilationRatio;
+  final int audioVolume;     // 0–30 (DFPlayer scale)
+  final int hapticIntensity; // 0–100
+  final bool syncWifiOnly;
 
   const AppSettings({
-    this.hapticFeedback        = true,
-    this.audioFeedback         = true,
-    this.visualFeedback        = true,
-    this.showCprMetrics        = true,
     this.keepScreenOn          = true,
     this.autoSwitchToCPR       = true,
     this.notifyOnDisconnect    = true,
-    this.compressionUnit       = 'cm',
-    this.showChecklist         = false,
-    this.defaultScenario       = 'standard_adult',
-    this.defaultMode           = 'emergency',
-    this.noFeedbackMode        = false,
-    this.trainingReminders     = false,
-    this.reminderFrequency     = 'weekly',
-    this.achievementAlerts     = true,
-    this.nearbyEmergencyAlerts = false,
+    this.gloveLedBrightness  = AppConstants.diagLedBrightnessDefault,
+    this.ventilationRatio      = '30:2',
+    this.audioVolume           = AppConstants.audioVolumeDefault,
+    this.hapticIntensity       = AppConstants.hapticIntensityDefault,
+    this.syncWifiOnly          = false,
   });
 
   AppSettings copyWith({
     bool?   hapticFeedback,
     bool?   audioFeedback,
     bool?   visualFeedback,
-    bool?   showCprMetrics,
     bool?   keepScreenOn,
     bool?   autoSwitchToCPR,
     bool?   notifyOnDisconnect,
-    String? compressionUnit,
-    bool?   showChecklist,
-    String? defaultScenario,
-    String? defaultMode,
-    bool?   noFeedbackMode,
-    bool?   trainingReminders,
-    String? reminderFrequency,
-    bool?   achievementAlerts,
-    bool?   nearbyEmergencyAlerts,
+    int? gloveLedBrightness,
+    String? ventilationRatio,
+    int? audioVolume,
+    int? hapticIntensity,
+    bool? syncWifiOnly,
   }) =>
       AppSettings(
-        hapticFeedback:        hapticFeedback        ?? this.hapticFeedback,
-        audioFeedback:         audioFeedback         ?? this.audioFeedback,
-        visualFeedback:        visualFeedback        ?? this.visualFeedback,
-        showCprMetrics:        showCprMetrics        ?? this.showCprMetrics,
         keepScreenOn:          keepScreenOn          ?? this.keepScreenOn,
         autoSwitchToCPR:       autoSwitchToCPR       ?? this.autoSwitchToCPR,
         notifyOnDisconnect:    notifyOnDisconnect    ?? this.notifyOnDisconnect,
-        compressionUnit:       compressionUnit       ?? this.compressionUnit,
-        showChecklist:         showChecklist         ?? this.showChecklist,
-        defaultScenario:       defaultScenario       ?? this.defaultScenario,
-        defaultMode:           defaultMode           ?? this.defaultMode,
-        noFeedbackMode:        noFeedbackMode        ?? this.noFeedbackMode,
-        trainingReminders:     trainingReminders     ?? this.trainingReminders,
-        reminderFrequency:     reminderFrequency     ?? this.reminderFrequency,
-        achievementAlerts:     achievementAlerts     ?? this.achievementAlerts,
-        nearbyEmergencyAlerts: nearbyEmergencyAlerts ?? this.nearbyEmergencyAlerts,
+        gloveLedBrightness:  gloveLedBrightness  ?? this.gloveLedBrightness,
+        ventilationRatio: ventilationRatio ?? this.ventilationRatio,
+        audioVolume:      audioVolume      ?? this.audioVolume,
+        hapticIntensity:  hapticIntensity  ?? this.hapticIntensity,
+        syncWifiOnly:     syncWifiOnly     ?? this.syncWifiOnly,
       );
 }
 
@@ -636,64 +647,89 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _kHaptic         = 'settings_hapticFeedback';
   static const _kAudio          = 'settings_audioFeedback';
   static const _kVisual         = 'settings_visualFeedback';
-  static const _kCprMetrics     = 'settings_showCprMetrics';
   static const _kScreenOn       = 'settings_keepScreenOn';
+  static const _kScenario = 'settings_scenario';
   static const _kAutoSwitch     = 'settings_autoSwitchToCPR';
   static const _kDisconnect     = 'settings_notifyOnDisconnect';
-  static const _kUnit           = 'settings_compressionUnit';
-  static const _kChecklist      = 'settings_showChecklist';
-  static const _kDefaultScenario = 'settings_defaultScenario';
-  static const _kDefaultMode    = 'settings_defaultMode';
-  static const _kNoFeedback     = 'settings_noFeedbackMode';
-  static const _kTrainReminders = 'settings_trainingReminders';
-  static const _kReminderFreq   = 'settings_reminderFrequency';
-  static const _kAchievAlerts   = 'settings_achievementAlerts';
-  static const _kNearbyAlerts   = 'settings_nearbyEmergencyAlerts';
+  static const _kLedBrightness  = 'settings_gloveLedBrightness';
+  static const _kVentRatio = 'settings_ventilationRatio';
+  static const _kAudioVol     = 'settings_audioVolume';
+  static const _kHapticInt    = 'settings_hapticIntensity';
+  static const _kSyncWifi = 'settings_syncWifiOnly';
 
   SettingsNotifier(this._prefs) : super(_load(_prefs));
 
   static AppSettings _load(SharedPreferences p) => AppSettings(
-    hapticFeedback:        p.getBool(_kHaptic)         ?? true,
-    audioFeedback:         p.getBool(_kAudio)          ?? true,
-    visualFeedback:        p.getBool(_kVisual)         ?? true,
-    showCprMetrics:        p.getBool(_kCprMetrics)     ?? true,
     keepScreenOn:          p.getBool(_kScreenOn)       ?? true,
     autoSwitchToCPR:       p.getBool(_kAutoSwitch)     ?? true,
     notifyOnDisconnect:    p.getBool(_kDisconnect)     ?? true,
-    compressionUnit:       p.getString(_kUnit)         ?? 'cm',
-    showChecklist:         p.getBool(_kChecklist)      ?? false,
-    defaultScenario:       p.getString(_kDefaultScenario) ?? 'standard_adult',
-    defaultMode:           p.getString(_kDefaultMode)  ?? 'emergency',
-    noFeedbackMode:        p.getBool(_kNoFeedback)     ?? false,
-    trainingReminders:     p.getBool(_kTrainReminders) ?? false,
-    reminderFrequency:     p.getString(_kReminderFreq) ?? 'weekly',
-    achievementAlerts:     p.getBool(_kAchievAlerts)   ?? true,
-    nearbyEmergencyAlerts: p.getBool(_kNearbyAlerts)   ?? false,
+    gloveLedBrightness:  p.getInt(_kLedBrightness)  ?? AppConstants.diagLedBrightnessDefault,
+    ventilationRatio: p.getString(_kVentRatio) ?? '30:2',
+    audioVolume: p.getInt(_kAudioVol) ?? AppConstants.audioVolumeDefault,
+    hapticIntensity: p.getInt(_kHapticInt) ?? AppConstants.hapticIntensityDefault,
+    syncWifiOnly: p.getBool(_kSyncWifi) ?? false,
   );
 
   Future<void> setHapticFeedback(bool v)     async { state = state.copyWith(hapticFeedback: v);        await _prefs.setBool(_kHaptic, v); }
   Future<void> setAudioFeedback(bool v)      async { state = state.copyWith(audioFeedback: v);         await _prefs.setBool(_kAudio, v); }
   Future<void> setVisualFeedback(bool v)     async { state = state.copyWith(visualFeedback: v);        await _prefs.setBool(_kVisual, v); }
-  Future<void> setShowCprMetrics(bool v)     async { state = state.copyWith(showCprMetrics: v);        await _prefs.setBool(_kCprMetrics, v); }
   Future<void> setKeepScreenOn(bool v)       async { state = state.copyWith(keepScreenOn: v);          await _prefs.setBool(_kScreenOn, v); }
   Future<void> setAutoSwitchToCPR(bool v)    async { state = state.copyWith(autoSwitchToCPR: v);       await _prefs.setBool(_kAutoSwitch, v); }
   Future<void> setNotifyOnDisconnect(bool v) async { state = state.copyWith(notifyOnDisconnect: v);    await _prefs.setBool(_kDisconnect, v); }
-  Future<void> setCompressionUnit(String v)  async { state = state.copyWith(compressionUnit: v);       await _prefs.setString(_kUnit, v); }
-  Future<void> setShowChecklist(bool v)      async { state = state.copyWith(showChecklist: v);         await _prefs.setBool(_kChecklist, v); }
-  Future<void> setDefaultScenario(String v)  async { state = state.copyWith(defaultScenario: v);       await _prefs.setString(_kDefaultScenario, v); }
-  Future<void> setDefaultMode(String v)      async { state = state.copyWith(defaultMode: v);           await _prefs.setString(_kDefaultMode, v); }
-  Future<void> setNoFeedbackMode(bool v)     async { state = state.copyWith(noFeedbackMode: v);        await _prefs.setBool(_kNoFeedback, v); }
-  Future<void> setTrainingReminders(bool v)  async { state = state.copyWith(trainingReminders: v);     await _prefs.setBool(_kTrainReminders, v); }
-  Future<void> setReminderFrequency(String v) async { state = state.copyWith(reminderFrequency: v);    await _prefs.setString(_kReminderFreq, v); }
-  Future<void> setAchievementAlerts(bool v)  async { state = state.copyWith(achievementAlerts: v);     await _prefs.setBool(_kAchievAlerts, v); }
-  Future<void> setNearbyEmergencyAlerts(bool v) async { state = state.copyWith(nearbyEmergencyAlerts: v); await _prefs.setBool(_kNearbyAlerts, v); }
+
+  Future<void> setVentilationRatio(String v) async {
+    state = state.copyWith(ventilationRatio: v);
+    await _prefs.setString(_kVentRatio, v);
+  }
+
+// Audio volume — Live: state only, Persist: state + disk
+  void setAudioVolumeLive(int v) {
+    state = state.copyWith(
+      audioVolume: v.clamp(AppConstants.audioVolumeMin, AppConstants.audioVolumeMax),
+    );
+  }
+  Future<void> setAudioVolumePersist(int v) async {
+    state = state.copyWith(
+      audioVolume: v.clamp(AppConstants.audioVolumeMin, AppConstants.audioVolumeMax),
+    );
+    await _prefs.setInt(_kAudioVol, v);
+  }
+
+// Haptic intensity
+  void setHapticIntensityLive(int v) {
+    state = state.copyWith(hapticIntensity: v.clamp(0, 100));
+  }
+  Future<void> setHapticIntensityPersist(int v) async {
+    state = state.copyWith(hapticIntensity: v.clamp(0, 100));
+    await _prefs.setInt(_kHapticInt, v);
+  }
+
+// LED brightness
+  void setGloveLedBrightnessLive(int v) {
+    state = state.copyWith(
+      gloveLedBrightness: v.clamp(
+        AppConstants.diagLedBrightnessMin,
+        AppConstants.diagLedBrightnessMax,
+      ),
+    );
+  }
+  Future<void> setGloveLedBrightnessPersist(int v) async {
+    state = state.copyWith(
+      gloveLedBrightness: v.clamp(
+        AppConstants.diagLedBrightnessMin,
+        AppConstants.diagLedBrightnessMax,
+      ),
+    );
+    await _prefs.setInt(_kLedBrightness, v);
+  }
+
+  Future<void> setSyncWifiOnly(bool v) async { state = state.copyWith(syncWifiOnly: v); await _prefs.setBool(_kSyncWifi, v); }
 
   Future<void> resetToDefaults() async {
     state = const AppSettings();
     for (final k in [
-      _kHaptic, _kAudio, _kVisual, _kCprMetrics, _kScreenOn, _kAutoSwitch,
-      _kDisconnect, _kUnit, _kChecklist, _kDefaultScenario, _kDefaultMode,
-      _kNoFeedback, _kTrainReminders, _kReminderFreq, _kAchievAlerts, _kNearbyAlerts,
+      _kScreenOn, _kAutoSwitch,
+      _kDisconnect, _kLedBrightness, _kVentRatio, _kAudioVol, _kHapticInt, _kSyncWifi,
     ]) { await _prefs.remove(k); }
   }
 }
@@ -715,3 +751,8 @@ final cacheErrorProvider = StateProvider<String?>((ref) => null);
 /// BLEConnection checks this flag when SELFTEST_RESULT arrives and
 /// only shows the dialog when it is true, then resets it.
 final selftestRequestedProvider = StateProvider<bool>((ref) => false);
+
+/// Set true immediately before sending CMD_CALIBRATE so the
+/// SELFTEST_RESULT that calibration always emits is shown as a
+/// calibration outcome, not a generic sensor warning.
+final calibrationPendingProvider = StateProvider<bool>((ref) => false);

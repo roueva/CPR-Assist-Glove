@@ -186,11 +186,7 @@ class RouteService {
     required LatLng destination,
     required String transportMode,
   }) async {
-    final googleMapsMode = transportMode == 'walking'
-        ? 'walking'
-        : transportMode == 'bicycling'
-        ? 'bicycling'
-        : 'driving';
+    final googleMapsMode = transportMode == 'walking' ? 'walking' : 'driving';
 
     final url = Uri.parse(
       'https://www.google.com/maps/dir/?api=1'

@@ -16,6 +16,7 @@ class _CollapsingTrainingLayout extends StatefulWidget {
   final double       grade;
   final bool         isPediatric;
   final bool         isNoFeedback;
+  final String ventilationRatioLabel;
   final String       motivational;
   final double       depthPct;
   final double       ratePct;
@@ -43,6 +44,7 @@ class _CollapsingTrainingLayout extends StatefulWidget {
     required this.grade,
     required this.isPediatric,
     required this.isNoFeedback,
+    required this.ventilationRatioLabel,
     required this.motivational,
     required this.depthPct,
     required this.ratePct,
@@ -741,6 +743,7 @@ class _GradeInfoSheet {
         required int    correctFrequency,
         required int    correctRecoil,
         required int    compressionCount,
+        required String ventilationRatioLabel,
       }) {
     showDialog<void>(
       context:      context,
@@ -755,6 +758,7 @@ class _GradeInfoSheet {
         correctFrequency: correctFrequency,
         correctRecoil:    correctRecoil,
         compressionCount: compressionCount,
+        ventilationRatioLabel: ventilationRatioLabel,
       ),
     );
   }
@@ -774,6 +778,7 @@ class _GradeInfoDialog extends StatelessWidget {
   final int    correctFrequency;
   final int    correctRecoil;
   final int    compressionCount;
+  final String ventilationRatioLabel;
 
   const _GradeInfoDialog({
     required this.isPediatric,
@@ -785,6 +790,7 @@ class _GradeInfoDialog extends StatelessWidget {
     required this.correctFrequency,
     required this.correctRecoil,
     required this.compressionCount,
+    required this.ventilationRatioLabel,
   });
 
   Color get _gradeColor {
@@ -801,25 +807,25 @@ class _GradeInfoDialog extends StatelessWidget {
   }
 
   List<_GradeWeightRow> get _weights => isPediatric
-      ? const [
-    _GradeWeightRow('Depth consistency',     '4–5 cm target',          28, true),
-    _GradeWeightRow('Rate consistency',       '100–120 BPM',            18, true),
-    _GradeWeightRow('Full recoil',            'Complete decompression', 18, true),
-    _GradeWeightRow('Ventilation compliance', '30:2 ratio',             12, false),
-    _GradeWeightRow('Depth + rate combined',  'Both correct together',   8, false),
-    _GradeWeightRow('Posture',                'Wrist alignment < 15°',   8, false),
-    _GradeWeightRow('Time to first comp',     'Under 10 seconds',        4, false),
-    _GradeWeightRow('Hands-on ratio',         'Minimal pauses',          4, false),
+      ? [
+    const _GradeWeightRow('Depth consistency',     '4–5 cm target',          28, true),
+    const _GradeWeightRow('Rate consistency',       '100–120 BPM',            18, true),
+    const _GradeWeightRow('Full recoil',            'Complete decompression', 18, true),
+    _GradeWeightRow('Ventilation compliance', ventilationRatioLabel,    12, false),
+    const _GradeWeightRow('Depth + rate combined',  'Both correct together',   8, false),
+    const _GradeWeightRow('Posture',                'Wrist alignment < 15°',   8, false),
+    const _GradeWeightRow('Time to first comp',     'Under 10 seconds',        4, false),
+    const _GradeWeightRow('Hands-on ratio',         'Minimal pauses',          4, false),
   ]
-      : const [
-    _GradeWeightRow('Depth consistency',     '5–6 cm target',           25, true),
-    _GradeWeightRow('Rate consistency',       '100–120 BPM',             20, true),
-    _GradeWeightRow('Full recoil',            'Complete decompression',  20, true),
-    _GradeWeightRow('Ventilation compliance', '30:2 ratio',              12, false),
-    _GradeWeightRow('Depth + rate combined',  'Both correct together',    8, false),
-    _GradeWeightRow('Posture',                'Wrist alignment < 15°',    8, false),
-    _GradeWeightRow('Hands-on ratio',         'Minimal pauses',           5, false),
-    _GradeWeightRow('Time to first comp',     'Under 10 seconds',         2, false),
+      : [
+    const _GradeWeightRow('Depth consistency',     '5–6 cm target',           25, true),
+    const _GradeWeightRow('Rate consistency',       '100–120 BPM',             20, true),
+    const _GradeWeightRow('Full recoil',            'Complete decompression',  20, true),
+    _GradeWeightRow('Ventilation compliance', ventilationRatioLabel,     12, false),
+    const _GradeWeightRow('Depth + rate combined',  'Both correct together',    8, false),
+    const _GradeWeightRow('Posture',                'Wrist alignment < 15°',    8, false),
+    const _GradeWeightRow('Hands-on ratio',         'Minimal pauses',           5, false),
+    const _GradeWeightRow('Time to first comp',     'Under 10 seconds',         2, false),
   ];
 
   static Widget _gradeInfoSectionLabel(String text, Color accentColor) {
@@ -1266,10 +1272,7 @@ class _PBBannerState extends State<_PBBanner>
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.pbGoldDark, AppColors.pbGoldLight, AppColors.pbGoldDark],
-                  stops: [0.0, 0.5, 1.0],
-                ),
+                color: AppColors.pbGoldLight,
                 borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
                 boxShadow: [
                   BoxShadow(

@@ -115,9 +115,13 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
           if (_isSingleSession && widget.detail != null) {
             ok = download
                 ? await ExportService.downloadSingleSessionPdf(
-                widget.detail!, username: auth.username)
+                widget.detail!,
+                username: auth.username,
+                sessionNumber: widget.summary?.sessionNumber)
                 : await ExportService.exportSingleSessionPdf(
-                widget.detail!, username: auth.username);
+                widget.detail!,
+                username: auth.username,
+                sessionNumber: widget.summary?.sessionNumber);
           }  else {
             ok = download
                 ? await ExportService.downloadMultiSessionPdf(
@@ -883,10 +887,7 @@ class _ZipExportTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryAlt],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-        ),
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
       ),
       padding: const EdgeInsets.all(AppSpacing.md),

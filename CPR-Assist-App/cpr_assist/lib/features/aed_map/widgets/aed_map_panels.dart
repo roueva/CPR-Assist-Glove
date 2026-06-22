@@ -167,7 +167,7 @@ class _AEDListPanelState extends State<AEDListPanel> {
       children: [
         GestureDetector(
           onVerticalDragUpdate: (details) {
-            final screenHeight = MediaQuery.sizeOf(context).height;
+            final screenHeight = context.screenHeight;
             final currentSize = _sheetController.size;
             final delta = -details.delta.dy / screenHeight;
             final newSize = (currentSize + delta).clamp(
@@ -541,7 +541,38 @@ class AEDNavigationPanel extends StatefulWidget {
 class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _hasScrolledUnderHeader = false;
+  double _computedNavMin = AEDMapUIConstants.portraitNavMin;
+  final GlobalKey _titleKey = GlobalKey();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeaderMin());
+  }
+
+  @override
+  void didUpdateWidget(AEDNavigationPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.config.selectedAED != widget.config.selectedAED) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeaderMin());
+    }
+  }
+
+  void _measureHeaderMin() {
+    final box = _titleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !mounted) return;
+    const singleLineH = 17.0 * 1.35;
+    final isMultiLine = box.size.height > singleLineH * 1.5;
+    final newMin = isMultiLine
+        ? AEDMapUIConstants.portraitNavMin
+        : AEDMapUIConstants.portraitNavMinSm;
+    if (newMin != _computedNavMin) {
+      setState(() => _computedNavMin = newMin);
+      if (_sheetController.isAttached && _sheetController.size < newMin) {
+        _sheetController.jumpTo(newMin);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -575,10 +606,10 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
             GestureDetector(
               behavior: HitTestBehavior.translucent,
               onVerticalDragUpdate: (details) {
-                final screenHeight = MediaQuery.sizeOf(context).height;
+                final screenHeight = context.screenHeight;
                 final delta = -details.delta.dy / screenHeight;
                 final newSize = (_sheetController.size + delta).clamp(
-                  AEDMapUIConstants.portraitNavMin,
+                  _computedNavMin,
                   AEDMapUIConstants.portraitNavMax,
                 );
                 _sheetController.jumpTo(newSize);
@@ -587,7 +618,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
                 final velocity = details.primaryVelocity ?? 0;
                 if (velocity > 300) {
                   _sheetController.animateTo(
-                    AEDMapUIConstants.portraitNavMin,
+                    _computedNavMin,
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOut,
                   );
@@ -633,6 +664,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
                               children: [
                                 Text(
                                   aed.name,
+                                  key: _titleKey,
                                   textAlign: TextAlign.center,
                                   style: AppTypography.heading(size: 17),
                                   maxLines: 2,
@@ -743,7 +775,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
       key: const ValueKey('nav_portrait'),
       controller: _sheetController,
       initialChildSize: AEDMapUIConstants.portraitNavInitial,
-      minChildSize: AEDMapUIConstants.portraitNavMin,
+      minChildSize: _computedNavMin,
       maxChildSize: AEDMapUIConstants.portraitNavMax,
       builder: (context, sc) => content(sc),
     );
@@ -762,90 +794,48 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
   );
 
   Widget _buildStatusBanners(bool isOfflineRoute) {
-    final showBanner = (isOfflineRoute && widget.config.isOffline) || !widget.userLocationAvailable;
-    final showCachedBanner =
-        widget.config.isUsingCachedLocation && widget.userLocationAvailable;
+    final showNoGps = !widget.userLocationAvailable;
+    final showOffline  = widget.config.isOffline;
+    final showCached = widget.config.isUsingCachedLocation && widget.userLocationAvailable;
 
-    if (!showBanner && !showCachedBanner) return const SizedBox.shrink();
+    if (!showNoGps && !showOffline && !showCached) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        if (showBanner)
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm + AppSpacing.xs,
-                vertical: AppSpacing.sm + AppSpacing.xxs),
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            decoration: AppDecorations.primaryCard(
-                radius: AppSpacing.cardRadiusMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!widget.userLocationAvailable)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.cardSpacing),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_off,
-                            size: AppSpacing.iconXs,
-                            color: AppColors.primary),
-                        const SizedBox(width: AppSpacing.cardSpacing),
-                        Expanded(
-                          child: Text(
-                            'No GPS · compass direction only',
-                            style: AppTypography.caption(
-                                color: AppColors.primary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (widget.config.isOffline)
-                  Row(
-                    children: [
-                      const Icon(Icons.wifi_off,
-                          size: AppSpacing.iconXs,
-                          color: AppColors.primary),
-                      const SizedBox(width: AppSpacing.cardSpacing),
-                      Expanded(
-                        child: Text(
-                          'No internet · distances are estimates',
-                          style: AppTypography.caption(
-                              color: AppColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Wrap(
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
+        children: [
+          if (showNoGps)
+            _StatusChip(
+              icon: Icons.location_off,
+              label: 'No GPS',
+              color: AppColors.primary,
+              bg: AppColors.primaryLight,
+              tooltip: 'Showing compass direction only',
             ),
-          ),
-        if (showCachedBanner)
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm + AppSpacing.xs),
-            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-            decoration: AppDecorations.primaryCard(
-                radius: AppSpacing.cardRadiusMd),
-            child: Row(
-              children: [
-                const SizedBox(
-                  width: AppSpacing.md,
-                  height: AppSpacing.md,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary),
-                ),
-                const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    'Using cached location, getting current position…',
-                    style: AppTypography.caption(color: AppColors.primary),
-                  ),
-                ),
-              ],
+          if (showOffline)
+            _StatusChip(
+              icon: Icons.wifi_off,
+              label: 'Offline',
+              color: AppColors.warning,
+              bg: AppColors.warningBg,
+              tooltip: 'No internet connection · distances are estimates',
             ),
-          ),
-      ],
+          if (showCached)
+            _StatusChip(
+              icon: Icons.refresh,
+              label: 'Locating…',
+              color: AppColors.primary,
+              bg: AppColors.primaryLight,
+              isSpinner: true,
+              tooltip: 'Using cached location, getting current GPS position…',
+            ),
+        ],
+      ),
     );
   }
+
 
   Widget _buildActionRow(
       BuildContext context, AED aed, bool isOfflineRoute) {
@@ -964,29 +954,26 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
           child: InkWell(
             onTap: () => widget.onOpenWebView(aed.aedWebpage!, aed.name),
             borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md, vertical: AppSpacing.sm + AppSpacing.xs),
-              decoration: AppDecorations.primaryCard(
-                  radius: AppSpacing.cardRadiusMd),
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm + AppSpacing.xs,
+              ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.info_outline,
-                      color: AppColors.primary,
-                      size: AppSpacing.iconSm),
+                  Icon(
+                    Icons.open_in_new,
+                    color: AppColors.primary,
+                    size: AppSpacing.iconSm,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'View AED Details',
-                      style: AppTypography.bodyMedium(color: AppColors.primary),
-                      textAlign: TextAlign.center,
+                  Text(
+                    'View full AED details',
+                    style: AppTypography.body(color: AppColors.primary).copyWith(
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.primary.withValues(alpha: 0.4),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  const Icon(Icons.open_in_browser,
-                      color: AppColors.primary,
-                      size: AppSpacing.iconXs),
                 ],
               ),
             ),
@@ -1083,7 +1070,7 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onVerticalDragUpdate: (details) {
-                      final screenHeight = MediaQuery.sizeOf(context).height;
+                      final screenHeight = context.screenHeight;
                       final delta = -details.delta.dy / screenHeight;
                       final newSize = (_sheetController.size + delta).clamp(
                         AEDMapUIConstants.portraitActiveNavMin,
@@ -1319,23 +1306,14 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
 
 
   Widget _buildOfflineBanner() {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm + AppSpacing.xs),
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration:
-      AppDecorations.warningCard(radius: AppSpacing.cardRadiusSm),
-      child: Row(
-        children: [
-          const Icon(Icons.wifi_off,
-              size: AppSpacing.md, color: AppColors.warning),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'No internet · distances are estimates',
-              style: AppTypography.caption(color: AppColors.warning),
-            ),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: _StatusChip(
+        icon: Icons.wifi_off,
+        label: 'Offline',
+        color: AppColors.warning,
+        bg: AppColors.warningBg,
+        tooltip: 'No internet connection · distances are estimates',
       ),
     );
   }
@@ -1406,31 +1384,26 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
           child: InkWell(
             onTap: () => widget.onOpenWebView(aed.aedWebpage!, aed.name),
             borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
-            child: Container(
+            child: Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm + AppSpacing.xs),
-              decoration: AppDecorations.primaryCard(
-                  radius: AppSpacing.cardRadiusMd),
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.sm + AppSpacing.xs,
+              ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.info_outline,
-                      color: AppColors.primary,
-                      size: AppSpacing.iconSm),
+                  Icon(
+                    Icons.open_in_new,
+                    color: AppColors.primary,
+                    size: AppSpacing.iconSm,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'View AED Details',
-                      style: AppTypography.bodyMedium(
-                          color: AppColors.primary),
-                      textAlign: TextAlign.center,
+                  Text(
+                    'View full AED details',
+                    style: AppTypography.body(color: AppColors.primary).copyWith(
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.primary.withValues(alpha: 0.4),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  const Icon(Icons.open_in_browser,
-                      color: AppColors.primary,
-                      size: AppSpacing.iconXs),
                 ],
               ),
             ),
@@ -1461,6 +1434,64 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Private shared widgets
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+class _StatusChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bg;
+  final bool isSpinner;
+  final String tooltip;
+
+
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bg,
+    this.isSpinner = false,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+        message: tooltip,
+        child: Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.chipPaddingH,
+        vertical: AppSpacing.chipPaddingVSm + AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isSpinner)
+            SizedBox(
+              width: AppSpacing.iconXs,
+              height: AppSpacing.iconXs,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: color,
+              ),
+            )
+          else
+            Icon(icon, size: AppSpacing.iconXs, color: color),
+          const SizedBox(width: AppSpacing.cardSpacing),
+          Text(
+            label,
+            style: AppTypography.label(color: color),
+          ),
+        ],
+      ),
+        ),
+    );
+  }
+}
 
 /// Consistent panel container with clip + shadow.
 class _PanelContainer extends StatelessWidget {
@@ -1507,7 +1538,10 @@ class _IconActionButton extends StatelessWidget {
     return Container(
       height: AppSpacing.xxl + AppSpacing.xxs,
       width: AppSpacing.xxl + AppSpacing.xxs,
-      decoration: AppDecorations.primaryCard(radius: AppSpacing.buttonRadius),
+      decoration: AppDecorations.primaryCard(
+        radius: AppSpacing.buttonRadius,
+        bordered: false,
+      ),
       child: IconButton(
         onPressed: enabled ? onTap : null,
         tooltip: tooltip,
@@ -1666,36 +1700,45 @@ class _TransportModeSelector extends StatelessWidget {
         _menuItem(context, 'walking', Icons.directions_walk, 'Walking'),
         _menuItem(context, 'driving', Icons.directions_car, 'Driving'),
       ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isWalking ? Icons.directions_walk : Icons.directions_car,
-              color: AppColors.aedNavGreen,
-              size: AppSpacing.iconSm + AppSpacing.xxs,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              isWalking ? 'Walking' : 'Driving',
-              style: AppTypography.bodyBold(),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Mode',
-                    style: AppTypography.label(
-                        color: AppColors.textSecondary)),
-                const SizedBox(width: AppSpacing.xxs),
-                const Icon(Icons.arrow_drop_down,
-                    size: AppSpacing.iconXs,
-                    color: AppColors.textDisabled),
-              ],
-            ),
-          ],
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSpacing.touchTargetMin),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isWalking ? Icons.directions_walk : Icons.directions_car,
+                color: AppColors.aedNavGreen,
+                size: AppSpacing.iconSm + AppSpacing.xxs,
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isWalking ? 'Walking' : 'Driving',
+                    style: AppTypography.bodyBold(),
+                  ),
+                  const SizedBox(width: AppSpacing.xxs),
+                  const Icon(
+                    Icons.unfold_more,
+                    size: AppSpacing.iconSm,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+              Text(
+                'Mode',
+                style: AppTypography.label(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
         ),
-      ),
     );
   }
 

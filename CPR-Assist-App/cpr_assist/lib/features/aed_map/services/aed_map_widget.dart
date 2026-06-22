@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:location/location.dart' as loc;
 
 import '../../../core/core.dart';
+import '../../../main.dart';
 import '../../../models/aed_models.dart';
 import '../../../providers/app_providers.dart';
 import '../../../services/app_initialization_manager.dart';
@@ -126,10 +127,11 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       if (mounted && !_isInitializingApp) _initializeApp();
     });
 
-    // Safety valve — complete map ready after 15s no matter what.
-    Future.delayed(const Duration(seconds: 15), () {
+    // Safety valve — complete map ready after 5s no matter what.
+// Map init normally completes in well under 1s; >5s means it has already failed.
+    Future.delayed(const Duration(seconds: 5), () {
       if (!_mapReadyCompleter.isCompleted && mounted) {
-        debugPrint('⚠️ Forcing map ready completion after 15s timeout');
+        debugPrint('⚠️ Forcing map ready completion after 5s timeout');
         _mapReadyCompleter.complete();
       }
     });
@@ -178,7 +180,12 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     try {
       final aedRepository = ref.read(aedServiceProvider);
-      final apiKey = NetworkService.googleMapsApiKey;
+      String? apiKey;
+      try {
+        apiKey = NetworkService.googleMapsApiKey;
+      } catch (_) {
+        apiKey = null; // dotenv not loaded yet — will be set later
+      }
       _routingCoordinator.setApiKey(apiKey);
 
       _clusterManager = cluster_pkg.ClusterManager<AEDClusterItem>(
@@ -379,6 +386,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     _routingCoordinator.scheduleRoutePreloading();
 
     // Fast parallel road-distance fetch for the top AEDs.
+    await dotenvReady;
     final apiKey = NetworkService.googleMapsApiKey;
     if (apiKey != null) {
       final locationSnapshot = location;

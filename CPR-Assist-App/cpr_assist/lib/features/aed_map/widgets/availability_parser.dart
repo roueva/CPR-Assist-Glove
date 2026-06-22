@@ -41,6 +41,11 @@ class AvailabilityStatus {
 class AvailabilityParser {
   static Map<String, dynamic>? _availabilityMap;
 
+  // Memoization cache — parseAvailability is called thousands of times during sort.
+  // Keyed by (availability string + minute-of-day) so it's still time-sensitive
+  // but reuses results within the same minute. Cleared when the rules reload.
+  static final Map<String, AvailabilityStatus> _parseCache = {};
+
   // ── Load rules ─────────────────────────────────────────────────────────────
 
   static Future<void> loadRules() async {
@@ -145,38 +150,52 @@ class AvailabilityParser {
       String? availability, {
         int? aedId,
       }) {
+    // Memo cache — same input within the same minute returns the same status
+    final now = DateTime.now();
+    final cacheKey = '${availability ?? ""}|${now.year}${now.month}${now.day}${now.hour}${now.minute}';
+    final cached = _parseCache[cacheKey];
+    if (cached != null) return cached;
+
+    // Local helper to cache every return path
+    AvailabilityStatus _cache(AvailabilityStatus s) {
+      _parseCache[cacheKey] = s;
+      // Bound cache to prevent unbounded growth
+      if (_parseCache.length > 5000) _parseCache.clear();
+      return s;
+    }
+
     // No availability data loaded — signal UI to hide the section
     if (_availabilityMap == null) {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: '',
         originalText: '',
-      );
+      ));
     }
 
     // Null / empty / unknown
     if (availability == null ||
         availability.trim().isEmpty ||
         availability.trim().toLowerCase() == 'unknown') {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: '',
         originalText: availability ?? '',
-      );
+      ));
     }
 
     final cleanText = availability.trim();
 
     // Not in map — show raw text, uncertain
     if (!_availabilityMap!.containsKey(cleanText)) {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: true,
         displayText: availability,
         originalText: availability,
-      );
+      ));
     }
 
     final data         = _availabilityMap![cleanText] as Map<String, dynamic>;
@@ -184,23 +203,23 @@ class AvailabilityParser {
 
     // 1. 24/7
     if (data['is_24_7'] == true) {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: false,
         displayText: 'Open 24/7',
         originalText: availability,
-      );
+      ));
     }
 
     // 2. Holiday
     if (_isGreekHoliday(DateTime.now())) {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: 'Likely Closed (Holiday)',
         detailText:  'Hours may differ due to public holiday',
         originalText: availability,
-      );
+      ));
     }
 
     // 3. Rule-based check
@@ -212,47 +231,47 @@ class AvailabilityParser {
         status,
         availability,
       );
-      if (ruleResult != null) return ruleResult;
+      if (ruleResult != null) return _cache(ruleResult);
     }
 
     // 4. Fallback by status
     if (status == 'closed_for_use') {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: false,
         displayText: 'Private / Restricted Use',
         detailText:  'Not intended for public use',
         originalText: availability,
-      );
+      ));
     }
 
     if (status == 'uncertain') {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: true,
         displayText: 'Check Availability',
         detailText:  availability,
         originalText: availability,
-      );
+      ));
     }
 
     if (status == 'parsed') {
-      return AvailabilityStatus(
+      return _cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: false,
         displayText: 'Closed',
         detailText:  'Closed at this time',
         originalText: availability,
-      );
+      ));
     }
 
     // Default
-    return AvailabilityStatus(
+    return _cache(AvailabilityStatus(
       isOpen:      true,
       isUncertain: true,
       displayText: availability,
       originalText: availability,
-    );
+    ));
   }
 
   // ── Rule engine ─────────────────────────────────────────────────────────────
@@ -344,15 +363,13 @@ class AvailabilityParser {
         }
       } else {
         // Rule exists but no time → uncertain fallback
-        if (generalStatus == 'uncertain') {
-          return AvailabilityStatus(
-            isOpen:      true,
-            isUncertain: true,
-            displayText: 'Check Availability',
-            detailText:  originalText,
-            originalText: originalText,
-          );
-        }
+        return AvailabilityStatus(
+          isOpen:      true,
+          isUncertain: true,
+          displayText: 'Check Availability',
+          detailText:  originalText,
+          originalText: originalText,
+        );
       }
     }
     return null;

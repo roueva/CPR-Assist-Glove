@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../widgets/availability_parser.dart';
 import '../../../models/aed_models.dart';
 import '../widgets/aed_markers.dart';
+import '../../../core/core.dart';
 
 class AEDClusterItem with cluster_pkg.ClusterItem {
   final AED aed;
@@ -20,11 +21,13 @@ class AEDClusterManager {
   // Icon cache keyed by count
   static final Map<int, BitmapDescriptor> _iconCache = {};
 
-  // Pre-warm icons for common cluster sizes at startup
+  // Pre-warm icons for common cluster sizes at startup.
+// Yields to the event loop between icons so we don't hog the UI thread.
   static Future<void> prewarmIconCache() async {
     const counts = [2, 5, 10, 50, 100, 500];
     for (final count in counts) {
       await getClusterIcon(count);
+      await Future<void>.delayed(Duration.zero); // yield to UI
     }
   }
 
@@ -50,8 +53,8 @@ class AEDClusterManager {
     final double w = logicalSize.width  * scale;
     final double h = logicalSize.height * scale;
 
-    const centerColor = Color(0xFF006636);
-    const ringColor   = Color(0xFF93C01F);
+    const centerColor = AppColors.clusterCenter;
+    const ringColor   = AppColors.clusterRing;
 
     final recorder = ui.PictureRecorder();
     final canvas    = Canvas(recorder);

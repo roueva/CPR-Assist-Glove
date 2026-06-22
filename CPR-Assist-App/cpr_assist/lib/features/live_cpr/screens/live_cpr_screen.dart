@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,6 +59,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   double   _displayDepth            = 0.0;
   double   _displayFrequency        = 0.0;
   double _peakDepth               = 0.0;
+  double _valleyDepth             = 0.0;
   int    _lastSeenCompressionCount = 0;
   DateTime? _sessionStartTime;
 
@@ -71,24 +73,27 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int         _compressionInCycle = 0;
   bool          _pulseCheckActive      = false;
   int?          _pulseCheckInterval;
-  int?          _pulseClassification;   // null = pending, 0/1/2 = result
+  int?          _pulseClassification;      // null = pending, final result from event
+  int?          _livePulseClassification;  // 0/1/2 inferred from live stream during window
+  int           _bestPulseClassification = 0; // highest seen (best wins for storage)
   double?       _pulseCheckDetectedBpm;
   int?          _pulseCheckConfidence;
+  int           _livePpgSignalQuality = 0;
+  double        _liveHeartRatePatient = 0.0;
   Timer?        _pulseResultTimer;
   bool _hasCompletedPulseCheck = false;
   int _swapSecondsRemaining = 10;
   Timer? _swapCountdownTimer;
   int _rescuerSignalQuality = 0;
-  int?    _rescuerHumidity;
 
   // ── Ventilation window state ───────────────────────────────────────────────
   bool _showVentilationOverlay = false;
   int  _ventilationCycleNumber = 0;
   int _ventilationsExpected = 2;
-  int? _ventilationOpenedAtCount; // compressionCount when overlay opened; null = closed
+// compressionCount when overlay opened; null = closed
 
   final List<double> _ppgBuffer = []; // ring buffer for ECG waveform
-  static const int   _ppgBufferMax = 60;
+  static const int   _ppgBufferMax = 150;
   StreamSubscription<Map<String, dynamic>>? _bleDataSubscription;
 
   // ── Vitals display state ───────────────────────────────────────────────────
@@ -109,22 +114,14 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     liveCprTabActivationNotifier.addListener(_onTabActivated);
 
-    // Warn user if old sessions are silently evicted
-    SessionLocalStorage.onEviction = (count) {
-      if (mounted) {
-        UIHelper.showWarning(
-          context,
-          'Oldest $count local session(s) removed — storage limit reached. '
-              'Log in to sync sessions to the cloud.',
-        );
-      }
-    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ble = ref.read(bleConnectionProvider);
       _bleDataSubscription = ble.dataStream.listen((data) {
         if (mounted) _updateDisplayValues(data);
       });
-      // Reassembled offline sessions from glove flash storage
+      // Reassembled offline sessions from glove flash storage.
+      // Overrides the provider-level handler while this screen is mounted,
+      // adding a snackbar confirmation. Cleared in dispose().
       ble.onOfflineSessionParsed = _handleOfflineSession;
     });
   }
@@ -148,13 +145,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     if (isLoggedIn) {
       savedId = await service.saveDetail(detail);
       if (savedId != null) {
+        detail = detail.withId(savedId);
         await SessionLocalStorage.markSynced(detail);
       }
     }
 
-    // Tell the glove it's safe to delete this slot, regardless of backend status
-    // (we have a local copy and will retry backend later via _syncLocalSessions)
-    // We use the most recent localSessionIndex broadcast — track that:
+    // Tell the glove it's safe to delete this slot, regardless of backend status.
+    // We have a local copy and will retry backend later via _syncLocalSessions.
     await ble.sendConfirmReceived(sessionIndex);
 
     if (mounted) {
@@ -182,7 +179,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     });
   }
 
-
   Future<void> _promptBluetoothIfNeeded() async {
     debugPrint('🔵 _promptBluetoothIfNeeded called');
     final ble = ref.read(bleConnectionProvider);
@@ -191,14 +187,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     if (status == 'Connected') { debugPrint('🔵 returning — already connected'); return; }
 
     final adapterState = await FlutterBluePlus.adapterState.first;
-    // Check if BT is already on — if so, nothing to do
     if (adapterState == BluetoothAdapterState.on) return;
 
-    // Try the system prompt silently (no custom dialog before)
     try {
       await FlutterBluePlus.turnOn();
     } on FlutterBluePlusException {
-      // User denied the system prompt — now show our explanation dialog
       if (mounted) {
         await AppDialogs.showAlert(
           context,
@@ -214,16 +207,37 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       // iOS or other — system handles it automatically
     }
   }
+
   void _onBleStatusChange() {
     final status = ref.read(bleConnectionProvider).connectionStatusNotifier.value;
+
     if (status == 'Connected') {
       ref.read(bleConnectionProvider).markPermissionsGranted();
       _syncLocalSessions();
-      ref.read(bleConnectionProvider).sendRunSelftest();
+      // Self-test is user-initiated only (Settings → Run self-test or the
+      // Glove diagnostic sheet). Running it automatically on every connect
+      // adds 300–500 ms of I²C bus contention right when the user is
+      // already on the live-CPR screen, and can stall LIVE_STREAM packets.
       return;
     }
 
     if (!mounted) return;
+
+    // Reconnect exhausted during active session — glove is unreachable but
+    // still recording. The 60 s watchdog in BLEConnection will synthesise
+    // SESSION_END. Tell the rescuer to keep going and that data is safe.
+    if (status == 'Connection Lost — Session Running on Glove') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        UIHelper.showWarning(
+          context,
+          'Glove unreachable — keep performing CPR. '
+              'Session will be recovered when glove reconnects.',
+        );
+      });
+      return;
+    }
+
     final notify = ref.read(settingsProvider).notifyOnDisconnect;
     if (!notify) return;
 
@@ -245,16 +259,20 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Future<void> _syncLocalSessions() async {
     final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
     if (!isLoggedIn) return;
+    if (ref.read(settingsProvider).syncWifiOnly) {
+      final results = await Connectivity().checkConnectivity();
+      if (!results.contains(ConnectivityResult.wifi)) return;
+    }
     final locals  = await SessionLocalStorage.loadAll();
     final pending = locals.where((d) => !d.syncedToBackend).toList();
     if (pending.isEmpty) return;
     final service = ref.read(sessionServiceProvider);
     bool anySynced = false;
-    for (final detail in pending) {
+    for (var detail in pending) {
       final savedId = await service.saveDetail(detail);
       debugPrint('🔵 saveDetail returned: $savedId');
-
       if (savedId != null) {
+        detail = detail.withId(savedId);
         await SessionLocalStorage.markSynced(detail);
         anySynced = true;
       }
@@ -286,23 +304,49 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     _pulseResultTimer?.cancel();
     _swapCountdownTimer?.cancel();
     liveCprTabActivationNotifier.removeListener(_onTabActivated);
-    SessionLocalStorage.onEviction = null;
+    // Clear the screen-level offline session handler so the provider-level
+    // fallback takes over when this screen is not mounted.
+    ref.read(bleConnectionProvider).onOfflineSessionParsed = null;
     super.dispose();
   }
 
   // ── BLE data handler ───────────────────────────────────────────────────────
   void _updateDisplayValues(Map<String, dynamic> data) {
     if (data['isSelftestResult'] == true) {
-      // Only auto-show warnings on connect, not when user explicitly requested it
-      // (settings screen handles the explicit request case via its own subscription)
-      final wasRequested = ref.read(selftestRequestedProvider);
+      final wasCalibration = ref.read(calibrationPendingProvider);
+      final wasRequested   = ref.read(selftestRequestedProvider);
+
+      if (wasCalibration) ref.read(calibrationPendingProvider.notifier).state = false;
+      ref.read(selftestRequestedProvider.notifier).state = false;
+
+      final critical = (data['selftestCriticalMask'] as int?) ?? 0;
+      final warn     = (data['selftestWarnMask']     as int?) ?? 0;
+
+      if (wasCalibration) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (critical != 0) {
+            AppDialogs.showAlert(
+              context,
+              icon:      Icons.warning_rounded,
+              iconColor: AppColors.error,
+              iconBg:    AppColors.errorBg,
+              title:     'Calibration failed',
+              message:   'A sensor error was detected after recalibration. '
+                  'Run Sensor Check in Glove Maintenance for details.',
+            );
+          } else {
+            UIHelper.showSuccess(context, 'Calibration complete — force sensor zeroed.');
+          }
+        });
+        return;
+      }
+
       if (!wasRequested) {
-        final critical = (data['selftestCriticalMask'] as int?) ?? 0;
-        final warn     = (data['selftestWarnMask']     as int?) ?? 0;
         if (critical != 0) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              AppDialogs.showAlert(
+            if (!mounted) return;
+            AppDialogs.showAlert(
               context,
               icon:      Icons.warning_rounded,
               iconColor: AppColors.error,
@@ -311,21 +355,18 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               message:   'A critical glove sensor failed self-test. '
                   'Check hardware before starting CPR.',
             );
-            }
           });
         } else if (warn != 0) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              UIHelper.showWarning(
-              context, 'Glove sensor warning — some readings may be unreliable',
-            );
-            }
+            if (!mounted) return;
+            UIHelper.showWarning(
+                context, 'Glove sensor warning — some readings may be unreliable');
           });
         }
-        // If all clear, no toast — connecting already shows 'Connected' status
       }
       return;
     }
+
     // ── SESSION_START ──────────────────────────────────────────────────────
     if (data['isStartPing'] == true) {
       _sessionStartTime = DateTime.now();
@@ -346,7 +387,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _showFatigueBadge        = false;
         _fatigueScore     = 0;
         _showVentilationOverlay = false;
-        _ventilationOpenedAtCount = null;
         _ventilationCycleNumber = 0;
         _pulseCheckActive        = false;
         _pulseClassification     = null;
@@ -356,11 +396,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _heartRatePatient = null;
         _spO2Patient = null;
         _patientTemperature = null;
-
         _heartRateUser = null;
         _spO2User = null;
         _rescuerTemperature = null;
-        _rescuerHumidity = null;
         _rescuerSignalQuality = 0;
         _ppgBuffer.clear();
       });
@@ -386,7 +424,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayDepth        = 0.0;
         _displayFrequency    = 0.0;
         _showVentilationOverlay = false;
-        _ventilationOpenedAtCount = null;
         _pulseCheckActive    = false;
         _showSwapBanner      = false;
         _showFatigueBadge    = false;
@@ -401,7 +438,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return;
     }
 
-    // ── Two-minute swap alert ──────────────────────────────────────────
+    // ── Two-minute swap alert ──────────────────────────────────────────────
     if (data['isTwoMinAlert'] == true) {
       _swapCountdownTimer?.cancel();
       setState(() {
@@ -420,22 +457,19 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return;
     }
 
-
-    // ── Ventilation window ─────────────────────────────────────────────
+    // ── Ventilation window ─────────────────────────────────────────────────
     if (data['isVentilationWindow'] == true) {
+      final ratio = ref.read(settingsProvider).ventilationRatio;
+      if (ratio == 'compressions_only') return;
       setState(() {
         _showVentilationOverlay = true;
         _ventilationCycleNumber = (data['cycleNumber'] as int?) ?? 1;
         _ventilationsExpected   = (data['ventilationsExpected'] as int?) ?? 2;
-        // Record the compression count at the moment the window opened so we
-        // can auto-dismiss once the rescuer resumes (≥2 new compressions),
-        // matching the firmware which closes its window on the same condition.
-        _ventilationOpenedAtCount = _displayCompressionCount;
       });
       return;
     }
 
-    // ── Fatigue alert ──────────────────────────────────────────────────
+    // ── Fatigue alert ──────────────────────────────────────────────────────
     if (data['isFatigueAlert'] == true) {
       setState(() {
         _showFatigueBadge = true;
@@ -475,7 +509,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return;
     }
 
-    // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────────
+    // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────
     if (data['isPendingLocalData'] == true) {
       final count = data['pendingSessionCount'] as int? ?? 0;
       if (count > 0 && mounted) {
@@ -488,28 +522,36 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       }
       return;
     }
+
     // ── PULSE_CHECK_START ──────────────────────────────────────────────────
     if (data['isPulseCheckStart'] == true) {
+      _ppgBuffer.clear();
       setState(() {
-        _pulseCheckActive    = true;
-        _pulseCheckInterval  = data['intervalNumber'] as int?;
-        _pulseClassification = null;
+        _pulseCheckActive         = true;
+        _pulseCheckInterval       = data['intervalNumber'] as int?;
+        _pulseClassification      = null;
+        _livePulseClassification  = null;
+        _bestPulseClassification  = 0;
+        _livePpgSignalQuality     = 0;
+        _liveHeartRatePatient     = 0.0;
+        _pulseCheckDetectedBpm    = null;
+        _pulseCheckConfidence     = null;
       });
       return;
     }
 
     // ── PULSE_CHECK_RESULT ─────────────────────────────────────────────────
     if (data['isPulseCheckResult'] == true) {
-      // Firmware owns the window lifecycle now. The RESULT only updates the
-      // displayed classification/BPM — it does NOT dismiss the overlay and
-      // does NOT start any app-side timer. The overlay stays until the
-      // firmware sends pulseCheckActive == false (rescuer resumed / backstop)
-      // or the user explicitly taps continue.
+      final eventClass = data['pulseClassification'] as int? ?? 0;
+      final best = eventClass > _bestPulseClassification
+          ? eventClass
+          : _bestPulseClassification;
       setState(() {
-        _hasCompletedPulseCheck = true;
-        _pulseClassification = data['pulseClassification'] as int? ?? 0;
-        _pulseCheckDetectedBpm = (data['detectedBPM'] as num?)?.toDouble();
-        _pulseCheckConfidence = data['confidencePct'] as int?;
+        _hasCompletedPulseCheck  = true;
+        _pulseClassification     = best;
+        _livePulseClassification = best;
+        _pulseCheckDetectedBpm   = (data['detectedBPM'] as num?)?.toDouble();
+        _pulseCheckConfidence    = data['confidencePct'] as int?;
       });
     }
 
@@ -520,10 +562,15 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   }
 
   Future<void> _requestGloveSessions(int count) async {
+    // Never pull offline sessions while a live session is active —
+    // EVENT_CHANNEL write contention would corrupt the live stream.
+    // The glove will re-send PENDING_LOCAL_DATA on the next connection.
+    if (_isSessionActive) return;
     final ble = ref.read(bleConnectionProvider);
     for (int i = 0; i < count; i++) {
       await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
+      if (_isSessionActive) return; // re-check after each delay
       await ble.sendRequestSession(i);
     }
   }
@@ -543,19 +590,17 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return v > 0 ? v : null;
     }
 
-    if (data['isContinuousData'] == true && !_isSessionActive) {
+    if (data['isContinuousData'] == true && !_isSessionActive && !_hasHandledEndPing) {
       ref.read(cprSessionActiveProvider.notifier).state = true;
     }
 
-    // Patient vitals only shown during pulse check (and quality ≥ 40 internally).
-    // Values are always measured + streamed; display is what filters.
     final rescuerSq = (data['rescuerSignalQuality'] as int?) ?? 0;
     final patientSq = (data['ppgSignalQuality'] as int?) ?? 0;
     final inPulseCheck = data['pulseCheckActive'] == true;
 
     final hrP    = (inPulseCheck && patientSq >= 40) ? readPositive('heartRatePatient') : null;
     final spo2P  = (inPulseCheck && patientSq >= 40) ? readPositive('spO2Patient')      : null;
-// patientTemperature is from MAX30205, gated on skin contact (IR DC) in
+    // patientTemperature is from MAX30205, gated on skin contact (IR DC) in
     // firmware — NOT on PPG pulse quality. A pulseless patient still has a
     // valid skin temp, so do not couple it to ppgSignalQuality. Show it
     // whenever a pulse-check window provided a reading.
@@ -565,11 +610,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final tempU  = readPositive('rescuerTemperature');  // GXHT30, always valid
     final humU   = readPositiveInt('rescuerHumidity');
 
-
     if (!mounted) return;
     setState(() {
 
-      if (data['isContinuousData'] == true) {
+      if (data['isContinuousData'] == true && !_hasHandledEndPing) {
         _isSessionActive = true;
         // Start timer if SESSION_START was missed
         if (_sessionTimer == null || !_sessionTimer!.isActive) {
@@ -590,22 +634,22 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _displayCompressionCount = data['compressionCount'] as int;
       }
 
-      // Ventilation overlay visibility is now firmware-driven: the glove
+      // Ventilation overlay visibility is firmware-driven: the glove
       // streams inVentilationWindow in LIVE_STREAM byte 86 and owns the
-      // open/close/compliant logic. The app only mirrors that flag — it
-      // does NOT run its own compression-count dismiss (which drifted from
-      // the firmware). Open is still triggered by the 0x03 event so we get
-      // cycleNumber/ventilationsExpected; close follows the streamed flag.
+      // open/close/compliant logic. The app only mirrors that flag.
       if (data.containsKey('inVentilationWindow')) {
         final fwVentOpen = data['inVentilationWindow'] == true;
         if (!fwVentOpen && _showVentilationOverlay) {
           _showVentilationOverlay = false;
-          _ventilationOpenedAtCount = null;
         }
       }
 
       if (data.containsKey('recoilAchieved')) {
         _recoilAchieved = data['recoilAchieved'] as bool;
+        if (_recoilAchieved) {
+          final vd = (data['valleyDepth'] as num?)?.toDouble() ?? 0.0;
+          if (vd >= 0) _valleyDepth = vd;
+        }
       }
 
       if (data.containsKey('compressionInCycle')) {
@@ -616,69 +660,114 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         if (data.containsKey('depth')) {
           _displayDepth = (data['depth'] as num).toDouble();
         }
-        // Live rate arc must react to every compression, so it reads the
-        // last-2-comp instantaneousRate, not the smoothed 5-comp frequency.
-        // 3 wrong-rate compressions must show as wrong immediately.
         if (data.containsKey('instantaneousRate')) {
           _displayFrequency = (data['instantaneousRate'] as num).toDouble();
         }
-        // Peak depth = the firmware's LOCKED peak for the last completed
-        // compression (not a sample of the noisy live signal).
         final newCount = data['compressionCount'] as int? ?? _displayCompressionCount;
         if (newCount > _lastSeenCompressionCount) {
           _lastSeenCompressionCount = newCount;
           final lp = (data['lastPeakDepthCm'] as num?)?.toDouble() ?? 0.0;
-          if (lp > 0) _peakDepth = lp;
+          if (lp > 0) {
+            _peakDepth    = lp;
+          }
         }
       }
 
-      // IMU calibration status
       if (data.containsKey('imuCalibrated')) {
         _imuCalibrated = data['imuCalibrated'] as bool;
       }
 
-      // Pulse check active from live stream (cross-check)
       if (data.containsKey('pulseCheckActive')) {
-        _pulseCheckActive = data['pulseCheckActive'] as bool;
+        final active = data['pulseCheckActive'] as bool;
+        if (!active && _pulseCheckActive) {
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) setState(() => _pulseCheckActive = false);
+          });
+        } else if (active && !_pulseCheckActive) {
+          _pulseCheckActive = true;
+        }
       }
 
-      // Vitals — only update when non-null to avoid overwriting valid readings
       if (hrP   != null) _heartRatePatient   = hrP;
       if (spo2P != null) _spO2Patient = spo2P;
 
-      // Collect ppgRaw into ring buffer during pulse check window
       if (_pulseCheckActive && data.containsKey('ppgRaw')) {
         final raw = (data['ppgRaw'] as num?)?.toDouble() ?? 0.0;
-        _ppgBuffer.add(raw);
-        if (_ppgBuffer.length > _ppgBufferMax) _ppgBuffer.removeAt(0);
+        if (raw > 0) {
+          _ppgBuffer.add(raw);
+          if (_ppgBuffer.length > _ppgBufferMax) _ppgBuffer.removeAt(0);
+        }
+      }
+
+      if (_pulseCheckActive) {
+        final sq = (data['ppgSignalQuality'] as int?) ?? 0;
+        final hr = (data['heartRatePatient'] as num?)?.toDouble() ?? 0.0;
+        _livePpgSignalQuality = sq;
+        _liveHeartRatePatient = hr;
+
+        int liveClass;
+        if (sq < 40) {
+          liveClass = 0;
+        } else if (sq >= 60 && hr >= 30.0 && hr <= 180.0) {
+          liveClass = 2;
+        } else if (sq >= 40) {
+          liveClass = 1;
+        } else {
+          liveClass = 0;
+        }
+
+        if (liveClass > _bestPulseClassification) {
+          _bestPulseClassification = liveClass;
+        }
+        _livePulseClassification = _bestPulseClassification > 0
+            ? _bestPulseClassification
+            : (sq >= 40 ? 1 : null);
       }
 
       if (tempP != null) _patientTemperature = tempP;
       if (data.containsKey('rescuerSignalQuality')) {
         _rescuerSignalQuality = (data['rescuerSignalQuality'] as int?) ?? 0;
       }
-      // Capture always; let the display widget show a "low signal" state
-      // based on _rescuerSignalQuality instead of hard-nulling the value.
       if (hrU   != null && hrU   > 0) _heartRateUser = hrU;
       if (spo2U != null && spo2U > 0) _spO2User      = spo2U;
       if (tempU != null) _rescuerTemperature = tempU;
-      if (humU != null) _rescuerHumidity = humU;
     });
   }
 
   // ── Session end ────────────────────────────────────────────────────────────
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
-    final isLoggedIn = ref
-        .read(authStateProvider)
-        .isLoggedIn;
+    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
     final service = ref.read(sessionServiceProvider);
     final bleConn = ref.read(bleConnectionProvider);
     final container = ProviderScope.containerOf(context, listen: false);
 
-
     final endTime = DateTime.now();
     final sessionStartTs = _sessionStartTime ?? DateTime.now();
+    final totalComps = (data['totalCompressions'] as int?) ?? 0;
+    final wasInterrupted = data['wasInterrupted'] == true;
+
+    // Trivial session — too few compressions to save.
+    if (totalComps < AppConstants.minCompressionsToSave && !wasInterrupted) {
+      if (mounted) {
+        UIHelper.showSnackbar(
+          context,
+          message: 'Session too short — not saved.',
+          icon: Icons.info_outline,
+        );
+      }
+      return;
+    }
+
+    // Interrupted session — save what we have; glove will sync full version later.
+    if (wasInterrupted && mounted) {
+      UIHelper.showWarning(
+        context,
+        'Glove disconnected — saving partial session. '
+            'Reconnect to recover the full version.',
+      );
+    }
+
     var detail = service.assembleDetail(
       summaryPacket: data,
       events: List.from(bleConn.compressionEvents),
@@ -690,19 +779,17 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       sessionDurationSecs: _displaySessionDuration.inSeconds,
       mode: currentMode.sessionModeString,
       scenario: ref.read(scenarioProvider).sessionScenarioString,
+      ventilationRatio: ref.read(settingsProvider).ventilationRatio,
       twoMinAlertTimestampsMs: List.from(bleConn.twoMinAlertTimestampsMs),
       fatigueAlertTimestampMs: bleConn.fatigueAlertTimestampMs,
       fatigueAlertScore: bleConn.fatigueAlertScore,
     );
 
-    // ALWAYS persist locally first — before any dialog or navigation — so the
-    // session can never be lost to a login race or a backend failure.
+    // ALWAYS persist locally first — before any dialog or navigation.
     final localOk = await service.saveLocalOnly(detail);
     container.invalidate(sessionSummariesProvider);
     if (!localOk && mounted) {
-      UIHelper.showWarning(
-        context, 'Session could not be saved on this device.',
-      );
+      UIHelper.showWarning(context, 'Session could not be saved on this device.');
     }
 
     // Emergency + not logged in: offer login once, non-blocking
@@ -715,16 +802,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       if (shouldLogin == true && mounted) {
         await context.push(const LoginScreen());
       }
-      final nowLoggedIn = ref
-          .read(authStateProvider)
-          .isLoggedIn;
+      final nowLoggedIn = ref.read(authStateProvider).isLoggedIn;
       if (!nowLoggedIn) {
-        if (mounted) {
-          context.push(SessionResultsScreen(detail: detail));
-        }
+        if (mounted) context.push(SessionResultsScreen(detail: detail));
         return;
       }
-      // logged in just now → fall through to backend push below
     }
 
     if (!mounted) return;
@@ -738,9 +820,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     if (savedId == null) {
       if (mounted) {
-        UIHelper.showWarning(
-          context, 'Could not sync to server — session saved locally.',
-        );
+        UIHelper.showWarning(context, 'Could not sync to server — session saved locally.');
       }
     } else {
       await SessionLocalStorage.markSynced(detail);
@@ -768,54 +848,48 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                 mode: currentMode,
                 scenario: scenario,
                 sessionLocked: sessionLocked,
-          onScenarioToggle: () {
-            ref.read(scenarioProvider.notifier).toggle();
-            final ble = ref.read(bleConnectionProvider);
-            final next = ref.read(scenarioProvider);
-            // Inform the glove of the scenario change FIRST so target
-            // overrides are interpreted in the right context.
-            ble.sendSetScenario(next.bleValue);
-            ble.sendSetTargetDepth(
-              minMm: next.targetDepthMinMm,
-              maxMm: next.targetDepthMaxMm,
-            );
-            ble.sendSetTargetRate(
-              minBpm: next.targetRateMin,
-              maxBpm: next.targetRateMax,
-            );
-          },
-          onModeToggle: sessionLocked
-              ? null
-              : () async {
-            final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
-            final goingToTraining = currentMode == AppMode.emergency;
+                onScenarioToggle: () {
+                  ref.read(scenarioProvider.notifier).toggle();
+                  final ble = ref.read(bleConnectionProvider);
+                  final next = ref.read(scenarioProvider);
+                  ble.sendSetScenario(next.bleValue);
+                  ble.sendSetTargetDepth(
+                    minMm: next.targetDepthMinMm,
+                    maxMm: next.targetDepthMaxMm,
+                  );
+                  ble.sendSetTargetRate(
+                    minBpm: next.targetRateMin,
+                    maxBpm: next.targetRateMax,
+                  );
+                },
+                onModeToggle: sessionLocked
+                    ? null
+                    : () async {
+                  final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                  final goingToTraining = currentMode == AppMode.emergency;
 
-            // Going to Training? Must be logged in first.
-            if (goingToTraining && !isLoggedIn) {
-              if (!mounted) return;
-              final shouldLogin = await AppDialogs.promptLogin(context);
-              if (shouldLogin != true || !mounted) return;
-              await context.push(const LoginScreen());
-              if (!mounted) return;
-              // If login didn't take, stay in Emergency.
-              if (!ref.read(authStateProvider).isLoggedIn) return;
-            }
+                  if (goingToTraining && !isLoggedIn) {
+                    if (!mounted) return;
+                    final shouldLogin = await AppDialogs.promptLogin(context);
+                    if (shouldLogin != true || !mounted) return;
+                    await context.push(const LoginScreen());
+                    if (!mounted) return;
+                    if (!ref.read(authStateProvider).isLoggedIn) return;
+                  }
 
-            // Logged in (or going to Emergency) — confirm switch.
-            if (goingToTraining) {
-              final confirmed = await AppDialogs.confirmSwitchToTraining(context);
-              if (confirmed != true || !mounted) return;
-            } else {
-              final confirmed = await AppDialogs.confirmSwitchToEmergency(context);
-              if (confirmed != true || !mounted) return;
-            }
+                  if (goingToTraining) {
+                    final confirmed = await AppDialogs.confirmSwitchToTraining(context);
+                    if (confirmed != true || !mounted) return;
+                  } else {
+                    final confirmed = await AppDialogs.confirmSwitchToEmergency(context);
+                    if (confirmed != true || !mounted) return;
+                  }
 
-            final next = _nextMode(currentMode, true);
-            if (next == null || !mounted) return;
-            ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
-            ref.read(appModeProvider.notifier).setMode(next);
-          },
-
+                  final next = _nextMode(currentMode, true);
+                  if (next == null || !mounted) return;
+                  ref.read(bleConnectionProvider).sendModeSet(next.bleValue);
+                  ref.read(appModeProvider.notifier).setMode(next);
+                },
                 onNoFeedbackToggle: sessionLocked
                     ? null
                     : () {
@@ -832,7 +906,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     children: [
-                      // ── Patient vitals — only after confirmed pulse ───────
                       if (_hasCompletedPulseCheck) ...[
                         VitalsCard(
                           label:           'Patient Vitals',
@@ -845,34 +918,30 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                         const SizedBox(height: AppSpacing.md),
                       ],
 
-                      // ── CPR metrics card ─────────────────────────────────
-                      if (ref.watch(settingsProvider).showCprMetrics) ...[
-                        LiveCprMetricsCard(
-                          depth:              _displayDepth,
-                          peakDepth: _peakDepth,
-                          frequency:          _displayFrequency,
-                          cprTime:            _displaySessionDuration,
-                          compressionCount:   _displayCompressionCount,
-                          isSessionActive:    _isSessionActive,
-                          scenario:           scenario,
-                          recoilAchieved:     _recoilAchieved,
-                          imuCalibrated:      _imuCalibrated,
-                          showFatigueBadge:   _showFatigueBadge,
-                          fatigueScore:       _fatigueScore,
-                          compressionInCycle: _compressionInCycle,
-                          isVentilationWindow: _showVentilationOverlay,
-                          isNoFeedback:       currentMode.isNoFeedback,
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                      ],
+                      LiveCprMetricsCard(
+                        depth:              _displayDepth,
+                        peakDepth:          _peakDepth,
+                        valleyDepth:        _valleyDepth,
+                        frequency:          _displayFrequency,
+                        cprTime:            _displaySessionDuration,
+                        compressionCount:   _displayCompressionCount,
+                        isSessionActive:    _isSessionActive,
+                        scenario:           scenario,
+                        recoilAchieved:     _recoilAchieved,
+                        imuCalibrated:      _imuCalibrated,
+                        showFatigueBadge:   _showFatigueBadge,
+                        fatigueScore:       _fatigueScore,
+                        compressionInCycle: _compressionInCycle,
+                        isVentilationWindow: _showVentilationOverlay,
+                        isNoFeedback:       currentMode.isNoFeedback,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
 
-                      // ── Rescuer vitals — always shown ────────────────────
                       VitalsCard(
                         label:                'Your Vitals',
                         heartRate:            _heartRateUser,
                         spO2:                 _spO2User,
                         temperature:          _rescuerTemperature,
-                        humidity:             _rescuerHumidity,
                         rescuerSignalQuality: _rescuerSignalQuality > 0 ? _rescuerSignalQuality : null,
                       ),
                     ],
@@ -887,9 +956,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               child: VentilationOverlay(
                 cycleNumber:          _ventilationCycleNumber,
                 ventilationsExpected: _ventilationsExpected,
-                onDismiss: () => setState(() {
-                  _ventilationOpenedAtCount = null;
-                }),
+                onDismiss: () => setState(() {}),
               ),
             ),
 
@@ -900,9 +967,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               right: 0,
               child: _SwapBanner(
                 alertNumber: _swapAlertNumber,
-                onDismiss: () {
-                  setState(() => _showSwapBanner = false);
-                },
+                onDismiss: () => setState(() => _showSwapBanner = false),
               ),
             ),
 
@@ -910,10 +975,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
             Positioned.fill(
               child: PulseCheckOverlay(
                 intervalNumber: _pulseCheckInterval,
-                classification: _pulseClassification,
+                classification: _livePulseClassification,
+                liveBpm: _liveHeartRatePatient > 0 ? _liveHeartRatePatient : null,
                 ppgBuffer: List.from(_ppgBuffer),
                 detectedBpm: _pulseCheckDetectedBpm,
-                confidence: _pulseCheckConfidence,
+                confidence: _pulseCheckConfidence != null
+                    ? _pulseCheckConfidence
+                    : (_livePpgSignalQuality > 0 ? _livePpgSignalQuality : null),
                 onContinueCpr: () {
                   _pulseResultTimer?.cancel();
                   setState(() => _pulseCheckActive = false);
@@ -990,9 +1058,7 @@ class _SwapBannerState extends State<_SwapBanner>
                 Container(
                   width:  32,
                   height: 32,
-                  decoration: AppDecorations.iconCircle(
-                    bg: AppColors.primaryLight,
-                  ),
+                  decoration: AppDecorations.iconCircle(bg: AppColors.primaryLight),
                   child: const Icon(
                     Icons.people_alt_outlined,
                     color: AppColors.primary,
@@ -1060,7 +1126,7 @@ class _StatusBar extends StatelessWidget {
     final isEmergency  = mode.isEmergency;
     final isNoFeedback = mode.isNoFeedback;
     final modeColor = isEmergency ? AppColors.emergencyMode : AppColors.primary;
-    const modeBg    =  AppColors.primaryLight;
+    const modeBg    = AppColors.primaryLight;
     final modeLabel    = isEmergency ? 'Emergency' : 'Training';
     final scenarioColor = scenario == CprScenario.pediatric
         ? AppColors.pediatric
@@ -1072,7 +1138,7 @@ class _StatusBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       color: modeBg,
       child: Row(
-        children:[
+        children: [
           GestureDetector(
             onTap: () => AppDialogs.showAlert(
               context,
@@ -1090,7 +1156,6 @@ class _StatusBar extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xxs),
 
-          // ── LEFT: Mode swap ──────────────────────────────────────────────
           GestureDetector(
             onTap: (sessionLocked || onModeToggle == null) ? null : onModeToggle,
             child: Row(
@@ -1117,9 +1182,6 @@ class _StatusBar extends StatelessWidget {
             ),
           ),
 
-          // ── Info icon ────────────────────────────────────────────────────
-
-          // ── No-Feedback pill (training only) ─────────────────────────────
           if (!isEmergency) ...[
             const SizedBox(width: AppSpacing.sm),
             GestureDetector(
@@ -1167,7 +1229,6 @@ class _StatusBar extends StatelessWidget {
 
           const Spacer(),
 
-          // ── RIGHT: Scenario swap ─────────────────────────────────────────
           GestureDetector(
             onTap: (sessionLocked || onScenarioToggle == null)
                 ? null
@@ -1195,7 +1256,6 @@ class _StatusBar extends StatelessWidget {
               ],
             ),
           ),
-
         ],
       ),
     );

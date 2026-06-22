@@ -48,6 +48,11 @@ class AppColors {
   /// Header surface and AED card tint — soft blue-white.
   static const Color headerSurface = Color(0xFFEDF4F9);
 
+
+  /// AED
+  static const Color clusterCenter = Color(0xFF006636);
+  static const Color clusterRing   = Color(0xFF93C01F);
+
   // ═══════════════════════════════════════════════════════
   // SEMANTIC — Success / Warning / Error
   // Used on WHITE / light surfaces only.
@@ -65,6 +70,10 @@ class AppColors {
 
   /// Warm orange tint for warning banners.
   static const Color warningBg = Color(0xFFFFF3E0);
+  /// No-feedback training mode accent — aliases warning.
+  /// Used in pills/badges to indicate the session ran without live coaching.
+  static const Color noFeedback   = warning;
+  static const Color noFeedbackBg = warningBg;
 
   /// Form errors, validation, non-life-threatening error states.
   static const Color error = Color(0xFFD32F2F);

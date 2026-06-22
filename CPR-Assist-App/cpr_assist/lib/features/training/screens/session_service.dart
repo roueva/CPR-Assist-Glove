@@ -71,7 +71,11 @@ class SessionService {
   /// Throws if no matching detail can be located.
   Future<SessionDetail> fetchDetailForSummary(SessionSummary summary) async {
     if (summary.id != null) {
-      return fetchDetail(summary.id!);
+      try {
+        return await fetchDetail(summary.id!);
+      } catch (_) {
+        // Backend returned 404 or error — fall through to local storage
+      }
     }
     final start = summary.sessionStart;
     if (start == null) {
@@ -129,7 +133,9 @@ class SessionService {
     }
   }
 
-  /// Delete one session by ID. Sub-tables deleted via ON DELETE CASCADE.
+  /// Delete one session by backend ID. Sub-tables deleted via ON DELETE CASCADE.
+  /// Returns true on success. Returns false on network/HTTP failure.
+  /// Used internally by [deleteSummary] — UI code should call deleteSummary instead.
   Future<bool> deleteSession(int sessionId) async {
     try {
       await _network.delete('/sessions/$sessionId', requiresAuth: true);
@@ -140,7 +146,8 @@ class SessionService {
     }
   }
 
-  /// Delete all sessions for the current user.
+  /// Delete all sessions for the current user on the backend.
+  /// Used internally by [deleteAllSummaries] — UI code should call deleteAllSummaries instead.
   Future<bool> deleteAllSessions() async {
     try {
       await _network.delete('/sessions/all', requiresAuth: true);
@@ -149,6 +156,47 @@ class SessionService {
       debugPrint('deleteAllSessions failed: $e');
       return false;
     }
+  }
+
+  /// Single entry point for deleting a session from the UI.
+  ///
+  /// Handles all three cases consistently:
+  ///   1. Backend + local copy   → DELETE backend, then deleteByStart locally
+  ///   2. Backend only           → DELETE backend (local copy already absent)
+  ///   3. Local only (id == null)→ deleteByStart locally; no network call
+  ///
+  /// Returns true if the session is gone from both stores after the call.
+  /// Returns false only when a backend-tracked session could not be deleted
+  /// from the backend (network error). In that case the local copy is left
+  /// intact so a retry can succeed later.
+  Future<bool> deleteSummary(SessionSummary summary) async {
+    final start = summary.sessionStart;
+
+    // Local-only session — nothing to delete on the backend
+    if (summary.id == null) {
+      if (start != null) {
+        await SessionLocalStorage.deleteByStart(start);
+      }
+      return true;
+    }
+
+    // Backend-tracked session — delete remotely first, then clean local copy
+    final ok = await deleteSession(summary.id!);
+    if (!ok) return false;
+
+    if (start != null) {
+      await SessionLocalStorage.deleteByStart(start);
+    }
+    return true;
+  }
+
+  /// Single entry point for deleting all sessions (logged-in users only).
+  /// Wipes the backend, then clears the local cache. Returns true on success.
+  Future<bool> deleteAllSummaries() async {
+    final ok = await deleteAllSessions();
+    if (!ok) return false;
+    await SessionLocalStorage.deleteAll();
+    return true;
   }
 
   /// Delete the current user's account and all associated data.
@@ -289,11 +337,13 @@ class SessionService {
     List<int> twoMinAlertTimestampsMs = const [],
     String mode     = 'emergency',
     String scenario = 'standard_adult',
+    String ventilationRatio = '30:2',
   }) {
     // Build raw (fromBleSession no longer computes pause logic inline).
     final raw = SessionDetail.fromBleSession(
       summaryPacket:         summaryPacket,
       events:                events,
+      ventilationRatio: ventilationRatio,
       ventilationEvents:     ventilationEvents,
       pulseCheckEvents:      pulseCheckEvents,
       rescuerVitalSnapshots: rescuerVitalSnapshots,
@@ -447,6 +497,22 @@ class SessionSummary {
   bool get isEmergency  => mode == 'emergency';
   bool get isTraining   => mode == 'training' || mode == 'training_no_feedback';
   bool get isNoFeedback => mode == 'training_no_feedback';
+
+  /// Stable session key for client-side maps and selection state.
+  ///
+  /// Equal to sessionStart truncated to whole seconds, expressed as
+  /// ms-since-epoch. Matches the truncation backend `session.js` applies
+  /// before INSERT/UPSERT, and matches `SessionLocalStorage.keyMsFromStart`
+  /// so the same physical session has identical keys in every store.
+  ///
+  /// Returns 0 if sessionStart is null — sessionStart should always be
+  /// present on a real session, so this fallback only kicks in for malformed
+  /// data and prevents a crash rather than masking a bug silently.
+  int get selKey {
+    final s = sessionStart;
+    if (s == null) return 0;
+    return s.copyWith(millisecond: 0, microsecond: 0).millisecondsSinceEpoch;
+  }
 
   String get durationFormatted {
     final m = sessionDuration ~/ 60;

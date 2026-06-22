@@ -137,8 +137,15 @@ class AppTypography {
   static TextStyle buttonSecondary({Color color = AppColors.primary}) =>
       inter(size: 15, weight: FontWeight.w600, color: color);
 
-  static TextStyle buttonSmall({Color color = AppColors.primary}) =>
-      inter(size: 13, weight: FontWeight.w600, color: color);
+  static TextStyle overline({Color? color}) =>
+      TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8,
+          color: color ?? AppColors.textSecondary);
+
+  static TextStyle buttonSmall({
+    double size = 13,
+    Color color = AppColors.primary,
+  }) =>
+      inter(size: size, weight: FontWeight.w600, color: color);
 
   // ── App-specific ─────────────────────────────────────
 

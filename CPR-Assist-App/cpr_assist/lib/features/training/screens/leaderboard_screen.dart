@@ -22,8 +22,19 @@ import '../widgets/session_results.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LeaderboardScreen extends ConsumerStatefulWidget {
+  // Tab indices exposed so callers can open a specific tab by name
+  // instead of passing a raw number.
+  static const int tabGlobal  = 0;
+  static const int tabFriends = 1;
+  static const int tabMyStats = 2;
+
   final String? currentUsername;
-  const LeaderboardScreen({super.key, this.currentUsername});
+  final int     initialTab;
+  const LeaderboardScreen({
+    super.key,
+    this.currentUsername,
+    this.initialTab = tabGlobal,
+  });
 
   @override
   ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -44,7 +55,14 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length:       3,
+      vsync:        this,
+      initialIndex: widget.initialTab.clamp(
+        LeaderboardScreen.tabGlobal,
+        LeaderboardScreen.tabMyStats,
+      ),
+    );
   }
 
   @override
@@ -261,7 +279,7 @@ class _GlobalTab extends ConsumerWidget {
                             children: [
                               _InfoRow(icon: Icons.looks_one_rounded,   label: 'Minimum 3 Training sessions required'),
                               _InfoRow(icon: Icons.looks_two_rounded,   label: 'Each session must be ≥ 30 compressions'),
-                              _InfoRow(icon: Icons.looks_3_rounded,     label: 'Your best session score is used for ranking'),
+                              _InfoRow(icon: Icons.looks_3_rounded,     label: 'Your average session score is used for ranking'),
                             ],
                           ),
                         ),
@@ -1772,11 +1790,7 @@ class _PersonalRecordsCard extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.pbGoldDark, AppColors.pbGoldLight],
-                begin:  Alignment.topLeft,
-                end:    Alignment.bottomRight,
-              ),
+              color: AppColors.pbGoldLight,
               borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
             ),
             child: Row(

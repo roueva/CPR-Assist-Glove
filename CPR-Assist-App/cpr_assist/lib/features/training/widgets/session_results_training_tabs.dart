@@ -280,21 +280,29 @@ class _GridStatTile extends StatelessWidget {
               style: AppTypography.caption(color: AppColors.textSecondary)),
           const SizedBox(height: AppSpacing.xxs),
           // Value + inline note on same row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(value,
-                  style: AppTypography.numericDisplay(
-                      size: 19, color: AppColors.textPrimary)),
-              if (note != null) ...[
-                const SizedBox(width: AppSpacing.xs),
-                Text(note!,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            // Numeric value — never clipped. Sub-pixel rounding sometimes
+            // pushes this row 0.5–1 px over its parent's 140px constraint;
+            // wrapping the secondary `note` in Flexible lets it shrink (and
+            // ellipsize) rather than overflowing the whole Row.
+            Text(value,
+                style: AppTypography.numericDisplay(
+                    size: 19, color: AppColors.textPrimary)),
+            if (note != null) ...[
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(note!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.caption(
                         color: AppColors.textDisabled)),
-              ],
+              ),
             ],
-          ),
+          ],
+        ),
           // Zone bar
           if (zoneBar != null) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -2145,12 +2153,14 @@ class _RescuerVitalsSection extends StatelessWidget {
   final double?       rescuerHR;
   final double?       rescuerSpO2;
   final SessionDetail detail;
+  final bool          isEmergency;
 
 
   const _RescuerVitalsSection({
     required this.rescuerHR,
     required this.rescuerSpO2,
     required this.detail,
+    this.isEmergency = false,
   });
 
   int get _fatigueScore => SessionDetail.computeFatigueScore(
@@ -2196,8 +2206,6 @@ class _RescuerVitalsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final onset  = detail.fatigueOnsetIndex;
     final temp   = _rescuerTemp;
-    final wristTemp = detail.rescuerWristTempEnd ?? detail.rescuerWristTempStart;
-    final wristTempSub = detail.rescuerWristTempEnd != null ? 'at session end' : 'at session start';
 
     final hrColor = rescuerHR == null  ? AppColors.textDisabled
         : rescuerHR! < 60             ? AppColors.primary
@@ -2248,10 +2256,11 @@ class _RescuerVitalsSection extends StatelessWidget {
                   sub:   hrSub,
                   color: hrColor,
                   onInfo: () => _HeartRateDetailDialog.show(context,
-                    hr:      rescuerHR!,
-                    hrSub:   hrSub,
-                    hrColor: hrColor,
-                    vitals:  detail.rescuerVitals,
+                    hr:          rescuerHR!,
+                    hrSub:       hrSub,
+                    hrColor:     hrColor,
+                    vitals:      detail.rescuerVitals,
+                    isEmergency: isEmergency,
                   ),
                 )),
               if (rescuerHR != null && rescuerSpO2 != null)
@@ -2274,42 +2283,21 @@ class _RescuerVitalsSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-
-        // ── Wrist temp + Room temp row ─────────────────────────────────────
-        if (temp != null || wristTemp != null) ...[
-          Row(
-            children: [
-              if (temp != null)
-                Expanded(child: _VitalInfoTile(
-                  icon:  Icons.watch_rounded,
-                  label: 'Wrist temp',
-                  value: temp.toStringAsFixed(1),
-                  unit:  '°C',
-                  sub:   tempSub,
-                  color: tempColor,
-                  onInfo: () => _WristTempDetailDialog.show(context,
-                    temp:      temp,
-                    tempSub:   tempSub,
-                    tempColor: tempColor,
-                    vitals:    detail.rescuerVitals,
-                  ),
-                )),
-              if (temp != null && wristTemp != null)
-                const SizedBox(width: AppSpacing.sm),
-              if (wristTemp != null)
-                Expanded(child: _VitalInfoTile(
-                  icon:  Icons.device_thermostat_rounded,
-                  label: 'Room temp',
-                  value: wristTemp.toStringAsFixed(1),
-                  unit:  '°C',
-                  sub:   wristTempSub,
-                  color: AppColors.textSecondary,
-                  onInfo: () => _RoomTempDetailDialog.show(context,
-                    wristTempStart: detail.rescuerWristTempStart,
-                    wristTempEnd:   detail.rescuerWristTempEnd,
-                  ),
-                )),
-            ],
+// ── Wrist temp tile (full width) ───────────────────────────────────
+        if (temp != null) ...[
+          _VitalInfoTile.wide(
+            icon:    Icons.watch_rounded,
+            label:   'Rescuer wrist temp',
+            value:   temp.toStringAsFixed(1),
+            unit:    '°C',
+            sub:     tempSub,
+            color:   tempColor,
+            onInfo:  () => _WristTempDetailDialog.show(context,
+              temp:      temp,
+              tempSub:   tempSub,
+              tempColor: tempColor,
+              vitals:    detail.rescuerVitals,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
         ],

@@ -281,7 +281,8 @@ class LiveCprMetricsCard extends StatefulWidget {
   final double      frequency;
   final Duration    cprTime;
   final int         compressionCount;
-  final bool recoilAchieved;   // ADD
+  final double      valleyDepth;
+  final bool        recoilAchieved;
   final bool        isSessionActive;
   final bool        imuCalibrated;
   final bool        showFatigueBadge;
@@ -299,6 +300,7 @@ class LiveCprMetricsCard extends StatefulWidget {
     required this.cprTime,
     required this.compressionCount,
     required this.isSessionActive,
+    this.valleyDepth       = 0.0,
     this.recoilAchieved    = false,
     this.imuCalibrated     = true,
     this.showFatigueBadge  = false,
@@ -638,6 +640,7 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                         child: _DepthColumn(
                           depth:          widget.depth,
                           peakDepth:      widget.peakDepth,
+                          valleyDepth:    widget.valleyDepth,
                           state:          depthState,
                           recoilAchieved: widget.recoilAchieved,
                           scenario:       widget.scenario,
@@ -922,6 +925,7 @@ class _FrequencyGauge extends StatelessWidget {
 class _DepthColumn extends StatelessWidget {
   final double         depth;
   final double         peakDepth;
+  final double         valleyDepth;
   final _FeedbackState state;
   final bool           recoilAchieved;
   final CprScenario    scenario;
@@ -935,15 +939,20 @@ class _DepthColumn extends StatelessWidget {
     required this.peakDepth,
     required this.state,
     required this.scenario,
+    this.valleyDepth     = 0.0,
     this.recoilAchieved  = false,
     this.sessionActive   = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final valueColor = state == _FeedbackState.idle
+    final bool hasPeak = peakDepth > 0;
+    final bool peakWrong = hasPeak &&
+        (peakDepth < scenario.targetDepthMinCm ||
+            peakDepth > scenario.targetDepthMaxCm);
+    final Color valueColor = !hasPeak
         ? AppColors.textOnDark.withValues(alpha: 0.4)
-        : state.color;
+        : (peakWrong ? AppColors.feedbackBad : AppColors.feedbackGood);
 
     return SizedBox(
       width: AppSpacing.depthBarWidth,
@@ -965,6 +974,7 @@ class _DepthColumn extends StatelessWidget {
             height: _barHeight,
             child: AnimatedDepthBar(
               depth:             depth,
+              valleyDepth:       valleyDepth,
               recoilAchieved:    recoilAchieved && depth > 0,
               targetDepthCm:     scenario.targetDepthMinCm,
               targetDepthMaxCm:  scenario.targetDepthMaxCm,

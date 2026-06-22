@@ -410,12 +410,14 @@ class _HeartRateDetailDialog extends StatelessWidget {
   final String                     hrSub;
   final Color                      hrColor;
   final List<RescuerVitalSnapshot> vitals;
+  final bool                       isEmergency;
 
   const _HeartRateDetailDialog({
     required this.hr,
     required this.hrSub,
     required this.hrColor,
     required this.vitals,
+    this.isEmergency = false,
   });
 
   static void show(BuildContext context, {
@@ -423,19 +425,20 @@ class _HeartRateDetailDialog extends StatelessWidget {
     required String hrSub,
     required Color  hrColor,
     required List<RescuerVitalSnapshot> vitals,
+    bool isEmergency = false,
   }) {
     showDialog<void>(
       context:      context,
       barrierColor: AppColors.overlayDark,
       builder: (_) => _HeartRateDetailDialog(
-        hr:      hr,
-        hrSub:   hrSub,
-        hrColor: hrColor,
-        vitals:  vitals,
+        hr:          hr,
+        hrSub:       hrSub,
+        hrColor:     hrColor,
+        vitals:      vitals,
+        isEmergency: isEmergency,
       ),
     );
   }
-
   bool get _hasVitals => vitals.length >= 2;
 
   int get _firstRMSSD => _hasVitals ? vitals.first.rmssd : 0;
@@ -683,12 +686,14 @@ class _HeartRateDetailDialog extends StatelessWidget {
                       ),
                     ],
 
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'See the Charts tab for your heart rate trend over the full session.',
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled),
-                    ),
+                    if (!isEmergency) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'See the Charts tab for your heart rate trend over the full session.',
+                        style: AppTypography.caption(
+                            color: AppColors.textDisabled),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1108,222 +1113,6 @@ class _WristTempDetailDialog extends StatelessWidget {
                                       ),
                                     ),
                                   ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            const Divider(height: 1, color: AppColors.divider),
-            TextButton(
-              onPressed: () => context.pop(),
-              style: TextButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48)),
-              child: Text('Got it', style: AppTypography.buttonSecondary()),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _RoomTempDetailDialog
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _RoomTempDetailDialog extends StatelessWidget {
-  final double? wristTempStart ;
-  final double? wristTempEnd ;
-
-  const _RoomTempDetailDialog({
-    required this.wristTempStart,
-    required this.wristTempEnd,
-  });
-
-  static void show(BuildContext context, {
-    required double? wristTempStart,
-    required double? wristTempEnd,
-  }) {
-    showDialog<void>(
-      context:      context,
-      barrierColor: AppColors.overlayDark,
-      builder: (_) => _RoomTempDetailDialog(
-        wristTempStart: wristTempStart,
-        wristTempEnd:   wristTempEnd,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lastVal = wristTempEnd ?? wristTempStart;
-    if (lastVal == null) return const SizedBox.shrink();
-
-    return Dialog(
-      backgroundColor: AppColors.transparent,
-      insetPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.dialogInsetH,
-          vertical:   AppSpacing.dialogInsetV),
-      child: Container(
-        decoration: AppDecorations.dialog(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-
-            // ── Header ───────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md, AppSpacing.md, AppSpacing.sm, 0),
-              child: Row(
-                children: [
-                  Container(
-                    width: AppSpacing.iconLg, height: AppSpacing.iconLg,
-                    decoration: AppDecorations.iconRounded(
-                        bg: AppColors.textSecondary.withValues(alpha: 0.10),
-                        radius: AppSpacing.cardRadiusSm),
-                    child: Icon(Icons.device_thermostat_rounded,
-                        size: AppSpacing.iconSm,
-                        color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text('Room Temperature',
-                      style: AppTypography.heading(size: 16))),
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
-                        color: AppColors.textSecondary,
-                        size: AppSpacing.iconMd),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Hero ─────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RichText(
-                    text: TextSpan(children: [
-                      TextSpan(
-                        text: lastVal.toStringAsFixed(1),
-                        style: AppTypography.numericDisplay(
-                            size: 48, color: AppColors.textSecondary),
-                      ),
-                      TextSpan(
-                        text: ' °C',
-                        style: AppTypography.bodyMedium(
-                            size: 16,
-                            color: AppColors.textSecondary.withValues(alpha: 0.7)),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(wristTempEnd != null ? 'at session end' : 'at session start',
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled)),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1, color: AppColors.divider),
-
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: AppDecorations.greyInfoBox(),
-                      child: Text(
-                        'Rescuer wrist skin temperature recorded by the glove sensor. '
-                            'Rising temperature during prolonged CPR can indicate physical exertion.',
-                        style: AppTypography.body(
-                            size: 13, color: AppColors.textSecondary),
-                      ),
-                    ),
-                    if (wristTempStart != null && wristTempEnd != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          Container(
-                            width: 3, height: 12,
-                            margin: const EdgeInsets.only(right: AppSpacing.xs),
-                            decoration: BoxDecoration(
-                              color: AppColors.textSecondary,
-                              borderRadius: BorderRadius.circular(AppSpacing.xxs),
-                            ),
-                          ),
-                          Text('During Session',
-                              style: AppTypography.subheading(size: 12)),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Container(
-                        decoration: AppDecorations.infoBox(),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.sm),
-                              child: Row(
-                                children: [
-                                  Expanded(child: Text('Session start',
-                                      style: AppTypography.bodyMedium(size: 13))),
-                                  Text('${wristTempStart!.toStringAsFixed(1)} °C',
-                                      style: AppTypography.bodyBold(
-                                          size: 13,
-                                          color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                            const Divider(height: 1, color: AppColors.divider),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpacing.sm),
-                              child: Row(
-                                children: [
-                                  Expanded(child: Text('Session end',
-                                      style: AppTypography.bodyMedium(size: 13))),
-                                  Text('${wristTempEnd!.toStringAsFixed(1)} °C',
-                                      style: AppTypography.bodyBold(
-                                          size: 13,
-                                          color: AppColors.textSecondary)),
-                                  const SizedBox(width: AppSpacing.xs),
-                                      () {
-                                    final diff = wristTempEnd! - wristTempStart!;
-                                    final diffColor = diff.abs() < 0.5
-                                        ? AppColors.success : AppColors.warning;
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: AppSpacing.xs, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: diffColor.withValues(alpha: 0.10),
-                                        borderRadius: BorderRadius.circular(
-                                            AppSpacing.buttonRadiusLg),
-                                      ),
-                                      child: Text(
-                                        '${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)} °C',
-                                        style: AppTypography.badge(
-                                            size: 9, color: diffColor),
-                                      ),
-                                    );
-                                  }(),
                                 ],
                               ),
                             ),

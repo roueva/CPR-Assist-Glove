@@ -281,6 +281,33 @@ class AppDialogs {
     );
   }
 
+  // ── Selftest Results ──────────────────────────────────────────────────────
+  // Shows pass/warn/fail grouped lists with per-sensor reason codes. Designed
+  // for the diagnostic sheet's "Check all components" tile, where the message
+  // can be long (up to 8 sensors × ~60-char reason lines). Scrollable so it
+  // never overflows the screen.
+
+  static Future<void> showSelftestResults(
+      BuildContext context, {
+        required List<_SelftestRow> failed,
+        required List<_SelftestRow> warns,
+        required List<_SelftestRow> passed,
+        required int batteryPct,
+      }) {
+    final allOk = failed.isEmpty && warns.isEmpty;
+    return showDialog<void>(
+      context: context,
+      barrierColor: AppColors.overlayDark,
+      builder: (_) => _SelftestResultsDialog(
+        allOk:      allOk,
+        failed:     failed,
+        warns:      warns,
+        passed:     passed,
+        batteryPct: batteryPct,
+      ),
+    );
+  }
+
   // ── AED Share ─────────────────────────────────────────────────────────────
 
   static Future<void> showAEDShare(
@@ -338,6 +365,249 @@ class AppDialogs {
       context: context,
       barrierColor: AppColors.overlayDark,
       builder: (_) => dialog,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SelftestRow — one row in the results dialog (name + optional reason)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SelftestRow {
+  final String name;
+  final String reason;   // empty for passed rows
+  const _SelftestRow({required this.name, this.reason = ''});
+}
+
+// Hoist to public so the caller can construct rows without importing _-private types
+typedef SelftestRow = _SelftestRow;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SelftestResultsDialog — scrollable, grouped, color-coded results
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SelftestResultsDialog extends StatelessWidget {
+  final bool                allOk;
+  final List<_SelftestRow>  failed;
+  final List<_SelftestRow>  warns;
+  final List<_SelftestRow>  passed;
+  final int                 batteryPct;
+
+  const _SelftestResultsDialog({
+    required this.allOk,
+    required this.failed,
+    required this.warns,
+    required this.passed,
+    required this.batteryPct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // Cap dialog at ~70% of screen height — content scrolls inside.
+    final maxH = mq.size.height * 0.7;
+
+    final headerIcon  = allOk ? Icons.check_circle_outline_rounded : Icons.warning_amber_rounded;
+    final headerColor = allOk ? AppColors.success : AppColors.warning;
+    final headerBg    = allOk ? AppColors.successBg : AppColors.warningBg;
+    final headerTitle = allOk ? 'Glove Ready' : 'Sensor Issues';
+    final headerSub   = allOk
+        ? 'All tested components passed.'
+        : '${failed.length} failed, ${warns.length} warning${warns.length == 1 ? '' : 's'}, '
+        '${passed.length} passed.';
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.dialogInsetH,
+        vertical:   AppSpacing.dialogInsetV,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: Container(
+          decoration: AppDecorations.dialog(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header (fixed) ───────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.dialogPaddingH,
+                  AppSpacing.dialogPaddingTop,
+                  AppSpacing.dialogPaddingH,
+                  AppSpacing.md,
+                ),
+                child: Column(
+                  children: [
+                    _IconCircle(icon: headerIcon, color: headerColor, bg: headerBg),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(headerTitle, style: AppTypography.heading(size: 17)),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      headerSub,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.body(size: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.divider),
+              // ── Scrollable groups ────────────────────────────────────────
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.dialogPaddingH,
+                    vertical:   AppSpacing.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (failed.isNotEmpty)
+                        _SelftestGroup(
+                          title:      'Failed',
+                          rows:       failed,
+                          accent:     AppColors.error,
+                          accentBg:   AppColors.errorBg,
+                          icon:       Icons.cancel_rounded,
+                        ),
+                      if (warns.isNotEmpty)
+                        _SelftestGroup(
+                          title:      'Warnings',
+                          rows:       warns,
+                          accent:     AppColors.warning,
+                          accentBg:   AppColors.warningBg,
+                          icon:       Icons.warning_amber_rounded,
+                        ),
+                      if (passed.isNotEmpty)
+                        _SelftestGroup(
+                          title:      'Passed',
+                          rows:       passed,
+                          accent:     AppColors.success,
+                          accentBg:   AppColors.successBg,
+                          icon:       Icons.check_circle_rounded,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.divider),
+              // ── Dismiss button (fixed) ───────────────────────────────────
+              TextButton(
+                onPressed: () => context.pop(),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(double.infinity, AppSpacing.touchTargetLarge),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      bottomLeft:  Radius.circular(AppSpacing.dialogRadius),
+                      bottomRight: Radius.circular(AppSpacing.dialogRadius),
+                    ),
+                  ),
+                ),
+                child: Text('OK',
+                    style: AppTypography.bodyBold(size: 15, color: AppColors.primary)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelftestGroup extends StatelessWidget {
+  final String              title;
+  final List<_SelftestRow>  rows;
+  final Color               accent;
+  final Color               accentBg;
+  final IconData            icon;
+  const _SelftestGroup({
+    required this.title,
+    required this.rows,
+    required this.accent,
+    required this.accentBg,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Group header pill
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm, vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: accentBg,
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 12, color: accent),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${title.toUpperCase()}  ${rows.length}',
+                      style: AppTypography.badge(color: accent),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          // Rows
+          for (int i = 0; i < rows.length; i++)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm, vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: i.isEven
+                    ? AppColors.screenBgGrey.withValues(alpha: 0.5)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 3, height: 28,
+                    margin: const EdgeInsets.only(right: AppSpacing.sm, top: 2),
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rows[i].name,
+                          style: AppTypography.bodyMedium(size: 13),
+                        ),
+                        if (rows[i].reason.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              rows[i].reason,
+                              style: AppTypography.caption(color: accent),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

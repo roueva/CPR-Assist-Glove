@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:cpr_assist/providers/session_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -22,7 +23,6 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final networkService = NetworkService();
   networkService.initialize(prefs);
-  await dotenv.load(fileName: '.env');  // ← moved here
   _filterLogs();
 
   final wakelockPref = prefs.getBool('settings_keepScreenOn') ?? true;
@@ -41,6 +41,8 @@ void main() async {
   );
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    dotenvReady = dotenv.load(fileName: '.env');
+    await dotenvReady;
     NetworkService.startConnectivityMonitoring(  // dotenv gone, this stays
       interval: AppConstants.connectivityCheckInterval,
     );
@@ -72,6 +74,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// Exposes tab switching to NFC and deep link handlers outside the widget tree.
 final ValueNotifier<int> nfcTabNotifier = ValueNotifier<int>(-1);
+/// Completes once `.env` has been loaded. Anything reading dotenv keys
+/// after first frame should `await dotenvReady` first.
+late final Future<void> dotenvReady;
 final ValueNotifier<int> liveCprTabActivationNotifier = ValueNotifier<int>(0);
 
 
@@ -116,6 +121,14 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _linkSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.detached) {
+      FlutterBluePlus.setLogLevel(LogLevel.none);
+    }
   }
 
   final _appLinks = AppLinks();

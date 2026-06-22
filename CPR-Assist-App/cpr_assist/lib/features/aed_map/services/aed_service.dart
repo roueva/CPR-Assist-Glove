@@ -22,8 +22,6 @@ class AEDService {
     switch (transportMode) {
       case 'driving':
         return AppConstants.drivingMultiplier;
-      case 'bicycling':
-        return AppConstants.bicyclingMultiplier;
       case 'walking':
       default:
         return AppConstants.walkingMultiplier;

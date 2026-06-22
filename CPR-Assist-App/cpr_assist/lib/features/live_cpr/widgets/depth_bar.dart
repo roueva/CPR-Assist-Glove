@@ -14,10 +14,11 @@ import 'package:cpr_assist/core/core.dart';
 
 class AnimatedDepthBar extends StatefulWidget {
   final double depth;           // live cm from BLE, 0–8
+  final double valleyDepth;     // actual recoil floor cm from firmware
   final bool   recoilAchieved;  // true = full chest recoil
-  final double targetDepthCm;   // where DEPTH pill starts  (adult=5, peds=4)
-  final double targetDepthMaxCm;// where DEPTH pill ends    (adult=6, peds=5)
-  final double maxDepthCm;      // absolute max shown       (default 8)
+  final double targetDepthCm;
+  final double targetDepthMaxCm;
+  final double maxDepthCm;
   final bool sessionActive;
 
 
@@ -26,9 +27,10 @@ class AnimatedDepthBar extends StatefulWidget {
     required this.depth,
     required this.targetDepthCm,
     required this.targetDepthMaxCm,
+    this.valleyDepth       = 0.0,
     this.recoilAchieved    = false,
     this.maxDepthCm        = 6.5,
-    this.sessionActive = false,
+    this.sessionActive     = false,
 
   });
 
@@ -46,14 +48,14 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
   late AnimationController _ctrl;
   late AnimationController _pillPulse;
   late Animation<double>   _anim;
-  double _displayed = 0.0;
+  double _lastTarget = 0.0;
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
       vsync:    this,
-      duration: const Duration(milliseconds: 50),
+      duration: const Duration(milliseconds: 40),
     );
     _pillPulse = AnimationController(
       vsync:    this,
@@ -69,10 +71,10 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
   void didUpdateWidget(covariant AnimatedDepthBar old) {
     super.didUpdateWidget(old);
     final double target = widget.depth.clamp(0.0, widget.maxDepthCm);
-    if ((target - _displayed).abs() < 0.01) return;
-    _anim = Tween<double>(begin: _displayed, end: target)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _displayed = target;   // ← moved AFTER creating the tween
+    if ((target - _lastTarget).abs() < 0.01) return;
+    _lastTarget = target;
+    _anim = Tween<double>(begin: _anim.value, end: target)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.linear));
     _ctrl.forward(from: 0);
   }
 

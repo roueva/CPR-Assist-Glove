@@ -856,6 +856,9 @@ class AEDRoutingCoordinator {
 
       await CacheService.saveDistanceCache();
 
+      // Yield so UI can paint before heavy re-sort of 3000+ AEDs
+      await Future.delayed(const Duration(milliseconds: 16));
+
       // Re-sort now that real road distances are in the cache
       final latestState = _ref.read(mapStateProvider);
       if (latestState.userLocation != null && latestState.aedList.isNotEmpty) {

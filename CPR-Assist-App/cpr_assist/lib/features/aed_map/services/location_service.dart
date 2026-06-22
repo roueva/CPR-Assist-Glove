@@ -420,8 +420,6 @@ class LocationService {
     switch (transportMode) {
       case 'walking':
         speedKmh = AppConstants.walkingSpeed;
-      case 'bicycling':
-        speedKmh = AppConstants.bicyclingSpeed;
       case 'driving':
         speedKmh = AppConstants.drivingSpeed;
       default:

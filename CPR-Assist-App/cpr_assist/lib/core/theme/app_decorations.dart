@@ -124,11 +124,25 @@ class AppDecorations {
         border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
       );
 
-  static BoxDecoration primaryCard({double radius = AppSpacing.cardRadius}) =>
+  static BoxDecoration primaryCard({
+    double radius = AppSpacing.cardRadius,
+    bool bordered = true,
+  }) =>
       BoxDecoration(
         color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        border: bordered
+            ? Border.all(color: AppColors.primary.withValues(alpha: 0.2))
+            : null,
+        boxShadow: bordered
+            ? null
+            : [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       );
 
   /// Achievement card — unlocked state has a tinted border + subtle shadow.
@@ -171,17 +185,12 @@ class AppDecorations {
     border:       Border.all(color: AppColors.divider),
   );
 
-  /// Brand gradient card — used for the CPR grade/score panel.
-  /// Start: AppColors.primary (#194E9D), End: a slightly lighter brand blue.
+  /// CPR grade/score panel.
   static BoxDecoration primaryGradientCard({
     double radius = AppSpacing.cardRadiusLg,
   }) =>
       BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryAlt],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(radius),
       );
 
@@ -201,16 +210,12 @@ class AppDecorations {
         ],
       );
 
-  /// Gradient card for the leaderboard podium and personal best highlight.
+  /// Card for the leaderboard podium and personal best highlight.
   static BoxDecoration podiumGradientCard({
     double radius = AppSpacing.cardRadius,
   }) =>
       BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryAlt],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.cprCardBg,
         borderRadius: BorderRadius.circular(radius),
       );
 
@@ -270,12 +275,11 @@ class AppDecorations {
       BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
       );
 
   /// Selected segment inside a segmented control (e.g. cm/in, Adult/Pediatric).
   static BoxDecoration segmentSelected({
-    double radius = AppSpacing.cardRadiusSm,
+    double radius = AppSpacing.cardRadiusLg,
   }) =>
       BoxDecoration(
         color:        AppColors.primary,
@@ -456,28 +460,13 @@ class AppDecorations {
   /// 3D-style avatar — gradient fill + layered shadow depth effect.
   static BoxDecoration avatarCircle3d() => const BoxDecoration(
     shape: BoxShape.circle,
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end:   Alignment.bottomRight,
-      colors: [
-        AppColors.primaryLight,
-        AppColors.primaryMid,
-      ],
-    ),
+    color: AppColors.primaryLight,
     boxShadow: [
-      // Outer depth shadow
       BoxShadow(
-        color:       AppColors.shadowDefault,
-        blurRadius:  10,
+        color:      AppColors.shadowDefault,
+        blurRadius: 10,
         spreadRadius: 1,
-        offset:      Offset(0, 4),
-      ),
-      // Inner highlight (top-left light source illusion)
-      BoxShadow(
-        color:       AppColors.primaryMid,
-        blurRadius:  6,
-        spreadRadius: -2,
-        offset:      Offset(-2, -2),
+        offset:     Offset(0, 4),
       ),
     ],
   );
@@ -496,13 +485,9 @@ class AppDecorations {
     border: Border.all(color: AppColors.white, width: AppSpacing.xxs),
   );
 
-  /// Emergency mode green gradient — used in EmergencyHeader.
+  /// Emergency mode green — used in EmergencyHeader.
   static BoxDecoration emergencyGradient() => const BoxDecoration(
-    gradient: LinearGradient(
-      colors: [AppColors.emergencyMode, AppColors.emergencyModeDark],
-      begin:  Alignment.topLeft,
-      end:    Alignment.bottomRight,
-    ),
+    color: AppColors.emergencyMode,
   );
 
   /// Thin coloured accent bar — used in chart card titles.
@@ -668,6 +653,12 @@ class AppDecorations {
   static BoxDecoration statsHeaderCard() => BoxDecoration(
     color:        AppColors.cprCardBg,
     borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+  );
+
+  /// Colored dot — used for bullet points in guide lists.
+  static BoxDecoration dot(Color c) => BoxDecoration(
+    color: c,
+    shape: BoxShape.circle,
   );
 
 }

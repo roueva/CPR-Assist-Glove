@@ -43,7 +43,9 @@ class _SessionCompareScreenState
 
   late TabController _tabController;
 
-  // Detail map: session id → detail (null while loading)
+  // Detail map: session selKey → detail (null while loading).
+  // selKey is sessionStart-derived, so it's stable for both backend-synced
+  // and local-only sessions. See SessionSummary.selKey.
   final Map<int, SessionDetail?> _details = {};
   final Map<int, bool>           _loading = {};
 
@@ -67,17 +69,21 @@ class _SessionCompareScreenState
   Future<void> _fetchAllDetails() async {
     final service = ref.read(sessionServiceProvider);
     await Future.wait(widget.sessions.map((s) async {
-      final id = s.id;
-      if (id == null) return;
-      setState(() => _loading[id] = true);
+      final key = s.selKey;
+      if (key == 0) return; // malformed — no sessionStart
+      setState(() => _loading[key] = true);
       try {
-        final d = await service.fetchDetail(id);
+        // fetchDetailForSummary handles both backend (id != null) and
+        // local-only (id == null) sessions, falling back to local storage
+        // when the backend lookup fails. This is what lets local-only
+        // sessions show up in compare.
+        final d = await service.fetchDetailForSummary(s);
         if (mounted) setState(() {
-          _details[id] = d;
-          _loading[id] = false;
+          _details[key] = d;
+          _loading[key] = false;
         });
       } catch (_) {
-        if (mounted) setState(() => _loading[id] = false);
+        if (mounted) setState(() => _loading[key] = false);
       }
     }));
   }
@@ -361,17 +367,18 @@ class _LegendCard extends StatelessWidget {
                             : session.isEmergency
                             ? Text(
                           session.pulseDetectedFinal
-                              ? 'Pulse Detected'
+                              ? 'Pulse\nDetected'
                               : session.pulseChecksPrompted > 0
-                              ? 'No Pulse Detected'
-                              : 'Pulse Uncertain',
-                          style: AppTypography.label(
+                              ? 'No Pulse\nDetected'
+                              : 'Uncertain',
+                          style: AppTypography.caption(
                             color: session.pulseDetectedFinal
                                 ? AppColors.success
                                 : session.pulseChecksPrompted > 0
                                 ? AppColors.error
                                 : AppColors.textDisabled,
                           ),
+                          maxLines: 2,
                         )
                             : const SizedBox.shrink(),
                       ),
@@ -615,7 +622,7 @@ class _EmergencyOutcomeCard extends StatelessWidget {
           for (int i = 0; i < emergencySessions.length; i++) ...[
             _EmergencyOutcomeRow(
               session: emergencySessions[i],
-              detail: details[emergencySessions[i].id],
+              detail: details[emergencySessions[i].selKey],
               color: slotColors[sessions.indexOf(emergencySessions[i])],
               index: sessions.indexOf(emergencySessions[i]),
             ),
@@ -703,8 +710,8 @@ class _EmergencyOutcomeRow extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Text(
-            compliance != null
-                ? '${compliance.toStringAsFixed(0)}% checks'
+            session.pulseChecksPrompted > 0
+                ? '${session.pulseChecksComplied}/${session.pulseChecksPrompted} checks done'
                 : '—',
             textAlign: TextAlign.end,
             style: AppTypography.caption(color: AppColors.textSecondary),
@@ -832,8 +839,8 @@ class _KeyStatsRow extends StatelessWidget {
                   textAlign: TextAlign.center)),
               Expanded(child: Text(depth,
                   style: AppTypography.label(
-                      color: session.averageDepth >= 5.0 &&
-                          session.averageDepth <= 6.0
+                      color: session.averageDepth >= (session.scenario == 'pediatric' ? 4.0 : 5.0) &&
+                          session.averageDepth <= (session.scenario == 'pediatric' ? 5.0 : 6.0)
                           ? AppColors.success
                           : session.averageDepth > 0
                           ? AppColors.warning
@@ -878,7 +885,7 @@ class _PostureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sessionsWithDetail = sessions
-        .where((s) => s.id != null && details[s.id] != null)
+        .where((s) => details[s.selKey] != null)
         .toList();
     if (sessionsWithDetail.isEmpty) return const SizedBox.shrink();
 
@@ -946,7 +953,7 @@ class _PostureCard extends StatelessWidget {
 
   Widget _buildPostureRow(
       SessionSummary s, int slotIdx, List<Color> colors) {
-    final d    = details[s.id!]!;
+    final d    = details[s.selKey]!;
     final comps = d.compressions;
 
     final avgAngle = comps.isEmpty
@@ -1008,7 +1015,7 @@ class _PostureCard extends StatelessWidget {
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
-// _TrendBanner — dark gradient card showing grade progression arc
+// _TrendBanner — dark card showing grade progression arc
 // Visually distinct from all other white cards in the Overview tab.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1063,11 +1070,7 @@ class _TrendBanner extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.cprCardBg, AppColors.primary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.cprCardBg,
         borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         boxShadow: const [
           BoxShadow(
@@ -1707,7 +1710,7 @@ class _PhaseComparisonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final withDetail = sessions
-        .where((s) => s.id != null && details[s.id] != null)
+        .where((s) => details[s.selKey] != null)
         .toList();
     if (withDetail.isEmpty) return const SizedBox.shrink();
 
@@ -1776,7 +1779,7 @@ class _PhaseComparisonCard extends StatelessWidget {
       List<Color> colors,
       bool pediatric,
       ) {
-    final phases = _phases(details[s.id!]!);
+    final phases = _phases(details[s.selKey]!);
     final color  = colors[slotIdx];
     final dMin   = pediatric ? CprTargets.depthMinPediatric : CprTargets.depthMin;
     final dMax   = pediatric ? CprTargets.depthMaxPediatric : CprTargets.depthMax;
@@ -1909,7 +1912,7 @@ class _MetricsTab extends StatelessWidget {
             label: 'Best Streak',
             infoText: 'Longest consecutive run of compressions where both depth and rate were correct at the same time. A higher streak means the rescuer sustained quality under pressure.',
             values: sessions.map((s) {
-              final d = s.id != null ? details[s.id] : null;
+              final d = details[s.selKey];
               return (d?.consecutiveGoodPeak ?? 0).toDouble();
             }).toList(),
             format:  (v) => (v != null && v > 0) ? '${v.toInt()} comps' : '—',
@@ -1937,24 +1940,23 @@ class _MetricsTab extends StatelessWidget {
           sessions: sessions,
           slotColors: slotColors,
           rows: [
-            _MetricRowDef(
-              label: 'Avg Depth',
-              hint: sessions.first.scenario == 'pediatric'
-                  ? '4–5 cm (pediatric)'
-                  : '5–6 cm (adult)',
-              infoText: 'Mean compression depth across all compressions in the session. The sternum must be pressed 5–6 cm for adults (4–5 cm for pediatric) to generate enough blood flow.',
-              values: sessions.map((s) => s.averageDepth).toList(),
-              format: (v) => v != null ? '${v.toStringAsFixed(1)} cm' : '—',
-              colorFn: (v) {
-                if (v == null) return AppColors.textDisabled;
-                final isPed = sessions.first.scenario == 'pediatric';
-                final min = isPed ? 4.0 : 5.0;
-                final max = isPed ? 5.0 : 6.0;
-                if (v >= min && v <= max) return AppColors.success;
-                if (v >= min - 0.5 && v <= max + 0.5) return AppColors.warning;
-                return AppColors.error;
-              },
-            ),
+          _MetricRowDef(
+          label: 'Avg Depth',
+          hint: sessions.every((s) => s.scenario == 'pediatric')
+              ? '4–5 cm (pediatric)'
+              : sessions.every((s) => s.scenario != 'pediatric')
+              ? '5–6 cm (adult)'
+              : '4–6 cm (mixed)',
+          infoText: 'Mean compression depth across all compressions in the session. The sternum must be pressed 5–6 cm for adults (4–5 cm for pediatric) to generate enough blood flow.',
+          values: sessions.map((s) => s.averageDepth).toList(),
+          format: (v) => v != null ? '${v.toStringAsFixed(1)} cm' : '—',
+          colorFn: (v) {
+            if (v == null) return AppColors.textDisabled;
+            if (v >= 4.0 && v <= 6.0) return AppColors.success;
+            if (v >= 3.5 && v <= 6.5) return AppColors.warning;
+            return AppColors.error;
+          },
+        ),
             _MetricRowDef(
               label: 'Peak Depth',
               infoText: 'The deepest single compression recorded in the session. Useful for checking whether over-compression occurred. Compressions beyond 6 cm risk rib or organ injury.',
@@ -2032,7 +2034,7 @@ class _MetricsTab extends StatelessWidget {
               hint:  '≤ 80 ms',
               infoText: 'Standard deviation of the time intervals between consecutive compressions, measured in milliseconds. A lower value means a steadier rhythm. High variability means the rescuer is rushing some compressions and slowing others.',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
+                final d = details[s.selKey];
                 return d?.rateVariability ?? 0.0;
               }).toList(),
               format: (v) => (v != null && v > 0)
@@ -2070,11 +2072,11 @@ class _MetricsTab extends StatelessWidget {
               hint:  'Gaps > 1.5 s',
               infoText: 'Number of gaps > 1.5 s between compressions that were not a scheduled ventilation or pulse check break. Each pause should stay under 10s. Even short unplanned pauses reduce blood flow to the brain.',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
-                return (d?.noFlowIntervals ?? s.noFlowIntervals).toDouble();
+                final d = details[s.selKey];
+                return (d?.unplannedPauseCount ?? 0).toDouble();
               }).toList(),
-              format: (v) => (v != null && v > 0)
-                  ? '${v.toInt()} times' : 'None',
+              format:  (v) => (v != null && v > 0)
+                  ? v.toInt().toString() : 'None',
               colorFn: (v) => v == null
                   ? AppColors.textDisabled
                   : v == 0 ? AppColors.success
@@ -2084,11 +2086,11 @@ class _MetricsTab extends StatelessWidget {
               bestHighlight: true,
             ),
             _MetricRowDef(
-              label: 'No-flow Time',
-              infoText: 'Total accumulated seconds without active compressions, excluding planned ventilation and pulse check breaks. Each individual pause should stay under 10s to prevent blood flow from stopping for too long.',
+              label: 'Unplanned Pause Time',
+              infoText: 'Total accumulated seconds of unplanned pauses. Gaps without active compressions that were not a scheduled ventilation or pulse check break. Each individual pause should stay under 10s.',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
-                return d?.noFlowTime ?? 0.0;
+                final d = details[s.selKey];
+                return d?.unplannedPauseTime ?? 0.0;
               }).toList(),
               format: (v) => (v != null && v > 0)
                   ? '${v.toStringAsFixed(1)} s' : '—',
@@ -2104,7 +2106,7 @@ class _MetricsTab extends StatelessWidget {
               infoText: 'Time from session start until the first compression was delivered. Every second without compressions reduces survival probability. Target is under 5 seconds.',
               target: '< 5s',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
+                final d = details[s.selKey];
                 return d?.timeToFirstCompression ?? 0.0;
               }).toList(),
               format: (v) => (v != null && v > 0)
@@ -2119,7 +2121,7 @@ class _MetricsTab extends StatelessWidget {
               label: 'Fatigue Onset',
               infoText: 'The compression number at which depth began dropping consistently, indicating physical fatigue. A lower number means fatigue set in earlier. If this appears before compression 60, consider a rescuer swap at 2 minutes.',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
+                final d = details[s.selKey];
                 return (d?.fatigueOnsetIndex ?? 0).toDouble();
               }).toList(),
               format: (v) => (v != null && v > 0)
@@ -2139,7 +2141,7 @@ class _MetricsTab extends StatelessWidget {
             _MetricRowDef(
               label:  'Avg Wrist Angle',
               values: sessions.map((s) {
-                final d = s.id != null ? details[s.id] : null;
+                final d = details[s.selKey];
                 if (d == null || d.compressions.isEmpty) return null;
                 return d.compressions
                     .map((c) => c.wristAlignmentAngle)
@@ -2182,14 +2184,14 @@ class _MetricsTab extends StatelessWidget {
               rows: [
                 _MetricRowDef(
                   label: 'Count',
-                  infoText: 'Total number of ventilation cycles recorded during the session. In standard CPR, a cycle is prompted every 30 compressions (30:2 ratio).',
+                  infoText: 'Total number of ventilation pause cycles recorded during the session. Each cycle represents a prompt to deliver rescue breaths.',
                   values: sessions.map((s) =>
                       s.ventilationCount.toDouble()).toList(),
                   format: (v) => v != null ? v.toInt().toString() : '—',
                   colorFn: (_) => AppColors.textPrimary,
                 ),
                 _MetricRowDef(
-                  label: '30:2 Compliance',
+                  label: 'Vent. Compliance',
                   infoText: 'Percentage of ventilation cycles where the rescuer actually paused and delivered breaths as prompted. Skipping ventilation cycles reduces oxygen delivery to the patient.',
                   values: sessions.map((s) => s.ventilationCount > 0
                       ? s.ventilationCompliance : null).toList(),
@@ -2251,7 +2253,7 @@ class _MetricsTab extends StatelessWidget {
     // ── Rescuer Vitals ────────────────────────────────────────────
           if (sessions.any((s) =>
           s.rescuerHRLastPause != null ||
-              (s.id != null && (details[s.id]?.rescuerVitals.isNotEmpty ?? false)))) ...[
+              ((details[s.selKey]?.rescuerVitals.isNotEmpty ?? false)))) ...[
             const SizedBox(height: AppSpacing.md),
             _MetricGroup(
               title: 'Rescuer Vitals',
@@ -2274,11 +2276,15 @@ class _MetricsTab extends StatelessWidget {
                 _MetricRowDef(
                   label:  'HR Change',
                   values: sessions.map((s) {
-                    final d = s.id != null ? details[s.id] : null;
+                    final d = details[s.selKey];
                     if (d == null || d.rescuerVitals.length < 2) return null;
-                    final first = d.rescuerVitals.first.heartRate;
-                    final last  = d.rescuerVitals.last.heartRate;
-                    return last - first;
+                    final baseline = d.rescuerVitals
+                        .firstWhere((v) => v.heartRate > 0,
+                        orElse: () => d.rescuerVitals.first)
+                        .heartRate;
+                    final last = d.rescuerVitals.last.heartRate;
+                    if (baseline == 0 || last == 0) return null;
+                    return last - baseline;
                   }).toList(),
                   format:  (v) => v != null
                       ? '${v >= 0 ? '+' : ''}${v!.toStringAsFixed(0)} bpm'
@@ -2308,7 +2314,7 @@ class _MetricsTab extends StatelessWidget {
                 _MetricRowDef(
                   label:  'Wrist Temp',
                   values: sessions.map((s) {
-                    final d = s.id != null ? details[s.id] : null;
+                    final d = details[s.selKey];
                     if (d == null || d.rescuerVitals.isEmpty) return null;
                     final last = d.rescuerVitals.last;
                     return last.temperature > 0 ? last.temperature : null;
@@ -2325,7 +2331,7 @@ class _MetricsTab extends StatelessWidget {
                 _MetricRowDef(
                   label:  'Fatigue Score',
                   values: sessions.map((s) {
-                    final d = s.id != null ? details[s.id] : null;
+                    final d = details[s.selKey];
                     if (d == null || d.rescuerVitals.isEmpty) return null;
                     return d.rescuerVitals.last.fatigueScore.toDouble();
                   }).toList(),
@@ -2345,7 +2351,7 @@ class _MetricsTab extends StatelessWidget {
                 _MetricRowDef(
                   label:  'HRV (RMSSD)',
                   values: sessions.map((s) {
-                    final d = s.id != null ? details[s.id] : null;
+                    final d = details[s.selKey];
                     if (d == null || d.rescuerVitals.isEmpty) return null;
                     final last = d.rescuerVitals.last;
                     return last.rmssd > 0 ? last.rmssd.toDouble() : null;
@@ -2361,9 +2367,9 @@ class _MetricsTab extends StatelessWidget {
                     infoText: 'How much the time between the rescuer\'s heartbeats varies, in milliseconds. A higher value means the heart is adapting well under exertion. When this drops below 20 ms during CPR, it signals the nervous system is under significant stress and fatigue is setting in. Used here as a relative within-session indicator only.',
                 ),
                 _MetricRowDef(
-                  label:  'Rescuer Swaps',
+                  label:  'Rescuer Swap Prompts',
                   values: sessions.map((s) {
-                    final d = s.id != null ? details[s.id] : null;
+                    final d = details[s.selKey];
                     return (d?.rescuerSwapCount ?? s.rescuerSwapCount).toDouble();
                   }).toList(),
                   format:  (v) => v != null ? v.toInt().toString() : '—',
@@ -2378,7 +2384,7 @@ class _MetricsTab extends StatelessWidget {
           if (sessions.any((s) => s.isEmergency) &&
               sessions.any((s) =>
               s.patientTemperature != null ||
-                  (s.id != null && (details[s.id]?.pulseChecks.isNotEmpty ?? false)))) ...[
+                  ((details[s.selKey]?.pulseChecks.isNotEmpty ?? false)))) ...[
             const SizedBox(height: AppSpacing.md),
             _MetricGroup(
               title: 'Patient Vitals',
@@ -2388,7 +2394,7 @@ class _MetricsTab extends StatelessWidget {
                   _MetricRowDef(
                     label:  'Pulse at Last Check',
                     values: sessions.map((s) {
-                      final d = s.id != null ? details[s.id] : null;
+                      final d = details[s.selKey];
                       if (d == null || d.pulseChecks.isEmpty) return null;
                       return d.pulseChecks.last.classification.toDouble();
                     }).toList(),
@@ -2408,7 +2414,7 @@ class _MetricsTab extends StatelessWidget {
                   _MetricRowDef(
                     label:  'Confidence',
                     values: sessions.map((s) {
-                      final d = s.id != null ? details[s.id] : null;
+                      final d = details[s.selKey];
                       if (d == null || d.pulseChecks.isEmpty) return null;
                       return d.pulseChecks.last.confidence.toDouble();
                     }).toList(),
@@ -2425,19 +2431,24 @@ class _MetricsTab extends StatelessWidget {
                   _MetricRowDef(
                     label:  'Detected BPM',
                     values: sessions.map((s) {
-                      final d = s.id != null ? details[s.id] : null;
+                      final d = details[s.selKey];
                       if (d == null || d.pulseChecks.isEmpty) return null;
                       final bpm = d.pulseChecks.last.detectedBpm;
                       return bpm > 0 ? bpm : null;
                     }).toList(),
                     format:  (v) => v != null ? '${v.toStringAsFixed(0)} bpm' : '—',
-                    colorFn: (v) => v == null ? AppColors.textDisabled : AppColors.success,
-                    infoText: 'Patient heart rate detected during the final pulse check in beats per minute. Only present when pulse classification is Present. Normal adult range: 60–100 bpm.',
+                    colorFn: (v) {
+                      if (v == null) return AppColors.textDisabled;
+                      if (v >= 40 && v <= 120) return AppColors.success;
+                      if (v >= 30 && v <= 150) return AppColors.warning;
+                      return AppColors.error;
+                    },
+                    infoText: 'Patient heart rate detected during the final pulse check in beats per minute. Only present when pulse classification is Present. Normal adult range: 60–100 bpm. Values outside 40–120 bpm should be treated with caution.',
                   ),
                   _MetricRowDef(
                     label:  'CPR Continued',
                     values: sessions.map((s) {
-                      final d = s.id != null ? details[s.id] : null;
+                      final d = details[s.selKey];
                       if (d == null || d.pulseChecks.isEmpty) return null;
                       final dec = d.pulseChecks.last.userDecision;
                       if (dec == null) return null;
@@ -2455,7 +2466,7 @@ class _MetricsTab extends StatelessWidget {
                   _MetricRowDef(
                     label:  'Patient SpO₂',
                     values: sessions.map((s) {
-                      final d = s.id != null ? details[s.id] : null;
+                      final d = details[s.selKey];
                       return d?.patientSpO2LastCheck;
                     }).toList(),
                     format:  (v) => v != null ? '${v.toStringAsFixed(0)}%' : '—',
@@ -2801,7 +2812,7 @@ class _ChartsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final withDetail = sessions
-        .where((s) => s.id != null && details[s.id] != null)
+        .where((s) => details[s.selKey] != null)
         .toList();
 
     return SingleChildScrollView(
@@ -2836,7 +2847,7 @@ class _ChartsTab extends StatelessWidget {
               slotColors: slotColors,
             ),
             // Rescuer HR — only if any session has vitals
-            if (withDetail.any((s) => (details[s.id]?.rescuerVitals.isNotEmpty ?? false))) ...[
+            if (withDetail.any((s) => (details[s.selKey]?.rescuerVitals.isNotEmpty ?? false))) ...[
               const SizedBox(height: AppSpacing.md),
               _CompareHrChartCard(
                 sessions:   withDetail,

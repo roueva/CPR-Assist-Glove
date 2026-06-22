@@ -162,6 +162,15 @@ class _SessionResultsScreenState
 // ── Mode / scenario helpers ─────────────────────────────────────────────────
   bool   get _isEmergency  => _d.isEmergency;
   String get _scenario     => _d.scenario;
+
+  String get _ventilationRatioLabel {
+    switch (_d.ventilationRatio) {
+      case 'compressions_only': return 'No ventilations';
+      case '15:2':              return '15:2 ratio';
+      default:                  return '30:2 ratio';
+    }
+  }
+
   bool   get _isPediatric  => _scenario == 'pediatric';
   bool   get _isNoFeedback => _d.isNoFeedback;
 
@@ -226,8 +235,6 @@ class _SessionResultsScreenState
   }
 
   Future<void> _confirmDeleteSession() async {
-    final sessionId = _d.id;
-    if (sessionId == null) return;
     final confirmed = await AppDialogs.showDestructiveConfirm(context,
       icon:         Icons.delete_outline_rounded,
       iconColor:    AppColors.emergency,
@@ -239,8 +246,12 @@ class _SessionResultsScreenState
       cancelLabel:  'Cancel',
     );
     if (confirmed != true || !mounted) return;
+
     final service = ref.read(sessionServiceProvider);
-    final ok = await service.deleteSession(sessionId);
+    // Build a summary view of the current detail. deleteSummary handles all
+    // three cases: backend+local, backend-only, local-only (id == null).
+    final summary = SessionSummary.fromDetail(_d);
+    final ok = await service.deleteSummary(summary);
     if (!mounted) return;
     if (ok) {
       ref.invalidate(sessionSummariesProvider);
@@ -344,12 +355,11 @@ class _SessionResultsScreenState
           tooltip: 'Export',
           onPressed: _exportSession,
         ),
-        if (_d.id != null)
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textSecondary),
-            tooltip: 'Delete',
-            onPressed: _confirmDeleteSession,
-          ),
+        IconButton(
+          icon: const Icon(Icons.delete_outline_rounded, color: AppColors.textSecondary),
+          tooltip: 'Delete',
+          onPressed: _confirmDeleteSession,
+        ),
       ],
     );
   }
@@ -363,6 +373,7 @@ class _SessionResultsScreenState
       grade:             _grade,
       isPediatric:       _isPediatric,
       isNoFeedback:      _isNoFeedback,
+      ventilationRatioLabel: _ventilationRatioLabel,
       motivational:      _motivationalLabel,
       depthPct:          _depthPct,
       ratePct:           _ratePct,
@@ -383,6 +394,7 @@ class _SessionResultsScreenState
         correctFrequency: _correctFrequency,
         correctRecoil:    _correctRecoil,
         compressionCount: _compressionCount,
+        ventilationRatioLabel: _ventilationRatioLabel,
       ),
       personalBest: _PersonalBestComparison(
         currentGrade: _grade,
@@ -438,6 +450,7 @@ class _SessionResultsScreenState
           ? _d.pulseDetectedFinal
           : null,
       pulseDetectedBpm:  lastPulseCheck?.detectedBpm,
+      ventilationRatioLabel: _ventilationRatioLabel,
       pulseUncertain:    lastPulseCheck?.isUncertain,
       grade:             0,
       isPediatric:       _isPediatric,

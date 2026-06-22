@@ -34,7 +34,7 @@ class _CompareDepthChartState extends State<_CompareDepthChart> {
 
   double get _sessionLength => widget.sessions
       .map((s) {
-    final d = widget.details[s.id];
+    final d = widget.details[s.selKey];
     return d == null || d.compressions.isEmpty
         ? 0.0
         : d.compressions.last.timestampSec;
@@ -59,7 +59,7 @@ class _CompareDepthChartState extends State<_CompareDepthChart> {
 
     final series = <CprSeries>[];
     for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
+      final d = widget.details[widget.sessions[i].selKey];
       if (d == null) continue;
       final waveform = buildCprWaveform(d.compressions);
       if (waveform.isEmpty) continue;
@@ -154,7 +154,7 @@ class _CompareRateChartState extends State<_CompareRateChart> {
 
   double get _sessionLength => widget.sessions
       .map((s) {
-    final d = widget.details[s.id];
+    final d = widget.details[s.selKey];
     return d == null || d.compressions.isEmpty
         ? 0.0
         : d.compressions.last.timestampSec;
@@ -176,7 +176,7 @@ class _CompareRateChartState extends State<_CompareRateChart> {
   Widget build(BuildContext context) {
     final series = <CprSeries>[];
     for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
+      final d = widget.details[widget.sessions[i].selKey];
       if (d == null || d.compressions.isEmpty) continue;
       series.add(CprSeries(
         label: 'S${widget.sessions[i].sessionNumber ?? i + 1}',
@@ -265,7 +265,7 @@ class _CompareDepthTrendChartState extends State<_CompareDepthTrendChart> {
 
   double get _sessionLength => widget.sessions
       .map((s) {
-    final d = widget.details[s.id];
+    final d = widget.details[s.selKey];
     return d == null || d.compressions.isEmpty
         ? 0.0
         : d.compressions.last.timestampSec;
@@ -290,7 +290,7 @@ class _CompareDepthTrendChartState extends State<_CompareDepthTrendChart> {
 
     final series = <CprSeries>[];
     for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
+      final d = widget.details[widget.sessions[i].selKey];
       if (d == null) continue;
       final spots = buildDepthTrendSpots(d.compressions, window: 5);
       if (spots.isEmpty) continue;
@@ -405,7 +405,7 @@ class _ComparePostureChartState extends State<_ComparePostureChart> {
   double get _sessionLength {
     double max = 0;
     for (final s in widget.sessions) {
-      final d = widget.details[s.id];
+      final d = widget.details[s.selKey];
       if (d != null && d.compressions.isNotEmpty) {
         final t = d.compressions.last.timestampSec;
         if (t > max) max = t;
@@ -430,7 +430,7 @@ class _ComparePostureChartState extends State<_ComparePostureChart> {
     final series = <CprSeries>[];
     double maxAngle = 0;
     for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
+      final d = widget.details[widget.sessions[i].selKey];
       if (d == null || d.compressions.isEmpty) continue;
       if (d.compressions.every((c) => c.wristAlignmentAngle == 0)) continue;
       final spots = buildPostureSpots(d.compressions);
@@ -544,7 +544,7 @@ class _CompareHrChartCardState extends State<_CompareHrChartCard> {
   double get _sessionLength {
     double max = 0;
     for (final s in widget.sessions) {
-      final d = widget.details[s.id];
+      final d = widget.details[s.selKey];
       if (d != null && d.rescuerVitals.isNotEmpty) {
         final t = d.rescuerVitals.last.timestampSec;
         if (t > max) max = t;
@@ -569,7 +569,7 @@ class _CompareHrChartCardState extends State<_CompareHrChartCard> {
     final series = <CprSeries>[];
     double maxHr = 180;
     for (int i = 0; i < widget.sessions.length; i++) {
-      final d = widget.details[widget.sessions[i].id];
+      final d = widget.details[widget.sessions[i].selKey];
       if (d == null || d.rescuerVitals.isEmpty) continue;
       final spots = buildHrSpots(d.rescuerVitals);
       if (spots.isEmpty) continue;

@@ -140,6 +140,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay>
     with WidgetsBindingObserver {
   String? _mapStyle;
   MapType _currentMapType = MapType.normal;
+  bool _mapMountAllowed = false;
 
   /// Per-AED distance/time cache — keyed by aed.id.
   final Map<int, Map<String, dynamic>> _distanceCache = {};
@@ -154,6 +155,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay>
     WidgetsBinding.instance.addObserver(this);
     _loadMapStyle();
     _syncTimeFuture = NetworkService.getFormattedSyncTime();
+
+    // Defer the GoogleMap platform-view mount by one frame so the first
+    // user-visible frame paints before the native Maps SDK starts loading.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _mapMountAllowed = true);
+    });
   }
 
   @override
@@ -347,6 +354,12 @@ class _AEDMapDisplayState extends State<AEDMapDisplay>
     final padding = isPortrait
         ? EdgeInsets.only(bottom: context.screenHeight * 0.04)
         : EdgeInsets.zero;
+
+    if (!_mapMountAllowed) {
+      return Positioned.fill(
+        child: ColoredBox(color: AppColors.primaryLight),
+      );
+    }
 
     return Positioned.fill(
       child: Padding(

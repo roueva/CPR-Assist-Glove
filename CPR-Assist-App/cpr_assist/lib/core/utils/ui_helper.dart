@@ -82,6 +82,22 @@ class UIHelper {
     );
   }
 
+  /// Info snackbar (blue) — neutral confirmations and "no data yet" messages
+  /// where success/warning/error would all be misleading.
+  static void showInfo(
+      BuildContext context,
+      String message, {
+        Duration duration = const Duration(seconds: 3),
+      }) {
+    _show(
+      context,
+      message:         message,
+      icon:            Icons.info_outline_rounded,
+      backgroundColor: AppColors.primary,
+      duration:        duration,
+    );
+  }
+
   /// Snackbar with a tappable action button.
   static void showSnackbarWithAction(
       BuildContext context, {

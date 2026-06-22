@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -54,6 +56,8 @@ class PulseCheckOverlay extends StatefulWidget {
   /// BPM from PULSE_CHECK_RESULT bytes 2–5. null if classification != 2.
   final double? detectedBpm;
 
+  final double? liveBpm;  // streamed HR during assessment, shown while pending
+
   /// Confidence 0–100 from PULSE_CHECK_RESULT byte 6.
   final int? confidence;
 
@@ -72,6 +76,7 @@ class PulseCheckOverlay extends StatefulWidget {
     this.classification,
     this.ppgBuffer    = const [],
     this.detectedBpm,
+    this.liveBpm,
     this.confidence,
     this.spO2,
     this.patientTemp,
@@ -86,6 +91,9 @@ class PulseCheckOverlay extends StatefulWidget {
 class _PulseCheckOverlayState extends State<PulseCheckOverlay>
     with TickerProviderStateMixin {
 
+  // ── Pause duration counter (mirrors VentilationOverlay) ──────────────────
+  Timer? _elapsedTimer;
+  double _elapsed = 0.0;
 
   // ── Heartbeat animation — plays once pulse is confirmed ───────────────────
   late final AnimationController _heartCtrl;
@@ -103,6 +111,11 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
       CurvedAnimation(parent: _heartCtrl, curve: Curves.easeInOut),
     );
 
+    // Tenth-of-a-second tick — drives the assessing pill turning red at 8 s
+    _elapsedTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted) return;
+      setState(() => _elapsed += 0.1);
+    });
   }
 
   @override
@@ -113,8 +126,8 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
     }
   }
 
-  @override
   void dispose() {
+    _elapsedTimer?.cancel();
     _heartCtrl.dispose();
     super.dispose();
   }
@@ -124,7 +137,9 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
   bool get _isPending => widget.classification == null;
 
   Color get _resultColor {
-    if (_isPending)                     return AppColors.primary;
+    if (_isPending) {
+      return _elapsed >= 8.0 ? AppColors.emergency : AppColors.primary;
+    }
     if (widget.classification == 2)     return AppColors.success;
     if (widget.classification == 1)     return AppColors.warning;
     return AppColors.emergency;
@@ -138,7 +153,11 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
   }
 
   String get _resultSub {
-    if (_isPending)                     return 'Keep both sensors on patient';
+    if (_isPending) {
+      return _elapsed >= 8.0
+          ? 'Resume compressions immediately'
+          : 'Keep both sensors on patient';
+    }
     if (widget.classification == 2)     return 'Decide whether to stop or continue CPR';
     if (widget.classification == 1)     return 'Verify manually and continue CPR unless certain';
     return 'Resume compressions immediately';
@@ -157,7 +176,7 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+                maxHeight: context.screenHeight * 0.85,
               ),
               decoration: AppDecorations.card(
                 color:  AppColors.white,
@@ -171,7 +190,7 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
                     _buildHeader(),
                     _buildWaveform(),
                     _buildStatus(),
-                    if (!_isPending) _buildVitals(),
+                    _buildVitals(),
                     _buildFooter(),
                   ],
                 ),
@@ -205,10 +224,14 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
           // open-ended and firmware-driven now — no countdown), then the
           // confidence badge once a result arrives.
           if (_isPending)
-            const _Pill(
-              label:     'Assessing…',
-              textColor: AppColors.primary,
-              bg:        AppColors.primaryLight,
+            _Pill(
+              label:     '${_elapsed.toStringAsFixed(1)}s',
+              textColor: _elapsed >= 8.0
+                  ? AppColors.emergency
+                  : AppColors.primary,
+              bg:        _elapsed >= 8.0
+                  ? AppColors.errorBg
+                  : AppColors.primaryLight,
             )
           else if (widget.confidence != null)
             _Pill(
@@ -331,6 +354,14 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
               color: AppColors.textSecondary,
             ),
           ),
+          if (_isPending && widget.liveBpm != null && widget.liveBpm! > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _Pill(
+              label: '${widget.liveBpm!.toStringAsFixed(0)} BPM live',
+              textColor: AppColors.primary,
+              bg: AppColors.primaryLight,
+            ),
+          ],
         ],
       ),
     );
@@ -340,8 +371,8 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
 
   Widget _buildVitals() {
     // Nothing to show if no values are available at all
-    final hasBpm  = widget.detectedBpm != null && widget.classification == 2;
-    final hasSpo2 = widget.spO2 != null && widget.classification == 2;
+    final hasBpm  = widget.detectedBpm != null && (widget.detectedBpm! > 0) && widget.classification != null;
+    final hasSpo2 = widget.spO2 != null && (widget.spO2! > 0) && widget.classification != null;
     final hasTemp = widget.patientTemp != null;
 
     if (!hasBpm && !hasSpo2 && !hasTemp) return const SizedBox.shrink();
@@ -574,7 +605,7 @@ class _PpgPainter extends CustomPainter {
       return;
     }
 
-    // ── Auto-scale ────────────────────────────────────────────────────────────
+// ── Auto-scale ────────────────────────────────────────────────────────────
     const padFrac = 0.12;
     final drawH = size.height * (1 - 2 * padFrac);
     final padY  = size.height * padFrac;
@@ -582,8 +613,43 @@ class _PpgPainter extends CustomPainter {
     double minV = buffer.reduce((a, b) => a < b ? a : b);
     double maxV = buffer.reduce((a, b) => a > b ? a : b);
     final range = (maxV - minV).abs();
-    if (range < 0.05) { minV -= 0.1; maxV += 0.1; }
-    final scale = range < 0.05 ? 1.0 : 1.0 / (maxV - minV);
+
+    // If the PPG is essentially flat (no real signal) we draw a "No signal"
+    // baseline + label instead of stretching noise to fill the canvas —
+    // a fake square waveform was misleading and looked like a present pulse.
+    if (range < 0.002) {
+      // Faint flat baseline
+      canvas.drawLine(
+        Offset(0, size.height * 0.55),
+        Offset(size.width, size.height * 0.55),
+        Paint()
+          ..color       = lineColor.withValues(alpha: 0.30)
+          ..strokeWidth = 1.5
+          ..strokeCap   = StrokeCap.round
+          ..style       = PaintingStyle.stroke,
+      );
+      // "No signal" label, centred
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'No signal',
+          style: AppTypography.label(
+            size:  11,
+            color: AppColors.textDisabled,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: size.width);
+      tp.paint(
+        canvas,
+        Offset(
+          (size.width  - tp.width)  / 2,
+          (size.height - tp.height) / 2 + 6,
+        ),
+      );
+      return;
+    }
+
+    final scale = 1.0 / (maxV - minV);
 
     final n = buffer.length;
     double xOf(int i) =>

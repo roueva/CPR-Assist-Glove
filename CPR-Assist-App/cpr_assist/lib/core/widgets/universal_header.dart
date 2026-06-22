@@ -169,7 +169,7 @@ class _BleAndBatteryPill extends ConsumerWidget {
           onTap: () => _showGloveDialog(context, bleConnection),
           child: Container(
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
+              horizontal: AppSpacing.xs,
               vertical:   AppSpacing.xs,
             ),
             decoration: BoxDecoration(
@@ -179,15 +179,13 @@ class _BleAndBatteryPill extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // BLE status icon (always shown)
                 BLEStatusIndicator(
                   bleConnection:            bleConnection,
                   connectionStatusNotifier: bleConnection.connectionStatusNotifier,
                 ),
-                const SizedBox(width: AppSpacing.xs),
                 SizedBox(
-                  width:  AppSpacing.iconSm + AppSpacing.xxs,  // 20px — fixed slot
-                  height: AppSpacing.iconSm + AppSpacing.xxs,
+                  width:  AppSpacing.iconLg,
+                  height: AppSpacing.iconLg,
                   child: Center(
                     child: isConnected
                         ? ValueListenableBuilder<int>(
@@ -217,11 +215,15 @@ class _BleAndBatteryPill extends ConsumerWidget {
                         );
                       },
                     )
-                        : Icon(
-                      Icons.front_hand_outlined,
-                      size:  AppSpacing.iconSm,
-                      color: AppColors.textSecondary,
-                    ),
+                        : SvgPicture.asset(
+                      'assets/icons/glove_icon.svg',
+                      width:  AppSpacing.iconMd,
+                      height: AppSpacing.iconMd,
+                      colorFilter: ColorFilter.mode(
+                        AppColors.textSecondary,
+                        BlendMode.srcIn,
+                      ),
+                    )
                   ),
                 ),
               ],
@@ -306,6 +308,38 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
     super.dispose();
   }
 
+  /// Handle "Scan Again" — check Bluetooth first, prompt if off.
+  Future<void> _handleScanAgain(BuildContext context) async {
+    final isBluetoothOn = await FlutterBluePlus.adapterState.first ==
+        BluetoothAdapterState.on;
+
+    if (!isBluetoothOn) {
+      // Bluetooth is OFF — show system prompt to enable
+      try {
+        await FlutterBluePlus.turnOn();
+        // After user enables BT, start scan
+        if (mounted) {
+          widget.bleConnection.manualRetry();
+        }
+      } on FlutterBluePlusException {
+        // User denied or error — show alert
+        if (mounted) {
+          AppDialogs.showAlert(
+            context,
+            icon:      Icons.bluetooth_disabled_rounded,
+            iconColor: AppColors.emergency,
+            iconBg:    AppColors.errorBg,
+            title:     'Bluetooth Required',
+            message:   'Enable Bluetooth to scan for the CPR Assist glove.',
+          );
+        }
+      } catch (_) {}
+    } else {
+      // Bluetooth is ON — just retry scan
+      widget.bleConnection.manualRetry();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -367,8 +401,8 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
 
                 // ── Pulsing BT icon ────────────────────────────────────────
                 SizedBox(
-                  width:  96,
-                  height: 96,
+                  width:  AppSpacing.avatarLg,
+                  height: AppSpacing.avatarLg,
                   child: AnimatedBuilder(
                     animation: _pulseController,
                     builder: (_, __) {
@@ -392,8 +426,8 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
                             ),
                           // Icon circle
                           Container(
-                            width:  60,
-                            height: 60,
+                            width:  AppSpacing.iconLg * 2,
+                            height: AppSpacing.iconLg * 2,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isConnected
@@ -465,7 +499,7 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
                   child: OutlinedButton(
                     onPressed: isScanning
                         ? null
-                        : () => widget.bleConnection.manualRetry(),
+                        : () => _handleScanAgain(context),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(
                         color: isScanning
@@ -546,19 +580,24 @@ class _DeviceRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         children: [
-          Container(
-            width:  AppSpacing.iconBoxSize,
-            height: AppSpacing.iconBoxSize,
-            decoration: BoxDecoration(
-              color:  AppColors.primaryLight,
-              shape:  BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.front_hand_outlined,
-              size:  AppSpacing.iconSm,
-              color: AppColors.primary,
-            ),
+        Container(
+        width:  AppSpacing.iconBoxSize,
+        height: AppSpacing.iconBoxSize,
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: SvgPicture.asset(
+          'assets/icons/glove_icon.svg',
+          width:  AppSpacing.iconMd,
+          height: AppSpacing.iconMd,
+          colorFilter: ColorFilter.mode(
+            AppColors.primary,
+            BlendMode.srcIn,
           ),
+        ),
+      ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(

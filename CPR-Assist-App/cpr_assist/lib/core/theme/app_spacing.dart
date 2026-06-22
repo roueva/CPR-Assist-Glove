@@ -73,6 +73,24 @@ class AppSpacing {
   static const double dragHandleWidthWide = 56.0; // Wider handle variant (AED sheet)
 
 
+  // ── Guide screen visual constants ────────────────────────────────────────────
+  static const double guideHeroImageH    = 160.0;  // standard hero image
+  static const double guideStepNumber    = 28.0;   // numbered step circle
+  static const double guideChainIcon     = 36.0;   // chain-of-survival circle
+  static const double guideStepRail      = 32.0;   // left rail width for numbered steps
+  static const double guideSchematicH    = 190.0;  // AED schematic painter height
+  static const double guideChainRowH     = 80.0;   // chain-of-survival icon row
+
+  static const double guideHubHeroH        = 160.0;  // hero card on hub
+  static const double guideHubSmH          = 120.0;  // small 2-col card on hub
+  static const double guideChainBannerH    = 150.0;  // chain-of-survival photo banner
+  static const double guideDetailImageH    = 160.0;  // photo inside detail screens
+  static const double guideSmallPhotoH     = 100.0;  // labelled photo pair (pediatric)
+  static const double guideAccentBarW      =  48.0;  // colored accent strip under appbar title
+  static const double guideSchematicPadW   =  44.0;  // AED schematic pad rectangle width
+  static const double guideSchematicPadH   =  32.0;  // AED schematic pad rectangle height
+  static const double guideSchematicLabelSize = 13.0; // AED schematic pad label font size
+
   // ═══════════════════════════════════════════════════════
   // TOUCH TARGETS (WCAG / accessibility)
   // ═══════════════════════════════════════════════════════

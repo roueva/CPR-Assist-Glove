@@ -40,7 +40,7 @@ class _MainNavigationScreenState
     _screens = [
       AedMapScreen(onTabTapped: _onTabTapped),
       LiveCPRScreen(onTabTapped: _onTabTapped),
-      const GuideScreen(),
+      GuideScreen(onTabTapped: _onTabTapped),
     ];
     nfcTabNotifier.addListener(_onNfcTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -118,7 +118,7 @@ class _MainNavigationScreenState
 // Bottom Navigation Bar
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BottomNav extends StatelessWidget {
+class _BottomNav extends ConsumerWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
@@ -134,7 +134,8 @@ class _BottomNav extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSessionActive = ref.watch(cprSessionActiveProvider);
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.white,
@@ -157,16 +158,10 @@ class _BottomNav extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SvgPicture.asset(
-                        item.icon,
-                        width: AppSpacing.iconMd - AppSpacing.xxs, // 22
-                        height: AppSpacing.iconMd - AppSpacing.xxs,
-                        colorFilter: ColorFilter.mode(
-                          selected
-                              ? AppColors.primary
-                              : AppColors.textDisabled,
-                          BlendMode.srcIn,
-                        ),
+                      _PulsingNavIcon(
+                        assetPath: item.icon,
+                        selected: selected,
+                        pulse: i == 1 && isSessionActive && !selected,
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
@@ -191,4 +186,89 @@ class _NavItem {
   final String icon;
   final String label;
   const _NavItem({required this.icon, required this.label});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pulsing nav icon — breathes between textDisabled and feedbackBad
+// when a live session is active and this tab is not selected.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PulsingNavIcon extends StatefulWidget {
+  final String assetPath;
+  final bool selected;
+  final bool pulse;
+
+  const _PulsingNavIcon({
+    required this.assetPath,
+    required this.selected,
+    required this.pulse,
+  });
+
+  @override
+  State<_PulsingNavIcon> createState() => _PulsingNavIconState();
+}
+
+class _PulsingNavIconState extends State<_PulsingNavIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    if (widget.pulse) _controller.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_PulsingNavIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.pulse && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.pulse && _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 0.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final staticColor = widget.selected
+        ? AppColors.primary
+        : AppColors.textDisabled;
+
+    if (!widget.pulse) {
+      return SvgPicture.asset(
+        widget.assetPath,
+        width: AppSpacing.iconMd - AppSpacing.xxs,
+        height: AppSpacing.iconMd - AppSpacing.xxs,
+        colorFilter: ColorFilter.mode(staticColor, BlendMode.srcIn),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final color = Color.lerp(
+          AppColors.textDisabled,
+          AppColors.feedbackBad,
+          Curves.easeInOut.transform(_controller.value),
+        )!;
+        return SvgPicture.asset(
+          widget.assetPath,
+          width: AppSpacing.iconMd - AppSpacing.xxs,
+          height: AppSpacing.iconMd - AppSpacing.xxs,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        );
+      },
+    );
+  }
 }

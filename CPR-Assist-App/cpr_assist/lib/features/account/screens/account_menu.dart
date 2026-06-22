@@ -529,7 +529,10 @@ class _StatsRow extends ConsumerWidget {
             value: (stats == null || stats.averageGrade == 0)
                 ? '—'
                 : stats.averageGradeFormatted,
-            onTap: () => onPush(LeaderboardScreen(currentUsername: username)),
+            onTap: () => onPush(LeaderboardScreen(
+              currentUsername: username,
+              initialTab:      LeaderboardScreen.tabMyStats,
+            )),
           ),
           const SizedBox(width: AppSpacing.sm),
           _StatCard(
@@ -539,7 +542,10 @@ class _StatsRow extends ConsumerWidget {
             value:     stats != null && stats.sessionCount > 0
                 ? '${stats.bestGrade.toStringAsFixed(0)}%'
                 : '—',
-              onTap: () => onPush(const SessionHistoryScreen()), // TODO: open best session directly
+            onTap: () => onPush(LeaderboardScreen(
+              currentUsername: username,
+              initialTab:      LeaderboardScreen.tabGlobal,
+            )),
           ),
         ],
       ),
@@ -567,9 +573,10 @@ class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
     final pending   = locals.where((d) => !d.syncedToBackend).toList();
 
     int synced = 0;
-    for (final detail in pending) {
+    for (var detail in pending) {
       final savedId = await service.saveDetail(detail);
       if (savedId != null) {
+        detail = detail.withId(savedId);
         await SessionLocalStorage.markSynced(detail);
         synced++;
       }
@@ -589,9 +596,12 @@ class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
   @override
   Widget build(BuildContext context) {
     final summaries = ref.watch(sessionSummariesProvider);
-    final pending   = summaries.valueOrNull
+    final pending = summaries.valueOrNull
         ?.where((s) => s.id == null)
         .length ?? 0;
+// Better: also drive from SessionLocalStorage so the banner reflects what
+// Sync will actually push. Consider using a FutureProvider that returns
+// (await SessionLocalStorage.loadAll()).where((d) => !d.syncedToBackend).length
 
     if (pending == 0) return const SizedBox.shrink();
 

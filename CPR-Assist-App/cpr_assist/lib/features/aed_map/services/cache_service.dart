@@ -127,7 +127,7 @@ class CacheService {
       final prefs = await SharedPreferences.getInstance();
       final cacheData = prefs.getString(_distanceCacheKey);
       if (cacheData != null) {
-        final Map<String, dynamic> decoded = jsonDecode(cacheData);
+        final Map<String, dynamic> decoded = await compute(_decodeMap, cacheData);
         _distanceCache.clear();
         decoded.forEach((key, value) {
           _distanceCache[key] = (value as num).toDouble();
@@ -260,8 +260,8 @@ class CacheService {
       final timestampData = prefs.getString(_routeTimestampKey);
 
       if (cacheData != null && timestampData != null) {
-        final Map<String, dynamic> decoded    = jsonDecode(cacheData);
-        final Map<String, dynamic> timestamps = jsonDecode(timestampData);
+        final Map<String, dynamic> decoded    = await compute(_decodeMap, cacheData);
+        final Map<String, dynamic> timestamps = await compute(_decodeMap, timestampData);
 
         int loadedCount  = 0;
         int expiredCount = 0;
@@ -390,7 +390,7 @@ class CacheService {
     if (cachedData == null) return null;
 
     try {
-      final data = jsonDecode(cachedData) as List;
+      final data = await compute(_decodeAedList, cachedData);
       debugPrint('📦 Loaded ${data.length} AEDs from cache');
       return data;
     } catch (e) {
@@ -601,6 +601,7 @@ class CacheService {
       prefs.remove(_mapPreferencesKey),
       prefs.remove(_mapBoundsKey),
       prefs.remove(_appStateKey),
+      prefs.remove(_cacheMetadataKey),
     ]);
 
     _distanceCache.clear();
@@ -715,3 +716,8 @@ class CacheService {
     _saveTimer = null;
   }
 }
+
+// Top-level for compute() — must not capture state
+List<dynamic> _decodeAedList(String raw) => jsonDecode(raw) as List;
+Map<String, dynamic> _decodeMap(String raw) =>
+    jsonDecode(raw) as Map<String, dynamic>;
