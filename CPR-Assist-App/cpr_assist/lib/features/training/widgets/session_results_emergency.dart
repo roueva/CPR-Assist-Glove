@@ -39,7 +39,7 @@ class _EmergencySummaryTab extends ConsumerWidget {
     final avgFreq         = d?.averageFrequency  ?? s?.averageFrequency  ?? 0.0;
     final unplannedTime      = d?.unplannedPauseTime ?? 0.0;
     final handsOnPct      = d?.handsOnPct        ?? '—';
-    final handsOnOk       = (d?.handsOnRatio     ?? 0) >= 0.80;
+    final handsOnOk       = (d?.handsOnRatio     ?? 0) >= 0.60;
     final unplannedCount = d?.unplannedPauseCount ?? 0;
     final noFlowSecs     = d?.noFlowTime ?? 0.0;
     final handsDouble     = double.tryParse(
@@ -1793,8 +1793,8 @@ class _EmergencyQualitySection extends StatelessWidget {
           icon:       Icons.touch_app_outlined,
           label:      'Chest Compression Fraction',
           value:      detail?.handsOnPct ?? '—',
-          note:       'Target ≥ 80% (AHA/ERC 2020)',
-          valueColor: (detail?.handsOnRatio ?? 0) >= 0.80
+          note:       'Target ≥ 60% (AHA 2025)',
+          valueColor: (detail?.handsOnRatio ?? 0) >= 0.60
               ? AppColors.success : AppColors.warning,
         ),
         _DetailRow(

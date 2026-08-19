@@ -2060,11 +2060,11 @@ class _MetricsTab extends StatelessWidget {
           rows: [
             _MetricRowDef(
               label: 'Hands-on Ratio',
-              infoText: 'Chest Compression Fraction (CCF): The proportion of total session time that active compressions were being delivered. Time spent on pauses, ventilation, and pulse checks reduces this. AHA recommends ≥ 80%.',
-              hint:  '≥ 80% (CCF)',
+              infoText: 'Chest Compression Fraction (CCF): The proportion of total session time that active compressions were being delivered. Time spent on pauses, ventilation, and pulse checks reduces this. AHA 2025 recommends ≥ 60%.',
+              hint:  '≥ 60% (CCF)',
               values: sessions.map((s) => s.handsOnRatio * 100).toList(),
               format: (v) => v != null ? '${v.toStringAsFixed(0)}%' : '—',
-              colorFn: (v) => _pctColor(v, target: 80),
+              colorFn: (v) => _pctColor(v, target: 60),
               bestHighlight: true,
             ),
             _MetricRowDef(

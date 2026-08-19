@@ -1520,28 +1520,10 @@ class _FullLiveCprSimulatorState extends State<_FullLiveCprSimulator> {
 
             // ── Pulse check overlay ────────────────────────────────────────
             if (_showPulseOverlay) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
-                child: SizedBox(
-                  height: 580,
-                  child: PulseCheckOverlay(
-                    intervalNumber: 1,
-                    classification: _pulseClassification,
-                    ppgBuffer:      const [],
-                    detectedBpm:    _pulseClassification == 2 ? _patientHR   : null,
-                    confidence:     _pulseClassification != null ? _pulseConfidence : null,
-                    spO2:           _pulseClassification == 2 ? _patientSpO2 : null,
-                    patientTemp:    _pulseClassification == 2 ? _patientTemp : null,
-                    onContinueCpr: () => setState(() {
-                      _showPulseOverlay    = false;
-                      _pulseClassification = null;
-                    }),
-                    onStopCpr: () => setState(() {
-                      _showPulseOverlay    = false;
-                      _pulseClassification = null;
-                    }),
-                  ),
-                ),
+              PulseCheckOverlay(
+                intervalNumber: 1,
+                classification: _pulseClassification,
+                ppgBuffer:      const [],
               ),
               const SizedBox(height: AppSpacing.md),
             ],
@@ -2351,45 +2333,46 @@ class _PulseCheckOverlayPreviewState
 
   @override
   Widget build(BuildContext context) {
-    // Use a normal white scaffold so the dark scrim overlay renders correctly
-    // on top — exactly as it will appear over live_cpr_screen in production.
+    // Non-blocking card now — shown inline in the scrollable content column,
+    // not as a modal over the screen. This preview shows it the same way,
+    // with a placeholder above standing in for the rest of the column.
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.screenBgGrey,
       appBar: const _PreviewAppBar(title: 'Pulse Check Overlay'),
-      body: Stack(
-        children: [
-          // Background body — mimics the live CPR screen sitting underneath
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.monitor_heart_rounded,
-                  size:  64,
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Live CPR Screen',
-                  style: AppTypography.caption(color: AppColors.textDisabled),
-                ),
-              ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.monitor_heart_rounded,
+                    size:  64,
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Rest of Live CPR Screen content',
+                    style: AppTypography.caption(color: AppColors.textDisabled),
+                  ),
+                ],
+              ),
             ),
-          ),
-          // The overlay itself — fills the body just like Positioned.fill
-          // in the real live_cpr_screen
-          PulseCheckOverlay(
-            intervalNumber: 1,
-            classification: _classification,
-            ppgBuffer:      List.from(_ppgBuffer),
-            detectedBpm:    _classification == 2 ? 65.0 : null,
-            confidence:     _classification != null ? 85 : null,
-            spO2:           _classification == 2 ? 94.0 : null,
-            patientTemp:    _classification == 2 ? 36.4 : null,
-            onContinueCpr:  context.pop,
-            onStopCpr:      context.pop,
-          ),
-        ],
+            const SizedBox(height: AppSpacing.md),
+            PulseCheckOverlay(
+              intervalNumber: 1,
+              classification: _classification,
+              ppgBuffer:      List.from(_ppgBuffer),
+            ),
+          ],
+        ),
       ),
     );
   }

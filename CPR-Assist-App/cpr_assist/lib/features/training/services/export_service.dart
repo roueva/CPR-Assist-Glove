@@ -324,7 +324,7 @@ class ExportService {
     final depthTarget = '${depthMin.toStringAsFixed(1)}-${depthMax.toStringAsFixed(1)} cm';
     final rateTarget =
         '${CprTargets.rateMin.toStringAsFixed(0)}-${CprTargets.rateMax.toStringAsFixed(0)} BPM';
-    const ccfTarget = '≥80%';
+    const ccfTarget = '≥60%';
     const timeToFirstCompressionTarget = '≤10 s';
 
     final n = s.compressionCount > 0 ? s.compressionCount.toDouble() : 0.0;
@@ -1028,7 +1028,7 @@ class ExportService {
 
     row(
       'CCF',
-      '≥80%',
+      '≥60%',
       sessions
           .map((s) => pctValue(s.handsOnRatio * 100))
           .toList(),
@@ -2661,7 +2661,7 @@ class ExportService {
           item('Recoil',
               '% of compressions with full chest release between presses.'),
           item('Hands-on (CCF)',
-              '% of session time actively compressing (AHA target ≥ 80%).'),
+              '% of session time actively compressing (AHA 2025 target ≥ 60%).'),
         ],
       ),
     );
@@ -3890,7 +3890,7 @@ class ExportService {
       if (s.rateVariability > 0)
         _Row('Rate Variability (SD)', '${s.rateVariability.toStringAsFixed(0)} ms',
             note: 'Inter-compression interval SD'),
-      _Row('CCF (Hands-On Time)', '${(s.handsOnRatio * 100).round()}%', note: 'Target ≥ 80%'),
+      _Row('CCF (Hands-On Time)', '${(s.handsOnRatio * 100).round()}%', note: 'Target ≥ 60%'),
       if (s.noFlowTime > 0)
         _Row('No-Flow Time', '${s.noFlowTime.toStringAsFixed(1)} s',
             note: '${s.noFlowIntervals} gap(s) > 2 s'),
@@ -4651,7 +4651,10 @@ class ExportService {
           _gradeColorForPct(avg((s) => s.frequencyConsistency) / 100)),
       _Metric('Hands-On (CCF)',
           '${(avgCCF * 100).round()}%',
-          _gradeColorForPct(avgCCF)),
+          // Direct 60%-threshold check, not the shared _gradeColorForPct —
+          // that helper's 80/60 tiers are a generic quality band shared by
+          // the other metrics in this grid, not the AHA CCF benchmark.
+          avgCCF >= 0.60 ? _kSuccess : _kWarning),
       _Metric('Full Recoil',
           sessions.first.compressionCount > 0
               ? '${avg((s) => s.compressionCount > 0
@@ -4729,7 +4732,7 @@ class ExportService {
         pw.Expanded(child: trendChart(
             title: 'Hands-On CCF (%)', unit: '%',
             values: sessions.map((s) => s.handsOnRatio * 100).toList(),
-            targetMin: 80, targetMax: 100, lineColor: _kSuccess)),
+            targetMin: 60, targetMax: 100, lineColor: _kSuccess)),
         pw.SizedBox(width: 8),
         pw.Expanded(child: trendChart(
             title: 'Recoil (%)', unit: '%',
@@ -5375,25 +5378,23 @@ class ExportService {
       ));
     }
 
-    // ── Pulse checks (emergency mode usually) ─────────────────────────────
+    // ── Pulse checks (emergency mode usually). No "ignored/responded"
+    // framing — there's no prompt to ignore, and continuing compressions
+    // is correct behaviour, not a lapse. Every check just shows what it
+    // found, matching the in-app timeline. ─────────────────────────────
     for (final p in d.pulseChecks) {
       final detected = p.detected && p.detectedBpm > 0;
       events.add(_TLEventPdf(
-        sortKey:   p.timestampSec,
-        time:      _mmssFromSec(p.timestampSec),
-        title:     'Pulse check #${p.intervalNumber}',
-        subtitle:  !p.compliant
-            ? 'Prompt ignored · CPR continued'
-            : detected
+        sortKey:  p.timestampSec,
+        time:     _mmssFromSec(p.timestampSec),
+        title:    'Pulse check #${p.intervalNumber}',
+        subtitle: detected
             ? '${p.detectedBpm.round()} bpm · ${p.confidence}% confidence'
             : 'No pulse found',
-        dotColor:  !p.compliant   ? _kTextDisabled
-            : detected      ? _kSuccess
-            : _kError,
-        isIgnored: !p.compliant,
+        dotColor: detected ? _kSuccess : _kError,
       ));
     }
-
+    
     // ── Rescuer swaps ──────────────────────────────────────────────────────
     for (int i = 0; i < d.rescuerSwapCount; i++) {
       final t = (i + 1) * 120.0;
@@ -5869,7 +5870,7 @@ class ExportService {
                   align: pw.TextAlign.right),
               _tableCell(font, '${(s.handsOnRatio * 100).round()}%',
                   align: pw.TextAlign.right,
-                  color: s.handsOnRatio >= 0.80 ? _kSuccess : _kWarning),
+                  color: s.handsOnRatio >= 0.60 ? _kSuccess : _kWarning),
               _tableCell(bold,
                   s.isEmergency ? '—' : '${s.totalGrade.toStringAsFixed(1)}%',
                   align: pw.TextAlign.right, color: gradeColor),
@@ -5992,7 +5993,7 @@ class ExportService {
       ),
       _CompareRow(
         label: 'CCF (Hands-On)',
-        hint:  'target ≥ 80%',
+        hint:  'target ≥ 60%',
         group: 'Quality',
         values: [for (final s in sessions) s.handsOnRatio * 100],
         format: (v) => v == null ? '—' : '${v.toStringAsFixed(0)}%',
@@ -6438,7 +6439,7 @@ class ExportService {
                   align: pw.TextAlign.right),
               _tableCell(font, '${(s.handsOnRatio * 100).round()}%',
                   align: pw.TextAlign.right,
-                  color: s.handsOnRatio >= 0.80 ? _kSuccess : _kWarning),
+                  color: s.handsOnRatio >= 0.60 ? _kSuccess : _kWarning),
               _tableCell(bold,
                   s.isEmergency ? '—' : '${s.totalGrade.toStringAsFixed(1)}%',
                   align: pw.TextAlign.right, color: gradeColor),

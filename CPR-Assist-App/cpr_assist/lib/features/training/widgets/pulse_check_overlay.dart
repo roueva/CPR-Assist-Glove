@@ -7,128 +7,66 @@ import 'package:cpr_assist/core/core.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // PulseCheckOverlay
 //
-// Full-screen modal overlay shown when PULSE_CHECK_START (0x04) fires.
-// Renders a semi-transparent dark scrim with a centred white card —
-// same pattern as VentilationOverlay.
+// Non-blocking card shown in the Live CPR screen's scrollable content column
+// when a circulation check is open or has just closed. Not a modal — nothing
+// behind it is blocked, and there is no decision to make: the glove can't
+// yet distinguish the patient's pulse from the rescuer's own, so the
+// measurement is never presented as something to act on.
 //
 // The card contains:
-//   • Header row  — "Pulse Check #N" pill  +  assessing / confidence pill
+//   • Header row  — "Pulse Check #N" pill  +  elapsed-time pill (while open)
 //   • ECG graph   — scrolling PPG waveform, full width, visible on white
-//   • Status area — pulsing dot while pending; icon + label after result
-//   • Vitals row  — BPM / SpO₂ / Temp chips, shown when pulse detected
-//   • Decision note — user autonomy text before buttons
-//   • Buttons     — "Continue CPR" / "Stop CPR" (or just "Continue CPR")
+//   • Status area — pulsing dot + "in progress" while open; neutral icon +
+//                   "Circulation check recorded" once closed
 //   • Footer      — end-condition hint
 //
-// classification values (matches PULSE_CHECK_RESULT byte 1):
-//   null — still assessing (window open until rescuer resumes)
-//   0    — ABSENT (no pulse)
-//   1    — UNCERTAIN (weak / manual verify)
-//   2    — PRESENT  (pulse detected)
-//
-// Usage (in live_cpr_screen.dart):
-//   if (_pulseCheckActive)
-//     Positioned.fill(
-//       child: PulseCheckOverlay(
-//         intervalNumber: _pulseIntervalNumber,
-//         classification: _pulseClassification,
-//         ppgBuffer:      List.from(_ppgBuffer),
-//         detectedBpm:    _pulseCheckBpm,
-//         confidence:     _pulseCheckConfidence,
-//         spO2:           _pulseCheckSpO2,
-//         patientTemp:    _patientTemperature,
-//         onContinueCpr:  () => setState(() => _pulseCheckActive = false),
-//         onStopCpr:      () => _endSession(),
-//       ),
-//     )
+// classification (matches PULSE_CHECK_RESULT byte 1) is used only to tell
+// open (null) from closed (non-null) here — the value itself, plus BPM and
+// confidence, are stored in the session record and shown on the results
+// screen, never on this live card.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PulseCheckOverlay extends StatefulWidget {
   /// Which 2-minute interval triggered this check (from PULSE_CHECK_START byte 1–2).
   final int? intervalNumber;
 
-  /// Result from PULSE_CHECK_RESULT byte 1. null = still assessing.
+  /// Result from PULSE_CHECK_RESULT byte 1. null = still open; non-null = closed.
+  /// The value itself is not displayed here — see file header.
   final int? classification;
 
   /// Live PPG buffer — normalised 0.0–1.0 amplitudes from LIVE_STREAM ppgRaw.
   final List<double> ppgBuffer;
 
-  /// BPM from PULSE_CHECK_RESULT bytes 2–5. null if classification != 2.
-  final double? detectedBpm;
-
-  final double? liveBpm;  // streamed HR during assessment, shown while pending
-
-  /// Confidence 0–100 from PULSE_CHECK_RESULT byte 6.
-  final int? confidence;
-
-  /// Patient SpO₂ from LIVE_STREAM bytes 60–63 (gated to pulse window). null if no signal.
-  final double? spO2;
-
-  /// Patient temperature °C from LIVE_STREAM bytes 70–71 (decoded / 100). null if no reading.
-  final double? patientTemp;
-
-  final VoidCallback onContinueCpr;
-  final VoidCallback onStopCpr;
-
   const PulseCheckOverlay({
     super.key,
     this.intervalNumber,
     this.classification,
-    this.ppgBuffer    = const [],
-    this.detectedBpm,
-    this.liveBpm,
-    this.confidence,
-    this.spO2,
-    this.patientTemp,
-    required this.onContinueCpr,
-    required this.onStopCpr,
+    this.ppgBuffer = const [],
   });
 
   @override
   State<PulseCheckOverlay> createState() => _PulseCheckOverlayState();
 }
 
-class _PulseCheckOverlayState extends State<PulseCheckOverlay>
-    with TickerProviderStateMixin {
+class _PulseCheckOverlayState extends State<PulseCheckOverlay> {
 
   // ── Pause duration counter (mirrors VentilationOverlay) ──────────────────
   Timer? _elapsedTimer;
   double _elapsed = 0.0;
 
-  // ── Heartbeat animation — plays once pulse is confirmed ───────────────────
-  late final AnimationController _heartCtrl;
-  late final Animation<double>   _heartScale;
-
   @override
   void initState() {
     super.initState();
 
-    _heartCtrl = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 650),
-    );
-    _heartScale = Tween<double>(begin: 1.0, end: 1.30).animate(
-      CurvedAnimation(parent: _heartCtrl, curve: Curves.easeInOut),
-    );
-
-    // Tenth-of-a-second tick — drives the assessing pill turning red at 8 s
+    // Tenth-of-a-second tick — drives the elapsed-time pill turning red at 8 s.
     _elapsedTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!mounted) return;
       setState(() => _elapsed += 0.1);
     });
   }
 
-  @override
-  void didUpdateWidget(covariant PulseCheckOverlay old) {
-    super.didUpdateWidget(old);
-    if (old.classification == null && widget.classification == 2) {
-      _heartCtrl.repeat(reverse: true);
-    }
-  }
-
   void dispose() {
     _elapsedTimer?.cancel();
-    _heartCtrl.dispose();
     super.dispose();
   }
 
@@ -136,67 +74,25 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
 
   bool get _isPending => widget.classification == null;
 
-  Color get _resultColor {
-    if (_isPending) {
-      return _elapsed >= 8.0 ? AppColors.emergency : AppColors.primary;
-    }
-    if (widget.classification == 2)     return AppColors.success;
-    if (widget.classification == 1)     return AppColors.warning;
-    return AppColors.emergency;
-  }
-
-  String get _resultLabel {
-    if (_isPending)                     return 'Checking for pulse…';
-    if (widget.classification == 2)     return 'Pulse Detected';
-    if (widget.classification == 1)     return 'Signal Uncertain';
-    return 'No Pulse Detected';
-  }
-
-  String get _resultSub {
-    if (_isPending) {
-      return _elapsed >= 8.0
-          ? 'Resume compressions immediately'
-          : 'Keep both sensors on patient';
-    }
-    if (widget.classification == 2)     return 'Decide whether to stop or continue CPR';
-    if (widget.classification == 1)     return 'Verify manually and continue CPR unless certain';
-    return 'Resume compressions immediately';
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.overlayDark,
-      child: SafeArea(
-        child: Center(
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              constraints: BoxConstraints(
-                maxHeight: context.screenHeight * 0.85,
-              ),
-              decoration: AppDecorations.card(
-                color:  AppColors.white,
-                radius: AppSpacing.cardRadiusLg,
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHeader(),
-                    _buildWaveform(),
-                    _buildStatus(),
-                    _buildVitals(),
-                    _buildFooter(),
-                  ],
-                ),
-              ),
-            ),
-          ),
+    return Container(
+      decoration: AppDecorations.card(
+        color:  AppColors.white,
+        radius: AppSpacing.cardRadiusLg,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(),
+            _buildWaveform(),
+            _buildStatus(),
+            _buildFooter(),
+          ],
         ),
       ),
     );
@@ -220,9 +116,9 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
             bg:        AppColors.primaryLight,
           ),
           const Spacer(),
-          // Right side: an "assessing" pill while pending (the window is
-          // open-ended and firmware-driven now — no countdown), then the
-          // confidence badge once a result arrives.
+          // Elapsed-time pill while open (the window is open-ended and
+          // firmware-driven now — no countdown). Nothing shown once closed;
+          // the result itself lives on the session record, not here.
           if (_isPending)
             _Pill(
               label:     '${_elapsed.toStringAsFixed(1)}s',
@@ -232,12 +128,6 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
               bg:        _elapsed >= 8.0
                   ? AppColors.errorBg
                   : AppColors.primaryLight,
-            )
-          else if (widget.confidence != null)
-            _Pill(
-              label:     '${widget.confidence}% confidence',
-              textColor: _resultColor,
-              bg:        _resultColor.withValues(alpha: 0.10),
             ),
         ],
       ),
@@ -268,41 +158,24 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
                     color: AppColors.textDisabled,
                   ),
                 ),
-                const Spacer(),
-                if (!_isPending && widget.classification == 2)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.circle,
-                        size:  6,
-                        color: AppColors.success,
-                      ),
-                      const SizedBox(width: AppSpacing.xxs),
-                      Text(
-                        'Live',
-                        style: AppTypography.label(
-                          size:  11,
-                          color: AppColors.success,
-                        ),
-                      ),
-                    ],
-                  ),
               ],
             ),
           ),
           // The graph itself
           _PpgGraph(
             buffer:    widget.ppgBuffer,
-            lineColor: _isPending ? AppColors.primary : _resultColor,
-            showFill:  widget.classification == 2,
+            lineColor: AppColors.primary,
           ),
         ],
       ),
     );
   }
 
-  // ── Status area — icon + label + sub ──────────────────────────────────────
+  // ── Status area — in-progress while open, neutral once closed ────────────
+  //
+  // No classification, no BPM, no confidence, no verdict colour — those
+  // stay in the session record and the results screen. This card only ever
+  // says whether a check is in progress or has been recorded.
 
   Widget _buildStatus() {
     return Padding(
@@ -312,120 +185,29 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay>
       ),
       child: Column(
         children: [
-          // Icon / animation
           if (_isPending)
             const _PulsingDot()
-          else if (widget.classification == 2)
-            ScaleTransition(
-              scale: _heartScale,
-              child: const Icon(
-                Icons.favorite_rounded,
-                size:  AppSpacing.iconXl,
-                color: AppColors.success,
-              ),
-            )
           else
-            Icon(
-              widget.classification == 1
-                  ? Icons.help_outline_rounded
-                  : Icons.heart_broken_rounded,
+            const Icon(
+              Icons.check_circle_outline_rounded,
               size:  AppSpacing.iconXl,
-              color: _resultColor,
+              color: AppColors.textSecondary,
             ),
 
           const SizedBox(height: AppSpacing.sm),
 
           Text(
-            _resultLabel,
+            _isPending ? 'Circulation check in progress' : 'Circulation check recorded',
             textAlign: TextAlign.center,
             style: AppTypography.heading(
               size:  20,
-              color: _resultColor,
+              color: AppColors.textPrimary,
             ),
           ),
-
-          const SizedBox(height: AppSpacing.xxs + 1),
-
-          Text(
-            _resultSub,
-            textAlign: TextAlign.center,
-            style: AppTypography.body(
-              size:  13,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          if (_isPending && widget.liveBpm != null && widget.liveBpm! > 0) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _Pill(
-              label: '${widget.liveBpm!.toStringAsFixed(0)} BPM live',
-              textColor: AppColors.primary,
-              bg: AppColors.primaryLight,
-            ),
-          ],
         ],
       ),
     );
   }
-
-  // ── Vitals row — BPM / SpO₂ / Temp (only when result present) ────────────
-
-  Widget _buildVitals() {
-    // Nothing to show if no values are available at all
-    final hasBpm  = widget.detectedBpm != null && (widget.detectedBpm! > 0) && widget.classification != null;
-    final hasSpo2 = widget.spO2 != null && (widget.spO2! > 0) && widget.classification != null;
-    final hasTemp = widget.patientTemp != null;
-
-    if (!hasBpm && !hasSpo2 && !hasTemp) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md, 0, AppSpacing.md, AppSpacing.md,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical:   AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color:        AppColors.screenBgGrey,
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            if (hasBpm)
-                _VitalChip(
-                  icon:  Icons.favorite_rounded,
-                  color: AppColors.primary,
-                value: widget.detectedBpm!.toStringAsFixed(0),
-                unit:  'BPM',
-              ),
-            if (hasBpm && hasSpo2)
-              _VertDivider(),
-            if (hasSpo2)
-              _VitalChip(
-                icon:  Icons.air_rounded,
-                color: AppColors.primary,
-                value: widget.spO2!.toStringAsFixed(0),
-                unit:  'SpO₂%',
-              ),
-            if ((hasBpm || hasSpo2) && hasTemp)
-              _VertDivider(),
-            if (hasTemp)
-              _VitalChip(
-                icon:  Icons.thermostat_rounded,
-                color: AppColors.primary,
-                value: widget.patientTemp!.toStringAsFixed(1),
-                unit:  '°C',
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
 
   // ── Footer — end-condition hint ────────────────────────────────────────────
 
@@ -517,12 +299,10 @@ class _PulsingDotState extends State<_PulsingDot>
 class _PpgGraph extends StatelessWidget {
   final List<double> buffer;
   final Color        lineColor;
-  final bool         showFill;
 
   const _PpgGraph({
     required this.buffer,
     required this.lineColor,
-    this.showFill = false,
   });
 
   @override
@@ -541,7 +321,6 @@ class _PpgGraph extends StatelessWidget {
           painter: _PpgPainter(
             buffer:    buffer,
             lineColor: lineColor,
-            showFill:  showFill,
           ),
         ),
       ),
@@ -552,12 +331,10 @@ class _PpgGraph extends StatelessWidget {
 class _PpgPainter extends CustomPainter {
   final List<double> buffer;
   final Color        lineColor;
-  final bool         showFill;
 
   const _PpgPainter({
     required this.buffer,
     required this.lineColor,
-    required this.showFill,
   });
 
   @override
@@ -668,30 +445,6 @@ class _PpgPainter extends CustomPainter {
       path.cubicTo(cpx, y0, cpx, y1, x1, y1);
     }
 
-    // ── Area fill + glow when pulse confirmed ─────────────────────────────────
-    if (showFill) {
-      final fill = Path.from(path)
-        ..lineTo(xOf(n - 1), size.height)
-        ..lineTo(xOf(0), size.height)
-        ..close();
-      canvas.drawPath(
-        fill,
-        Paint()
-          ..color = lineColor.withValues(alpha: 0.08)
-          ..style = PaintingStyle.fill,
-      );
-      // Soft glow stroke
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color       = lineColor.withValues(alpha: 0.22)
-          ..strokeWidth = 7.0
-          ..style       = PaintingStyle.stroke
-          ..strokeCap   = StrokeCap.round
-          ..maskFilter  = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
-    }
-
     // ── Main line ─────────────────────────────────────────────────────────────
     canvas.drawPath(
       path,
@@ -722,66 +475,7 @@ class _PpgPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PpgPainter old) =>
       old.buffer != buffer ||
-          old.lineColor != lineColor ||
-          old.showFill != showFill;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _VitalChip — icon + value + unit, used in the vitals row
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VitalChip extends StatelessWidget {
-  final IconData icon;
-  final Color    color;
-  final String   value;
-  final String   unit;
-
-  const _VitalChip({
-    required this.icon,
-    required this.color,
-    required this.value,
-    required this.unit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: AppSpacing.iconSm, color: color),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          value,
-          style: AppTypography.numericDisplay(
-            size:  20,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        Text(
-          unit,
-          style: AppTypography.label(
-            size:  10,
-            color: AppColors.textDisabled,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _VertDivider — thin vertical separator between vitals chips
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VertDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width:  AppSpacing.dividerThickness,
-      height: AppSpacing.lg,
-      color:  AppColors.divider,
-    );
-  }
+          old.lineColor != lineColor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

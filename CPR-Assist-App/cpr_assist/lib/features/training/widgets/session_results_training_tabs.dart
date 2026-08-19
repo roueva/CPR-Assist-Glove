@@ -1709,35 +1709,29 @@ class _SessionTimelineSection extends StatelessWidget {
       ));
     }
 
-    // Pulse check events
+    // Pulse check events. No "ignored/responded" framing — there's no
+    // prompt to ignore, and continuing compressions is correct behaviour,
+    // not a lapse. Every check just shows what it found.
     for (final p in detail.pulseChecks) {
-      final t         = p.timestampSec;
-      // Compliant = rescuer actually paused >= 3 s for the check (same rule
-      // as ventilation), not merely whether a UI button was tapped.
-      final completed = p.compliant;
+      final t = p.timestampSec;
 
       final dotColor = p.detected    ? AppColors.success
           : p.isUncertain            ? AppColors.warning
           :                            AppColors.error;
 
       events.add(_TLEvent(
-        sortKey:     t,
-        time:        _fmt(t),
-        title:       'Pulse check #${p.intervalNumber}',
-        subtitle:    !completed
-            ? 'Prompt ignored · CPR continued'
-            : p.detected && p.detectedBpm > 0
+        sortKey:  t,
+        time:     _fmt(t),
+        title:    'Pulse check #${p.intervalNumber}',
+        subtitle: p.detected && p.detectedBpm > 0
             ? '${p.detectedBpm.round()} bpm · ${p.confidence}% confidence'
             : p.isUncertain
             ? 'Weak signal · Verify manually'
             : 'No pulse found',
-        dotColor:    completed ? dotColor : AppColors.textDisabled,
-        icon:        !completed          ? Icons.monitor_heart_outlined
-            : p.detected                 ? Icons.favorite_rounded
-            : p.isUncertain              ? Icons.help_outline_rounded
-            :                              Icons.heart_broken_rounded,
-        isGrayedOut: !completed,
-        isIgnored:   !completed,
+        dotColor: dotColor,
+        icon:     p.detected    ? Icons.favorite_rounded
+            : p.isUncertain     ? Icons.help_outline_rounded
+            :                     Icons.heart_broken_rounded,
       ));
     }
 
@@ -2038,22 +2032,15 @@ class _TimelineStatGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Pulse chip ──────────────────────────────────────────────────────────
+    // ── Pulse chip — plain count, no compliance framing ──────────────────────
     _StatChip? pulseChip;
     if (detail.pulseChecks.isNotEmpty) {
       final total = detail.pulseChecks.length;
-      final completed = detail.pulseChecks.where((p) => p.compliant).length;
-      final lastDetected = detail.pulseChecks.lastWhere(
-            (p) => p.detected && p.detectedBpm > 0,
-        orElse: () => detail.pulseChecks.first,
-      );
-      final hasDetection = lastDetected.detected && lastDetected.detectedBpm > 0;
-      final complianceNote = '$completed/$total completed';
       pulseChip = _StatChip(
         Icons.monitor_heart_outlined,
-        'Pulse checks',
-        '$complianceNote',
-        hasDetection ? AppColors.success : AppColors.textSecondary,
+        'Circulation checks',
+        total == 1 ? '1 recorded' : '$total recorded',
+        AppColors.textSecondary,
       );
     }
 
