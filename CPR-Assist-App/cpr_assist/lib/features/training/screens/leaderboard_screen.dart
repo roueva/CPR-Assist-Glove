@@ -141,7 +141,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
                 color: AppColors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: AppColors.shadowStrong,
                     blurRadius: 8,
                     offset: Offset(0, 3),
                     spreadRadius: -4,
@@ -157,7 +157,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
                     unselectedLabelColor: AppColors.textDisabled,
                     indicatorColor:       AppColors.primary,
                     indicatorWeight:      2.5,
-                    dividerColor:         Colors.transparent,
+                    dividerColor:         AppColors.transparent,
                     labelStyle: AppTypography.label(size: 13, color: AppColors.primary),
                     unselectedLabelStyle: AppTypography.label(size: 13, color: AppColors.textDisabled),
                     tabs: const [
@@ -1108,7 +1108,7 @@ class _StatsHeroCard extends StatelessWidget {
                         vertical:   AppSpacing.xxs,
                       ),
                       decoration: AppDecorations.darkTrendPill(chipColor).copyWith(
-                        border: Border.all(color: Colors.transparent, width: 0),
+                        border: Border.all(color: AppColors.transparent, width: 0),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -2147,7 +2147,7 @@ class _SimulatedLeaderboardPreviewState
                 color: AppColors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
+                    color: AppColors.shadowStrong,
                     blurRadius: 8,
                     offset: Offset(0, 3),
                     spreadRadius: -4,
@@ -2163,7 +2163,7 @@ class _SimulatedLeaderboardPreviewState
                     unselectedLabelColor: AppColors.textDisabled,
                     indicatorColor:       AppColors.primary,
                     indicatorWeight:      2.5,
-                    dividerColor:         Colors.transparent,
+                    dividerColor:         AppColors.transparent,
                     labelStyle: AppTypography.label(size: 13, color: AppColors.primary),
                     unselectedLabelStyle: AppTypography.label(size: 13, color: AppColors.textDisabled),
                     tabs: const [

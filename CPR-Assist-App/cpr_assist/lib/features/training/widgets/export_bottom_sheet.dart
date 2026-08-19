@@ -49,7 +49,7 @@ class ExportBottomSheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<void>(
       context:            context,
       isScrollControlled: true,
-      backgroundColor:    Colors.transparent,
+      backgroundColor:    AppColors.transparent,
       useSafeArea:        true,
       builder: (_) => ExportBottomSheet._(
         detail:  detail,
@@ -65,7 +65,7 @@ class ExportBottomSheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<void>(
       context:            context,
       isScrollControlled: true,
-      backgroundColor:    Colors.transparent,
+      backgroundColor:    AppColors.transparent,
       useSafeArea:        true,
       builder: (_) => ExportBottomSheet._(sessions: sessions),
     );

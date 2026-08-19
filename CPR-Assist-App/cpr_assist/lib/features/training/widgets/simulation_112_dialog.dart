@@ -69,7 +69,7 @@ class _Simulation112DialogState extends State<Simulation112Dialog> {
     final isFirst  = _step == 0;
 
     return Dialog(
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColors.transparent,
       insetPadding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.dialogInsetH,
         vertical:   AppSpacing.dialogInsetV,

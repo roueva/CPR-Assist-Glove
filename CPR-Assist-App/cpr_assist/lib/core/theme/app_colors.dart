@@ -225,6 +225,21 @@ class AppColors {
   static const Color pediatricLight = Color(0xFFE0F7FA);
 
   // ═══════════════════════════════════════════════════════
+  // GUIDE HUB CARD OVERLAYS
+  // Deep-toned variants of the card's semantic color, used as the
+  // gradient scrim over the hero image (overlayColor in _HubCard).
+  // ═══════════════════════════════════════════════════════
+
+  /// AED hub card overlay — deep brown-orange (darkened warning).
+  static const Color hubOverlayAed = Color(0xFF5A2800);
+
+  /// Special situations hub card overlay — deep teal (darkened pediatric).
+  static const Color hubOverlayPediatric = Color(0xFF003D50);
+
+  /// Stop & recovery hub card overlay — deep green (darkened success).
+  static const Color hubOverlayRecovery = Color(0xFF0A2D10);
+
+  // ═══════════════════════════════════════════════════════
   // BACKGROUNDS & SURFACES
   // ═══════════════════════════════════════════════════════
 
@@ -232,6 +247,9 @@ class AppColors {
 
   /// Pure white — screens, cards, dialogs, header, sheets.
   static const Color white = Color(0xFFFFFFFF);
+
+  /// Pure black — base for withValues(alpha:) overlays/scrims only.
+  static const Color black = Color(0xFF000000);
 
   /// Cool grey-blue screen bg — lists, settings, achievements.
   static const Color screenBgGrey = Color(0xFFF2F6FC);
@@ -271,4 +289,7 @@ class AppColors {
   static const Color shadowDefault = Color(0x0D000000);
   static const Color shadowMedium  = Color(0x1A000000);
   static const Color shadowStrong  = Color(0x1F000000);
+
+  /// Guide hub card elevation shadow (~15% black).
+  static const Color shadowCard = Color(0x26000000);
 }

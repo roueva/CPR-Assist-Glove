@@ -673,7 +673,7 @@ class _SessionsList extends StatelessWidget {
               color: AppColors.screenBgGrey,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
+                  color: AppColors.shadowStrong,
                   blurRadius: 8,
                   offset: Offset(0, 3),
                 ),
@@ -1094,7 +1094,7 @@ class _SearchSortRowState extends State<_SearchSortRow> {
         onTap: _closeSortOverlay,
         child: Stack(
           children: [
-            Positioned.fill(child: Container(color: Colors.transparent)),
+            Positioned.fill(child: Container(color: AppColors.transparent)),
             CompositedTransformFollower(
               link:           _sortLayerLink,
               showWhenUnlinked: false,
@@ -1102,7 +1102,7 @@ class _SearchSortRowState extends State<_SearchSortRow> {
               followerAnchor: Alignment.topRight,
               offset:         const Offset(0, 6),
               child: Material(
-                color: Colors.transparent,
+                color: AppColors.transparent,
                 child: _SortPopup(
                   current:       liveSortOrder,
                   showGradeSort: widget.showGradeSort,

@@ -85,7 +85,7 @@ class GuideScreen extends StatelessWidget {
                         assetPath: 'assets/icons/guide/hub_aed.png',
                         placeholderIcon: Icons.bolt_rounded,
                         placeholderColor: AppColors.warning,
-                        overlayColor: const Color(0xFF5A2800),
+                        overlayColor: AppColors.hubOverlayAed,
                         title: 'AED',
                         heroHeight: AppSpacing.guideHubSmH,
                         imageScale: 0.9,
@@ -118,7 +118,7 @@ class GuideScreen extends StatelessWidget {
                         assetPath: 'assets/icons/guide/hub_pediatric.png',
                         placeholderIcon: Icons.child_care_rounded,
                         placeholderColor: AppColors.pediatric,
-                        overlayColor: const Color(0xFF003D50),
+                        overlayColor: AppColors.hubOverlayPediatric,
                         title: 'Special situations',
                         heroHeight: AppSpacing.guideHubSmH,
                         onTap: () =>
@@ -131,7 +131,7 @@ class GuideScreen extends StatelessWidget {
                         assetPath: 'assets/icons/guide/hub_recovery.png',
                         placeholderIcon: Icons.airline_seat_flat_rounded,
                         placeholderColor: AppColors.success,
-                        overlayColor: const Color(0xFF0A2D10),
+                        overlayColor: AppColors.hubOverlayRecovery,
                         title: 'Stop & recovery',
                         heroHeight: AppSpacing.guideHubSmH,
                         onTap: () =>
@@ -349,7 +349,7 @@ class _ChainBanner extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x26000000),
+                color: AppColors.shadowCard,
                 blurRadius: 12,
                 spreadRadius: 0,
                 offset: Offset(0, 4),
@@ -431,7 +431,7 @@ class _HubCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x26000000),   // ~15% black
+                color: AppColors.shadowCard,
                 blurRadius: 8,
                 spreadRadius: 0,
                 offset: Offset(0, 2),
@@ -473,7 +473,7 @@ class _HubCard extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.transparent,
+                      AppColors.transparent,
                       overlayColor.withValues(alpha: 0.82),
                     ],
                     stops: const [0.55, 1.0],
@@ -1110,7 +1110,7 @@ class _PhotoCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x26000000),
+              color: AppColors.shadowCard,
               blurRadius: 12,
               spreadRadius: 0,
               offset: Offset(0, 4),
@@ -1151,7 +1151,7 @@ class _PhotoCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.62)],
+                  colors: [AppColors.transparent, AppColors.black.withValues(alpha: 0.62)],
                 ),
               ),
               child: Text(

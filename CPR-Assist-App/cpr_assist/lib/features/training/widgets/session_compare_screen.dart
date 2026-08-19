@@ -192,7 +192,7 @@ class _SessionCompareScreenState
           color: AppColors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
+              color: AppColors.shadowStrong,
               blurRadius: 6,
               offset: Offset(0, 3),
             ),
@@ -211,7 +211,7 @@ class _SessionCompareScreenState
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor:       AppColors.primary,
               indicatorWeight:      2.0,
-              dividerColor:         Colors.transparent,
+              dividerColor:         AppColors.transparent,
               labelStyle:           AppTypography.label(color: AppColors.primary),
               unselectedLabelStyle: AppTypography.caption(color: AppColors.textSecondary),
               tabs: const [
@@ -2555,7 +2555,7 @@ class _MetricGroup extends StatelessWidget {
           child: Container(
             decoration: AppDecorations.dialog(),
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.75,
+              maxHeight: context.screenHeight * 0.75,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

@@ -440,14 +440,12 @@ class _GloveDiagnosticSheetState extends ConsumerState<GloveDiagnosticSheet> {
   }
 
   void _openComponent(_DiagComponent component) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ComponentTestScreen(
-          ble:           widget.ble,
-          component:     component,
-          onManualPass:  () => setState(() => _manualPassed[component] = true),
-          onManualFail:  () => setState(() => _manualFailed[component] = true),
-        ),
+    context.push(
+      _ComponentTestScreen(
+        ble:           widget.ble,
+        component:     component,
+        onManualPass:  () => setState(() => _manualPassed[component] = true),
+        onManualFail:  () => setState(() => _manualFailed[component] = true),
       ),
     );
   }

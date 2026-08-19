@@ -76,7 +76,7 @@ class AEDClusterManager {
       text: TextSpan(
         text: count.toString(),
         style: TextStyle(
-          color: Colors.white,
+          color: AppColors.white,
           fontSize: fontSize,
           fontWeight: FontWeight.bold,
         ),
