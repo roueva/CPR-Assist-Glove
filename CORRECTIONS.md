@@ -15,6 +15,19 @@
       windows, which contaminates detB feeding max30102ClassifyPulse.
       Fix: drain patient at ≤200 ms during the window, or detect FIFO
       overflow and advance the clock accordingly.
+- [ ] BLOCKING BEFORE USER STUDY — bench the contact threshold on real geometry.
+      PULSE_GATE_CONTACT_IR_MIN currently inherits CONTACT_IR_MIN (30000),
+      tuned for a finger covering the sensor, not a fingertip pressed outward
+      against neck skin. Measure patient IR DC in four states: sensor in air,
+      resting on clothing/bench, pressed on human neck, pressed on manikin neck.
+      Set threshold at the midpoint of the actual gap. Needs max30102DiagPatientDc().
+      NOTE: if the manikin's plastic neck reads below threshold, the gate never
+      opens during the study. Must be checked before any session is run.
+- [ ] Chatter test: pause → contact → one window opens; hold through resume prompt;
+      resume compressions → closes; pause again without lifting → NO second window;
+      lift and replace → second window opens.
+- [ ] Confirm the 200 ms pause-time contact probe doesn't inflate sensorTask dt
+      (depth integral is the validated output — see mutex note at cpr_glove.ino:1307).
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card
