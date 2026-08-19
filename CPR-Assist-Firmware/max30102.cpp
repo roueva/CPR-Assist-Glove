@@ -25,6 +25,13 @@ static MAX30105 _patient;
 static bool _rescuerOk = false;
 static bool _patientOk = false;
 
+// Cached anyContact from the most recent max30102UpdatePatient() call, plus
+// the millis() it was written at — surfaced via max30102PatientContactOk()
+// / max30102PatientContactUpdateMs() so callers can tell a fresh reading
+// from one left over from before their window opened.
+static bool _patientContactOk = false;
+static unsigned long _patientContactMs = 0;
+
 // ── Tunables (validated on bench) ────────────────────────────────────────────
 #define CONTACT_IR_MIN 30000   // IR DC below this = sensor not covered
 #define PEAK_THRESH_PCT 0.40f  // peak must exceed 40% of envelope
@@ -142,6 +149,7 @@ static void resetState(PpgState& s, bool keepDet) {
 void max30102ResetPatientDetectors() {
   resetState(_pP, false);
   _pSampleClockMs = 0;
+  _patientContactOk = false;
 }
 void max30102ResetRescuerBeats() {
   resetState(_pR, true);
@@ -392,6 +400,8 @@ void max30102UpdatePatient(float& hrBpm, float& spO2, float& ppgRaw,
     hrBpm = spO2 = ppgRaw = 0;
     sigQuality = pi = 0;
     detectorACount = detectorBCount = 0;
+    _patientContactOk = false;
+    _patientContactMs = millis();
     return;
   }
   tcaSelect(TCA_CH_MAX30102_P);
@@ -424,6 +434,9 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
   detectorACount = _pP.detA;
   detectorBCount = _pP.detB;
 
+  _patientContactOk = anyContact;
+  _patientContactMs = millis();
+
   if (!anyContact) {
     hrBpm = spO2 = 0;
     sigQuality = pi = 0;
@@ -437,6 +450,36 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
            : 0.0f;
   float qi = (_pP.dc > 0) ? (_pP.envelope / _pP.dc) * 100.0f : 0.0f;
   pi = (uint8_t)constrain(qi * 10.0f, 0.0f, 255.0f);
+}
+
+bool max30102PatientContactOk() {
+  return _patientContactOk;
+}
+
+// millis() at which max30102PatientContactOk()'s value was last written.
+// Callers should ignore the cached value unless this is later than their
+// own window's start time — otherwise it may be a stale pre-window reading.
+unsigned long max30102PatientContactUpdateMs() {
+  return _patientContactMs;
+}
+
+// ── Patient contact probe — lightweight, for the pulse-check gate ───────────
+// Selects the patient TCA channel and checks raw IR DC against the contact
+// threshold. No bandpass/envelope/beat detection, and never touches _pP —
+// safe to call before a window opens (or after one closes) without
+// disturbing the state max30102UpdatePatient() uses.
+bool max30102PatientContact() {
+  if (!_patientOk) return false;
+  tcaSelect(TCA_CH_MAX30102_P);
+  _patient.check();
+
+  bool contact = false;
+  while (_patient.available()) {
+    uint32_t ir = _patient.getIR();
+    _patient.nextSample();
+    if (ir >= PULSE_GATE_CONTACT_IR_MIN) contact = true;
+  }
+  return contact;
 }
 
 // ── Pulse classification (unchanged logic, now fed by reliable SQI) ──────────

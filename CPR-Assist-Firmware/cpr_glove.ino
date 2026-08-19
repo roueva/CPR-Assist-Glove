@@ -56,9 +56,13 @@ static bool _inPulseCheck = false;
 static unsigned long _pulseCheckStartMs = 0;
 static uint32_t _pulseCheckOpenAtCount = 0;  // compressionCount when window opened
 static bool _pulseResumePromptPlayed = false;
-static bool _pulsePauseSeen = false;
 static bool _pulseResultSent = false;
 static unsigned long _pulseCheckWarmupEndMs = 0;
+// Passive contact+pause gate state.
+static bool _pulseGateArmed = true;          // edge-armed: exactly one check per carotid palpation
+static unsigned long _pulseGateContactMs = 0;    // 0 = no current contact streak; else ms it began (pre-open debounce)
+static unsigned long _pulseGateNoContactMs = 0;  // 0 = no current no-contact streak; else ms it began (close/re-arm debounce)
+static unsigned long _pulseGatePollMs = 0;   // throttle for the pre-open/re-arm contact probe (200ms, matches max30102ServiceRescuer)
 static uint16_t _ventCycleNum = 0;
 static bool _inVentWindow = false;
 static uint32_t _ventWindowOpenAtCount = 0;
@@ -374,6 +378,10 @@ static void startSession() {
   _pulseCheckCount = 0;
   _inPulseCheck = false;
   _pulseResultSent = false;
+  _pulseGateArmed = true;
+  _pulseGateContactMs = 0;
+  _pulseGateNoContactMs = 0;
+  _pulseGatePollMs = 0;
   _ventCycleNum = 0;
   _inVentWindow = false;
   _lastCompressionMs = millis();
@@ -1122,17 +1130,63 @@ bool cycleReached = (ventComps > 0
         }
       }
 
-      // Pulse check (Emergency mode only)
+      // Pulse check (Emergency mode only) — passive contact+pause gate.
+      // The glove never prompts. A circulation check opens only when the
+      // rescuer has already stopped compressions on their own AND the
+      // fingertip sensor confirms carotid contact. No time-based trigger.
       if (snap.currentMode == GloveMode::Emergency) {
-        if (!_inPulseCheck && (now - _lastPulseCheckMs) >= PULSE_CHECK_INTERVAL_MS) {
-          _lastPulseCheckMs = now;
+        bool paused = (millis() - _lastCompressionMs) >= UNPLANNED_PAUSE_THRESHOLD_MS;
+
+        // Contact probe — throttled to 200 ms, matching max30102ServiceRescuer
+        // (avoids contending with sensorTask's 100 Hz IMU read on gI2CMutex).
+        // Only used pre-open (while paused, gate armed) and for re-arming
+        // (gate disarmed, window already closed) — never while a window is
+        // open, which derives contact from max30102UpdatePatient() instead
+        // (see below; that already runs in the 500 ms vitals block).
+        bool pollPreOpen = !_inPulseCheck && _pulseGateArmed && paused;
+        bool pollRearm   = !_inPulseCheck && !_pulseGateArmed;
+        if ((pollPreOpen || pollRearm) && (now - _pulseGatePollMs) >= 200) {
+          _pulseGatePollMs = now;
+          xSemaphoreTake(gI2CMutex, portMAX_DELAY);
+          bool contact = max30102PatientContact();
+          xSemaphoreGive(gI2CMutex);
+
+          if (pollPreOpen) {
+            if (contact) {
+              if (_pulseGateContactMs == 0) _pulseGateContactMs = now;
+            } else {
+              _pulseGateContactMs = 0;
+            }
+          } else {
+            if (contact) {
+              _pulseGateNoContactMs = 0;
+            } else if (_pulseGateNoContactMs == 0) {
+              _pulseGateNoContactMs = now;
+            }
+          }
+        } else if (_pulseGateArmed && !paused) {
+          // Compressions resumed (or never paused) — clear any partial
+          // pre-open streak so a later pause starts fresh. Not gated on the
+          // 200 ms throttle: this is just a local reset, no I2C involved.
+          _pulseGateContactMs = 0;
+        }
+
+        // Open: contact confirmed sustained for the debounce period. Checked
+        // every tick (not just on poll ticks) so the window opens as soon as
+        // the debounce is actually crossed, not on the next 200 ms poll.
+        if (!_inPulseCheck && _pulseGateArmed && _pulseGateContactMs != 0 &&
+            (now - _pulseGateContactMs) >= PULSE_GATE_CONTACT_DEBOUNCE_MS) {
+          // Disarm the gate immediately so this is exactly one check per
+          // carotid palpation.
+          _pulseGateArmed = false;
+          _pulseGateContactMs = 0;
+          _pulseGateNoContactMs = 0;
           _pulseCheckCount++;
           _lastMetronomeMs = millis();
           _inPulseCheck = true;
           _pulseResultSent = false;
           _pulseCheckOpenAtCount = snap.compressionCount;
           _pulseResumePromptPlayed = false;
-          _pulsePauseSeen = false;
           portENTER_CRITICAL(&gStateMux);
           gState.pulseCheckActive = true;
           gState.pulseChecksPrompted++;
@@ -1140,9 +1194,7 @@ bool cycleReached = (ventComps > 0
           bleQueueEvent(bleBuildPulseCheckStart(
             _pulseCheckCount,
             (uint32_t)(now - _sessionStartMs)));
-          if (snap.audioFeedbackEnabled) audioPlay(AUDIO_CHECK_PULSE, AUDIO_PRI_PULSE_CHECK);
-          if (snap.hapticFeedbackEnabled) motorPulse(MOTOR_LONG_MS);
-        max30102ResetPatientDetectors();
+          max30102ResetPatientDetectors();
           _pulseCheckStartMs = now;
           _pulseCheckWarmupEndMs = now + 2000UL;
           portENTER_CRITICAL(&gStateMux);
@@ -1152,38 +1204,59 @@ bool cycleReached = (ventComps > 0
         }
 
         // Resume-compressions voice prompt: once, at WINDOW_RESUME_PROMPT_MS.
-if (_inPulseCheck && !_pulseResumePromptPlayed && (now - _pulseCheckStartMs) >= WINDOW_RESUME_PROMPT_MS) {
-            _pulseResumePromptPlayed = true;
+        // Shortens a pause already in progress — it never causes one.
+        if (_inPulseCheck && !_pulseResumePromptPlayed && (now - _pulseCheckStartMs) >= WINDOW_RESUME_PROMPT_MS) {
+          _pulseResumePromptPlayed = true;
           if (snap.audioFeedbackEnabled) audioPlay(AUDIO_RESUME_COMPRESSIONS, AUDIO_PRI_PULSE_CHECK);
         }
 
-        // Window CLOSE — IDENTICAL logic to the ventilation window:
-        //   (a) ≥ WINDOW_NONCOMPLIANT_COMP_COUNT comps, no real pause → dismiss
-        //   (b) a real pause (≥ WINDOW_PAUSE_COMPLIANT_MS) occurred AND
-        //       ≥ WINDOW_RESUME_COMP_COUNT comps after → compliant close
-        //   (c) WINDOW_MAX_BACKSTOP_MS elapsed → hard close.
-        // Never closes on a fixed timer alone; never closes because a beat
-        // was found — the result is computed AT close, waveform keeps
-        // streaming until the window actually closes.
+        // In-window contact tracking — derived from max30102UpdatePatient(),
+        // already running in the 500 ms vitals block while pulseCheckActive.
+        // No new I2C here.
+        // Gated on freshness, not a fixed warmup: right at open, the vitals
+        // block may not have run yet with pulseCheckActive freshly true, so
+        // its cached reading can be stale (from before this window existed,
+        // likely false). Only trust it once it was actually written after
+        // this window opened — otherwise a stale false reading could start
+        // the no-contact debounce right at open and close the window despite
+        // genuine contact.
+        if (_inPulseCheck && max30102PatientContactUpdateMs() > _pulseCheckStartMs) {
+          if (max30102PatientContactOk()) {
+            _pulseGateNoContactMs = 0;
+          } else if (_pulseGateNoContactMs == 0) {
+            _pulseGateNoContactMs = now;
+          }
+        }
+
+        // Window CLOSE. A real pause is now a precondition to opening at
+        // all, so close on any of:
+        //   (a) ≥ WINDOW_RESUME_COMP_COUNT comps after open — resumed
+        //   (b) contact lost ≥ PULSE_GATE_CONTACT_DEBOUNCE_MS — let go
+        //   (c) WINDOW_MAX_BACKSTOP_MS elapsed — hard close backstop
+        // Never closes because a beat was found — the result is computed
+        // AT close, waveform keeps streaming until the window actually closes.
         {
           unsigned long pcWindowMs = now - _pulseCheckStartMs;
-          unsigned long sinceLastComp = millis() - _lastCompressionMs;
           uint32_t compsSinceOpen = (_inPulseCheck)
                                       ? (snap.compressionCount - _pulseCheckOpenAtCount)
                                       : 0;
 
-          if (!_pulsePauseSeen && _inPulseCheck && sinceLastComp >= WINDOW_PAUSE_COMPLIANT_MS) {
-            _pulsePauseSeen = true;
+          bool pcContactLost = (_pulseGateNoContactMs != 0) &&
+              ((now - _pulseGateNoContactMs) >= PULSE_GATE_CONTACT_DEBOUNCE_MS);
+
+          // Re-arm as soon as contact has been confirmed absent for the
+          // debounce period — independent of whether that's what closes
+          // the window below, or the window already closed another way.
+          if (!_pulseGateArmed && pcContactLost) {
+            _pulseGateArmed = true;
+            _pulseGateNoContactMs = 0;
           }
 
-          bool pcNonCompliant =
-            !_pulsePauseSeen && (compsSinceOpen >= WINDOW_NONCOMPLIANT_COMP_COUNT);
-          bool pcCompliantClose =
-            _pulsePauseSeen && (compsSinceOpen >= WINDOW_RESUME_COMP_COUNT);
+          bool pcResumed = (compsSinceOpen >= WINDOW_RESUME_COMP_COUNT);
           bool pcBackstop = (pcWindowMs >= WINDOW_MAX_BACKSTOP_MS);
 
           bool pcClose =
-            _inPulseCheck && !_pulseResultSent && (pcNonCompliant || pcCompliantClose || pcBackstop);
+            _inPulseCheck && !_pulseResultSent && (pcResumed || pcContactLost || pcBackstop);
 
           if (pcClose) {
             _pulseResultSent = true;
@@ -1222,10 +1295,11 @@ if (_inPulseCheck && !_pulseResumePromptPlayed && (now - _pulseCheckStartMs) >= 
               p.detectorBCount = snap.detectorBCount;
             }
 
-            // "Complied" = user actually held the carotid sensor long enough
-            // to get a usable signal (regardless of whether a pulse was found).
-            // Distinguishes real attempts from windows where the rescuer ignored
-            // the prompt.
+            // "Complied" = signal quality was good enough to classify by the
+            // time the window closed (regardless of whether a pulse was
+            // found). Contact is now a precondition to open at all, so this
+            // will usually be true — it still catches a window that closed
+            // (e.g. via backstop) before a usable signal was obtained.
             if (snap.ppgSignalQuality >= 40) {
               portENTER_CRITICAL(&gStateMux);
               gState.pulseChecksComplied++;

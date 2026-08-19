@@ -8,6 +8,13 @@
 - [ ] `imu.cpp:4` comment says ±8g/0x5C, should be ±4g/0x4A
 - [ ] `config.h:142` comment says ±2g, confirm ±4g and fix comment
 - [ ] Before user study: MANIKIN_CALIBRATION_LOG=0, BLE_DEBUG_SERIAL=0
+- [ ] Patient PPG FIFO overflows: max30102UpdatePatient drains at 500 ms
+      (cpr_glove.ino:1430) but the 32-sample FIFO holds only 320 ms.
+      ~36% of samples dropped; synthetic clock (_pSampleClockMs += 10) runs
+      ~40% slow, inflating patient hrBpm and distorting RR_MIN/MAX refractory
+      windows, which contaminates detB feeding max30102ClassifyPulse.
+      Fix: drain patient at ≤200 ms during the window, or detect FIFO
+      overflow and advance the clock accordingly.
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card

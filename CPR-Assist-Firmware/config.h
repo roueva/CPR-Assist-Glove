@@ -426,12 +426,20 @@
 #define VENTILATION_GRACE_MS 2500UL  // reflex comps in this window after the prompt don't count
 
 // ── Pulse check ───────────────────────────────────────────────────────────────
-#define PULSE_CHECK_INTERVAL_MS 120000UL  // every 2 min in Emergency
+#define PULSE_CHECK_INTERVAL_MS 120000UL  // unused, retained pending cleanup
+
+// Passive contact+pause gate — the glove never prompts. A circulation check
+// opens only when the rescuer has already stopped compressions on their own
+// AND the fingertip sensor confirms carotid contact. No time-based trigger.
+#define PULSE_GATE_CONTACT_IR_MIN 30000       // same value as CONTACT_IR_MIN (max30102.cpp) — tunable independently
+#define PULSE_GATE_CONTACT_DEBOUNCE_MS 500UL  // sustained contact/no-contact required before the gate opens/closes/re-arms
 
 // ── Shared pulse-check / ventilation window behaviour ───────────────────────
-// Both windows use the SAME mechanism: stay open until the rescuer either
-// resumes (≥ WINDOW_RESUME_COMP_COUNT comps AFTER a real pause) or proves
-// non-compliant (≥ WINDOW_NONCOMPLIANT_COMP_COUNT comps with no real pause).
+// Both windows stay open until the rescuer resumes (≥ WINDOW_RESUME_COMP_COUNT
+// comps AFTER a real pause) or the backstop elapses. Ventilation additionally
+// closes non-compliant (≥ WINDOW_NONCOMPLIANT_COMP_COUNT comps with no real
+// pause) — pulse check has no non-compliant branch, since a real pause is
+// now a precondition of opening at all (contact+pause gate).
 #define WINDOW_PAUSE_COMPLIANT_MS 3000UL  // ≥3 s with no new compression = a real pause = compliant
 #define WINDOW_NONCOMPLIANT_COMP_COUNT 5  // this many comps with no pause = non-compliant dismiss
 #define WINDOW_RESUME_COMP_COUNT 2        // comps after a real pause that close the window normally
