@@ -71,7 +71,6 @@ class BLEConnection {
 
   final List<double> _ppgBuffer = [];   // accumulates ppgRaw during pulse check window
   double _bestPatientSpO2 = 0.0;        // best spO2Patient reading during pulse check
-  int    _bestLivePulseClass = 0;       // best classification inferred during window
 
   // ── Rescuer vital sampling state ──────────────────────────────────────────
   int _lastVitalSnapshotMs = 0;
@@ -619,18 +618,6 @@ class BLEConnection {
         parsed.spO2Patient > 0 && parsed.spO2Patient > _bestPatientSpO2) {
       _bestPatientSpO2 = parsed.spO2Patient;
     }
-// Track best live classification during window (best wins for storage)
-    if (_sessionActive && _pulseCheckOpen) {
-      final sq = parsed.ppgSignalQuality;
-      final hr = parsed.heartRatePatient;
-      int liveClass = 0;
-      if (sq >= 60 && hr >= 30.0 && hr <= 180.0) {
-        liveClass = 2;
-      } else if (sq >= 40) {
-        liveClass = 1;
-      }
-      if (liveClass > _bestLivePulseClass) _bestLivePulseClass = liveClass;
-    }
 
     // Broadcast everything to UI screens
     _dataController.add({
@@ -711,7 +698,10 @@ class BLEConnection {
   int _prevValleyTimestampMs = 0;    // valley_ts of current compression (for downstroke calc)
   double _latchedLastPeakDepthCm = 0.0;
 
-  static int _bestOf(int a, int b) => a > b ? a : b;
+  static double _plausibleBpm(double? bpm) =>
+      (bpm != null && bpm >= AppConstants.pulseBpmMin && bpm <= AppConstants.pulseBpmMax)
+          ? bpm
+          : 0.0;
 
   // ── EVENT_CHANNEL packet handler ──────────────────────────────────────────
   void _handleEventPacket(List<int> packet) {
@@ -845,8 +835,8 @@ class BLEConnection {
       _pulseCheckEvents.add(PulseCheckEvent(
         timestampMs:    timestampMs,
         intervalNumber: parsed.intervalNumber ?? _pulseCheckEvents.length + 1,
-        classification: _bestOf(parsed.pulseClassification ?? 0, _bestLivePulseClass),
-        detectedBpm:    parsed.detectedBPM ?? 0.0,
+        classification: parsed.pulseClassification ?? 0,
+        detectedBpm:    _plausibleBpm(parsed.detectedBPM),
         confidence:     parsed.confidencePct ?? 0,
         detectorACount: parsed.detectorACount ?? 0,
         detectorBCount: parsed.detectorBCount ?? 0,
@@ -855,7 +845,6 @@ class BLEConnection {
       ));
       _ppgBuffer.clear();
       _bestPatientSpO2 = 0.0;
-      _bestLivePulseClass = 0;
       debugPrint(
         'BLE: PULSE_CHECK_RESULT classification=${parsed.pulseClassification} '
             'bpm=${parsed.detectedBPM}',
@@ -1055,14 +1044,6 @@ class BLEConnection {
   Future<bool> sendSetLedBrightness(int brightness) =>
       _writeCommand([kCmdSetLedBrightness, brightness.clamp(0, 255)]);
 
-  // /// 0xF3 — Trigger session start (equivalent to physical button press).
-  // Future<bool> sendStart() =>
-  //     _writeCommand([kCmdStart]);
-  //
-  // /// 0xF4 — Trigger session end.
-  // Future<bool> sendStop() =>
-  //     _writeCommand([kCmdStop]);
-
   /// 0xF5 — Request a locally stored offline session by index.
   Future<bool> sendRequestSession(int index) =>
       _writeCommand([kCmdRequestSession, index]);
@@ -1208,6 +1189,34 @@ class BLEConnection {
         _sessionActive = false;
         final snap = _lastLiveStreamSnapshot ?? <String, dynamic>{};
         _dataController.add({
+          // Full SESSION_END shape with safe defaults, then overlay the last
+          // live snapshot, so a synthesised end never carries missing keys
+          // that assembleDetail/toJson would turn into nulls the backend rejects.
+          'totalCompressions':        0,
+          'correctDepth':             0,
+          'correctFrequency':         0,
+          'correctRecoil':            0,
+          'depthRateCombo':           0,
+          'correctPosture':           0,
+          'leaningCount':             0,
+          'overForceCount':           0,
+          'tooDeepCount':             0,
+          'totalVentilations':        0,
+          'correctVentilations':      0,
+          'pulseChecksPrompted':      0,
+          'pulseChecksComplied':      0,
+          'fatigueOnsetIndex':        0,
+          'peakDepth':                0.0,
+          'compressionDepthSD':       0.0,
+          'noFlowIntervals':          0,
+          'rescuerSwapCount':         0,
+          'timeToFirstCompressionMs': 0,
+          'pulseDetected':            null,
+          'patientTemperature':       null,
+          'rescuerHRLastPause':       null,
+          'rescuerSpO2LastPause':     null,
+          'rescuerWristTempStart':    null,
+          'rescuerWristTempEnd':      null,
           ...snap,
           'isStartPing':     false,
           'isEndPing':       true,

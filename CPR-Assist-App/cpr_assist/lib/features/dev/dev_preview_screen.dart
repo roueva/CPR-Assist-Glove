@@ -1583,7 +1583,6 @@ class _FullLiveCprSimulatorState extends State<_FullLiveCprSimulator> {
               isSessionActive:    _sessionActive,
               scenario:           _scenario,
               recoilAchieved:     _recoilAchieved,
-              imuCalibrated:      _imuCalibrated,
               showFatigueBadge:   _showFatigue,
               fatigueScore:       _fatigueScore,
               compressionInCycle: _compressionInCycle,

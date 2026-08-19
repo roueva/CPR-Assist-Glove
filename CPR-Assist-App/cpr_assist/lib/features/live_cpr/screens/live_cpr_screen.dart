@@ -54,6 +54,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   // ── Display state ──────────────────────────────────────────────────────────
   bool     _isSessionActive         = false;
   bool     _hasHandledEndPing       = false;
+  String? _sessionStartMode;
+  String? _sessionStartScenario;
   int      _displayCompressionCount = 0;
   Duration _displaySessionDuration  = Duration.zero;
   double   _displayDepth            = 0.0;
@@ -64,7 +66,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   DateTime? _sessionStartTime;
 
   // ── Overlay state ──────────────────────────────────────────────────────────
-  bool   _imuCalibrated      = false; // false = show calibrating banner
   bool   _showSwapBanner     = false; // true after TWO_MIN_ALERT
   int    _swapAlertNumber    = 0;
   bool   _showFatigueBadge   = false;
@@ -73,14 +74,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   int         _compressionInCycle = 0;
   bool          _pulseCheckActive      = false;
   int?          _pulseCheckInterval;
-  int?          _pulseClassification;      // null = pending, final result from event
-  int?          _livePulseClassification;  // 0/1/2 inferred from live stream during window
-  int           _bestPulseClassification = 0; // highest seen (best wins for storage)
-  double?       _pulseCheckDetectedBpm;
-  int?          _pulseCheckConfidence;
-  int           _livePpgSignalQuality = 0;
-  double        _liveHeartRatePatient = 0.0;
-  Timer?        _pulseResultTimer;
+  int?          _livePulseClassification;  // 0/1/2 from event; null = open. Drives open/closed state only — not displayed.
+  int?          _pulseCheckConfidence;      // feeds the "Patient Vitals" card, not the pulse-check card itself
   bool _hasCompletedPulseCheck = false;
   int _swapSecondsRemaining = 10;
   Timer? _swapCountdownTimer;
@@ -301,7 +296,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     ref.read(bleConnectionProvider).connectionStatusNotifier.removeListener(_onBleStatusChange);
     _sessionTimer?.cancel();
     _bleDataSubscription?.cancel();
-    _pulseResultTimer?.cancel();
     _swapCountdownTimer?.cancel();
     liveCprTabActivationNotifier.removeListener(_onTabActivated);
     // Clear the screen-level offline session handler so the provider-level
@@ -378,20 +372,19 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         _compressionInCycle = 0;
         _isSessionActive         = true;
         _hasHandledEndPing       = false;
+        _sessionStartMode     = ref.read(appModeProvider).sessionModeString;
+        _sessionStartScenario = ref.read(scenarioProvider).sessionScenarioString;
         _displayDepth            = 0.0;
         _displayFrequency        = 0.0;
         _displayCompressionCount = 0;
         _displaySessionDuration  = Duration.zero;
-        _imuCalibrated           = false;
         _showSwapBanner          = false;
         _showFatigueBadge        = false;
         _fatigueScore     = 0;
         _showVentilationOverlay = false;
         _ventilationCycleNumber = 0;
         _pulseCheckActive        = false;
-        _pulseClassification     = null;
         _hasCompletedPulseCheck = false;
-        _pulseCheckDetectedBpm   = null;
         _pulseCheckConfidence    = null;
         _heartRatePatient = null;
         _spO2Patient = null;
@@ -480,6 +473,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── MODE_CHANGE from glove button ──────────────────────────────────────
     if (data['isModeChange'] == true) {
+      if (_isSessionActive) return;
       final newModeInt = data['currentMode'] as int? ?? 0;
       final newMode    = AppMode.fromBleValue(newModeInt);
       if (newMode.isTraining && !ref.read(authStateProvider).isLoggedIn) {
@@ -504,6 +498,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── SCENARIO_CHANGE from glove button ──────────────────────────────────
     if (data['isScenarioChange'] == true) {
+      if (_isSessionActive) return;
       final newScenario = data['scenarioFromGlove'] as int? ?? 0;
       ref.read(scenarioProvider.notifier).setFromGlove(newScenario);
       return;
@@ -529,28 +524,22 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       setState(() {
         _pulseCheckActive         = true;
         _pulseCheckInterval       = data['intervalNumber'] as int?;
-        _pulseClassification      = null;
         _livePulseClassification  = null;
-        _bestPulseClassification  = 0;
-        _livePpgSignalQuality     = 0;
-        _liveHeartRatePatient     = 0.0;
-        _pulseCheckDetectedBpm    = null;
         _pulseCheckConfidence     = null;
       });
       return;
     }
 
     // ── PULSE_CHECK_RESULT ─────────────────────────────────────────────────
+    // classification/BPM/confidence are recorded on the session (via
+    // ble_connection's own PulseCheckEvent list) and shown on the results
+    // screen — not displayed live. Only confidence is mirrored here, for the
+    // "Patient Vitals" card (label unaffected by this change).
     if (data['isPulseCheckResult'] == true) {
       final eventClass = data['pulseClassification'] as int? ?? 0;
-      final best = eventClass > _bestPulseClassification
-          ? eventClass
-          : _bestPulseClassification;
       setState(() {
         _hasCompletedPulseCheck  = true;
-        _pulseClassification     = best;
-        _livePulseClassification = best;
-        _pulseCheckDetectedBpm   = (data['detectedBPM'] as num?)?.toDouble();
+        _livePulseClassification = eventClass;
         _pulseCheckConfidence    = data['confidencePct'] as int?;
       });
     }
@@ -673,10 +662,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         }
       }
 
-      if (data.containsKey('imuCalibrated')) {
-        _imuCalibrated = data['imuCalibrated'] as bool;
-      }
-
       if (data.containsKey('pulseCheckActive')) {
         final active = data['pulseCheckActive'] as bool;
         if (!active && _pulseCheckActive) {
@@ -697,31 +682,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
           _ppgBuffer.add(raw);
           if (_ppgBuffer.length > _ppgBufferMax) _ppgBuffer.removeAt(0);
         }
-      }
-
-      if (_pulseCheckActive) {
-        final sq = (data['ppgSignalQuality'] as int?) ?? 0;
-        final hr = (data['heartRatePatient'] as num?)?.toDouble() ?? 0.0;
-        _livePpgSignalQuality = sq;
-        _liveHeartRatePatient = hr;
-
-        int liveClass;
-        if (sq < 40) {
-          liveClass = 0;
-        } else if (sq >= 60 && hr >= 30.0 && hr <= 180.0) {
-          liveClass = 2;
-        } else if (sq >= 40) {
-          liveClass = 1;
-        } else {
-          liveClass = 0;
-        }
-
-        if (liveClass > _bestPulseClassification) {
-          _bestPulseClassification = liveClass;
-        }
-        _livePulseClassification = _bestPulseClassification > 0
-            ? _bestPulseClassification
-            : (sq >= 40 ? 1 : null);
       }
 
       if (tempP != null) _patientTemperature = tempP;
@@ -746,6 +706,20 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final sessionStartTs = _sessionStartTime ?? DateTime.now();
     final totalComps = (data['totalCompressions'] as int?) ?? 0;
     final wasInterrupted = data['wasInterrupted'] == true;
+
+    // Interrupted but nothing was recorded before the glove dropped. Saving
+    // it writes a 0-compression record the backend rejects, leaving a
+    // permanent unsynced banner. Nothing to recover — bail.
+    if (wasInterrupted && totalComps == 0) {
+      if (mounted) {
+        UIHelper.showSnackbar(
+          context,
+          message: 'Session ended — nothing was recorded.',
+          icon: Icons.info_outline,
+        );
+      }
+      return;
+    }
 
     // Trivial session — too few compressions to save.
     if (totalComps < AppConstants.minCompressionsToSave && !wasInterrupted) {
@@ -777,8 +751,8 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       sessionStart: sessionStartTs,
       sessionEnd:   endTime,
       sessionDurationSecs: _displaySessionDuration.inSeconds,
-      mode: currentMode.sessionModeString,
-      scenario: ref.read(scenarioProvider).sessionScenarioString,
+      mode: _sessionStartMode ?? currentMode.sessionModeString,
+      scenario: _sessionStartScenario ?? ref.read(scenarioProvider).sessionScenarioString,
       ventilationRatio: ref.read(settingsProvider).ventilationRatio,
       twoMinAlertTimestampsMs: List.from(bleConn.twoMinAlertTimestampsMs),
       fatigueAlertTimestampMs: bleConn.fatigueAlertTimestampMs,
@@ -918,6 +892,15 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                         const SizedBox(height: AppSpacing.md),
                       ],
 
+                      if (_pulseCheckActive || _hasCompletedPulseCheck) ...[
+                        PulseCheckOverlay(
+                          intervalNumber: _pulseCheckInterval,
+                          classification: _livePulseClassification,
+                          ppgBuffer:      List.from(_ppgBuffer),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+
                       LiveCprMetricsCard(
                         depth:              _displayDepth,
                         peakDepth:          _peakDepth,
@@ -928,7 +911,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                         isSessionActive:    _isSessionActive,
                         scenario:           scenario,
                         recoilAchieved:     _recoilAchieved,
-                        imuCalibrated:      _imuCalibrated,
                         showFatigueBadge:   _showFatigueBadge,
                         fatigueScore:       _fatigueScore,
                         compressionInCycle: _compressionInCycle,
@@ -968,28 +950,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
               child: _SwapBanner(
                 alertNumber: _swapAlertNumber,
                 onDismiss: () => setState(() => _showSwapBanner = false),
-              ),
-            ),
-
-          if (_pulseCheckActive)
-            Positioned.fill(
-              child: PulseCheckOverlay(
-                intervalNumber: _pulseCheckInterval,
-                classification: _livePulseClassification,
-                liveBpm: _liveHeartRatePatient > 0 ? _liveHeartRatePatient : null,
-                ppgBuffer: List.from(_ppgBuffer),
-                detectedBpm: _pulseCheckDetectedBpm,
-                confidence: _pulseCheckConfidence != null
-                    ? _pulseCheckConfidence
-                    : (_livePpgSignalQuality > 0 ? _livePpgSignalQuality : null),
-                onContinueCpr: () {
-                  _pulseResultTimer?.cancel();
-                  setState(() => _pulseCheckActive = false);
-                },
-                onStopCpr: () {
-                  _pulseResultTimer?.cancel();
-                  setState(() => _pulseCheckActive = false);
-                },
               ),
             ),
         ],

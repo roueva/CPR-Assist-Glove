@@ -2184,10 +2184,10 @@ class ExportService {
       SessionDetail s, { String? username, int? sessionNumber }) async {
 
     final doc          = pw.Document();
-    final roboto       = await PdfGoogleFonts.robotoRegular();
-    final robotoBold   = await PdfGoogleFonts.robotoBold();
-    final robotoMedium = await PdfGoogleFonts.robotoMedium();
-    final noto         = await PdfGoogleFonts.notoSansRegular();
+    final roboto       = await _safeFont(PdfGoogleFonts.robotoRegular, pw.Font.helvetica());
+    final robotoBold   = await _safeFont(PdfGoogleFonts.robotoBold,     pw.Font.helveticaBold());
+    final robotoMedium = await _safeFont(PdfGoogleFonts.robotoMedium,   pw.Font.helveticaBold());
+    final noto         = await _safeFont(PdfGoogleFonts.notoSansRegular, pw.Font.helvetica());
     final theme        = pw.ThemeData.withFont(
         base: roboto, bold: robotoBold, fontFallback: [noto]);
 
@@ -2679,10 +2679,10 @@ class ExportService {
       }) async {
 
     final doc          = pw.Document();
-    final roboto       = await PdfGoogleFonts.robotoRegular();
-    final robotoBold   = await PdfGoogleFonts.robotoBold();
-    final robotoMedium = await PdfGoogleFonts.robotoMedium();
-    final noto         = await PdfGoogleFonts.notoSansRegular();
+    final roboto       = await _safeFont(PdfGoogleFonts.robotoRegular, pw.Font.helvetica());
+    final robotoBold   = await _safeFont(PdfGoogleFonts.robotoBold,     pw.Font.helveticaBold());
+    final robotoMedium = await _safeFont(PdfGoogleFonts.robotoMedium,   pw.Font.helveticaBold());
+    final noto         = await _safeFont(PdfGoogleFonts.notoSansRegular, pw.Font.helvetica());
     final theme        = pw.ThemeData.withFont(
         base: roboto, bold: robotoBold, fontFallback: [noto]);
 
@@ -2901,10 +2901,10 @@ class ExportService {
     required CertificateMilestone milestone,
   }) async {
     final doc          = pw.Document();
-    final roboto       = await PdfGoogleFonts.robotoRegular();
-    final robotoBold   = await PdfGoogleFonts.robotoBold();
-    final robotoMedium = await PdfGoogleFonts.robotoMedium();
-    final noto         = await PdfGoogleFonts.notoSansRegular();
+    final roboto       = await _safeFont(PdfGoogleFonts.robotoRegular, pw.Font.helvetica());
+    final robotoBold   = await _safeFont(PdfGoogleFonts.robotoBold,     pw.Font.helveticaBold());
+    final robotoMedium = await _safeFont(PdfGoogleFonts.robotoMedium,   pw.Font.helveticaBold());
+    final noto         = await _safeFont(PdfGoogleFonts.notoSansRegular, pw.Font.helvetica());
     final theme        = pw.ThemeData.withFont(
         base: roboto, bold: robotoBold, fontFallback: [noto]);
 
@@ -7069,6 +7069,15 @@ class ExportService {
   // ═══════════════════════════════════════════════════════════════════════════
   // SMALL HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  static Future<pw.Font> _safeFont(
+      Future<pw.Font> Function() loader, pw.Font fallback) async {
+    try {
+      return await loader().timeout(const Duration(seconds: 6));
+    } catch (_) {
+      return fallback;
+    }
+  }
 
   static String _dateStamp() {
     final d = DateTime.now();

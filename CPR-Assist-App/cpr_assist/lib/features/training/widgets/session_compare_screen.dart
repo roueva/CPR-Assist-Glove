@@ -111,11 +111,11 @@ class _SessionCompareScreenState
     final slotColors = SessionCompareScreen._slotColors;
 
     final activeSessions  = [
-      for (int i = 0; i < widget.sessions.length; i++)
-        if (_activeIndices.contains(i)) widget.sessions[i]
+      for (int i = 0; i < sessions.length; i++)
+        if (_activeIndices.contains(i)) sessions[i]
     ];
     final activeColors    = [
-      for (int i = 0; i < widget.sessions.length; i++)
+      for (int i = 0; i < sessions.length; i++)
         if (_activeIndices.contains(i)) slotColors[i]
     ];
 
