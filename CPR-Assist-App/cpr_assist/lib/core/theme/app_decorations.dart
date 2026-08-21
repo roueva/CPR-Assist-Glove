@@ -447,6 +447,19 @@ class AppDecorations {
     borderRadius: BorderRadius.circular(AppSpacing.cardRadiusSm),
   );
 
+  /// Dark-blue hub card behind the live CPR metrics (timer, gauges, pills).
+  static BoxDecoration cprMetricsCard() => BoxDecoration(
+    color:        AppColors.cprCardBg,
+    borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+    boxShadow: const [
+      BoxShadow(
+        color:      AppColors.shadowMedium,
+        blurRadius: 16,
+        offset:     Offset(0, 6),
+      ),
+    ],
+  );
+
   /// Bordered circle avatar — profile header in account panel.
   static BoxDecoration avatarCircle({Color? borderColor}) => BoxDecoration(
     shape:  BoxShape.circle,

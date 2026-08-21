@@ -284,7 +284,6 @@ class LiveCprMetricsCard extends StatefulWidget {
   final double      valleyDepth;
   final bool        recoilAchieved;
   final bool        isSessionActive;
-  final bool        imuCalibrated;
   final bool        showFatigueBadge;
   final int         fatigueScore;
   final CprScenario scenario;
@@ -302,7 +301,6 @@ class LiveCprMetricsCard extends StatefulWidget {
     required this.isSessionActive,
     this.valleyDepth       = 0.0,
     this.recoilAchieved    = false,
-    this.imuCalibrated     = true,
     this.showFatigueBadge  = false,
     this.fatigueScore      = 0,
     required this.scenario,
@@ -324,7 +322,15 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
   int _consecutiveTooFast   = 0;
   int _lastCompressionCount = 0;
 
-  static const int _kCoachingThreshold = 5;
+  // Latched pill states — flip to bad only after several bad compressions,
+  // clear back to good quickly. Prevents the TOO SLOW / TOO SHALLOW pills
+  // from flickering on every single compression.
+  _FeedbackState _pillDepthState = _FeedbackState.idle;
+  _FeedbackState _pillFreqState  = _FeedbackState.idle;
+
+  static const int _kCoachingThreshold  = 5;
+  static const int _kPillBadThreshold   = 3; // bad comps before pill flips to bad
+  static const int _kPillGoodThreshold  = 2; // good comps before pill clears
 
   @override
   void didUpdateWidget(covariant LiveCprMetricsCard old) {
@@ -336,6 +342,8 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
       _consecutiveTooDeep    = 0;
       _consecutiveTooSlow    = 0;
       _consecutiveTooFast    = 0;
+      _pillDepthState        = _FeedbackState.idle;
+      _pillFreqState         = _FeedbackState.idle;
     }
   }
 
@@ -348,10 +356,10 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
 
   // Frequency: too slow = orange (tooLittle), too fast = red (tooMuch)
   _FeedbackState _freqFeedback(double f) {
-    if (f <= 0)   return _FeedbackState.idle;
-    if (f < 100)  return _FeedbackState.tooLittle;
-    if (f <= 120) return _FeedbackState.good;
-    return         _FeedbackState.tooMuch;
+    if (f <= 0)                                  return _FeedbackState.idle;
+    if (f < widget.scenario.targetRateMin)        return _FeedbackState.tooLittle;
+    if (f <= widget.scenario.targetRateMax)       return _FeedbackState.good;
+    return                                        _FeedbackState.tooMuch;
   }
 
   void _updateConsecutiveCounts(
@@ -381,7 +389,26 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
         _consecutiveTooSlow = 0;
       }
     }
+
+    // Latch depth pill: flip to bad after _kPillBadThreshold, clear after _kPillGoodThreshold good.
+    if (_consecutiveTooShallow >= _kPillBadThreshold) {
+      _pillDepthState = _FeedbackState.tooLittle;
+    } else if (_consecutiveTooDeep >= _kPillBadThreshold) {
+      _pillDepthState = _FeedbackState.tooMuch;
+    } else if (_consecutiveGood >= _kPillGoodThreshold) {
+      _pillDepthState = _FeedbackState.good;
+    }
+
+    // Latch rate pill (same policy).
+    if (_consecutiveTooSlow >= _kPillBadThreshold) {
+      _pillFreqState = _FeedbackState.tooLittle;
+    } else if (_consecutiveTooFast >= _kPillBadThreshold) {
+      _pillFreqState = _FeedbackState.tooMuch;
+    } else if (_consecutiveGood >= _kPillGoodThreshold) {
+      _pillFreqState = _FeedbackState.good;
+    }
   }
+
 
   Widget _buildCoachingHint(
       _FeedbackState depthState, _FeedbackState freqState) {
@@ -428,26 +455,20 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final depthState = _depthFeedback(widget.depth);
-    final freqState  = _freqFeedback(widget.frequency);
+    // Live depth drives the bar animation only (it sweeps down through the
+    // whole stroke). Grading uses the fused final peak the firmware sends
+    // once per completed compression.
+    final depthState      = _depthFeedback(widget.depth);
+    final gradeDepthState = _depthFeedback(widget.peakDepth);
+    final freqState       = _freqFeedback(widget.frequency);
     if (widget.isSessionActive && !widget.isNoFeedback &&
         widget.compressionCount != _lastCompressionCount) {
       _lastCompressionCount = widget.compressionCount;
-      _updateConsecutiveCounts(depthState, freqState);
+      _updateConsecutiveCounts(gradeDepthState, freqState);
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color:        AppColors.cprCardBg,
-        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
-        boxShadow: const [
-          BoxShadow(
-            color:      AppColors.shadowMedium,
-            blurRadius: 16,
-            offset:     Offset(0, 6),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.cprMetricsCard(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -580,36 +601,6 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
         ),
       ),
     ),
-// ── Calibration strip — shown during first seconds of session ─────
-          if (widget.isSessionActive && !widget.imuCalibrated)
-            Container(
-              margin: const EdgeInsets.fromLTRB(
-                AppSpacing.cardPadding, AppSpacing.xs,
-                AppSpacing.cardPadding, 0,
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical:   AppSpacing.xs,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width:  AppSpacing.iconSm,
-                    height: AppSpacing.iconSm,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.feedbackWarn),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Calibrating...',
-                    style: AppTypography.label(size: 11, color: AppColors.feedbackWarn),
-                  ),
-                ],
-              ),
-            ),
 
           // ── B) Gauge row ─────────────────────────────────────────────────
           Padding(
@@ -676,7 +667,7 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                 children: [
                   Expanded(
                     child: _FeedbackLabel(
-                      state:         freqState,
+                      state:         _pillFreqState,
                       goodText:      'GOOD RATE',
                       tooLittleText: 'TOO SLOW',
                       tooMuchText:   'TOO FAST',
@@ -689,7 +680,7 @@ class _LiveCprMetricsCardState extends State<LiveCprMetricsCard> {
                   ),
                   Expanded(
                     child: _FeedbackLabel(
-                      state:         depthState,
+                      state:         _pillDepthState,
                       goodText:      'GOOD DEPTH',
                       tooLittleText: 'TOO SHALLOW',
                       tooMuchText:   'TOO DEEP',
