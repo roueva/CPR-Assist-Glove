@@ -42,7 +42,8 @@ class PulseCheckEvent {
   /// Perfusion index at time of check (0–100).
   final int perfusionIndex;
 
-  /// "continue" or "stop_cpr" — set by the user's button tap.
+  /// "continue" or "stop_cpr". The decision-UI write path was deliberately
+  /// removed; this field is kept read-only so older session records still render.
   final String? userDecision;
 
   /// PPG waveform samples captured during this pulse check window.
@@ -122,7 +123,7 @@ class PulseCheckEvent {
     if (ppgSamples.isNotEmpty) 'ppg_samples': ppgSamples,
   };
 
-  PulseCheckEvent copyWith({double? durationSec, bool? compliant}) =>
+  PulseCheckEvent copyWith({double? durationSec, bool? compliant, String? userDecision}) =>
       PulseCheckEvent(
         timestampMs:    timestampMs,
         intervalNumber: intervalNumber,
@@ -132,7 +133,7 @@ class PulseCheckEvent {
         detectedBpm:    detectedBpm,
         confidence:     confidence,
         perfusionIndex: perfusionIndex,
-        userDecision:   userDecision,
+        userDecision:   userDecision ?? this.userDecision,
         ppgSamples:     ppgSamples,
         patientSpO2:    patientSpO2,
         durationSec:    durationSec ?? this.durationSec,
