@@ -62,7 +62,7 @@ class RouteService {
           polyline: Polyline(
             polylineId: PolylineId(mode),
             points: routePoints,
-            color: mode == 'walking' ? AppColors.aedNavGreen : AppColors.primary,
+            color: mode == 'walking' ? AppColors.success : AppColors.primaryAlt,
             patterns: mode == 'walking'
                 ? [PatternItem.dash(15), PatternItem.gap(8)]
                 : [],
