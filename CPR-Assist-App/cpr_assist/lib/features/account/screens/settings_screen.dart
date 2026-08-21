@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cpr_assist/core/core.dart';
 
 import '../../../providers/app_providers.dart';
+import '../../../providers/session_provider.dart';
 import '../../aed_map/services/cache_service.dart';
+import '../../training/services/session_local_storage.dart';
 import 'glove_diagnostic_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,6 +197,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               subtitle: 'Free up space',
               onTap:    () => _confirmClearCache(),
             ),
+            const _SettingsDivider(),
+            _NavTile(
+              icon:     Icons.cloud_off_outlined,
+              title:    'Clear unsynced sessions',
+              subtitle: 'Remove local sessions that never uploaded',
+              onTap:    () => _purgeUnsynced(),
+            ),
           ]),
 
 // ── Glove Maintenance ────────────────────────────────────────────
@@ -317,6 +326,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       backgroundColor: AppColors.transparent,
       builder: (_) => GloveDiagnosticSheet(ble: ble),
     );
+  }
+
+  Future<void> _purgeUnsynced() async {
+    final removed = await SessionLocalStorage.purgeAllUnsynced();
+    if (!mounted) return;
+    ref.invalidate(sessionSummariesProvider);
+    UIHelper.showSuccess(context, 'Cleared $removed unsynced session${removed == 1 ? '' : 's'}');
   }
 
   Future<void> _confirmClearCache() async {
