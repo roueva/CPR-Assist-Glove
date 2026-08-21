@@ -33,6 +33,24 @@ class RouteService {
   final String apiKey;
   RouteService(this.apiKey);
 
+  /// Single source of truth for how a route polyline is built: walking is a
+  /// dashed AppColors.success line, everything else (driving) is a solid
+  /// AppColors.primaryAlt line. Used for both freshly-fetched routes and
+  /// routes reconstructed from cache, so the two never drift apart.
+  static Polyline buildRoutePolyline({
+    required String mode,
+    required String polylineId,
+    required List<LatLng> points,
+  }) => Polyline(
+    polylineId: PolylineId(polylineId),
+    points: points,
+    color: mode == 'walking' ? AppColors.success : AppColors.primaryAlt,
+    patterns: mode == 'walking'
+        ? [PatternItem.dash(15), PatternItem.gap(8)]
+        : [],
+    width: 4,
+  );
+
   Future<RouteResult?> fetchRoute(LatLng origin, LatLng destination, String mode) async {
     if (apiKey.isEmpty) {
       debugPrint('❌ Missing API Key.');
@@ -59,14 +77,10 @@ class RouteService {
         final distanceText = response['routes'][0]['legs'][0]['distance']['text'] as String;
 
         return RouteResult(
-          polyline: Polyline(
-            polylineId: PolylineId(mode),
+          polyline: RouteService.buildRoutePolyline(
+            mode: mode,
+            polylineId: mode,
             points: routePoints,
-            color: mode == 'walking' ? AppColors.success : AppColors.primaryAlt,
-            patterns: mode == 'walking'
-                ? [PatternItem.dash(15), PatternItem.gap(8)]
-                : [],
-            width: 4,
           ),
           duration: durationText,
           points: routePoints,

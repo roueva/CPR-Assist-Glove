@@ -693,14 +693,10 @@ class CacheService {
     final polylineId    = data['polylineId']    as String? ?? 'cached_route';
 
     return RouteResult(
-      polyline: Polyline(
-        polylineId: PolylineId(polylineId),
+      polyline: RouteService.buildRoutePolyline(
+        mode:       transportMode,
+        polylineId: polylineId,
         points:     points,
-        color:      transportMode == 'walking' ? AppColors.aedNavGreen : AppColors.primary,
-        patterns:   transportMode == 'walking'
-            ? [PatternItem.dash(15), PatternItem.gap(8)]
-            : [],
-        width: 4,
       ),
       duration:       data['duration'] as String,
       points:         points,
