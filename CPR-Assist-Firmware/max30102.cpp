@@ -441,6 +441,11 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
   if (!anyContact) {
     hrBpm = spO2 = 0;
     sigQuality = pi = 0;
+    ppgRaw = 0.5f;  // matches the no-signal fallback above — flat mid-axis,
+                    // not a drop to 0. envelope/filtered are running state
+                    // the peak detector and SQI depend on, so they're left
+                    // alone (not reset/decayed) on transient contact loss —
+                    // this only overrides the waveform value sent out.
     return;
   }
 

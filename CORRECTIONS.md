@@ -59,12 +59,21 @@
       (2) ppgRaw waveform formula: the waveform sent to the app — both live
       (pulse_check_overlay.dart) and in stored session results
       (session_results_emergency.dart's _PpgResultPainter) — renders as a
-      visible pulse trace, not a flat line or a staircase. Also watch for a
-      frozen/non-decaying trace during a deliberate mid-window contact
-      loss: _pP.filtered/_pP.envelope only update on samples that pass the
-      per-sample contact gate, so a lost-contact stretch may echo the last
-      good reading instead of flattening — confirm whether that's visible
-      and whether it matters.
+      visible pulse trace, not a flat line or a staircase.
+      (3) Mid-window contact-loss freeze — FIXED, confirm on hardware.
+      _pP.filtered/_pP.envelope are left as running state on contact loss
+      (deliberately not reset/decayed — they're what the peak detector's
+      40%-of-envelope threshold and the SQI envelope score depend on, and
+      contact loss inside a window is often transient), so ppgRaw now
+      explicitly overrides to 0.5f in max30102UpdatePatient's
+      `if (!anyContact)` branch instead of computing from stale values.
+      SQI/hrBpm/spO2 were already protected by that same branch — traced
+      and confirmed not reachable into max30102ClassifyPulse (sigQuality
+      and hrBpm both zero out well before the window's 500ms contact-loss
+      debounce elapses). On hardware: confirm a deliberate mid-window
+      contact loss shows as a flat trace at mid-axis (not frozen, not a
+      drop to 0) and that the waveform resumes cleanly — no discontinuity
+      or stuck value — when contact returns.
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card
