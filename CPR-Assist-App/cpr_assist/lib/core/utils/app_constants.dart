@@ -162,6 +162,10 @@ class AppConstants {
   /// session as trivial — no save, no grade screen, just exit. Must match
   /// STORAGE_MIN_COMPRESSIONS_TO_SAVE in firmware config.h (currently 3).
   static const int minCompressionsToSave = 3;
+  /// Physiologically plausible patient pulse-rate bounds. A detected-BPM value
+  /// outside this range is treated as noise and never displayed.
+  static const double pulseBpmMin = 20.0;
+  static const double pulseBpmMax = 220.0;
 
 // ═══════════════════════════════════════════════════════
 // GLOVE DIAGNOSTIC
