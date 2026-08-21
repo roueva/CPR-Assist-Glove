@@ -77,7 +77,6 @@ class BLEDataProcessor {
 //   4– 7  float32  frequency           BPM (5-compression rolling average for display)
   //   8–11  float32  force               N (internal)
 //  12–15  float32  instantaneousRate   BPM (exact per-compression rate for grading)
-  //  12–15  float32  instantaneousRate   BPM (last 2 compressions)
   //  16–19  int32    compressionCount
   //  20–23  int32    compressionInCycle  0–30
   //  24–27  float32  wristAlignmentAngle degrees
@@ -567,7 +566,7 @@ class ParsedBLEData {
 
   // ── LIVE_STREAM: core compression ────────────────────────────────────────
   final double depth;
-  final double frequency;           // instantaneous per-compression rate
+  final double frequency;           // 5-compression rolling average (display only)
   final double force;               // Newtons (internal)
   final double instantaneousRate;   // per-compression rate (for grading)
   final int    compressionCount;
