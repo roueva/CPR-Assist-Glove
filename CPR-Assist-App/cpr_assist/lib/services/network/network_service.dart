@@ -18,6 +18,18 @@ import 'package:cpr_assist/core/core.dart';
 // All debug output goes through debugPrint (stripped in release builds).
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Thrown by [NetworkService] for non-2xx HTTP responses (other than the
+/// auto-refreshed 401 case). Carries the real status code so callers can
+/// branch on it instead of substring-matching the exception message.
+class HttpStatusException implements Exception {
+  final int statusCode;
+  final String message;
+  HttpStatusException(this.statusCode, this.message);
+
+  @override
+  String toString() => 'HTTP $statusCode: $message';
+}
+
 class NetworkService {
   static final NetworkService _instance = NetworkService._internal();
   factory NetworkService() => _instance;
@@ -270,7 +282,7 @@ class NetworkService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final msg  = json['errors'] ?? json['error'] ?? json['message'] ?? 'Unknown error';
-    throw Exception('HTTP ${response.statusCode}: $msg');
+    throw HttpStatusException(response.statusCode, msg.toString());
   }
 
   // ── Retry wrapper ─────────────────────────────────────────────────────────

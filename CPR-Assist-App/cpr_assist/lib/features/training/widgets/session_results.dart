@@ -251,7 +251,8 @@ class _SessionResultsScreenState
     // Build a summary view of the current detail. deleteSummary handles all
     // three cases: backend+local, backend-only, local-only (id == null).
     final summary = SessionSummary.fromDetail(_d);
-    final ok = await service.deleteSummary(summary);
+    final ownerId = ref.read(authStateProvider).ownerId;
+    final ok = await service.deleteSummary(summary, ownerId: ownerId);
     if (!mounted) return;
     if (ok) {
       ref.invalidate(sessionSummariesProvider);
@@ -280,7 +281,8 @@ class _SessionResultsScreenState
     } else {
       final newNote = result.isEmpty ? null : result;
       setState(() => _note = newNote);
-      await SessionLocalStorage.saveLocal(_d.withNote(newNote));
+      final ownerId = ref.read(authStateProvider).ownerId;
+      await SessionLocalStorage.saveLocal(_d.withNote(newNote), ownerId: ownerId);
       ref.invalidate(sessionSummariesProvider);
     }
   }
@@ -513,7 +515,8 @@ Future<void> openSessionResults(
     }) async {
   final service = ref.read(sessionServiceProvider);
   try {
-    final detail = await service.fetchDetailForSummary(summary);
+    final ownerId = ref.read(authStateProvider).ownerId;
+    final detail = await service.fetchDetailForSummary(summary, ownerId: ownerId);
     if (!context.mounted) return;
     await context.push(SessionResultsScreen(detail: detail));
   } catch (e, st) {

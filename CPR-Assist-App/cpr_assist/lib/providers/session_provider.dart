@@ -31,11 +31,13 @@ final connectivityProvider = StateProvider<bool>((ref) {
 final sessionSummariesProvider =
 FutureProvider<List<SessionSummary>>((ref) async {
   ref.keepAlive();
-  final isLoggedIn = ref.watch(authStateProvider).isLoggedIn;
+  final authState  = ref.watch(authStateProvider);
+  final isLoggedIn = authState.isLoggedIn;
+  final ownerId    = authState.ownerId;
   ref.watch(connectivityProvider); // re-run when connectivity changes
 
   // ── Always load local sessions first — never gated on auth or network ──
-  final localDetails  = await SessionLocalStorage.loadAll();
+  final localDetails  = await SessionLocalStorage.loadAll(ownerId: ownerId);
   final localSummaries = localDetails
       .map((d) => SessionSummary.fromDetail(d))
       .toList();

@@ -212,7 +212,10 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
       final summary = selected.first;
       SessionDetail? detail;
       try {
-        detail = await ref.read(sessionServiceProvider).fetchDetailForSummary(summary);
+        detail = await ref.read(sessionServiceProvider).fetchDetailForSummary(
+          summary,
+          ownerId: ref.read(authStateProvider).ownerId,
+        );
       } catch (e) {
         debugPrint('fetchDetailForSummary for export failed: $e');
         if (mounted) {
@@ -252,6 +255,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
     if (confirmed != true || !mounted) return;
 
     final service = ref.read(sessionServiceProvider);
+    final ownerId = ref.read(authStateProvider).ownerId;
     final summaries = ref.read(sessionSummariesProvider).valueOrNull ?? [];
     final toDelete  = summaries
         .where((s) => _selectedIds.contains(_selKey(s)))
@@ -260,7 +264,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
     int succeeded = 0;
     int failed    = 0;
     for (final summary in toDelete) {
-      final ok = await service.deleteSummary(summary);
+      final ok = await service.deleteSummary(summary, ownerId: ownerId);
       if (ok) {
         succeeded++;
       } else {
@@ -456,19 +460,21 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                       cancelLabel:  'Cancel',
                     );
                     if (confirmed != true || !mounted) return;
-                    final service = ref.read(sessionServiceProvider);
-                    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+                    final service  = ref.read(sessionServiceProvider);
+                    final authState = ref.read(authStateProvider);
+                    final isLoggedIn = authState.isLoggedIn;
+                    final ownerId    = authState.ownerId;
 
                     // Route through deleteAllSummaries when possible (single
                     // backend round-trip + local wipe). Falls back to a
                     // per-item loop if not logged in or it fails.
                     bool wipedInBulk = false;
                     if (isLoggedIn) {
-                      wipedInBulk = await service.deleteAllSummaries();
+                      wipedInBulk = await service.deleteAllSummaries(ownerId: ownerId);
                     }
                     if (!wipedInBulk) {
                       for (final s in all) {
-                        await service.deleteSummary(s);
+                        await service.deleteSummary(s, ownerId: ownerId);
                       }
                     }
                     if (!mounted) return;
@@ -529,7 +535,8 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                     .isLoggedIn;
                 if (isLoggedIn) {
                   final service = ref.read(sessionServiceProvider);
-                  final locals = await SessionLocalStorage.loadAll();
+                  final ownerId = ref.read(authStateProvider).ownerId;
+                  final locals = await SessionLocalStorage.loadAll(ownerId: ownerId);
                   final pending = locals
                       .where((d) => !d.syncedToBackend)
                       .toList();
@@ -537,7 +544,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                     final id = await service.saveDetail(detail);
                     if (id != null) {
                       detail = detail.withId(id);
-                      await SessionLocalStorage.markSynced(detail);
+                      await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
                     }
                   }
                 }
@@ -557,14 +564,15 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                             .isLoggedIn;
                         if (isLoggedIn) {
                           final service = ref.read(sessionServiceProvider);
-                          final locals = await SessionLocalStorage.loadAll();
+                          final ownerId = ref.read(authStateProvider).ownerId;
+                          final locals = await SessionLocalStorage.loadAll(ownerId: ownerId);
                           final pending = locals.where((d) =>
                           !d.syncedToBackend).toList();
                           for (var detail in pending) {
                             final id = await service.saveDetail(detail);
                             if (id != null) {
                               detail = detail.withId(id);
-                              await SessionLocalStorage.markSynced(detail);
+                              await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
                             }
                           }
                         }

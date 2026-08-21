@@ -86,13 +86,17 @@ final bleConnectionProvider = Provider<BLEConnection>((ref) {
       if (detail.mode != 'emergency') {
         detail = detail.withGrade(service.calculateGradeFromDetail(detail));
       }
-      await service.saveLocalOnly(detail);
-      final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+      // Captured once and reused below: saveLocalOnly and markSynced must
+      // target the same local record, even if auth state changes mid-flight.
+      final authState  = ref.read(authStateProvider);
+      final isLoggedIn = authState.isLoggedIn;
+      final ownerId    = authState.ownerId;
+      await service.saveLocalOnly(detail, ownerId: ownerId);
       if (isLoggedIn) {
         final savedId = await service.saveDetail(detail);
         if (savedId != null) {
           detail = detail.withId(savedId);
-          await SessionLocalStorage.markSynced(detail);
+          await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
         }
       }
       await connection.sendConfirmReceived(sessionIndex);
@@ -339,6 +343,12 @@ class AuthState {
     this.createdAt,
     this.isLoading = false,
   });
+
+  /// Single source of truth for SessionLocalStorage's owner-scoping key.
+  /// Always derive it from here — never re-read userId from NetworkService/
+  /// SharedPreferences separately, since that value can be written slightly
+  /// out of step with this state during login()/logout() transitions.
+  String get ownerId => userId?.toString() ?? 'anon';
 
   AuthState copyWith({
     bool? isLoggedIn,

@@ -124,7 +124,9 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Future<void> _handleOfflineSession(SessionDetail detail, int sessionIndex) async {
     final service = ref.read(sessionServiceProvider);
     final ble     = ref.read(bleConnectionProvider);
-    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+    final authState  = ref.read(authStateProvider);
+    final isLoggedIn = authState.isLoggedIn;
+    final ownerId    = authState.ownerId;
 
     // Offline parser doesn't compute a grade — do it here for training sessions.
     // Emergency sessions always stay at grade 0.
@@ -133,7 +135,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     }
 
     // Always save locally first
-    await service.saveLocalOnly(detail);
+    await service.saveLocalOnly(detail, ownerId: ownerId);
 
     // If logged in, try to push to backend
     int? savedId;
@@ -141,7 +143,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       savedId = await service.saveDetail(detail);
       if (savedId != null) {
         detail = detail.withId(savedId);
-        await SessionLocalStorage.markSynced(detail);
+        await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
       }
     }
 
@@ -252,13 +254,15 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   }
 
   Future<void> _syncLocalSessions() async {
-    final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+    final authState  = ref.read(authStateProvider);
+    final isLoggedIn = authState.isLoggedIn;
     if (!isLoggedIn) return;
+    final ownerId = authState.ownerId;
     if (ref.read(settingsProvider).syncWifiOnly) {
       final results = await Connectivity().checkConnectivity();
       if (!results.contains(ConnectivityResult.wifi)) return;
     }
-    final locals  = await SessionLocalStorage.loadAll();
+    final locals  = await SessionLocalStorage.loadAll(ownerId: ownerId);
     final pending = locals.where((d) => !d.syncedToBackend).toList();
     if (pending.isEmpty) return;
     final service = ref.read(sessionServiceProvider);
@@ -268,7 +272,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       debugPrint('🔵 saveDetail returned: $savedId');
       if (savedId != null) {
         detail = detail.withId(savedId);
-        await SessionLocalStorage.markSynced(detail);
+        await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
         anySynced = true;
       }
     }
@@ -698,6 +702,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
     final isLoggedIn = ref.read(authStateProvider).isLoggedIn;
+    final preLoginOwnerId = ref.read(authStateProvider).ownerId;
     final service = ref.read(sessionServiceProvider);
     final bleConn = ref.read(bleConnectionProvider);
     final container = ProviderScope.containerOf(context, listen: false);
@@ -760,7 +765,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     );
 
     // ALWAYS persist locally first — before any dialog or navigation.
-    final localOk = await service.saveLocalOnly(detail);
+    // Uses the pre-login ownerId: this runs before the login prompt below,
+    // so a not-yet-logged-in Emergency session must land in the 'anon'
+    // bucket. AuthNotifier.login() migrates it to the real owner afterward.
+    final localOk = await service.saveLocalOnly(detail, ownerId: preLoginOwnerId);
     container.invalidate(sessionSummariesProvider);
     if (!localOk && mounted) {
       UIHelper.showWarning(context, 'Session could not be saved on this device.');
@@ -797,7 +805,12 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
         UIHelper.showWarning(context, 'Could not sync to server — session saved locally.');
       }
     } else {
-      await SessionLocalStorage.markSynced(detail);
+      // Re-read here, not preLoginOwnerId: if the login prompt above ran,
+      // AuthNotifier.login() has already migrated the local record from
+      // 'anon' to the new owner and updated authStateProvider — in that
+      // order — before context.push(LoginScreen()) can return control here.
+      final ownerId = ref.read(authStateProvider).ownerId;
+      await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
     }
     if (mounted) context.push(SessionResultsScreen(detail: detail));
   }

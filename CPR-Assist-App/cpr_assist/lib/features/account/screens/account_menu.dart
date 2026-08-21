@@ -569,7 +569,8 @@ class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
 
     final container = ProviderScope.containerOf(context);
     final service   = container.read(sessionServiceProvider);
-    final locals    = await SessionLocalStorage.loadAll();
+    final ownerId   = container.read(authStateProvider).ownerId;
+    final locals    = await SessionLocalStorage.loadAll(ownerId: ownerId);
     final pending   = locals.where((d) => !d.syncedToBackend).toList();
 
     int synced = 0;
@@ -577,7 +578,7 @@ class _SyncPendingRowState extends ConsumerState<_SyncPendingRow> {
       final savedId = await service.saveDetail(detail);
       if (savedId != null) {
         detail = detail.withId(savedId);
-        await SessionLocalStorage.markSynced(detail);
+        await SessionLocalStorage.markSynced(detail, ownerId: ownerId);
         synced++;
       }
     }

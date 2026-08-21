@@ -68,8 +68,14 @@ class SessionService {
   /// Resolves a SessionSummary into a full SessionDetail.
   /// - Backend session (id != null): calls GET /sessions/:id/detail.
   /// - Local-only session (id == null): looks up by sessionStart in local storage.
+  /// [ownerId] identifies whose local cache to search — pass
+  /// `ref.read(authStateProvider).ownerId` so this always agrees with
+  /// SessionLocalStorage's other callers.
   /// Throws if no matching detail can be located.
-  Future<SessionDetail> fetchDetailForSummary(SessionSummary summary) async {
+  Future<SessionDetail> fetchDetailForSummary(
+    SessionSummary summary, {
+    required String ownerId,
+  }) async {
     if (summary.id != null) {
       try {
         return await fetchDetail(summary.id!);
@@ -81,7 +87,7 @@ class SessionService {
     if (start == null) {
       throw Exception('Local session has no start time');
     }
-    final all = await SessionLocalStorage.loadAll();
+    final all = await SessionLocalStorage.loadAll(ownerId: ownerId);
     int trunc(DateTime t) =>
         t.toUtc().copyWith(millisecond: 0, microsecond: 0).millisecondsSinceEpoch;
     return all.firstWhere(
@@ -112,10 +118,11 @@ class SessionService {
 
   /// Save a session locally only, without hitting the backend.
   /// Used when Emergency mode ends and the user declines to log in.
-  Future<bool> saveLocalOnly(SessionDetail detail) async {
+  /// [ownerId]: pass `ref.read(authStateProvider).ownerId`.
+  Future<bool> saveLocalOnly(SessionDetail detail, {required String ownerId}) async {
     // SessionLocalStorage handles the SharedPreferences write.
     // The sync-on-reconnect logic will pick this up later if the user logs in.
-    return SessionLocalStorage.saveLocal(detail);
+    return SessionLocalStorage.saveLocal(detail, ownerId: ownerId);
   }
 
   /// Update the note on a saved session.
@@ -140,6 +147,10 @@ class SessionService {
     try {
       await _network.delete('/sessions/$sessionId', requiresAuth: true);
       return true;
+    } on HttpStatusException catch (e) {
+      if (e.statusCode == 404) return true; // not ours / already gone
+      debugPrint('deleteSession failed: $e');
+      return false;
     } catch (e) {
       debugPrint('deleteSession failed: $e');
       return false;
@@ -169,13 +180,14 @@ class SessionService {
   /// Returns false only when a backend-tracked session could not be deleted
   /// from the backend (network error). In that case the local copy is left
   /// intact so a retry can succeed later.
-  Future<bool> deleteSummary(SessionSummary summary) async {
+  /// [ownerId]: pass `ref.read(authStateProvider).ownerId`.
+  Future<bool> deleteSummary(SessionSummary summary, {required String ownerId}) async {
     final start = summary.sessionStart;
 
     // Local-only session — nothing to delete on the backend
     if (summary.id == null) {
       if (start != null) {
-        await SessionLocalStorage.deleteByStart(start);
+        await SessionLocalStorage.deleteByStart(start, ownerId: ownerId);
       }
       return true;
     }
@@ -185,17 +197,18 @@ class SessionService {
     if (!ok) return false;
 
     if (start != null) {
-      await SessionLocalStorage.deleteByStart(start);
+      await SessionLocalStorage.deleteByStart(start, ownerId: ownerId);
     }
     return true;
   }
 
   /// Single entry point for deleting all sessions (logged-in users only).
   /// Wipes the backend, then clears the local cache. Returns true on success.
-  Future<bool> deleteAllSummaries() async {
+  /// [ownerId]: pass `ref.read(authStateProvider).ownerId`.
+  Future<bool> deleteAllSummaries({required String ownerId}) async {
     final ok = await deleteAllSessions();
     if (!ok) return false;
-    await SessionLocalStorage.deleteAll();
+    await SessionLocalStorage.deleteAll(ownerId: ownerId);
     return true;
   }
 

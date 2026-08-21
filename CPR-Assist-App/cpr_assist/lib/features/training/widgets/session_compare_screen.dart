@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import 'package:cpr_assist/core/core.dart';
+import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
 import '../screens/session_service.dart';
 import '../services/session_detail.dart';
@@ -68,6 +69,7 @@ class _SessionCompareScreenState
 
   Future<void> _fetchAllDetails() async {
     final service = ref.read(sessionServiceProvider);
+    final ownerId = ref.read(authStateProvider).ownerId;
     await Future.wait(widget.sessions.map((s) async {
       final key = s.selKey;
       if (key == 0) return; // malformed — no sessionStart
@@ -77,7 +79,7 @@ class _SessionCompareScreenState
         // local-only (id == null) sessions, falling back to local storage
         // when the backend lookup fails. This is what lets local-only
         // sessions show up in compare.
-        final d = await service.fetchDetailForSummary(s);
+        final d = await service.fetchDetailForSummary(s, ownerId: ownerId);
         if (mounted) setState(() {
           _details[key] = d;
           _loading[key] = false;
