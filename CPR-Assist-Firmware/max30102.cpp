@@ -493,9 +493,14 @@ bool max30102PatientContact() {
 uint8_t max30102ClassifyPulse(float hrBpm, uint8_t sigQuality,
                               uint8_t detA, uint8_t detB,
                               float rescuerHrBpm, uint8_t rescuerSigQuality) {
-  // Hard rejection: too few confirmed beats or signal too weak.
-  // detB ≥ 4 over a 10 s window = ≥ 24 BPM sustained (below brady floor).
-  if (sigQuality < PULSE_MIN_SIGNAL_QUALITY || detB < 2) return 0;  // Absent
+  // Signal too weak to read at all: Uncertain, not Absent — we don't know
+  // whether there's a pulse, we just couldn't measure one.
+  if (sigQuality < PULSE_MIN_SIGNAL_QUALITY) return 1;  // Uncertain
+
+  // Signal was good enough to trust but no beats were confirmed: Absent.
+  // detB ≥ 2 confirmed beats required. detB accumulates over the whole open
+  // pulse-check window (up to WINDOW_MAX_BACKSTOP_MS), not a fixed interval.
+  if (detB < 2) return 0;  // Absent
 
   const float ratio = (detA > 0) ? (float)detB / (float)detA : 0.0f;
   const bool rateOk = (hrBpm >= 30.0f && hrBpm <= 180.0f);

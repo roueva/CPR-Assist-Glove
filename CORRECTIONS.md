@@ -3,7 +3,7 @@
 ## Firmware
 - [ ] Contact-plus-pause gating for circulation check (passive only, never prompts)
 - [ ] Remove audio/haptic prompt from pulse check trigger
-- [ ] Low-SQI must report "Uncertain", not "Absent"
+- [x] Low-SQI must report "Uncertain", not "Absent"
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
       using simultaneous wrist HR. Problem: the patient sensor is a
       fingertip pressed against the carotid, with the rescuer's own perfused
