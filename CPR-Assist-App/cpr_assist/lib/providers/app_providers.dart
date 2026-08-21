@@ -401,6 +401,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _network.saveUserId(userId);
     await _prefs.setBool('isLoggedIn', true);
     await _prefs.setString('username', username);
+    await SessionLocalStorage.migrateOwner(from: 'anon', to: userId.toString());
     state = state.copyWith(
       isLoggedIn: true,
       userId:     userId,
