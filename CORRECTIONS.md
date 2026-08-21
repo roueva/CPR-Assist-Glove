@@ -8,13 +8,22 @@
 - [ ] `imu.cpp:4` comment says ±8g/0x5C, should be ±4g/0x4A
 - [ ] `config.h:142` comment says ±2g, confirm ±4g and fix comment
 - [ ] Before user study: MANIKIN_CALIBRATION_LOG=0, BLE_DEBUG_SERIAL=0
-- [ ] Patient PPG FIFO overflows: max30102UpdatePatient drains at 500 ms
-      (cpr_glove.ino:1430) but the 32-sample FIFO holds only 320 ms.
-      ~36% of samples dropped; synthetic clock (_pSampleClockMs += 10) runs
-      ~40% slow, inflating patient hrBpm and distorting RR_MIN/MAX refractory
-      windows, which contaminates detB feeding max30102ClassifyPulse.
-      Fix: drain patient at ≤200 ms during the window, or detect FIFO
-      overflow and advance the clock accordingly.
+- [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Patient PPG FIFO overflowed:
+      max30102UpdatePatient was folded into the 500 ms rescuer vitals block,
+      but the 32-sample FIFO holds only 320 ms at 100 Hz, so a 500 ms drain
+      dropped ~1/3 of every batch and the synthetic clock (_pSampleClockMs
+      += 10/sample) ran ~40% slow, inflating patient hrBpm and distorting
+      RR_MIN/MAX refractory windows feeding detB / max30102ClassifyPulse.
+      Fix landed: patient PPG now drains on its own LIVE_STREAM_INTERVAL_MS
+      (100 ms) timer, gated on pulseCheckActive || diagActive, separate
+      from the 500 ms rescuer block. Also fixes the transmitted waveform,
+      which was updating at 2 Hz (below Nyquist for a 1–1.7 Hz pulse) while
+      sent over BLE at 10 Hz. Not hardware-validated — see hardware
+      checklist below. Same commit also fixed the patient-temperature
+      contact check (was `ppgRaw > 0.08f`, a stale threshold on the wrong
+      signal that read contactOk=true with no contact; now uses
+      max30102PatientContactOk(), the same per-sample IR-DC gate the rest
+      of the pulse pipeline already uses).
 - [ ] BLOCKING BEFORE USER STUDY — bench the contact threshold on real geometry.
       PULSE_GATE_CONTACT_IR_MIN currently inherits CONTACT_IR_MIN (30000),
       tuned for a finger covering the sensor, not a fingertip pressed outward
@@ -28,6 +37,11 @@
       lift and replace → second window opens.
 - [ ] Confirm the 200 ms pause-time contact probe doesn't inflate sensorTask dt
       (depth integral is the validated output — see mutex note at cpr_glove.ino:1307).
+- [ ] HARDWARE — validate the patient PPG 100 ms drain fix above: confirm the
+      waveform sent to the app renders as an actual pulse trace, not a
+      staircase, and that patient HR (heartRatePatient) is no longer
+      inflated relative to a known-good reference (pulse oximeter or manual
+      count) during a pulse-check window.
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card

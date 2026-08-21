@@ -822,6 +822,7 @@ static void commsTask(void* pv) {
   unsigned long lastNeoMs = 0;
   unsigned long lastBatMs = 0;
   unsigned long lastVitalsMs = 0;
+  unsigned long lastPatientVitalsMs = 0;
 
   while (true) {
     unsigned long now = millis();
@@ -1142,7 +1143,7 @@ bool cycleReached = (ventComps > 0
         // Only used pre-open (while paused, gate armed) and for re-arming
         // (gate disarmed, window already closed) — never while a window is
         // open, which derives contact from max30102UpdatePatient() instead
-        // (see below; that already runs in the 500 ms vitals block).
+        // (see below; that runs in its own 100 ms patient-vitals block).
         bool pollPreOpen = !_inPulseCheck && _pulseGateArmed && paused;
         bool pollRearm   = !_inPulseCheck && !_pulseGateArmed;
         if ((pollPreOpen || pollRearm) && (now - _pulseGatePollMs) >= 200) {
@@ -1211,8 +1212,8 @@ bool cycleReached = (ventComps > 0
         }
 
         // In-window contact tracking — derived from max30102UpdatePatient(),
-        // already running in the 500 ms vitals block while pulseCheckActive.
-        // No new I2C here.
+        // already running in its own 100 ms patient-vitals block while
+        // pulseCheckActive. No new I2C here.
         // Gated on freshness, not a fixed warmup: right at open, the vitals
         // block may not have run yet with pulseCheckActive freshly true, so
         // its cached reading can be stale (from before this window existed,
@@ -1392,7 +1393,7 @@ bool cycleReached = (ventComps > 0
       xSemaphoreGive(gI2CMutex);
     }
 
-    // ── Vitals (rescuer: every 500ms; patient: only during pulse check) ─────
+    // ── Vitals (rescuer only) — every 500ms ──────────────────────────────────
     if (now - lastVitalsMs >= 500) {
       lastVitalsMs = now;
       float hr = 0, spo2 = 0;
@@ -1416,11 +1417,29 @@ bool cycleReached = (ventComps > 0
         gState.rescuerHumidity = rHum;
       }
       portEXIT_CRITICAL(&gStateMux);
-      // Patient temp: ONLY meaningful during pulse check, when the glove
-      // fingertip (carrying the MAX30205) is placed on the patient's carotid.
+    }
 
-
-
+    // ── Patient PPG (pulse-check / bench diag only) — 100ms ─────────────────
+    // Was folded into the 500ms rescuer block above. The MAX30102 FIFO holds
+    // only 32 samples (320ms at 100Hz), so a 500ms drain silently dropped
+    // ~1/3 of every batch, and max30102UpdatePatient()'s synthetic
+    // per-sample clock (advanced 10ms/sample to keep RR timing exact within
+    // a burst) then ran ~40% slow relative to wall time — inflating patient
+    // hrBpm and shifting the RR_MIN_MS/RR_MAX_MS refractory windows, which
+    // contaminates detB feeding max30102ClassifyPulse. Draining at
+    // LIVE_STREAM_INTERVAL_MS (100ms) keeps the FIFO from ever filling and
+    // keeps the synthetic clock honest. It also fixes the transmitted
+    // waveform: ppgRaw was being written at 2Hz while sent over BLE at
+    // 10Hz, so every value repeated 5x and rendered as a staircase — 2Hz is
+    // below Nyquist for a 1–1.7 Hz pulse.
+    //
+    // Safe ONLY because this path now runs solely while paused (pulse-check
+    // window or bench diag), never during compressions — the faster I2C
+    // cadence here cannot contend with sensorTask's 100Hz IMU read on
+    // gI2CMutex (which would inflate sensorTask's dt and corrupt the depth
+    // integral — same constraint as the 200ms rescuer drain above).
+    if (now - lastPatientVitalsMs >= LIVE_STREAM_INTERVAL_MS) {
+      lastPatientVitalsMs = now;
       SharedState snap = snapshotState();
       if (snap.pulseCheckActive || diagActive) {
         // 1. Read PPG (HR + SpO2 + signal quality)
@@ -1449,9 +1468,12 @@ bool cycleReached = (ventComps > 0
         gState.detectorACount = detA;
         gState.detectorBCount = detB;
 
-        // Patient temp validity: skin contact confirmed by IR DC level (sensor covered),
-        // independent of PPG pulsatility — a pulseless patient still has warm skin.
-        bool contactOk = (gState.ppgRaw > 0.08f);  // ppgRaw is IR/262144, 0.08 ≈ 21000 raw
+        // Patient temp validity: use the same per-sample IR-DC contact gate
+        // (CONTACT_IR_MIN, in processSample()) that the rest of the pulse
+        // pipeline is already gated on, instead of re-deriving contact from
+        // a coarse batch-averaged threshold on ppgRaw — independent of PPG
+        // pulsatility, a pulseless patient still has warm skin.
+        bool contactOk = max30102PatientContactOk();
         if (contactOk && patTemp > 0) {
           gState.patientTemperature = patTemp;
           gState.patientTemperatureLastPulseCheck = patTemp;
