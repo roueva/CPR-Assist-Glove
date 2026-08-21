@@ -491,18 +491,36 @@ bool max30102PatientContact() {
 // ── Pulse classification (unchanged logic, now fed by reliable SQI) ──────────
 // 0=Absent 1=Uncertain 2=Present
 uint8_t max30102ClassifyPulse(float hrBpm, uint8_t sigQuality,
-                              uint8_t detA, uint8_t detB) {
+                              uint8_t detA, uint8_t detB,
+                              float rescuerHrBpm, uint8_t rescuerSigQuality) {
   // Hard rejection: too few confirmed beats or signal too weak.
   // detB ≥ 4 over a 10 s window = ≥ 24 BPM sustained (below brady floor).
-  if (sigQuality < 40 || detB < 2) return 0;  // Absent
+  if (sigQuality < PULSE_MIN_SIGNAL_QUALITY || detB < 2) return 0;  // Absent
 
   const float ratio = (detA > 0) ? (float)detB / (float)detA : 0.0f;
   const bool rateOk = (hrBpm >= 30.0f && hrBpm <= 180.0f);
   const bool signalOk = (sigQuality >= 60);
   const bool agreement = (detB <= 4) ? (ratio >= 0.60f) : (ratio >= 0.70f);
 
-  if (rateOk && signalOk && agreement) return 2;  // Present
-  return 1;                                       // Uncertain
+  if (!(rateOk && signalOk && agreement)) return 1;  // Uncertain
+
+  // Self-detection guard — see PULSE_SELF_DETECT_BPM_TOL in config.h. Only
+  // downgrades a Present; never fires on an Absent/Uncertain result, and
+  // never fires on a rescuer reference that isn't itself trustworthy (a
+  // missing or unreliable reference must leave the classification alone).
+  // Pure function: which reference (live rescuer reading vs. paused
+  // snapshot vs. none available) was passed in is the caller's decision —
+  // see the self-detect ref selection in cpr_glove.ino, which also owns the
+  // debug logging for this guard.
+  bool rescuerRefValid = rescuerHrBpm >= 30.0f && rescuerHrBpm <= 180.0f &&
+                          rescuerSigQuality >= PULSE_MIN_SIGNAL_QUALITY;
+  if (!rescuerRefValid) return 2;  // Present — no usable reference to check against
+
+  if (fabsf(hrBpm - rescuerHrBpm) <= PULSE_SELF_DETECT_BPM_TOL) {
+    return 1;  // Uncertain — can't rule out this being the rescuer's own pulse
+  }
+
+  return 2;  // Present
 }
 
 float max30102DiagRescuerFiltered() {

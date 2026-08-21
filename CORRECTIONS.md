@@ -4,7 +4,71 @@
 - [ ] Contact-plus-pause gating for circulation check (passive only, never prompts)
 - [ ] Remove audio/haptic prompt from pulse check trigger
 - [ ] Low-SQI must report "Uncertain", not "Absent"
-- [ ] Rescuer-pulse discriminator using simultaneous wrist HR
+- [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
+      using simultaneous wrist HR. Problem: the patient sensor is a
+      fingertip pressed against the carotid, with the rescuer's own perfused
+      fingertip immediately behind it — nothing stopped the glove reporting
+      the rescuer's own pulse as the patient's. In cardiac arrest the
+      patient's true signal is usually absent by definition while an
+      adrenalised rescuer has strong peripheral perfusion, making self-
+      detection the most likely false positive.
+      Fix landed: max30102ClassifyPulse (max30102.cpp) takes one rescuer
+      hrBpm/sigQuality pair and downgrades Present → Uncertain when the
+      patient and rescuer rates agree within PULSE_SELF_DETECT_BPM_TOL
+      (config.h, 10 BPM). Downgrade only — never upgrades, never touches
+      Absent or an already-Uncertain result. Guarded: does not fire if the
+      rescuer HR is zero/out of physiological range (30-180 BPM, same bound
+      as the patient rateOk check) or rescuer sigQuality is below
+      PULSE_MIN_SIGNAL_QUALITY (40, the same threshold the patient hard-
+      rejection check uses) — a missing or unreliable reference leaves the
+      classification untouched. The classifier itself is pure and ignorant
+      of where the reference came from.
+      Reference selection lives at the call site (cpr_glove.ino, window
+      close): prefers the live rescuer reading (snap.heartRateUser /
+      snap.rescuerSignalQuality, contemporaneous with this close) but falls
+      back to the paused snapshot (rescuerHRLastPause / the new
+      rescuerSQLastPause, both captured at window-open while the rescuer's
+      hand was still) when live fails the quality gate. This matters because
+      the window's usual close path (WINDOW_RESUME_COMP_COUNT, only 2 comps)
+      fires right as the rescuer's wrist starts moving again — exactly when
+      the live channel is most likely motion-corrupted and would otherwise
+      make the guard silently no-op in the common case. On a backstop close
+      the paused snapshot can be the full window old, but a backstop close
+      already means the rescuer never resumed and contact never cleanly
+      broke — the least trustworthy classification this system produces
+      regardless of this guard, so a stale reference nudging that toward
+      Uncertain is correct, not a defect.
+      rescuerSQLastPause (shared_state.h) is a new internal-only field, not
+      part of the transmitted SESSION_END summary or storage.cpp's persisted
+      layout — pairs an SQI with the existing rescuerHRLastPause/
+      rescuerSpO2LastPause snapshot so the paused reference can be
+      quality-gated the same way the live one is.
+      SPEC LIMITATION: PKT_PULSE_CHECK_RESULT (Spec v3.1, locked) has no
+      spare field, so the downgrade reason cannot be transmitted over BLE.
+      The app currently cannot distinguish a self-detection downgrade from
+      an ordinary weak-signal Uncertain — clinically these are different
+      (one means "this might be your own pulse", the other means "signal
+      too poor to tell") and worth a spec revision later to add a reason
+      code. For now it's only visible in Serial under the existing
+      BLE_DEBUG_SERIAL flag: cpr_glove.ino logs
+      `[PULSE] self-detect ref: source=live|paused|none patient=...bpm
+      ref=...bpm(sq=...) cls=...` at every window close, so source=none
+      (no usable reference at all — the discriminator silently no-opped)
+      is distinguishable on hardware from source=live/paused with cls
+      unchanged (reference was available but didn't agree).
+- [ ] OPEN — not fixed. gState.heartRateUser is published every 500ms with
+      no quality gate: max30102UpdateRescuer (max30102.cpp) writes
+      _pR.hrBpm unconditionally, and it's only zeroed after ~1.5s of
+      sustained no-contact (_rNoContactStreak >= 150). Between those, a
+      motion-corrupted value (e.g. mid-compression) can sit in
+      gState.heartRateUser looking like a valid reading. The self-detection
+      guard above works around this itself (checks rescuerSignalQuality
+      before trusting it), but other consumers of heartRateUser —
+      including, on the app side, the live rescuer vitals card — may be
+      trusting it blindly without checking rescuerSignalQuality alongside
+      it. Needs a sweep of every reader of heartRateUser (firmware and app)
+      to confirm each one either checks signal quality or has a reason not
+      to.
 - [ ] `imu.cpp:4` comment says ±8g/0x5C, should be ±4g/0x4A
 - [ ] `config.h:142` comment says ±2g, confirm ±4g and fix comment
 - [ ] Before user study: MANIKIN_CALIBRATION_LOG=0, BLE_DEBUG_SERIAL=0
@@ -74,6 +138,16 @@
       contact loss shows as a flat trace at mid-axis (not frozen, not a
       drop to 0) and that the waveform resumes cleanly — no discontinuity
       or stuck value — when contact returns.
+- [ ] HARDWARE — validate the rescuer-pulse self-detection discriminator.
+      With the glove on and the fingertip (patient) sensor pressed against
+      your OWN neck (both channels reading the same person), confirm the
+      pulse-check result is Uncertain, not Present. If it still reports
+      Present, check cpr_glove.ino's Serial log under BLE_DEBUG_SERIAL —
+      `[PULSE] self-detect ref: source=... patient=...bpm ref=...bpm(sq=...)
+      cls=...` — at window close. source=none means no rescuer reference
+      (live or paused) cleared PULSE_MIN_SIGNAL_QUALITY, so the guard never
+      ran; source=live/paused with ref far from patient means it ran but the
+      rates genuinely didn't agree.
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card

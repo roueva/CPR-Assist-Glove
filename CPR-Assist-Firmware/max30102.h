@@ -45,9 +45,18 @@ bool max30102PatientContact();
 // after a long idle isn't rejected by the 2000ms inter-beat limit.
 void max30102ResetRescuerBeats();
 
-// Classification: 0=Absent, 1=Uncertain, 2=Present
+// Classification: 0=Absent, 1=Uncertain, 2=Present.
+// rescuerHrBpm/rescuerSigQuality are a rescuer wrist HR/SQI reference, used
+// only to downgrade a Present to Uncertain when the two channels can't be
+// told apart (self-detection guard, see PULSE_SELF_DETECT_BPM_TOL in
+// config.h). Never upgrades, never touches Absent/Uncertain. Pure function —
+// ignorant of where the reference came from; the caller decides whether to
+// pass a live reading, a paused snapshot, or a fallback chain of both (see
+// cpr_glove.ino). Pass rescuerSigQuality=0 (or any out-of-range HR) to
+// disable the guard, e.g. when no rescuer reading is available.
 uint8_t max30102ClassifyPulse(float hrBpm, uint8_t sigQuality,
-                              uint8_t detA, uint8_t detB);
+                              uint8_t detA, uint8_t detB,
+                              float rescuerHrBpm, uint8_t rescuerSigQuality);
 
 // Diagnostic — last filtered (band-passed) IR sample from rescuer pipeline.
 // Returns 0 if rescuer not OK. Range typically ±300 counts during pulse.

@@ -1044,6 +1044,7 @@ bool cycleReached = (ventComps > 0
         gState.inVentilationWindow = true;
         gState.rescuerHRLastPause = gState.heartRateUser;
         gState.rescuerSpO2LastPause = gState.spO2User;
+        gState.rescuerSQLastPause = gState.rescuerSignalQuality;
         portEXIT_CRITICAL(&gStateMux);
         bleQueueEvent(bleBuildVentilationWindow(_ventCycleNum, snap.ventilationBreaths));
         if (snap.audioFeedbackEnabled) audioPlay(AUDIO_GIVE_TWO_BREATHS, AUDIO_PRI_VENTILATION);
@@ -1201,6 +1202,7 @@ bool cycleReached = (ventComps > 0
           portENTER_CRITICAL(&gStateMux);
           gState.rescuerHRLastPause = gState.heartRateUser;
           gState.rescuerSpO2LastPause = gState.spO2User;
+          gState.rescuerSQLastPause = gState.rescuerSignalQuality;
           portEXIT_CRITICAL(&gStateMux);
         }
 
@@ -1277,9 +1279,55 @@ bool cycleReached = (ventComps > 0
                                          ? (float)snap.detectorBCount * 60.0f / windowSecs
                                          : 0.0f;
 
+            // Self-detection reference: prefer the live rescuer reading
+            // (snap was just refreshed above, so heartRateUser /
+            // rescuerSignalQuality are as of the last 500ms vitals tick,
+            // contemporaneous with this close) over rescuerHRLastPause,
+            // which is captured once at window-open. But the window's usual
+            // close path (WINDOW_RESUME_COMP_COUNT, only 2 comps) fires
+            // right as the rescuer's wrist starts moving again — exactly
+            // when the live channel is most likely motion-corrupted and
+            // fails its own quality gate. So fall back to the paused
+            // snapshot, captured while the rescuer's hand was still
+            // (window-open requires the pause threshold and contact
+            // debounce to have already elapsed), when live fails the same
+            // PULSE_MIN_SIGNAL_QUALITY gate max30102ClassifyPulse applies.
+            bool liveRefOk = snap.heartRateUser >= 30.0f && snap.heartRateUser <= 180.0f &&
+                             snap.rescuerSignalQuality >= PULSE_MIN_SIGNAL_QUALITY;
+            bool pausedRefOk = snap.rescuerHRLastPause >= 30.0f && snap.rescuerHRLastPause <= 180.0f &&
+                               snap.rescuerSQLastPause >= PULSE_MIN_SIGNAL_QUALITY;
+
+            float refHrBpm = 0.0f;
+            uint8_t refSigQuality = 0;
+            const char* refSource = "none";
+            if (liveRefOk) {
+              refHrBpm = snap.heartRateUser;
+              refSigQuality = snap.rescuerSignalQuality;
+              refSource = "live";
+            } else if (pausedRefOk) {
+              // On a backstop close (WINDOW_MAX_BACKSTOP_MS) this snapshot
+              // can be the full window old — but a backstop close already
+              // means the rescuer never resumed compressions and contact
+              // never cleanly broke, the least trustworthy classification
+              // this system produces regardless of this guard. A stale
+              // reference nudging that toward Uncertain is the correct
+              // outcome here, not a defect.
+              refHrBpm = snap.rescuerHRLastPause;
+              refSigQuality = snap.rescuerSQLastPause;
+              refSource = "paused";
+            }
+
             uint8_t cls = max30102ClassifyPulse(
               estimatedBpm, snap.ppgSignalQuality,
-              snap.detectorACount, snap.detectorBCount);
+              snap.detectorACount, snap.detectorBCount,
+              refHrBpm, refSigQuality);
+
+#if BLE_DEBUG_SERIAL
+            // How often the discriminator actually runs (source != "none")
+            // vs. silently no-ops, and which reference it ran against.
+            Serial.printf("[PULSE] self-detect ref: source=%s patient=%.0fbpm ref=%.0fbpm(sq=%u) cls=%u\n",
+                          refSource, estimatedBpm, refHrBpm, refSigQuality, cls);
+#endif
 
             bleQueueEvent(bleBuildPulseCheckResult(
               cls, estimatedBpm, snap.ppgSignalQuality,

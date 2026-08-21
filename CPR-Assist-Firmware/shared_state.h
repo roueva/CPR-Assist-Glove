@@ -123,6 +123,13 @@ struct SharedState {
   float compressionDepthSD;  // cm
   float rescuerHRLastPause;
   float rescuerSpO2LastPause;
+  // SQI paired with rescuerHRLastPause at the moment it was captured —
+  // internal only, not part of the transmitted SESSION_END summary or
+  // storage.cpp's persisted layout. Lets a consumer quality-gate the paused
+  // snapshot the same way the live rescuerSignalQuality is gated, instead of
+  // trusting an old HR value blindly (see pulse-check self-detection guard
+  // in cpr_glove.ino).
+  uint8_t rescuerSQLastPause;
   float rescuerTemperatureStart;
   float rescuerTemperatureEnd;
   bool pulseDetected;

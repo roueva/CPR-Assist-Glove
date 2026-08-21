@@ -434,6 +434,24 @@
 #define PULSE_GATE_CONTACT_IR_MIN 30000       // same value as CONTACT_IR_MIN (max30102.cpp) — tunable independently
 #define PULSE_GATE_CONTACT_DEBOUNCE_MS 500UL  // sustained contact/no-contact required before the gate opens/closes/re-arms
 
+// Minimum composite SQI for a channel's HR reading to be trusted at all.
+// Shared by the patient hard-rejection check and the rescuer self-detection
+// reference below — one source of truth for "good enough signal to act on".
+#define PULSE_MIN_SIGNAL_QUALITY 40
+
+// Self-detection guard: the patient sensor is a fingertip pressed against the
+// carotid, with the rescuer's own perfused fingertip immediately behind it.
+// In cardiac arrest the patient's true pulse is usually absent by definition,
+// while an adrenalised rescuer has strong peripheral perfusion — so the glove
+// reporting the rescuer's own pulse back as the patient's is the most likely
+// failure mode of the whole feature. If the patient-channel and rescuer-
+// channel rates agree within this tolerance, there's no way to tell whose
+// pulse was actually detected, so a Present result downgrades to Uncertain.
+// 10 BPM is tight enough that two genuinely different people's resting/
+// stressed rates rarely coincide by chance, loose enough to catch jitter
+// between the two independent HR estimates when it really is the same pulse.
+#define PULSE_SELF_DETECT_BPM_TOL 10.0f
+
 // ── Shared pulse-check / ventilation window behaviour ───────────────────────
 // Both windows stay open until the rescuer resumes (≥ WINDOW_RESUME_COMP_COUNT
 // comps AFTER a real pause) or the backstop elapses. Ventilation additionally
