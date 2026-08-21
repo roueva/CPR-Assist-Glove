@@ -291,45 +291,42 @@ class _GlobalTab extends ConsumerWidget {
                   if (entries.length >= 3)
                     _Podium(entries: entries.take(3).toList()),
 
-                  // ── Rankings list (4th+) ───────────────────────────────────
-                  if (entries.length > 3) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.xl, AppSpacing.sm,
-                          AppSpacing.xl, AppSpacing.xs),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('RANKINGS',
-                              style: AppTypography.label(size: 11)),
-                          Text('${entries.length - 3} more · ${scenarioOptions[scenario] ?? ''}',
-                              style: AppTypography.caption(color: AppColors.textDisabled)),
-                        ],
-                      ),
+                  // ── Full rankings list — everyone, including top 3 ──────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl, AppSpacing.sm,
+                        AppSpacing.xl, AppSpacing.xs),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('RANKINGS',
+                            style: AppTypography.label(size: 11)),
+                        Text('${entries.length}',
+                            style: AppTypography.caption(color: AppColors.textDisabled)),
+                      ],
                     ),
-                    Container(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md),
-                      decoration: AppDecorations.card(),
-                      child: Column(
-                        children: entries.skip(3).map((entry) {
-                          final isLast =
-                              entry == entries.last;
-                          return Column(
-                            children: [
-                              _LeaderRow(entry: entry),
-                              if (!isLast)
-                                const Divider(
-                                    height: 1,
-                                    color: AppColors.divider,
-                                    indent: 60,
-                                    endIndent: AppSpacing.md),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md),
+                    decoration: AppDecorations.card(),
+                    child: Column(
+                      children: entries.map((entry) {
+                        final isLast = entry == entries.last;
+                        return Column(
+                          children: [
+                            _LeaderRow(entry: entry),
+                            if (!isLast)
+                              const Divider(
+                                  height: 1,
+                                  color: AppColors.divider,
+                                  indent: 60,
+                                  endIndent: AppSpacing.md),
+                          ],
+                        );
+                      }).toList(),
                     ),
-                  ],
+                  ),
                 ],
 
                 const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
