@@ -72,3 +72,11 @@ of `e.toString().contains('404')`.
       breaking, and none of them branch on `e.statusCode` even though the
       type is now available. Migrate to `e is HttpStatusException` checks
       when those screens are next touched.
+
+## Notes
+- M24 remains closed. kCmdStart/kCmdStop (0xF3/0xF4) stay commented on the
+  app side. The firmware handler at cpr_glove.ino:200-206 is live and wired
+  to startSession()/stopSession(), but the app deliberately has no caller —
+  session start/stop is owned by the glove's physical button. Adding a
+  sendStart/sendStop caller is a BLE behaviour change against locked
+  Spec v3.1 and needs an explicit decision, not an uncommenting.
