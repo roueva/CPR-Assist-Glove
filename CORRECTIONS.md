@@ -16,14 +16,29 @@
       RR_MIN/MAX refractory windows feeding detB / max30102ClassifyPulse.
       Fix landed: patient PPG now drains on its own LIVE_STREAM_INTERVAL_MS
       (100 ms) timer, gated on pulseCheckActive || diagActive, separate
-      from the 500 ms rescuer block. Also fixes the transmitted waveform,
-      which was updating at 2 Hz (below Nyquist for a 1–1.7 Hz pulse) while
-      sent over BLE at 10 Hz. Not hardware-validated — see hardware
-      checklist below. Same commit also fixed the patient-temperature
-      contact check (was `ppgRaw > 0.08f`, a stale threshold on the wrong
-      signal that read contactOk=true with no contact; now uses
-      max30102PatientContactOk(), the same per-sample IR-DC gate the rest
-      of the pulse pipeline already uses).
+      from the 500 ms rescuer block. This fixes the hrBpm inflation and
+      RR-window distortion. It does NOT fix the transmitted waveform —
+      that turned out to be a separate bug (see next item). Not
+      hardware-validated — see hardware checklist below. Same commit also
+      fixed the patient-temperature contact check (was `ppgRaw > 0.08f`, a
+      stale threshold on the wrong signal that read contactOk=true with no
+      contact; now uses max30102PatientContactOk(), the same per-sample
+      IR-DC gate the rest of the pulse pipeline already uses).
+- [ ] ADDRESSED — PENDING HARDWARE VALIDATION. PPG waveform rendered as a
+      staircase / flat line, not a pulse. Root cause was NOT the 2 Hz vs
+      10 Hz drain rate (that was a wrong diagnosis, corrected above) — it
+      was that ppgRaw (max30102.cpp) was a batch-averaged raw-IR/262144 DC
+      ratio with no meaningful pulsatile content: envelope ≈ 40 counts on
+      a ≈130000 DC baseline, i.e. real variation ≈0.00015 out of the 0–1
+      range, invisible after any scaling. Fix landed: ppgRaw now streams
+      `0.5 + 0.5*(_pP.filtered / (_pP.envelope * 2.5))`, the AC-coupled
+      bandpass-filtered value centred on 0.5, clamped to [0,1], falling
+      back to 0.5 when there's no fresh envelope this drain. Checked both
+      app-side PPG painters: pulse_check_overlay.dart's live _PpgPainter
+      auto-scales (unaffected either way); session_results_emergency.dart's
+      _PpgResultPainter uses a fixed 0–1 axis and needed real pulsatility
+      to render anything — this is the painter the staircase symptom was
+      actually about.
 - [ ] BLOCKING BEFORE USER STUDY — bench the contact threshold on real geometry.
       PULSE_GATE_CONTACT_IR_MIN currently inherits CONTACT_IR_MIN (30000),
       tuned for a finger covering the sensor, not a fingertip pressed outward
@@ -37,11 +52,19 @@
       lift and replace → second window opens.
 - [ ] Confirm the 200 ms pause-time contact probe doesn't inflate sensorTask dt
       (depth integral is the validated output — see mutex note at cpr_glove.ino:1307).
-- [ ] HARDWARE — validate the patient PPG 100 ms drain fix above: confirm the
-      waveform sent to the app renders as an actual pulse trace, not a
-      staircase, and that patient HR (heartRatePatient) is no longer
-      inflated relative to a known-good reference (pulse oximeter or manual
-      count) during a pulse-check window.
+- [ ] HARDWARE — validate both patient PPG fixes above, separately:
+      (1) 100 ms drain: patient HR (heartRatePatient) is no longer inflated
+      relative to a known-good reference (pulse oximeter or manual count)
+      during a pulse-check window.
+      (2) ppgRaw waveform formula: the waveform sent to the app — both live
+      (pulse_check_overlay.dart) and in stored session results
+      (session_results_emergency.dart's _PpgResultPainter) — renders as a
+      visible pulse trace, not a flat line or a staircase. Also watch for a
+      frozen/non-decaying trace during a deliberate mid-window contact
+      loss: _pP.filtered/_pP.envelope only update on samples that pass the
+      per-sample contact gate, so a lost-contact stretch may echo the last
+      good reading instead of flattening — confirm whether that's visible
+      and whether it matters.
 
 ## App
 - [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card

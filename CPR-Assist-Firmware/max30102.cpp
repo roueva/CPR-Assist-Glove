@@ -408,7 +408,6 @@ void max30102UpdatePatient(float& hrBpm, float& spO2, float& ppgRaw,
   _patient.check();
 
   bool anyContact = false;
-  uint32_t irSum = 0;
   int irCount = 0;
 if (_pSampleClockMs == 0) _pSampleClockMs = millis();
   while (_patient.available()) {
@@ -416,7 +415,6 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
     uint32_t red = _patient.getRed();
     _patient.nextSample();
     _pSampleClockMs += 10;
-    irSum += ir;
     irCount++;
     uint32_t before = _pP.lastBeatMs;
     if (processSample(_pP, ir, red, _pSampleClockMs, ENV_DC_FRAC_P)) {
@@ -427,9 +425,12 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
     }
   }
 
-  ppgRaw = (irCount > 0)
-    ? constrain((float)(irSum / (uint32_t)irCount) / 262144.0f, 0.0f, 1.0f)
-    : 0.0f;
+  // Stream the AC-coupled, bandpass-filtered pulse waveform centred on 0.5 —
+  // NOT the DC average. The DC baseline has no visible pulsatility, so the
+  // app's auto-scale was stretching its quantisation steps into "squares".
+  ppgRaw = (irCount > 0 && _pP.envelope > ENV_FLOOR)
+    ? constrain(0.5f + 0.5f * (_pP.filtered / (_pP.envelope * 2.5f)), 0.0f, 1.0f)
+    : 0.5f;
   _pP.detA = (uint8_t)constrain(_pP.rawPeakCount, 0, 255);
   detectorACount = _pP.detA;
   detectorBCount = _pP.detB;
