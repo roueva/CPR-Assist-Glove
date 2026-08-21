@@ -73,6 +73,15 @@ of `e.toString().contains('404')`.
       type is now available. Migrate to `e is HttpStatusException` checks
       when those screens are next touched.
 
+## UI
+- [ ] Open design decision: aed_map_cards.dart:170 still tints the ETA
+      time/icon with `AppColors.aedNavGreen`/`AppColors.primary` (walking/
+      driving), while the route polyline itself now draws in `success`/
+      `primaryAlt` (see buildRoutePolyline in route_service.dart). Both are
+      visible on screen at once — the card and its own route line no longer
+      match. Decide whether card accents should follow the polyline swap or
+      are intentionally a separate palette.
+
 ## Notes
 - M24 remains closed. kCmdStart/kCmdStop (0xF3/0xF4) stay commented on the
   app side. The firmware handler at cpr_glove.ino:200-206 is live and wired
