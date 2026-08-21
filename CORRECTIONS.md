@@ -57,3 +57,18 @@
 - [ ] K2 standalone glove verification
 - [ ] Export PDF: saveContext/restoreContext in gradeSparkline, genericSparkline,
       radar polygon, both trainingHero ring painters
+
+## HTTP error handling — still substring-matches in three screens
+`network_service.dart` now throws `HttpStatusException` (carries a real
+`statusCode`) instead of a bare `Exception` for non-2xx responses, and
+`SessionService.deleteSession` was switched to check `e.statusCode` instead
+of `e.toString().contains('404')`.
+- [ ] `login_screen.dart`, `registration_screen.dart`, `reset_password_screen.dart`
+      still parse the status code out of the exception's string form via
+      `e.toString().contains('401')` etc. They still work today because
+      `HttpStatusException.toString()` was deliberately kept in the same
+      `HTTP <code>: <message>` shape the old `Exception('HTTP $code: $msg')`
+      produced — but they're one string-format change away from silently
+      breaking, and none of them branch on `e.statusCode` even though the
+      type is now available. Migrate to `e is HttpStatusException` checks
+      when those screens are next touched.

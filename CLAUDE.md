@@ -10,6 +10,10 @@
 - Read the actual source before proposing anything. Grep before asserting.
 - One batch at a time. Wait for confirmation before the next.
 - Run `flutter analyze` after every Flutter batch. Zero new issues.
+- Never use Write on an existing file. Read it first, then edit. Write is
+  for new files only.
+- Comment blocks describing UI structure or data semantics may be stale.
+  Verify against the actual code before acting on them.
 
 ## Flutter design tokens — hard rules, no exceptions
 Single import: `import 'package:cpr_assist/core/core.dart'`
