@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../features/aed_map/services/aed_service.dart';
 import '../features/aed_map/services/cache_service.dart';
 import '../features/aed_map/services/location_service.dart';
+import '../features/training/services/session_local_storage.dart';
 import '../models/aed_models.dart';
 import '../services/network/network_service.dart';
 
@@ -96,6 +97,7 @@ class AppInitializationManager {
   // ── Core pipeline ─────────────────────────────────────────────────────────
 
   static Future<InitializationResult> _run(AEDService aedRepository) async {
+    unawaited(SessionLocalStorage.migrateLegacyUnscopedData());
     final isConnected = await NetworkService.isConnected();
     final apiKey      = NetworkService.googleMapsApiKey;
 
