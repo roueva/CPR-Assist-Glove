@@ -523,6 +523,7 @@ class NavigationState {
     bool?     hasStarted,
     LatLng?   destination,
     Polyline? route,
+    bool      clearRoute = false,
     String?   estimatedTime,
     double?   distance,
     String?   transportMode,
@@ -533,7 +534,7 @@ class NavigationState {
         isActive:               isActive               ?? this.isActive,
         hasStarted:             hasStarted             ?? this.hasStarted,
         destination:            destination            ?? this.destination,
-        route:                  route                  ?? this.route,
+        route:                  clearRoute ? null : (route ?? this.route),
         estimatedTime:          estimatedTime          ?? this.estimatedTime,
         distance:               distance               ?? this.distance,
         transportMode:          transportMode          ?? this.transportMode,
@@ -574,7 +575,8 @@ class MapStateNotifier extends StateNotifier<AEDMapState> {
   void updateRoute(Polyline? route, String estimatedTime, double distance) =>
       state = state.copyWith(
         navigation: state.navigation.copyWith(
-          route: route, estimatedTime: estimatedTime, distance: distance,
+          route: route, clearRoute: route == null,
+          estimatedTime: estimatedTime, distance: distance,
         ),
       );
 
