@@ -4,7 +4,7 @@
 - [ ] Contact-plus-pause gating for circulation check (passive only, never prompts)
 - [ ] Remove audio/haptic prompt from pulse check trigger
 - [x] Low-SQI must report "Uncertain", not "Absent"
-- [ ] BLOCKING BEFORE USER STUDY — K_POPULATION_DEFAULT does not match the
+- [x] BLOCKING BEFORE USER STUDY — K_POPULATION_DEFAULT does not match the
       thesis's stated k values, in either mode. The thesis states the
       firmware starts at k=1.30 and that the user study runs with k=3.45
       locked. Neither value exists in the code:
@@ -41,6 +41,16 @@
       provenance in its comment. Needs a decision on where 3.45 actually
       comes from (which/how many calibration runs) before it can be
       written down with an honest comment.
+      RESOLVED — confirmed the thesis values are correct and the firmware
+      had drifted. K_POPULATION_DEFAULT is now 1.30f (config.h:189), with
+      its comment carrying only the Tomlinson 2007 derivation. A new
+      K_STUDY_LOCKED 3.45f (config.h:195) holds the Little Anne study k —
+      averaged from 10 independent runs of ~30 compressions each — and is
+      wired in as _calibK's initial/reset value in force.cpp whenever
+      FORCE_CALIB_LOCK is 1. FORCE_CALIB_LOCK (config.h:315) flipped to 1.
+      The surrounding workflow comments (config.h:182-195 and :304-315)
+      were rewritten to describe the two constants' separate roles instead
+      of the old hardcode-k-into-K_POPULATION_DEFAULT workflow.
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
       using simultaneous wrist HR. Problem: the patient sensor is a
       fingertip pressed against the carotid, with the rescuer's own perfused
@@ -175,6 +185,12 @@
       contact loss shows as a flat trace at mid-axis (not frozen, not a
       drop to 0) and that the waveform resumes cleanly — no discontinuity
       or stuck value — when contact returns.
+- [ ] HARDWARE — on the first study session, confirm from the serial log
+      (DEPTH_PIPELINE_LOG's CALIB line, calibK field) that k reads 3.45 at
+      boot and stays 3.45 for the full two-minute session under real
+      compressions — never drifts, never reverts toward the population
+      mean. This is the empirical check that FORCE_CALIB_LOCK actually
+      holds in practice, not just by code-path analysis.
 - [ ] HARDWARE — validate the rescuer-pulse self-detection discriminator.
       With the glove on and the fingertip (patient) sensor pressed against
       your OWN neck (both channels reading the same person), confirm the

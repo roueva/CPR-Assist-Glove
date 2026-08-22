@@ -180,16 +180,19 @@
 
 
 // Force-to-depth coefficient — population mean k for human chest stiffness.
-// Derived from Tomlinson et al. 2007 (n=91 OHCA): F38 = 27.5 kg ≈ 270 N
-// → depth = k * 270^0.6 = k * 27.84, solving for 38 mm gives k ≈ 1.365.
-// Cross-check at F25: k * 136.3^0.6 = k * 18.92, solving for 25 mm gives k ≈ 1.32.
-// We use 1.35 as the rounded population mean. Per-session calibration refines
-// this for the specific surface (manikin or patient) via forceCalibCompute().
+// Tomlinson et al. 2007 (n=91 OHCA), d = k·F^0.6, from two reference points:
+// 25 mm at ~136 N and 38 mm at ~270 N, both giving k ≈ 1.31. Population mean
+// rounds to 1.30. Governs uncalibrated use — Emergency mode on a real chest.
+// Per-session calibration refines this for the specific surface via
+// forceCalibCompute(); see K_STUDY_LOCKED below for the fixed k used in
+// controlled user-study sessions instead.
+#define K_POPULATION_DEFAULT 1.30f
 
-// When you find k set FORCE_CALIB_LOCK to 1
-#define K_POPULATION_DEFAULT 1.7131f //little anne manikin 2.9612, 2.8710, 2.7046, 2.9585, 3.0136, 2.6200, 2.5847, 2.9615
-// #define K_POPULATION_DEFAULT 2.0624f  //qcpr
-// #define K_POPULATION_DEFAULT 1.35f
+// Laerdal Little Anne study manikin k — averaged from 10 independent runs of
+// ~30 compressions each. Used in place of K_POPULATION_DEFAULT when
+// FORCE_CALIB_LOCK is 1, so every study participant is scored against the
+// same manikin-derived coefficient instead of one refit per session.
+#define K_STUDY_LOCKED 3.45f
 
 
 // ── Force sensor ──────────────────────────────────────────────────────────────
@@ -301,14 +304,15 @@
 // (below 200 N) take longer as those samples are rejected.
 #define MAX_CALIBRATION_SAMPLES 20
 
-// When 1, k is permanently locked after the first successful fit and never
-// refitted in subsequent sessions. Use this for participant studies so all
-// subjects use the same k derived from your pre-study manikin calibration.
-// Workflow: run one calibration session with DEPTH_PIPELINE_LOG=1, find the
-// first CALIB line where calibK ≠ 1.3500, record that value, then set this
-// to 1 and optionally hardcode K_POPULATION_DEFAULT to that value.
-// 0 = normal operation (k refits every session from scratch).
-#define FORCE_CALIB_LOCK 0
+// When 1, k is locked at K_STUDY_LOCKED from boot and never fitted from
+// session data — every participant is scored against the same pre-measured
+// Little Anne coefficient. K_POPULATION_DEFAULT and K_STUDY_LOCKED are
+// separate constants: the former is the uncalibrated physiological default
+// used in Emergency mode, the latter is the fixed study-manikin k. Do not
+// hardcode one into the other.
+// 0 = normal operation (k refits every session from scratch, starting from
+// K_POPULATION_DEFAULT).
+#define FORCE_CALIB_LOCK 1
 
 
 

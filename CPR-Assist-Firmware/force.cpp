@@ -8,10 +8,11 @@
 
 static float _baseline = 0.0f;
 static bool _baselineReady = false;
-static float _calibK = K_POPULATION_DEFAULT;  // population-mean k (Tomlinson 2007), refined per-session by forceCalibCompute()
 #if FORCE_CALIB_LOCK
-static bool _calibComplete = true;   // k pre-locked at K_POPULATION_DEFAULT, never refit
+static float _calibK = K_STUDY_LOCKED;  // Little Anne study k, locked for all user-study sessions
+static bool _calibComplete = true;      // k pre-locked at K_STUDY_LOCKED, never refit
 #else
+static float _calibK = K_POPULATION_DEFAULT;  // population-mean k (Tomlinson 2007), refined per-session by forceCalibCompute()
 static bool _calibComplete = false;
 #endif
 
@@ -145,6 +146,10 @@ void forceCalibAddSample(float forceN, float imuDepthMM) {
 #if FORCE_CALIB_LOCK
   if (_calibLocked) return;  // Stop accepting samples if locked
 #endif
+  // When FORCE_CALIB_LOCK=1, _calibComplete is already true at boot, so this
+  // returns here on every call — samples never accumulate and
+  // forceCalibCompute() (and its 0.70–3.50 fallback-to-population-mean
+  // check) never runs. K_STUDY_LOCKED is never subject to that check.
   if (_calibComplete || _calibCount >= MAX_CALIBRATION_SAMPLES) return;
 
 #if LOW_FORCE_MODE
@@ -218,11 +223,13 @@ void forceCalibCompute() {
   }
   if (nIn >= 5) k = computeK(inlier);
 
-// Physiological k range per Tomlinson 2007 — individual k varies roughly
-  // 0.7–2.0 across the human chest-stiffness spread (derived from F25
-  // std dev ±6.6 kg). If the fit lands outside this range, the calibration
-  // data is suspect — revert to the population mean and let the next
-  // session's calibration try again.
+// Acceptance range is wider than the Tomlinson 2007 physiological spread
+  // (individual k ≈ 0.7–2.0 across human chests, derived from F25 std dev
+  // ±6.6 kg) because that range only applies to human chest tissue. Training
+  // manikins are stiffer and legitimately fit outside it, so the bound is
+  // widened to 0.70–3.50 to cover both. If the fit still lands outside this
+  // wider range, the calibration data is suspect — revert to the population
+  // mean and let the next session's calibration try again.
  if (k < 0.70f || k > 3.50f) k = K_POPULATION_DEFAULT;
   _calibK = k;
   Serial.printf("[FORCE-CALIB] k fitted = %.4f from %d samples\n", _calibK, _calibCount);
@@ -253,6 +260,12 @@ void forceUpdateBaseline(float rawForceN) {
 }
 
 void forceResetCalibration() {
+#if FORCE_CALIB_LOCK
+  // Locked builds never reset calibration, even if a future caller is
+  // wired up — k stays at K_STUDY_LOCKED for the life of the build. This
+  // is structural, not merely a consequence of no caller existing today.
+  return;
+#endif
   _baselineReady = false;
   _lpfState = 0.0f;
   _baselineSum   = 0;
