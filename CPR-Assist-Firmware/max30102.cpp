@@ -44,8 +44,9 @@ static unsigned long _patientContactMs = 0;
 // SQI scaling: envScore reaches 1.0 when envelope ≥ DC * this fraction.
 // Bench: rescuer good contact env≈250 at DC≈138000 → ratio≈0.0018.
 //        patient good contact env≈40  at DC≈130000 → ratio≈0.0003.
-// We scale each sensor to its own observed "good" level.
-//0.0002
+// We scale each sensor to its own observed "good" level. ENV_DC_FRAC_P below
+// is set to 0.0002, not the bench-observed 0.0003 — intentionally more
+// lenient, not a rounding of the bench number.
 #define ENV_DC_FRAC_R 0.0018f
 #define ENV_DC_FRAC_P 0.0002f
 

@@ -147,7 +147,8 @@
 #define ACCEL_SENSITIVITY 0.122f
 
 
-// CTRL2_G = 0x50 → ODR=208Hz, FS=±250dps
+// 0x50 (ODR=208Hz) was tried and rejected — mismatched the accel's 104Hz
+// ODR and risked aliasing. Using 0x40 instead:
 #define IMU_CTRL2_G_VALUE 0x40  // ODR=104Hz, FS=±250dps — matches accel ODR, no aliasing
 // Gyro sensitivity: ±250dps → 8.75 mdps/LSB
 #define GYRO_SENSITIVITY (8.75f / 1000.0f)
@@ -156,17 +157,16 @@
 #define SAMPLE_DT (1.0f / SAMPLE_RATE)
 #define CF_ALPHA      0.98f   // standard — 0.5s time constant at 100Hz
 #define CF_ALPHA_FAST 0.85f   // fast-converge gain — used for ~60 ticks at session start (Mahony 2008)
-// Was 50 mg (~0.49 m/s²) — zeroed motion accel through most of every stroke,
-// fully decorrelating depth from force. 12 mg keeps a small drift guard.
-
-// Accelerometer bias deadband — values below this are zeroed. Sized between
-// LSM6DSOX typical zero-g offset (~30 mg) and the validated 50 mg from
-// thesis_depth.ino. 30 mg balances bias suppression against signal preservation.
+// Accelerometer bias deadband — values below this are zeroed. LSM6DSOX
+// typical zero-g offset is ~30 mg; earlier passes used 50 mg (from
+// thesis_depth.ino) and then 30 mg, but both zeroed motion accel through
+// most of every stroke, decorrelating depth from force. 10 mg keeps a
+// small drift guard while preserving signal.
 // Note: less critical once CF-driven gravity removal is active (rotation matrix
 // continuously projects out gravity, so static bias becomes a smaller share of
 // the residual). Literature: integration bias is dominant drift source
 // (Song 2015 U-CPR; Tomlinson 2021 review; Aase 2002 boundary method).
-#define ACC_DEADBAND_MS2 (10.0f * 9.81f / 1000.0f)  // 10 mg ≈ 0.098 m/s² — CF gravity removal is continuous; 30 mg was removing signal
+#define ACC_DEADBAND_MS2 (10.0f * 9.81f / 1000.0f)  // 10 mg ≈ 0.098 m/s²
 
 #define GRAV_EMA_ALPHA 0.85f
 #define GRAV_MIN_CYCLES_PALM 3

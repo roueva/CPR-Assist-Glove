@@ -293,7 +293,7 @@ float forceConfidence(float peakForceN) {
   }
   if (peakForceN > FORCE_CONF_RANGE_MAX_N) {
     // Above the operating range — likely an ADC glitch or extreme over-force.
-    // forceRead() at line 85 already glitch-rejects > 700 N, but defend.
+    // forceRead() at line 107 already glitch-rejects > 700 N, but defend.
     return 0.0f;
   }
   // Linear taper near the edges of the operating range for graceful behavior.

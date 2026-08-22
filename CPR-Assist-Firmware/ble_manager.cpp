@@ -213,7 +213,7 @@ void bleSendLiveStream(const SharedState& s) {
 
 #if BLE_DEBUG_SERIAL
   static uint32_t _liveLogCount = 0;
-  // Throttle: LIVE_STREAM is 25 Hz. Log 1 in 25 (~1 Hz) to keep Serial readable.
+  // Throttle: LIVE_STREAM is 10 Hz (Spec v3.1). Log 1 in 25 (~0.4 Hz) to keep Serial readable.
   if ((_liveLogCount++ % 25) == 0) {
     Serial.printf(
       "[LIVE] d=%.1fcm f=%.0fN rate=%.0f cnt=%lu inCyc=%lu "

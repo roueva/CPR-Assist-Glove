@@ -339,7 +339,7 @@ float depthGetAvg() {
 
 // ── Chunk 3 Change 13 — finalize last-compression valley at session end ─────
 // Normally a compression's recoil is graded when the NEXT compression starts
-// (depth.cpp:343 consumes _valleyDepth into _recoilValleyDepthMM). At session
+// (depth.cpp:514 consumes _valleyDepth into _recoilValleyDepthMM). At session
 // end, the very last compression's recoil is never evaluated because no next
 // compression occurs. This function finalizes the in-flight valley tracking
 // so the app receives a recoil grade for every compression including the last.

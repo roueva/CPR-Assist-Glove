@@ -1,5 +1,5 @@
 // =============================================================================
-// storage.cpp — LittleFS offline session storage (Spec v3.0 §8.2, format v4)
+// storage.cpp — LittleFS offline session storage (Spec v3.0 §8.2, format v5)
 // Session binary layout:
 //   HEADER (104 bytes, see writeHeader())
 //     0–1   uint16  magic 0xC9A1
@@ -36,14 +36,14 @@
 //   COMPRESSION ARRAY (compressionArrayLen × 20 bytes)
 //   VENTILATION ARRAY (ventilationArrayLen × 12 bytes)
 //   PULSE CHECK ARRAY (pulseCheckArrayLen × 12 bytes)
-// Meta:  /sessions/meta.bin — 20 bytes, one per slot (0=empty,1=pending,2=synced)
+// Meta:  /sessions/meta.bin — 41 bytes, see layout below (state 0=empty,1=pending)
 // =============================================================================
 #include "storage.h"
 #include "depth.h"
 #include <LittleFS.h>
 #include <string.h>
 
-// Meta file layout (40 bytes for STORAGE_MAX_SESSIONS=20):
+// Meta file layout (41 bytes for STORAGE_MAX_SESSIONS=20):
 //   bytes 0–19:  state per slot (0=empty, 1=pending). State 2 is retired
 //                in v5+ — confirmed sessions are deleted immediately so
 //                their slot returns to 0.

@@ -1413,7 +1413,7 @@ bool cycleReached = (ventComps > 0
       }
     }
 
-    // ── LIVE_STREAM at 25Hz ─────────────────────────────────────────────────
+    // ── LIVE_STREAM at 10Hz (LIVE_STREAM_INTERVAL_MS, Spec v3.1) ────────────
     if (bleConnected() && (now - lastLiveMs) >= LIVE_STREAM_INTERVAL_MS) {
       lastLiveMs = now;
       SharedState snap = snapshotState();

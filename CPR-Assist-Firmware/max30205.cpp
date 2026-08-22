@@ -22,7 +22,7 @@ bool max30205Init() {
     return false;
   }
 
-  // Write config: continuous conversion, comparator mode, OS active high
+  // Write config: continuous conversion, comparator mode, OS active low
   Wire.beginTransmission(MAX30205_ADDR);
   Wire.write(MAX30205_REG_CONFIG);
   Wire.write(0x00);  // normal mode, continuous conversion
@@ -56,7 +56,7 @@ float max30205ReadCelsius() {
   int16_t raw = (int16_t)((msb << 8) | lsb);
   float temp = raw * 0.00390625f;
 
-  // Sanity check: human skin 25–42°C
+  // Sanity check: human skin 15–42°C
   if (temp < 15.0f || temp > 42.0f) return 0.0f;
   return temp;
 }
