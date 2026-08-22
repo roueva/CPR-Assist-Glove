@@ -4,6 +4,43 @@
 - [ ] Contact-plus-pause gating for circulation check (passive only, never prompts)
 - [ ] Remove audio/haptic prompt from pulse check trigger
 - [x] Low-SQI must report "Uncertain", not "Absent"
+- [ ] BLOCKING BEFORE USER STUDY — K_POPULATION_DEFAULT does not match the
+      thesis's stated k values, in either mode. The thesis states the
+      firmware starts at k=1.30 and that the user study runs with k=3.45
+      locked. Neither value exists in the code:
+        - K_POPULATION_DEFAULT (config.h:190) is 1.7131f, not 1.30.
+        - 1.35f is commented out directly below it (config.h:192) — an
+          earlier value, not the current one, and not 1.30 either.
+        - config.h:308's workflow comment references "calibK ≠ 1.3500" as
+          the value to compare a fresh fit against — another 1.35, not 1.30.
+        - FORCE_CALIB_LOCK (config.h:311) is 0 — k is NOT locked. The
+          "3.45 locked" claim in the thesis describes a state the firmware
+          is not currently built to.
+        - 3.45 does not appear anywhere in the firmware.
+        - The eight Little Anne manikin values annotated beside
+          K_POPULATION_DEFAULT (config.h:190: 2.9612, 2.8710, 2.7046,
+          2.9585, 3.0136, 2.6200, 2.5847, 2.9615) average 2.83, not 3.45 —
+          so even if 3.45 were meant to derive from those runs, it isn't
+          their mean, and there are eight of them, not the ten the thesis
+          implies.
+      Root cause: K_POPULATION_DEFAULT is being asked to serve two
+      incompatible roles — the literature-derived population-mean fallback
+      for uncalibrated human chests in Emergency mode (Tomlinson 2007,
+      k≈1.35 rounded, per the derivation comment at config.h:182-187), and
+      the slot for a hardcoded locked manikin k per the
+      calibrate-then-lock workflow documented at config.h:189 and :304-309.
+      Whoever last set it to 1.7131f (the Little Anne bench-derived value)
+      overwrote the literature fallback without introducing a separate
+      constant for the locked-study role, so neither the thesis's 1.30
+      startup value nor its 3.45 locked value is actually compiled in.
+      PROPOSED FIX, pending confirmation — do not implement without
+      sign-off: split the two roles into separate constants —
+      K_POPULATION_DEFAULT 1.30f (Tomlinson population mean, used in
+      Emergency/uncalibrated mode) and a new K_STUDY_LOCKED 3.45f (used
+      only when FORCE_CALIB_LOCK = 1) — each with full derivation
+      provenance in its comment. Needs a decision on where 3.45 actually
+      comes from (which/how many calibration runs) before it can be
+      written down with an honest comment.
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
       using simultaneous wrist HR. Problem: the patient sensor is a
       fingertip pressed against the carotid, with the rescuer's own perfused
