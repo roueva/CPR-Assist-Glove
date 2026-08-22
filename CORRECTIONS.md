@@ -238,6 +238,22 @@ of `e.toString().contains('404')`.
       visible on screen at once — the card and its own route line no longer
       match. Decide whether card accents should follow the polyline swap or
       are intentionally a separate palette.
+- [ ] Per-event pause rows can't distinguish a 45 s overrun from a clean
+      10 s pause. VentilationEvent/PulseCheckEvent display `durationSec`
+      capped at `maxAcceptablePauseSec` (10 s) with a compliant marker, so
+      a pause that ran 4.5x over shows identically to an honest 10 s pause
+      in the in-app timeline (session_results_training_tabs.dart:1703),
+      the PDF ventilation log (export_service.dart:4450-4461), and the PDF
+      timeline (export_service.dart:5373-5377). The overrun IS correctly
+      counted in the session-level unplannedPauseTime/unplannedPauseCount
+      aggregate via the Behavior-Y branch (session_detail.dart:916-936),
+      but nothing links that summary back to the specific row that caused
+      it. Proposed fix: carry the true (uncapped) duration alongside
+      cappedDur and suppress the success marker on rows that overran.
+      Also fix the imprecise note at export_service.dart:3901 — it reads
+      "not explained by ventilation/pulse checks", but Behavior-Y time IS
+      associated with a ventilation/pulse-check window, just in excess of
+      the allowance; that wording is wrong for that portion.
 
 ## Notes
 - M24 remains closed. kCmdStart/kCmdStop (0xF3/0xF4) stay commented on the
@@ -246,3 +262,8 @@ of `e.toString().contains('404')`.
   session start/stop is owned by the glove's physical button. Adding a
   sendStart/sendStop caller is a BLE behaviour change against locked
   Spec v3.1 and needs an explicit decision, not an uncommenting.
+- Unresolved comment ambiguities from the firmware comment audit — could not
+  tell whether the comment or the code drifted, left as-is pending judgement:
+  - `depth.cpp:636` — `validDepth` "used for storage gating" may be true at one remove (feeds stored depth SD) rather than wrong; not clearly one or the other.
+  - `depth.cpp:472,820` — wrist flexion "signed ±45" isn't enforced anywhere; unclear if that's a dropped clamp or just an expected range.
+  - `depth.cpp:413` — "jitters ±cm at 25 Hz" matches neither the 100 Hz update rate nor the 20 Hz NeoPixel render rate; unclear which was meant.
