@@ -17,7 +17,10 @@ class CprTargets {
   static const double rateMax          = 120.0; // BPM
   static const double alignmentMaxDeg  = 15.0;  // degrees from vertical
   static const double flexionMaxDeg    = 10.0;  // degrees ±
-  static const double overForceNewtons = 600.0; // N — rib fracture risk
+  // N — rib fracture risk. Currently unused: over-force is computed
+  // firmware-side (scenario-aware — 600 N adult, 400 N pediatric) and the
+  // app just displays the resulting overForce flag it receives over BLE.
+  static const double overForceNewtons = 600.0;
 
   // Pediatric overrides — used by SessionService when scenario = 'pediatric'
   static const double depthMinPediatric = 4.0;

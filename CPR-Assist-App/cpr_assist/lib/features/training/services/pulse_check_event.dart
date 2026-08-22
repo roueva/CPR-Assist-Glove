@@ -36,7 +36,9 @@ class PulseCheckEvent {
   /// BPM — 0.0 if not detected.
   final double detectedBpm;
 
-  /// Signal quality 0–100. App shows result only when ≥ 40.
+  /// Signal quality 0–100. Result is always shown, not gated on this value —
+  /// results screens label it "Unreliable" below 40, "Acceptable" at 40–79,
+  /// "Strong" at ≥ 80.
   final int confidence;
 
   /// Perfusion index at time of check (0–100).

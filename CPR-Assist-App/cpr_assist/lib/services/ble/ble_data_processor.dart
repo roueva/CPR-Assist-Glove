@@ -6,7 +6,8 @@ import 'package:flutter/foundation.dart';
 // The glove exposes exactly two BLE characteristics:
 //
 //   LIVE_STREAM   UUID 19b10001-e8f2-537e-4f6c-d104768a1214
-//     108 bytes fixed, 25 Hz notify.
+//     108 bytes fixed, 10 Hz notify (see dev_preview_screen.dart:2309, which
+//     already had this rate right).
 //     Drives depth bar, rate gauge, posture indicator, vitals, PPG waveform.
 //
 //   EVENT_CHANNEL UUID 19b10002-e8f2-537e-4f6c-d104768a1214
@@ -70,7 +71,7 @@ const int kCmdDiagAction           = 0xEE;
 class BLEDataProcessor {
   const BLEDataProcessor();
 
-  // ── LIVE_STREAM parser (108 bytes, 25 Hz) ────────────────────────────────
+  // ── LIVE_STREAM parser (108 bytes, 10 Hz) ────────────────────────────────
   //
   // Byte layout per spec v3.0 Section 3:
   //   0– 3  float32  depth               cm
