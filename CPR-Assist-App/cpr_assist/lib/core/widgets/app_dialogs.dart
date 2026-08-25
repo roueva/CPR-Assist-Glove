@@ -289,9 +289,9 @@ class AppDialogs {
 
   static Future<void> showSelftestResults(
       BuildContext context, {
-        required List<_SelftestRow> failed,
-        required List<_SelftestRow> warns,
-        required List<_SelftestRow> passed,
+        required List<SelftestRow> failed,
+        required List<SelftestRow> warns,
+        required List<SelftestRow> passed,
         required int batteryPct,
       }) {
     final allOk = failed.isEmpty && warns.isEmpty;

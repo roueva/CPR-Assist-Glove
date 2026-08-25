@@ -272,7 +272,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
       }
     }
 
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
     ref.invalidate(sessionSummariesProvider);
     _clearSelection();
 
@@ -477,7 +477,7 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
                         await service.deleteSummary(s, ownerId: ownerId);
                       }
                     }
-                    if (!mounted) return;
+                    if (!mounted || !context.mounted) return;
                     ref.invalidate(sessionSummariesProvider);
                     UIHelper.showSuccess(context, 'All sessions deleted');
                   }
@@ -1426,8 +1426,6 @@ class SessionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = gradeColor(session.totalGrade);
-
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       margin:     const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -1924,7 +1922,7 @@ class _SortPopup extends StatelessWidget {
       ('duration', 'Duration', Icons.timer_outlined),
     ];
 
-    String _resolveValue(String chip) {
+    String resolveValue(String chip) {
       switch (chip) {
         case 'date':
           return (current == 'oldest') ? 'newest' : 'oldest';
@@ -1936,15 +1934,15 @@ class _SortPopup extends StatelessWidget {
       }
     }
 
-    String? _activeChip() {
+    String? activeChip() {
       if (current == 'newest' || current == 'oldest') return 'date';
       if (current == 'grade_high' || current == 'grade_low') return 'grade';
       if (current == 'duration_desc' || current == 'duration_asc') return 'duration';
       return null;
     }
 
-    IconData? _arrowIcon(String chip) {
-      if (_activeChip() != chip) return null;
+    IconData? arrowIcon(String chip) {
+      if (activeChip() != chip) return null;
       switch (chip) {
         case 'date':     return current == 'newest' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
         case 'grade':    return current == 'grade_high' ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
@@ -1974,9 +1972,9 @@ class _SortPopup extends StatelessWidget {
               for (int i = 0; i < chips.length; i++) ...[
                 _SortOption(
                   label:    chips[i].$2,
-                  selected: _activeChip() == chips[i].$1,
-                  arrow:    _arrowIcon(chips[i].$1),
-                  onTap:    () => onSelect(_resolveValue(chips[i].$1)),
+                  selected: activeChip() == chips[i].$1,
+                  arrow:    arrowIcon(chips[i].$1),
+                  onTap:    () => onSelect(resolveValue(chips[i].$1)),
                 ),
                 if (i < chips.length - 1)
                   const Divider(height: 1, color: AppColors.divider),

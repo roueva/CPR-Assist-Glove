@@ -123,8 +123,8 @@ class OfflineSessionParser {
     // the glove always records correctly from millis(). Such sessions are
     // timestamp-approximate: the duration is exact, the wall-clock start is
     // our best estimate (when we received it).
-    const _minValidMs = 1577836800000; // 2020-01-01T00:00:00Z
-    final bool timeApproximate = sessionStartMs < _minValidMs;
+    const minValidMs = 1577836800000; // 2020-01-01T00:00:00Z
+    final bool timeApproximate = sessionStartMs < minValidMs;
     final int realDurationMs =
     (sessionEndMs > sessionStartMs) ? (sessionEndMs - sessionStartMs) : 0;
 

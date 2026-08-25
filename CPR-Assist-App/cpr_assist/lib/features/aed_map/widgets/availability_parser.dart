@@ -157,7 +157,7 @@ class AvailabilityParser {
     if (cached != null) return cached;
 
     // Local helper to cache every return path
-    AvailabilityStatus _cache(AvailabilityStatus s) {
+    AvailabilityStatus cache(AvailabilityStatus s) {
       _parseCache[cacheKey] = s;
       // Bound cache to prevent unbounded growth
       if (_parseCache.length > 5000) _parseCache.clear();
@@ -166,7 +166,7 @@ class AvailabilityParser {
 
     // No availability data loaded — signal UI to hide the section
     if (_availabilityMap == null) {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: '',
@@ -178,7 +178,7 @@ class AvailabilityParser {
     if (availability == null ||
         availability.trim().isEmpty ||
         availability.trim().toLowerCase() == 'unknown') {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: '',
@@ -190,7 +190,7 @@ class AvailabilityParser {
 
     // Not in map — show raw text, uncertain
     if (!_availabilityMap!.containsKey(cleanText)) {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: true,
         displayText: availability,
@@ -203,7 +203,7 @@ class AvailabilityParser {
 
     // 1. 24/7
     if (data['is_24_7'] == true) {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: false,
         displayText: 'Open 24/7',
@@ -213,7 +213,7 @@ class AvailabilityParser {
 
     // 2. Holiday
     if (_isGreekHoliday(DateTime.now())) {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: true,
         displayText: 'Likely Closed (Holiday)',
@@ -231,12 +231,12 @@ class AvailabilityParser {
         status,
         availability,
       );
-      if (ruleResult != null) return _cache(ruleResult);
+      if (ruleResult != null) return cache(ruleResult);
     }
 
     // 4. Fallback by status
     if (status == 'closed_for_use') {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: false,
         displayText: 'Private / Restricted Use',
@@ -246,7 +246,7 @@ class AvailabilityParser {
     }
 
     if (status == 'uncertain') {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      true,
         isUncertain: true,
         displayText: 'Check Availability',
@@ -256,7 +256,7 @@ class AvailabilityParser {
     }
 
     if (status == 'parsed') {
-      return _cache(AvailabilityStatus(
+      return cache(AvailabilityStatus(
         isOpen:      false,
         isUncertain: false,
         displayText: 'Closed',
@@ -266,7 +266,7 @@ class AvailabilityParser {
     }
 
     // Default
-    return _cache(AvailabilityStatus(
+    return cache(AvailabilityStatus(
       isOpen:      true,
       isUncertain: true,
       displayText: availability,

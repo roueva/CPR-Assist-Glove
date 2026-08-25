@@ -23,7 +23,7 @@ class _TrainingChartsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasGraphs) {
-      return _EmptyState(
+      return const _EmptyState(
         icon:  Icons.show_chart_rounded,
         title: 'No chart data available',
         body:              'History sessions do not carry the full compression stream.',
@@ -126,11 +126,11 @@ class _DepthRecoilChartCardState extends State<_DepthRecoilChartCard> {
     final spots = buildCprWaveform(widget.events);
 
     if (spots.isEmpty) {
-      return CprChartCard(
+      return const CprChartCard(
         title:    'Compression Depth',
         subtitle: 'Depth per compression · Target depth and recoil',
         lineColor: AppColors.primary,
-        child: const SizedBox.shrink(),
+        child: SizedBox.shrink(),
       );
     }
 

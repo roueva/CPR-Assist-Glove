@@ -598,6 +598,7 @@ class _SelectTile extends StatelessWidget {
     required this.onChanged,
   });
 
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(

@@ -569,9 +569,9 @@ class AppDecorations {
   );
 
   /// Certificate card footer — locked grey tint.
-  static BoxDecoration certFooterLocked() => BoxDecoration(
+  static BoxDecoration certFooterLocked() => const BoxDecoration(
     color: AppColors.screenBgGrey,
-    borderRadius: const BorderRadius.only(
+    borderRadius: BorderRadius.only(
       bottomLeft:  Radius.circular(AppSpacing.cardRadius),
       bottomRight: Radius.circular(AppSpacing.cardRadius),
     ),

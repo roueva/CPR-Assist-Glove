@@ -807,7 +807,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
         runSpacing: AppSpacing.xs,
         children: [
           if (showNoGps)
-            _StatusChip(
+            const _StatusChip(
               icon: Icons.location_off,
               label: 'No GPS',
               color: AppColors.primary,
@@ -815,7 +815,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
               tooltip: 'Showing compass direction only',
             ),
           if (showOffline)
-            _StatusChip(
+            const _StatusChip(
               icon: Icons.wifi_off,
               label: 'Offline',
               color: AppColors.warning,
@@ -823,7 +823,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
               tooltip: 'No internet connection · distances are estimates',
             ),
           if (showCached)
-            _StatusChip(
+            const _StatusChip(
               icon: Icons.refresh,
               label: 'Locating…',
               color: AppColors.primary,
@@ -961,7 +961,7 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
               ),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.open_in_new,
                     color: AppColors.primary,
                     size: AppSpacing.iconSm,
@@ -1306,8 +1306,8 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
 
 
   Widget _buildOfflineBanner() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+    return const Padding(
+      padding: EdgeInsets.only(bottom: AppSpacing.md),
       child: _StatusChip(
         icon: Icons.wifi_off,
         label: 'Offline',
@@ -1391,7 +1391,7 @@ class _AEDActiveNavigationPanel extends State<AEDActiveNavigationPanel> {
               ),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.open_in_new,
                     color: AppColors.primary,
                     size: AppSpacing.iconSm,

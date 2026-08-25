@@ -59,7 +59,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   bool _isInitializingApp = false;
   bool _hasPerformedInitialZoom = false;
   bool _hasFetchedFreshAEDs = false;
-  bool _freshDataLoaded = false;
   bool _isLoadingAEDs = false;
   bool _wasOffline = false;
 
@@ -255,7 +254,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
           await _locationController.startGPSTracking(isNavigating: false);
         } else if (!hasPermission &&
             !_locationController.hasRequestedPermission) {
-          if (!mounted) return;
+          if (!mounted || !capturedContext.mounted) return;
           await _locationController.requestLocationPermission(
             mapReadyFuture: _mapReadyCompleter.future,
             mapViewController: _mapViewController,
@@ -490,7 +489,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         latestState.navigation.transportMode,
       );
 
-      _freshDataLoaded = true;
       mapNotifier.setAEDs(sorted);
       if (!_hasPerformedInitialZoom) await _zoomToUserAndAEDsIfReady();
       _addMarkersToMap(sorted);
@@ -562,8 +560,9 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
   void _resortAEDs() {
     final currentState = ref.read(mapStateProvider);
-    if (currentState.userLocation == null || currentState.aedList.isEmpty)
+    if (currentState.userLocation == null || currentState.aedList.isEmpty) {
       return;
+    }
 
     final aedRepository = ref.read(aedServiceProvider);
     final newSorted = aedRepository.sortAEDsByDistance(

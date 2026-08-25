@@ -356,7 +356,7 @@ class _AEDMapDisplayState extends State<AEDMapDisplay>
         : EdgeInsets.zero;
 
     if (!_mapMountAllowed) {
-      return Positioned.fill(
+      return const Positioned.fill(
         child: ColoredBox(color: AppColors.primaryLight),
       );
     }

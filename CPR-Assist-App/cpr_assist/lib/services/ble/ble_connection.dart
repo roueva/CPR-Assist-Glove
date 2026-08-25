@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:flutter_foreground_task/models/notification_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cpr_assist/core/core.dart';
@@ -466,15 +465,15 @@ class BLEConnection {
     if (_sessionActive && parsed.isContinuousData) {
 
       _lastLiveStreamSnapshot = {
-        'totalCompressions':  parsed.totalCompressions ?? 0,
-        'correctDepth':       parsed.correctDepth ?? 0,
-        'correctFrequency':   parsed.correctFrequency ?? 0,
-        'correctRecoil':      parsed.correctRecoil ?? 0,
-        'depthRateCombo':     parsed.depthRateCombo ?? 0,
-        'correctPosture':     parsed.correctPosture ?? 0,
-        'leaningCount':       parsed.leaningCount ?? 0,
-        'overForceCount':     parsed.overForceCount ?? 0,
-        'tooDeepCount':       parsed.tooDeepCount ?? 0,
+        'totalCompressions':  parsed.totalCompressions,
+        'correctDepth':       parsed.correctDepth,
+        'correctFrequency':   parsed.correctFrequency,
+        'correctRecoil':      parsed.correctRecoil,
+        'depthRateCombo':     parsed.depthRateCombo,
+        'correctPosture':     parsed.correctPosture,
+        'leaningCount':       parsed.leaningCount,
+        'overForceCount':     parsed.overForceCount,
+        'tooDeepCount':       parsed.tooDeepCount,
         'currentMode':        parsed.currentMode,
         // Fields needed so the watchdog-synthesised SESSION_END has real values:
         'peakDepth':          _latchedLastPeakDepthCm > 0 ? _latchedLastPeakDepthCm : _lastRecordedPeakDepth,

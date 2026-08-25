@@ -57,61 +57,6 @@ class _VDivider extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final String   value;
-  final String?  note;
-  final Color    iconColor;
-  final Color?   valueColor;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.note,
-    this.iconColor  = AppColors.primary,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        children: [
-          Container(
-            width:  AppSpacing.iconLg,
-            height: AppSpacing.iconLg,
-            decoration: AppDecorations.iconRounded(
-              bg:     iconColor.withValues(alpha: 0.10),
-              radius: AppSpacing.cardRadiusSm,
-            ),
-            child: Icon(icon, color: iconColor, size: AppSpacing.iconSm),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: AppTypography.bodyMedium(size: 13)),
-                if (note != null)
-                  Text(note!,
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled)),
-              ],
-            ),
-          ),
-          Text(value,
-              style: AppTypography.bodyBold(
-                  size: 14,
-                  color: valueColor ?? AppColors.textPrimary)),
-        ],
-      ),
-    );
-  }
-}
-
 class _NoteCard extends StatelessWidget {
   final String?      note;
   final bool         canEdit;
@@ -182,70 +127,6 @@ class _UnsyncedBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SaveSessionBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppDecorations.primaryCard(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Save this session',
-              style: AppTypography.subheading(size: 13)),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'This session was conducted without an account. Sign in to save it permanently.',
-            style: AppTypography.caption(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textOnDark,
-                shape: RoundedRectangleBorder(
-                    borderRadius:
-                    BorderRadius.circular(AppSpacing.buttonRadius)),
-              ),
-              onPressed: () => context.push(const LoginScreen()),
-              child: Text('Log In / Sign Up',
-                  style: AppTypography.buttonPrimary()),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExportButton extends StatelessWidget {
-  final VoidCallback onTap;
-  final String       label;
-  const _ExportButton({required this.onTap, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        icon:  const Icon(Icons.upload_file_outlined,
-            size: AppSpacing.iconSm, color: AppColors.primary),
-        label: Text(label, style: AppTypography.buttonSecondary()),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.primary),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppSpacing.buttonRadius)),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        ),
-        onPressed: onTap,
       ),
     );
   }

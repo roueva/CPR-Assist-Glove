@@ -38,12 +38,8 @@ class _EmergencySummaryTab extends ConsumerWidget {
     final avgDepth        = d?.averageDepth      ?? s?.averageDepth      ?? 0.0;
     final avgFreq         = d?.averageFrequency  ?? s?.averageFrequency  ?? 0.0;
     final unplannedTime      = d?.unplannedPauseTime ?? 0.0;
-    final handsOnPct      = d?.handsOnPct        ?? '—';
-    final handsOnOk       = (d?.handsOnRatio     ?? 0) >= 0.60;
     final unplannedCount = d?.unplannedPauseCount ?? 0;
     final noFlowSecs     = d?.noFlowTime ?? 0.0;
-    final handsDouble     = double.tryParse(
-        handsOnPct.replaceAll('%', '').trim()) ?? 0.0;
 
     final depthOk   = avgDepth >= targetDepthMin && avgDepth <= targetDepthMax;
     final depthHigh = avgDepth > targetDepthMax;
@@ -55,15 +51,6 @@ class _EmergencySummaryTab extends ConsumerWidget {
         : ttf <= 20  ? AppColors.warning
         : AppColors.error;
     final ttfValue = ttf > 0 ? '${ttf.toStringAsFixed(1)} s' : '—';
-
-    final effectiveCprTime = d != null
-        ? d.sessionDuration - d.noFlowTime
-        : 0.0;
-    final effectiveSecs = effectiveCprTime.round();
-    final effectiveFormatted =
-        '${effectiveSecs ~/ 60}:${(effectiveSecs % 60).toString().padLeft(2, '0')}';
-
-    final ttfOk = ttf > 0 && ttf <= 10;
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -241,7 +228,7 @@ class _EmergencyPatientTab extends StatelessWidget {
           // ── RESCUER VITALS ────────────────────────────────────────────
           if (d != null && (rescuerHR != null || rescuerSpO2 != null ||
               d.rescuerVitals.isNotEmpty)) ...[
-            _EmergencySectionHeader(
+            const _EmergencySectionHeader(
               icon:      Icons.watch_rounded,
               iconColor: AppColors.primaryAlt,
               title:     'Rescuer',
@@ -471,9 +458,6 @@ class _PatientVitalsGrid extends StatelessWidget {
             (p) => p.detected,
         orElse: () => detail.pulseChecks.last)
         : null;
-    final detectedAtNumber = (detectedCheck != null && detectedCheck.detected)
-        ? detectedCheck.intervalNumber : null;
-
     final detectedAtTime = (detectedCheck != null && detectedCheck.detected)
         ? () {
       final abs = detail.sessionStart.add(
@@ -538,7 +522,7 @@ class _PatientVitalsGrid extends StatelessWidget {
                       text: TextSpan(children: [
                         TextSpan(
                           text: detected && bpm != null
-                              ? bpm!.round().toString() : '—',
+                              ? bpm.round().toString() : '—',
                           style: AppTypography.numericDisplay(
                               size: 28, color: pulseColor),
                         ),
@@ -663,27 +647,6 @@ class _PulseDetailDialog extends StatelessWidget {
     final lastCheck = detail.pulseChecks.isNotEmpty
         ? detail.pulseChecks.last : null;
 
-    final lastPi = lastCheck?.perfusionIndex ?? 0;
-    final piColor = lastPi <= 0      ? AppColors.textDisabled
-        : lastPi >= 40               ? AppColors.success
-        : lastPi >= 20               ? AppColors.warning
-        :                              AppColors.error;
-    final piLabel = lastPi <= 0      ? '—'
-        : lastPi >= 40               ? 'Good'
-        : lastPi >= 20               ? 'Reduced'
-        :                              'Poor';
-
-    final lastSpo2 = lastCheck?.patientSpO2 ?? 0.0;
-    final spo2Val  = lastSpo2 > 0 ? lastSpo2 : spo2;
-    final effectiveSpo2Color = spo2Val == null ? AppColors.textDisabled
-        : spo2Val >= 95              ? AppColors.success
-        : spo2Val >= 90              ? AppColors.warning
-        :                              AppColors.error;
-    final spo2Label = spo2Val == null ? '—'
-        : spo2Val >= 95              ? 'Normal'
-        : spo2Val >= 90              ? 'Low-normal'
-        :                              'Low';
-
     final confColor = lastCheck == null || lastCheck.confidence == 0
         ? AppColors.textDisabled
         : lastCheck.confidence >= 80 ? AppColors.success
@@ -727,7 +690,7 @@ class _PulseDetailDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1013,63 +976,6 @@ class _PulseDetailDialog extends StatelessWidget {
   }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _MiniMetricTile — compact metric display used inside _PulseDetailDialog hero
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MiniMetricTile extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final String   value;
-  final String   sub;
-  final Color    color;
-
-  const _MiniMetricTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical:   AppSpacing.sm),
-        decoration: AppDecorations.tintedCard(radius: AppSpacing.cardRadiusMd),
-        child: Row(
-          children: [
-            Icon(icon, size: AppSpacing.iconXs, color: AppColors.textDisabled),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: AppTypography.caption(
-                          color: AppColors.textSecondary),
-                      overflow: TextOverflow.ellipsis),
-                  Text(value,
-                      style: AppTypography.bodyBold(size: 13, color: color),
-                      overflow: TextOverflow.ellipsis),
-                  Text(sub,
-                      style: AppTypography.caption(
-                          color: color.withValues(alpha: 0.70)),
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // _PerfusionIndexDialog
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1130,7 +1036,7 @@ class _PerfusionIndexDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1311,7 +1217,7 @@ class _PatientSkinTempDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1462,426 +1368,6 @@ Widget _buildRangeRow(String range, String meaning, Color color,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _PulseChecksSection
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PulseChecksSection extends StatelessWidget {
-  final SessionDetail detail;
-  const _PulseChecksSection({required this.detail});
-
-  @override
-  Widget build(BuildContext context) {
-    final detected = detail.pulseDetectedFinal;
-    final color    = detected ? AppColors.success : AppColors.textSecondary;
-    final lastCheck = detail.pulseChecks.isNotEmpty
-        ? detail.pulseChecks.last : null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        // ── Final outcome banner ────────────────────────────────────────
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadiusMd),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                detected
-                    ? Icons.favorite_rounded
-                    : Icons.heart_broken_rounded,
-                color: color, size: AppSpacing.iconSm,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  detected ? 'Pulse Detected' : 'No Pulse Detected',
-                  style: AppTypography.subheading(
-                      size: 14, color: color),
-                ),
-              ),
-              if (lastCheck != null && lastCheck.detectedBpm > 0)
-                Text(
-                  '${lastCheck.detectedBpm.round()} bpm',
-                  style: AppTypography.numericDisplay(
-                      size: 18, color: color),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-
-        // ── Individual checks ───────────────────────────────────────────
-        ...detail.pulseChecks.map((pc) {
-          final c = pc.detected    ? AppColors.success
-              : pc.isUncertain     ? AppColors.warning
-              :                      AppColors.textSecondary;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-            child: _DetailRow(
-              icon:       Icons.sensors_rounded,
-              label:      'Check #${pc.intervalNumber}',
-              value:      pc.detected   ? 'Present'
-                  : pc.isUncertain      ? 'Uncertain'
-                  :                       'Absent',
-              note:       pc.detectedBpm > 0
-                  ? '${pc.detectedBpm.toStringAsFixed(0)} bpm · ${pc.confidence}% confidence'
-                  : null,
-              iconColor:  c,
-              valueColor: c,
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _PatientEnvironmentSection
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PatientEnvironmentSection extends StatelessWidget {
-  final SessionDetail detail;
-  final bool          isPediatric;
-  const _PatientEnvironmentSection({
-    required this.detail,
-    required this.isPediatric,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _DetailRow(
-          icon:      Icons.person_outline_rounded,
-          label:     'Patient Type',
-          value:     isPediatric ? 'Pediatric' : 'Adult',
-          iconColor: AppColors.primary,
-        ),
-        if (detail.patientTemperature != null)
-          _DetailRow(
-            icon:      Icons.thermostat_rounded,
-            label:     'Patient Skin Temperature',
-            value:     '${detail.patientTemperature!.toStringAsFixed(1)} °C',
-            note: 'Glove sensor, carotid contact',
-            iconColor: AppColors.error,
-          ),
-      ],
-    );
-  }
-}
-
-class _EmergencyTile extends StatelessWidget {
-  final String  label;
-  final String  value;
-  final bool    ok;
-  final String? note;
-
-  const _EmergencyTile({
-    required this.label,
-    required this.value,
-    required this.ok,
-    this.note,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = ok ? AppColors.feedbackGood : AppColors.warning;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.sm, horizontal: AppSpacing.sm),
-        decoration: AppDecorations.chip(
-          color: color,
-          bg:    AppColors.textOnDark.withValues(alpha: 0.10),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: AppTypography.poppins(
-                    size: 20, weight: FontWeight.w700, color: color)),
-            const SizedBox(height: AppSpacing.xxs),
-            Text(label, textAlign: TextAlign.center,
-                style: AppTypography.badge(
-                    size: 8, color: AppColors.textOnDark.withValues(alpha: 0.7))),
-            if (note != null)
-              Text(note!, textAlign: TextAlign.center,
-                  style: AppTypography.caption(
-                      color: AppColors.textOnDark.withValues(alpha: 0.55))),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class _WaveformPainter extends CustomPainter {
-  final Color color;
-  final bool  active;
-  const _WaveformPainter({required this.color, required this.active});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = active ? color.withValues(alpha: 0.7) : color.withValues(alpha: 0.25)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final w = size.width;
-    final h = size.height;
-    final mid = h / 2;
-
-    // A single representative PPG-like waveform cycle, repeated 3 times
-    final path = Path();
-    path.moveTo(0, mid);
-
-    // Repeat the pattern across width
-    final cycles = 3;
-    final cycleW = w / cycles;
-
-    for (int i = 0; i < cycles; i++) {
-      final x0 = i * cycleW;
-      // Flat baseline
-      path.lineTo(x0 + cycleW * 0.25, mid);
-      // Upstroke
-      path.cubicTo(
-        x0 + cycleW * 0.30, mid,
-        x0 + cycleW * 0.35, mid - h * 0.7,
-        x0 + cycleW * 0.40, mid - h * 0.85,
-      );
-      // Peak and downstroke with dicrotic notch
-      path.cubicTo(
-        x0 + cycleW * 0.45, mid - h * 0.7,
-        x0 + cycleW * 0.50, mid - h * 0.1,
-        x0 + cycleW * 0.55, mid - h * 0.2,
-      );
-      path.cubicTo(
-        x0 + cycleW * 0.58, mid - h * 0.15,
-        x0 + cycleW * 0.60, mid - h * 0.05,
-        x0 + cycleW * 0.65, mid,
-      );
-      // Return to baseline
-      path.lineTo(x0 + cycleW, mid);
-    }
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_WaveformPainter old) =>
-      old.color != color || old.active != active;
-}
-
-// ── Small info chip ──────────────────────────────────────────────────────────
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final Color    color;
-  const _InfoChip({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xxs + 1,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: AppTypography.badge(size: 10, color: color)),
-        ],
-      ),
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Content sections
-// ═════════════════════════════════════════════════════════════════════════════
-
-
-class _VentilationSection extends StatelessWidget {
-  final SessionDetail detail;
-  const _VentilationSection({required this.detail});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _DetailRow(
-          icon:  Icons.air_rounded,
-          label: 'Ventilation Cycles',
-          value: '${detail.ventilationCount}',
-        ),
-        _DetailRow(
-          icon:       Icons.check_circle_outline_rounded,
-          label:      'Compliance',
-          value:      '${detail.ventilationCompliance.round()}%',
-          valueColor: detail.ventilationCompliance >= 80
-              ? AppColors.success : AppColors.warning,
-        ),
-        _DetailRow(
-          icon:  Icons.vaccines_rounded,
-          label: 'Correct Ventilations',
-          value: '${detail.correctVentilations}',
-        ),
-      ],
-    );
-  }
-}
-
-class _EmergencyQualitySection extends StatelessWidget {
-  final SessionDetail? detail;
-  final int            compressionCount;
-  final String         targetDepthLabel;
-  final double         targetDepthMin;
-  final double         targetDepthMax;
-  final double         averageDepth;
-  final double         averageFrequency;
-  final int            correctRecoil;
-
-  const _EmergencyQualitySection({
-    required this.detail,
-    required this.compressionCount,
-    required this.targetDepthLabel,
-    required this.targetDepthMin,
-    required this.targetDepthMax,
-    required this.averageDepth,
-    required this.averageFrequency,
-    required this.correctRecoil,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _DetailRow(
-          icon:  Icons.compress_rounded,
-          label: 'Average Depth',
-          value: averageDepth > 0 ? '${averageDepth.toStringAsFixed(1)} cm' : '—',
-          note:  'Target: $targetDepthLabel',
-          valueColor: averageDepth >= targetDepthMin && averageDepth <= targetDepthMax
-              ? AppColors.success : AppColors.warning,
-        ),
-        _DetailRow(
-          icon:  Icons.speed_rounded,
-          label: 'Average Rate',
-          value: averageFrequency > 0 ? '${averageFrequency.round()} BPM' : '—',
-          note:  'Target: 100–120 BPM',
-          valueColor: averageFrequency >= CprTargets.rateMin &&
-              averageFrequency <= CprTargets.rateMax
-              ? AppColors.success : AppColors.warning,
-        ),
-        _DetailRow(
-          icon:       Icons.touch_app_outlined,
-          label:      'Chest Compression Fraction',
-          value:      detail?.handsOnPct ?? '—',
-          note:       'Target ≥ 60% (AHA 2025)',
-          valueColor: (detail?.handsOnRatio ?? 0) >= 0.60
-              ? AppColors.success : AppColors.warning,
-        ),
-        _DetailRow(
-          icon:  Icons.sync_rounded,
-          label: 'Full Recoil',
-          value: compressionCount > 0
-              ? '${(correctRecoil / compressionCount * 100).round()}%' : '—',
-          note:  'Compressions with complete decompression',
-          valueColor: compressionCount > 0 &&
-              (correctRecoil / compressionCount) >= 0.80
-              ? AppColors.success : AppColors.warning,
-        ),
-        if ((detail?.noFlowTime ?? 0) > 0)
-          _DetailRow(
-            icon:       Icons.pause_circle_outline_rounded,
-            label:      'No-Flow Time',
-            value:      '${detail!.noFlowTime.toStringAsFixed(1)}s',
-            note:       'Includes ventilation & pulse-check pauses',
-            valueColor: AppColors.textPrimary,
-          ),
-        if ((detail?.leaningCount ?? 0) > 0)
-          _DetailRow(
-            icon:       Icons.warning_amber_rounded,
-            label:      'Leaning Events',
-            value:      '${detail!.leaningCount}×',
-            note:       'Incomplete decompression',
-            iconColor:  AppColors.warning,
-            valueColor: AppColors.warning,
-          ),
-      ],
-    );
-  }
-}
-
-class _BiometricsSection extends StatelessWidget {
-  final SessionDetail?  detail;
-  final SessionSummary? summary;
-  final double?         rescuerHR;
-  final double?         rescuerSpO2;
-
-  const _BiometricsSection({
-    required this.detail,
-    required this.summary,
-    required this.rescuerHR,
-    required this.rescuerSpO2,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final patientTemp = detail?.patientTemperature ?? summary?.patientTemperature;
-    return Column(
-      children: [
-        if (rescuerHR != null)
-          _DetailRow(
-            icon:      Icons.monitor_heart_outlined,
-            label:     'Rescuer HR (last pause)',
-            value:     '${rescuerHR!.toStringAsFixed(0)} bpm',
-            iconColor: AppColors.primary,
-          ),
-        if (rescuerSpO2 != null)
-          _DetailRow(
-            icon:  Icons.air_rounded,
-            label: 'Rescuer SpO₂ (last pause)',
-            value: '${rescuerSpO2!.toStringAsFixed(0)}%',
-          ),
-        if (patientTemp != null)
-          _DetailRow(
-            icon:      Icons.thermostat_rounded,
-            label:     'Patient Skin Temperature',
-            value:     '${patientTemp.toStringAsFixed(1)}°C',
-            note: 'Glove sensor, carotid contact',
-            iconColor: AppColors.error,
-          ),
-        if (detail?.rescuerWristTempStart != null)
-          _DetailRow(
-            icon:      Icons.thermostat_rounded,
-            label:     'Room Temperature',
-            value:     '${detail!.rescuerWristTempStart!.toStringAsFixed(1)}°C',
-            note:      'Rescuer wrist temp at session start',
-            iconColor: AppColors.textSecondary,
-          ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // _OutcomeHeartIcon — single-beat animation on ROSC
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2027,30 +1513,6 @@ class _PpgResultPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PpgResultPainter old) =>
       old.samples != samples || old.color != color;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _SyntheticPpgWave — fallback when no real samples stored
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SyntheticPpgWave extends StatelessWidget {
-  final Color  color;
-  final bool   detected;
-  final double bpm;
-
-  const _SyntheticPpgWave({
-    required this.color,
-    required this.detected,
-    required this.bpm,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _WaveformPainter(color: color, active: detected),
-      size: const Size(double.infinity, 56),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

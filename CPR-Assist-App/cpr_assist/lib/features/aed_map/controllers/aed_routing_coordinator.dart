@@ -292,7 +292,7 @@ class AEDRoutingCoordinator {
               .read(mapStateProvider.notifier)
               .updateUserLocation(currentLocation);
           debugPrint('✅ Got fresh HIGH accuracy location: $currentLocation');
-          UIHelper.clearSnackbars(context);
+          if (context.mounted) UIHelper.clearSnackbars(context);
         }
       } catch (e) {
         debugPrint('⚠️ Error getting fresh location: $e');

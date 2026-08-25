@@ -80,7 +80,7 @@ final _kTextPrimary  = _pdf(AppColors.textPrimary);
 final _kTextSecond   = _pdf(AppColors.textSecondary);
 final _kTextDisabled = _pdf(AppColors.textDisabled);
 final _kDivider      = _pdf(AppColors.divider);
-final _kWhite        = PdfColors.white;
+const _kWhite        = PdfColors.white;
 final _kBgGrey       = _pdf(AppColors.screenBgGrey);
 
 class ExportService {
@@ -96,7 +96,7 @@ class ExportService {
       final bytes = await _buildSingleSessionPdf(detail,
           username: username, sessionNumber: sessionNumber);
       final name  = 'cpr_session_${_stamp(detail.sessionStart)}.pdf';
-      return _shareFile(bytes, name, 'CPR Assist — Session Report', 'application/pdf');
+      return await _shareFile(bytes, name, 'CPR Assist — Session Report', 'application/pdf');
     } catch (e) { debugPrint('ExportService PDF single share: $e'); return false; }
   }
 
@@ -106,7 +106,7 @@ class ExportService {
       final bytes = await _buildSingleSessionPdf(detail,
           username: username, sessionNumber: sessionNumber);
       final name  = 'cpr_session_${_stamp(detail.sessionStart)}.pdf';
-      return _saveToDevice(bytes, name);
+      return await _saveToDevice(bytes, name);
     } catch (e) { debugPrint('ExportService PDF single download: $e'); return false; }
   }
 
@@ -116,7 +116,7 @@ class ExportService {
     try {
       final bytes = await _buildMultiSessionPdf(sessions, username: username, details: details);
       final name  = 'cpr_sessions_${sessions.length}_${_dateStamp()}.pdf';
-      return _shareFile(bytes, name, 'CPR Assist — Session History Report', 'application/pdf');
+      return await _shareFile(bytes, name, 'CPR Assist — Session History Report', 'application/pdf');
     } catch (e) { debugPrint('ExportService PDF multi share: $e'); return false; }
   }
 
@@ -126,7 +126,7 @@ class ExportService {
     try {
       final bytes = await _buildMultiSessionPdf(sessions, username: username, details: details);
       final name  = 'cpr_sessions_${sessions.length}_${_dateStamp()}.pdf';
-      return _saveToDevice(bytes, name);
+      return await _saveToDevice(bytes, name);
     } catch (e) { debugPrint('ExportService PDF multi download: $e'); return false; }
   }
 
@@ -137,7 +137,7 @@ class ExportService {
     try {
       final bytes = await _buildCertificatePdf(username: username, milestone: milestone);
       final name  = 'cpr_cert_${milestone.id}_${_dateStamp()}.pdf';
-      return _shareFile(bytes, name, 'CPR Assist — ${milestone.title} Certificate', 'application/pdf');
+      return await _shareFile(bytes, name, 'CPR Assist — ${milestone.title} Certificate', 'application/pdf');
     } catch (e) { debugPrint('ExportService certificate: $e'); return false; }
   }
 
@@ -152,7 +152,7 @@ class ExportService {
     try {
       final csv = _buildSingleSessionMetricsCsv(s, detail: detail);
       final name = 'cpr_session_metrics_${_stamp(s.sessionStart)}.csv';
-      return _shareFile(
+      return await _shareFile(
         _csvBytes(csv),
         name,
         'CPR Assist — Session Metrics',
@@ -171,7 +171,7 @@ class ExportService {
     try {
       final csv = _buildSingleSessionMetricsCsv(s, detail: detail);
       final name = 'cpr_session_metrics_${_stamp(s.sessionStart)}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) {
       debugPrint('ExportService single metrics CSV download: $e');
       return false;
@@ -184,7 +184,7 @@ class ExportService {
     try {
       final csv  = _buildSummaryCsv(sessions);
       final name = '${filename}_${_dateStamp()}.csv';
-      return _shareFile(_csvBytes(csv), name, 'CPR Assist — Session Data', 'text/csv');
+      return await _shareFile(_csvBytes(csv), name, 'CPR Assist — Session Data', 'text/csv');
     } catch (e) { debugPrint('ExportService CSV share: $e'); return false; }
   }
 
@@ -194,7 +194,7 @@ class ExportService {
     try {
       final csv  = _buildSummaryCsv(sessions);
       final name = '${filename}_${_dateStamp()}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService CSV download: $e'); return false; }
   }
 
@@ -207,7 +207,7 @@ class ExportService {
     try {
       final csv  = _buildCompressionsCsv(d);
       final name = 'cpr_compressions_${_stamp(d.sessionStart)}.csv';
-      return _shareFile(_csvBytes(csv), name, 'CPR Assist — Raw Compressions', 'text/csv');
+      return await _shareFile(_csvBytes(csv), name, 'CPR Assist — Raw Compressions', 'text/csv');
     } catch (e) { debugPrint('ExportService compressions share: $e'); return false; }
   }
 
@@ -216,7 +216,7 @@ class ExportService {
     try {
       final csv  = _buildCompressionsCsv(d);
       final name = 'cpr_compressions_${_stamp(d.sessionStart)}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService compressions download: $e'); return false; }
   }
 
@@ -225,7 +225,7 @@ class ExportService {
     try {
       final csv  = _buildRescuerVitalsCsv(d);
       final name = 'cpr_rescuer_vitals_${_stamp(d.sessionStart)}.csv';
-      return _shareFile(_csvBytes(csv), name, 'CPR Assist — Rescuer Vitals', 'text/csv');
+      return await _shareFile(_csvBytes(csv), name, 'CPR Assist — Rescuer Vitals', 'text/csv');
     } catch (e) { debugPrint('ExportService vitals share: $e'); return false; }
   }
 
@@ -234,7 +234,7 @@ class ExportService {
     try {
       final csv  = _buildRescuerVitalsCsv(d);
       final name = 'cpr_rescuer_vitals_${_stamp(d.sessionStart)}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService vitals download: $e'); return false; }
   }
 
@@ -243,7 +243,7 @@ class ExportService {
     try {
       final csv  = _buildVentilationsCsv(d);
       final name = 'cpr_ventilations_${_stamp(d.sessionStart)}.csv';
-      return _shareFile(_csvBytes(csv), name, 'CPR Assist — Ventilations', 'text/csv');
+      return await _shareFile(_csvBytes(csv), name, 'CPR Assist — Ventilations', 'text/csv');
     } catch (e) { debugPrint('ExportService ventilations share: $e'); return false; }
   }
 
@@ -252,7 +252,7 @@ class ExportService {
     try {
       final csv  = _buildVentilationsCsv(d);
       final name = 'cpr_ventilations_${_stamp(d.sessionStart)}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService ventilations download: $e'); return false; }
   }
 
@@ -261,7 +261,7 @@ class ExportService {
     try {
       final csv  = _buildPulseChecksCsv(d);
       final name = 'cpr_pulse_checks_${_stamp(d.sessionStart)}.csv';
-      return _shareFile(_csvBytes(csv), name, 'CPR Assist — Pulse Checks', 'text/csv');
+      return await _shareFile(_csvBytes(csv), name, 'CPR Assist — Pulse Checks', 'text/csv');
     } catch (e) { debugPrint('ExportService pulse checks share: $e'); return false; }
   }
 
@@ -270,7 +270,7 @@ class ExportService {
     try {
       final csv  = _buildPulseChecksCsv(d);
       final name = 'cpr_pulse_checks_${_stamp(d.sessionStart)}.csv';
-      return _saveToDevice(_csvBytes(csv), name);
+      return await _saveToDevice(_csvBytes(csv), name);
     } catch (e) { debugPrint('ExportService pulse checks download: $e'); return false; }
   }
 
@@ -283,7 +283,7 @@ class ExportService {
       final bytes = await _buildRawDataZip(d);
       if (bytes == null) return false;
       final name = 'cpr_raw_${_stamp(d.sessionStart)}.zip';
-      return _shareFile(bytes, name, 'CPR Assist — Raw Session Data', 'application/zip');
+      return await _shareFile(bytes, name, 'CPR Assist — Raw Session Data', 'application/zip');
     } catch (e) { debugPrint('ExportService ZIP share: $e'); return false; }
   }
 
@@ -292,7 +292,7 @@ class ExportService {
       final bytes = await _buildRawDataZip(d);
       if (bytes == null) return false;
       final name = 'cpr_raw_${_stamp(d.sessionStart)}.zip';
-      return _saveToDevice(bytes, name);
+      return await _saveToDevice(bytes, name);
     } catch (e) { debugPrint('ExportService ZIP download: $e'); return false; }
   }
 
@@ -2224,8 +2224,8 @@ class ExportService {
     final posturePct = s.compressionCount > 0
         ? (s.correctPosture  / n * 100).clamp(0.0, 100.0) : 0.0;
 
-    print('[PDF] sessionStart = ${s.sessionStart}');
-    print('[PDF] dateTimeFormatted = ${s.dateTimeFormatted}');
+    debugPrint('[PDF] sessionStart = ${s.sessionStart}');
+    debugPrint('[PDF] dateTimeFormatted = ${s.dateTimeFormatted}');
     debugPrint('PDF note: ${s.note}');
 
     doc.addPage(pw.MultiPage(
@@ -2543,90 +2543,6 @@ class ExportService {
     return doc.save();
   }
 
-
-  static pw.Widget _buildVerdictCard(
-      pw.Font bold, pw.Font medium, pw.Font font,
-      double depthPct, double ratePct,
-      double recoilPct, double posturePct,
-      double depthMin, double depthMax) {
-
-    final dims = <(String, double, String)>[
-      ('Depth',   depthPct,
-      'Aim for ${depthMin.toStringAsFixed(0)}–${depthMax.toStringAsFixed(0)} cm — '
-          'press firmly and let the chest fully rebound.'),
-      ('Rate',    ratePct,
-      'Aim for 100–120 BPM — try a metronome or sing '
-          '"Stayin\' Alive" at 1 beat per compression.'),
-      ('Recoil',  recoilPct,
-      'Release fully between compressions — lift your '
-          'palms an extra centimetre before pressing down again.'),
-      ('Posture', posturePct,
-      'Keep shoulders directly over your wrists. '
-          'Lock your elbows and use your bodyweight, not your arms.'),
-    ]..sort((a, b) => a.$2.compareTo(b.$2));
-
-    final weakest = dims.first;
-    final color   = _pctColor(weakest.$2 / 100);
-    final bg      = color.shade(0.85);
-
-    if (weakest.$2 >= 80) {
-      // Strong all-round — encouragement instead
-      return pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: pw.BoxDecoration(
-          color: _kSuccessLight,
-          borderRadius: pw.BorderRadius.circular(10),
-        ),
-        child: pw.Row(children: [
-          pw.Container(width: 4, height: 32,
-              decoration: pw.BoxDecoration(color: _kSuccess,
-                  borderRadius: pw.BorderRadius.circular(2))),
-          pw.SizedBox(width: 10),
-          pw.Expanded(child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Strong performance across all metrics',
-                  style: pw.TextStyle(font: bold, fontSize: 11, color: _kSuccess)),
-              pw.SizedBox(height: 2),
-              pw.Text('Consistent quality — keep practising at this level.',
-                  style: pw.TextStyle(font: font, fontSize: 9, color: _kTextSecond)),
-            ],
-          )),
-        ]),
-      );
-    }
-
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: pw.BoxDecoration(
-        color: bg,
-        borderRadius: pw.BorderRadius.circular(10),
-      ),
-      child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Container(width: 4, height: 44,
-            decoration: pw.BoxDecoration(color: color,
-                borderRadius: pw.BorderRadius.circular(2))),
-        pw.SizedBox(width: 10),
-        pw.Expanded(child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(children: [
-              pw.Text('What to work on next: ',
-                  style: pw.TextStyle(font: bold, fontSize: 11, color: _kTextPrimary)),
-              pw.Text('${weakest.$1} (${weakest.$2.toStringAsFixed(0)}%)',
-                  style: pw.TextStyle(font: bold, fontSize: 11, color: color)),
-            ]),
-            pw.SizedBox(height: 3),
-            pw.Text(weakest.$3,
-                style: pw.TextStyle(font: font, fontSize: 9, color: _kTextSecond)),
-          ],
-        )),
-      ]),
-    );
-  }
-
   static pw.Widget _buildMethodologyBox(pw.Font font, pw.Font bold) {
     pw.Widget item(String k, String v) => pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 3),
@@ -2687,10 +2603,6 @@ class ExportService {
         base: roboto, bold: robotoBold, fontFallback: [noto]);
 
     final trainingSessions  = sessions.where((s) => s.isTraining && s.totalGrade > 0).toList();
-    final emergencySessions = sessions.where((s) => s.isEmergency).toList();
-    final totalCompressions = sessions.fold<int>(0, (sum, s) => sum + s.compressionCount);
-    final adultSessions     = sessions.where((s) => s.scenario != 'pediatric').length;
-    final pediatricSessions = sessions.length - adultSessions;
 
     final avgGrade   = trainingSessions.isEmpty ? 0.0
         : trainingSessions.map((s) => s.totalGrade).reduce((a, b) => a + b)
@@ -2703,12 +2615,6 @@ class ExportService {
     final trendDelta = trainingSessions.length >= 2
         ? trainingSessions.last.totalGrade - trainingSessions.first.totalGrade
         : 0.0;
-
-    final avgCCF = trainingSessions.isEmpty ? 0.0
-        : trainingSessions.map((s) => s.handsOnRatio).reduce((a, b) => a + b)
-        / trainingSessions.length;
-
-    final roscCount = emergencySessions.where((s) => s.pulseDetectedFinal).length;
 
     final sortedByDate = [...sessions]
       ..sort((a, b) => (a.sessionStart ?? DateTime(2000))
@@ -3141,21 +3047,6 @@ class ExportService {
       ],
     );
   }
-
-// ── Pill helper ────────────────────────────────────────────────────────────────
-  static pw.Widget _pill(pw.Font bold, String label, PdfColor color, PdfColor bg) {
-    return pw.ClipRRect(
-      horizontalRadius: 999,
-      verticalRadius: 999,
-      child: pw.Container(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        color: bg,
-        child: pw.Text(label,
-            style: pw.TextStyle(font: bold, fontSize: 8, color: color)),
-      ),
-    );
-  }
-  // ── Page footer ────────────────────────────────────────────────────────────
 
   static pw.Widget _pageFooter(pw.Font font, pw.Context ctx) {
     return pw.Container(
@@ -3621,7 +3512,7 @@ class ExportService {
 
                 else if (lastCheck != null && lastCheck.detectedBpm > 0)
                   statPill('Detected BPM',
-                      '${lastCheck.detectedBpm.toStringAsFixed(0)}', _kSuccess)
+                      lastCheck.detectedBpm.toStringAsFixed(0), _kSuccess)
                 else
                   statPill('CCF', '${(s.handsOnRatio * 100).round()}%', _kWhite),
               ],
@@ -3631,97 +3522,6 @@ class ExportService {
       ),
     );
   }
-
-  // ── Emergency outcome hero ─────────────────────────────────────────────────
-
-  static pw.Widget _emergencyOutcomeHero(
-      pw.Font bold, pw.Font medium, SessionDetail s) {
-    final rosc       = s.pulseDetectedFinal;
-    final hadChecks  = s.pulseChecks.isNotEmpty;
-    final outcomeText = rosc ? 'ROSC DETECTED'
-        : hadChecks ? 'NO ROSC'
-        : 'NO PULSE DATA';
-    final headerBg = rosc ? _kEmgGreen : _kBrandDark;
-
-    return pw.Container(
-      width: double.infinity,
-      decoration: pw.BoxDecoration(
-          color:        headerBg,
-          borderRadius: pw.BorderRadius.circular(12)),
-      child: pw.Row(children: [
-        pw.Container(
-          width: 120,
-          padding: const pw.EdgeInsets.all(16),
-          child: pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-            pw.Text(outcomeText, style: pw.TextStyle(
-                font: bold, fontSize: 13, color: _kWhite),
-                textAlign: pw.TextAlign.center),
-            pw.SizedBox(height: 4),
-            pw.Text('Emergency Outcome', style: pw.TextStyle(
-                font: medium, fontSize: 8, color: _kWhite.shade(0.7)),
-                textAlign: pw.TextAlign.center),
-          ]),
-        ),
-        pw.Container(width: 1, height: 60, color: _kWhite.shade(0.2)),
-        pw.SizedBox(width: 16),
-        pw.Expanded(
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-            children: [
-              _miniStat(bold, medium, '${s.compressionCount}', 'Compressions'),
-              _miniStat(bold, medium, '${s.pulseChecksPrompted}', 'Pulse Checks'),
-              _miniStat(bold, medium, s.durationFormatted, 'Duration'),
-              if (s.patientTemperature != null)
-                _miniStat(bold, medium,
-                    '${s.patientTemperature!.toStringAsFixed(1)} °C', 'Patient Temp'),
-            ],
-          ),
-        ),
-        pw.SizedBox(width: 16),
-      ]),
-    );
-  }
-
-  static pw.Widget _miniStat(pw.Font bold, pw.Font medium, String value, String label) =>
-      pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-        pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 16, color: _kWhite)),
-        pw.SizedBox(height: 2),
-        pw.Text(label, style: pw.TextStyle(font: medium, fontSize: 7, color: _kWhite.shade(0.65)),
-            textAlign: pw.TextAlign.center),
-      ]);
-
-  // ── Summary strip ──────────────────────────────────────────────────────────
-
-  static pw.Widget _summaryStrip(
-      pw.Font bold, pw.Font medium, List<_Cell> cells) {
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-          color: _kBrandDark, borderRadius: pw.BorderRadius.circular(10)),
-      child: pw.Row(
-        children: cells.map((c) {
-          final isLast = cells.last == c;
-          return pw.Expanded(
-            child: pw.Container(
-              padding: const pw.EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-              decoration: pw.BoxDecoration(
-                  border: isLast ? null : pw.Border(
-                      right: pw.BorderSide(color: _kWhite, width: 0.15))),
-              child: pw.Column(children: [
-                pw.Text(c.value, style: pw.TextStyle(
-                    font: bold, fontSize: 18, color: _kWhite),
-                    textAlign: pw.TextAlign.center),
-                pw.SizedBox(height: 3),
-                pw.Text(c.label, style: pw.TextStyle(
-                    font: medium, fontSize: 8, color: _kWhite.shade(0.6)),
-                    textAlign: pw.TextAlign.center),
-              ]),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
 
 // ── Quality bar table — horizontal proportion bars per metric ──────────────
 
@@ -3927,118 +3727,6 @@ class ExportService {
       ],
     );
   }
-
-  // ── Metric tile (single) ───────────────────────────────────────────────────
-//
-// Layout per tile (white card, brand-blue left accent bar):
-//   ┌──┬──────────────────────────────┐
-//   │  │ LABEL                        │
-//   │  │ VALUE • status dot           │
-//   │  │ ───────●──── (zone bar)      │
-//   │  │ target: 5–6 cm               │
-//   └──┴──────────────────────────────┘
-
-  static pw.Widget _metricTile({
-    required pw.Font   bold,
-    required pw.Font   medium,
-    required pw.Font   font,
-    required String    label,
-    required String    value,
-    required PdfColor  statusColor,
-    required String    target,
-    double?            currentVal,   // value position on zone bar
-    double?            zoneMin,      // bar full range
-    double?            zoneMax,
-    double?            targetMin,    // target band within zone
-    double?            targetMax,
-    bool               isAlert = false,
-  }) {
-    return pw.SizedBox(
-        height: 64,
-        child: pw.Container(
-          decoration: pw.BoxDecoration(
-            color: _kWhite,
-            borderRadius: pw.BorderRadius.circular(8),
-          ),
-          child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
-        // Left accent bar
-        pw.Container(width: 3,
-            decoration: pw.BoxDecoration(
-                color: statusColor,
-                borderRadius: const pw.BorderRadius.only(
-                    topLeft: pw.Radius.circular(8),
-                    bottomLeft: pw.Radius.circular(8)))),
-        pw.Expanded(
-          child: pw.Padding(
-            padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                // Label row
-                pw.Text(label.toUpperCase(),
-                    style: pw.TextStyle(font: medium, fontSize: 7,
-                        color: _kTextDisabled, letterSpacing: 0.4)),
-                pw.SizedBox(height: 2),
-                // Value + status dot
-                pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      pw.Text(value,
-                          style: pw.TextStyle(font: bold, fontSize: 15,
-                              color: isAlert ? _kError : _kTextPrimary)),
-                      pw.SizedBox(width: 6),
-                      pw.Container(width: 6, height: 6,
-                          decoration: pw.BoxDecoration(
-                              color: statusColor, shape: pw.BoxShape.circle)),
-                    ]),
-                pw.SizedBox(height: 6),
-                // Zone bar (optional)
-                if (currentVal != null && zoneMin != null && zoneMax != null)
-                  pw.SizedBox(
-                    height: 6,
-                    child: pw.CustomPaint(painter: (c, size) {
-                      // Track
-                      c.saveContext();
-                      c.setFillColor(_kDivider);
-                      c.drawRect(0, 0, size.x, size.y);
-                      c.fillPath();
-                      c.restoreContext();
-                      // Target band
-                      if (targetMin != null && targetMax != null) {
-                        final range = zoneMax - zoneMin;
-                        final tMinX = ((targetMin - zoneMin) / range)
-                            .clamp(0.0, 1.0) * size.x;
-                        final tMaxX = ((targetMax - zoneMin) / range)
-                            .clamp(0.0, 1.0) * size.x;
-                        c.saveContext();
-                        c.setFillColor(_kSuccess.shade(0.25));
-                        c.drawRect(tMinX, 0, tMaxX - tMinX, size.y);
-                        c.fillPath();
-                        c.restoreContext();
-                      }
-                      // Current value marker
-                      final range = zoneMax - zoneMin;
-                      final cx = ((currentVal - zoneMin) / range)
-                          .clamp(0.0, 1.0) * size.x;
-                      c.saveContext();
-                      c.setFillColor(statusColor);
-                      c.drawEllipse(cx, size.y / 2, 3.5, 3.5);
-                      c.fillPath();
-                      c.restoreContext();
-                    }),
-                  ),
-                if (currentVal != null) pw.SizedBox(height: 3),
-                pw.Text(target,
-                    style: pw.TextStyle(font: font, fontSize: 7,
-                        color: _kTextDisabled)),
-              ],
-            ),
-          ),
-        ),
-      ]),
-        ),
-    );
-  }
-
 // ── Headline metric grid (2 cols × 3 rows = 6 tiles) ───────────────────────
 
   static pw.Widget _buildMetricGrid(
@@ -4207,18 +3895,8 @@ class ExportService {
 
     // Unplanned pauses
     final pauseTime  = s.unplannedPauseTime;
-    final pauseLimit = AppConstants.maxAcceptablePauseSec;
+    const pauseLimit = AppConstants.maxAcceptablePauseSec;
     final pauseColor = pauseTime <= pauseLimit ? _kSuccess : _kWarning;
-
-    // ── Row helper ───────────────────────────────────────────────────────────────
-    pw.Widget row(pw.Widget a, pw.Widget b) => pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Expanded(child: a),
-        pw.SizedBox(width: 10),
-        pw.Expanded(child: b),
-      ],
-    );
 
     pw.Widget row3(pw.Widget a, pw.Widget b, pw.Widget c) => pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -4530,7 +4208,7 @@ class ExportService {
                   ),
                 ),
                 _tableCell(font,
-                    p.detectedBpm > 0 ? '${p.detectedBpm.toStringAsFixed(0)}' : '—',
+                    p.detectedBpm > 0 ? p.detectedBpm.toStringAsFixed(0) : '—',
                     align: pw.TextAlign.right),
                 _tableCell(font, '${p.confidence}%', align: pw.TextAlign.right),
                 _tableCell(font,
@@ -4553,40 +4231,48 @@ class ExportService {
 
     // Row 1: Rescuer
     final rescuerItems = <_Metric>[];
-    if (s.rescuerHRLastPause != null)
+    if (s.rescuerHRLastPause != null) {
       rescuerItems.add(_Metric('Rescuer HR (last pause)',
           '${s.rescuerHRLastPause!.toStringAsFixed(0)} BPM', _kBrandBlue));
-    if (s.rescuerSpO2LastPause != null)
+    }
+    if (s.rescuerSpO2LastPause != null) {
       rescuerItems.add(_Metric('Rescuer SpO₂ (last pause)',
           '${s.rescuerSpO2LastPause!.toStringAsFixed(0)}%', _kBrandBlue));
+    }
 
     // RMSSD from last vital snapshot with data
     final lastVitalWithRmssd = s.rescuerVitals.lastWhere(
             (v) => v.rmssd > 0, orElse: () => const RescuerVitalSnapshot(timestampMs: 0));
-    if (lastVitalWithRmssd.rmssd > 0)
+    if (lastVitalWithRmssd.rmssd > 0) {
       rescuerItems.add(_Metric('HRV RMSSD',
           '${lastVitalWithRmssd.rmssd} ms', _kBrandBlue));
+    }
     final lastFatigue = s.rescuerVitals.isEmpty ? 0
         : s.rescuerVitals.last.fatigueScore;
-    if (lastFatigue > 0)
+    if (lastFatigue > 0) {
       rescuerItems.add(_Metric('Final Fatigue Score',
           '$lastFatigue / 100',
           lastFatigue >= 70 ? _kError : lastFatigue >= 40 ? _kWarning : _kSuccess));
+    }
 
     // Row 2: Patient & environment
     final patientItems = <_Metric>[];
-    if (s.patientTemperature != null)
+    if (s.patientTemperature != null) {
       patientItems.add(_Metric('Patient Temperature',
           '${s.patientTemperature!.toStringAsFixed(1)} °C', _kTextPrimary));
-    if (patSpO2 != null)
+    }
+    if (patSpO2 != null) {
       patientItems.add(_Metric('Patient SpO₂ (best)',
           '${patSpO2.toStringAsFixed(0)}%', _kTextPrimary));
-    if (s.rescuerWristTempStart != null)
+    }
+    if (s.rescuerWristTempStart != null) {
       rescuerItems.add(_Metric('Wrist Temp (start)',
           '${s.rescuerWristTempStart!.toStringAsFixed(1)} °C', _kTextSecond));
-    if (s.rescuerWristTempEnd != null)
+    }
+    if (s.rescuerWristTempEnd != null) {
       rescuerItems.add(_Metric('Wrist Temp (end)',
           '${s.rescuerWristTempEnd!.toStringAsFixed(1)}  C', _kTextSecond));
+    }
 
     if (rescuerItems.isEmpty && patientItems.isEmpty) return pw.SizedBox.shrink();
 
@@ -4620,219 +4306,6 @@ class ExportService {
           )).toList(),
         ),
       ]),
-    );
-  }
-
-  // ── Average metrics grid (multi-session) ──────────────────────────────────
-
-  static pw.Widget _avgMetricsGrid(
-      pw.Font bold, pw.Font medium, pw.Font font,
-      List<SessionSummary> sessions) {
-    if (sessions.isEmpty) return pw.SizedBox.shrink();
-
-    double avg(double Function(SessionSummary) fn) =>
-        sessions.map(fn).reduce((a, b) => a + b) / sessions.length;
-
-    final avgDepth = avg((s) => s.averageDepth);
-    final avgRate  = avg((s) => s.averageFrequency);
-    final avgCCF   = avg((s) => s.handsOnRatio);
-
-    final metrics = [
-      _Metric('Avg Depth', '${avgDepth.toStringAsFixed(1)} cm',
-          _gradeColorForPct(avgDepth >= 5.0 && avgDepth <= 6.0 ? 1.0
-              : avgDepth >= 4.5 ? 0.7 : 0.3)),
-      _Metric('Avg Rate', '${avgRate.round()} BPM',
-          _gradeColorForPct(avgRate >= 100 && avgRate <= 120 ? 1.0 : 0.5)),
-      _Metric('Depth Consistency',
-          '${avg((s) => s.depthConsistency).round()}%',
-          _gradeColorForPct(avg((s) => s.depthConsistency) / 100)),
-      _Metric('Rate Consistency',
-          '${avg((s) => s.frequencyConsistency).round()}%',
-          _gradeColorForPct(avg((s) => s.frequencyConsistency) / 100)),
-      _Metric('Hands-On (CCF)',
-          '${(avgCCF * 100).round()}%',
-          // Direct 60%-threshold check, not the shared _gradeColorForPct —
-          // that helper's 80/60 tiers are a generic quality band shared by
-          // the other metrics in this grid, not the AHA CCF benchmark.
-          avgCCF >= 0.60 ? _kSuccess : _kWarning),
-      _Metric('Full Recoil',
-          sessions.first.compressionCount > 0
-              ? '${avg((s) => s.compressionCount > 0
-              ? s.correctRecoil / s.compressionCount * 100 : 0).round()}%' : '—',
-          _gradeColorForPct(sessions.first.compressionCount > 0
-              ? avg((s) => s.compressionCount > 0
-              ? s.correctRecoil / s.compressionCount : 0) : 0)),
-    ];
-    return _metricTileGrid(bold, font, metrics);
-  }
-
-  // ── 2×2 metric trend chart grid ───────────────────────────────────────────
-
-  static pw.Widget _metricTrendGrid(
-      pw.Font font, pw.Font medium, pw.Font bold,
-      List<SessionSummary> sessions) {
-
-    pw.Widget trendChart({
-      required String title,
-      required List<double> values,
-      required double targetMin,
-      required double targetMax,
-      required PdfColor lineColor,
-      required String unit,
-    }) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.all(10),
-        decoration: pw.BoxDecoration(
-            color: _kBgGrey, borderRadius: pw.BorderRadius.circular(8)),
-        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text(title,
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _kTextPrimary)),
-          pw.SizedBox(height: 6),
-          pw.SizedBox(
-            height: 60,
-            child: pw.CustomPaint(painter: (canvas, size) =>
-                _paintGenericSparkline(canvas, size, values,
-                    targetMin: targetMin, targetMax: targetMax,
-                    lineColor: lineColor)),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
-            pw.Text(sessions.first.dateFormatted,
-                style: pw.TextStyle(font: font, fontSize: 7, color: _kTextDisabled)),
-            pw.Text(sessions.last.dateFormatted,
-                style: pw.TextStyle(font: font, fontSize: 7, color: _kTextDisabled)),
-          ]),
-          pw.SizedBox(height: 2),
-          pw.Row(children: [
-            pw.Container(width: 8, height: 2,
-                decoration: pw.BoxDecoration(
-                    color: lineColor, borderRadius: pw.BorderRadius.circular(1))),
-            pw.SizedBox(width: 4),
-            pw.Text('$unit  |  Target: ${targetMin.toStringAsFixed(0)}-${targetMax.toStringAsFixed(0)}',
-                style: pw.TextStyle(font: font, fontSize: 7, color: _kTextSecond)),
-          ]),
-        ]),
-      );
-    }
-
-    return pw.Column(children: [
-      pw.Row(children: [
-        pw.Expanded(child: trendChart(
-            title: 'Avg Depth (cm)', unit: 'cm',
-            values: sessions.map((s) => s.averageDepth).toList(),
-            targetMin: 5.0, targetMax: 6.0, lineColor: _kBrandBlue)),
-        pw.SizedBox(width: 8),
-        pw.Expanded(child: trendChart(
-            title: 'Avg Rate (BPM)', unit: 'BPM',
-            values: sessions.map((s) => s.averageFrequency).toList(),
-            targetMin: 100, targetMax: 120, lineColor: _kBrandMid)),
-      ]),
-      pw.SizedBox(height: 8),
-      pw.Row(children: [
-        pw.Expanded(child: trendChart(
-            title: 'Hands-On CCF (%)', unit: '%',
-            values: sessions.map((s) => s.handsOnRatio * 100).toList(),
-            targetMin: 60, targetMax: 100, lineColor: _kSuccess)),
-        pw.SizedBox(width: 8),
-        pw.Expanded(child: trendChart(
-            title: 'Recoil (%)', unit: '%',
-            values: sessions.map((s) => s.compressionCount > 0
-                ? s.correctRecoil / s.compressionCount * 100 : 0.0).toList(),
-            targetMin: 80, targetMax: 100, lineColor: _kWarning)),
-      ]),
-    ]);
-  }
-
-  // ── Emergency sessions summary (multi-session) ────────────────────────────
-
-  static pw.Widget _emergencySessionsSummary(
-      pw.Font bold, pw.Font medium, pw.Font font,
-      List<SessionSummary> sessions, int roscCount) {
-    final roscRate = sessions.isEmpty ? 0.0 : roscCount / sessions.length * 100;
-
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-          color: roscCount > 0 ? _kEmgGreenBg : _kErrorLight,
-          borderRadius: pw.BorderRadius.circular(8),
-          border: pw.Border.all(
-              color: roscCount > 0 ? _kEmgGreen : _kError, width: 0.8)),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-        children: [
-          _statPanelCell(bold, font, '${sessions.length}', 'Emergency Sessions'),
-          _statPanelCell(bold, font, '$roscCount', 'ROSC Detected'),
-          _statPanelCell(bold, font, '${roscRate.toStringAsFixed(0)}%', 'ROSC Rate'),
-          _statPanelCell(bold, font,
-              '${sessions.fold<int>(0, (sum, s) => sum + s.compressionCount)}',
-              'Total Compressions'),
-        ],
-      ),
-    );
-  }
-
-  static pw.Widget _statPanelCell(
-      pw.Font bold, pw.Font font, String value, String label) {
-    return pw.Column(mainAxisSize: pw.MainAxisSize.min, children: [
-      pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 18, color: _kTextPrimary)),
-      pw.SizedBox(height: 2),
-      pw.Text(label, style: pw.TextStyle(font: font, fontSize: 8, color: _kTextSecond),
-          textAlign: pw.TextAlign.center),
-    ]);
-  }
-
-  // ── Metric tile grid ───────────────────────────────────────────────────────
-
-  static pw.Widget _metricTileGrid(
-      pw.Font bold, pw.Font font, List<_Metric> metrics) {
-    const cols = 3;
-    final rows = <pw.Widget>[];
-    for (var i = 0; i < metrics.length; i += cols) {
-      final rowItems = metrics.skip(i).take(cols).toList();
-      rows.add(pw.Row(children: [
-        ...rowItems.map((m) => pw.Expanded(
-          child: pw.Container(
-            margin:  const pw.EdgeInsets.only(right: 6, bottom: 6),
-            padding: const pw.EdgeInsets.all(10),
-            decoration: pw.BoxDecoration(
-                color: _kBgGrey,
-                borderRadius: pw.BorderRadius.circular(8),
-                border: pw.Border.all(color: _kDivider, width: 0.5)),
-            child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              pw.Text(m.value, style: pw.TextStyle(font: bold, fontSize: 17, color: m.color)),
-              pw.SizedBox(height: 2),
-              pw.Text(m.label, style: pw.TextStyle(font: font, fontSize: 8, color: _kTextSecond)),
-            ]),
-          ),
-        )),
-        if (rowItems.length < cols)
-          for (var p = 0; p < cols - rowItems.length; p++)
-            pw.Spacer(),
-      ]));
-    }
-    return pw.Column(children: rows);
-  }
-
-  // ── Stat panel ────────────────────────────────────────────────────────────
-
-  static pw.Widget _statPanel(
-      pw.Font bold, pw.Font medium, List<_Cell> cells) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-          color: _kBrandLight, borderRadius: pw.BorderRadius.circular(8)),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: cells.map((c) => pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 10),
-          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text(c.label, style: pw.TextStyle(font: medium, fontSize: 9, color: _kTextSecond)),
-            pw.SizedBox(height: 2),
-            pw.Text(c.value, style: pw.TextStyle(font: bold, fontSize: 16, color: _kBrandBlue)),
-          ]),
-        )).toList(),
-      ),
     );
   }
 
@@ -5128,10 +4601,11 @@ class ExportService {
         for (int i = 0; i < n; i++) {
           final x = px(i, fracs[i]),
               y = py(i, fracs[i]);
-          if (i == 0)
+          if (i == 0) {
             canvas.moveTo(x, y);
-          else
+          } else {
             canvas.lineTo(x, y);
+          }
         }
         canvas.closePath();
         canvas.fillPath();
@@ -5144,8 +4618,11 @@ class ExportService {
       canvas.setLineWidth(1.4);
       for (int i = 0; i < n; i++) {
         final x = px(i, fracs[i]), y = py(i, fracs[i]);
-        if (i == 0) canvas.moveTo(x, y);
-        else canvas.lineTo(x, y);
+        if (i == 0) {
+          canvas.moveTo(x, y);
+        } else {
+          canvas.lineTo(x, y);
+        }
       }
       canvas.lineTo(px(0, fracs[0]), py(0, fracs[0]));
       canvas.strokePath();
@@ -5455,7 +4932,7 @@ class ExportService {
 
     pw.Widget row(_TLEventPdf e, bool isFirst, bool isLast) {
       final dotSize     = e.isBookend ? 18.0 : 12.0;
-      final dotColumnW  = 22.0;
+      const dotColumnW  = 22.0;
 
       // Build the optional tip pill
       pw.Widget? tip;
@@ -5765,12 +5242,12 @@ class ExportService {
                   ),
                 ),
                 _tableCell(font, s.dateFormatted),
-                cell('${p[0].toStringAsFixed(1)}', color: dc(p[0])),
-                cell('${p[1].toStringAsFixed(1)}', color: dc(p[1])),
-                cell('${p[2].toStringAsFixed(1)}', color: dc(p[2])),
-                cell('${p[3].toStringAsFixed(0)}', color: rc(p[3])),
-                cell('${p[4].toStringAsFixed(0)}', color: rc(p[4])),
-                cell('${p[5].toStringAsFixed(0)}', color: rc(p[5])),
+                cell(p[0].toStringAsFixed(1), color: dc(p[0])),
+                cell(p[1].toStringAsFixed(1), color: dc(p[1])),
+                cell(p[2].toStringAsFixed(1), color: dc(p[2])),
+                cell(p[3].toStringAsFixed(0), color: rc(p[3])),
+                cell(p[4].toStringAsFixed(0), color: rc(p[4])),
+                cell(p[5].toStringAsFixed(0), color: rc(p[5])),
               ],
             );
           }(),
@@ -5896,9 +5373,6 @@ class ExportService {
       List<PdfColor> slotColors) {
 
     final n = sessions.length;
-    double? safeAvg(List<double> v) => v.isEmpty
-        ? null : v.reduce((a, b) => a + b) / v.length;
-
     SessionDetail? detailFor(int i) {
       if (details == null) return null;
       if (i >= details.length) return null;
@@ -6326,7 +5800,7 @@ class ExportService {
                               color: badgeBg,
                               borderRadius: pw.BorderRadius.circular(3),
                             ),
-                            child: pw.Text(badge!,
+                            child: pw.Text(badge,
                                 style: pw.TextStyle(font: bold, fontSize: 7,
                                     color: badgeColor)),
                           ),
@@ -6373,81 +5847,6 @@ class ExportService {
 
     return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: widgets);
-  }
-
-  // ── All-sessions table ────────────────────────────────────────────────────
-
-  static pw.Widget _sessionTable(
-      pw.Font bold, pw.Font medium, pw.Font font,
-      List<SessionSummary> sessions) {
-    return pw.Table(
-      border: pw.TableBorder(
-          horizontalInside: pw.BorderSide(color: _kDivider, width: 0.5)),
-      columnWidths: {
-        0: const pw.FixedColumnWidth(22),
-        1: const pw.FlexColumnWidth(1.8),
-        2: const pw.FixedColumnWidth(62),
-        3: const pw.FixedColumnWidth(52),
-        4: const pw.FixedColumnWidth(50),
-        5: const pw.FlexColumnWidth(1.2),
-        6: const pw.FlexColumnWidth(1),
-        7: const pw.FlexColumnWidth(1),
-        8: const pw.FlexColumnWidth(1),
-      },
-      children: [
-        pw.TableRow(
-          decoration: pw.BoxDecoration(color: _kBrandDark),
-          children: [
-            _tableCell(bold, '#',            isHeader: true, isDark: true),
-            _tableCell(bold, 'Date',         isHeader: true, isDark: true),
-            _tableCell(bold, 'Mode',         isHeader: true, isDark: true),
-            _tableCell(bold, 'Scenario',     isHeader: true, isDark: true),
-            _tableCell(bold, 'Duration',     isHeader: true, isDark: true, align: pw.TextAlign.right),
-            _tableCell(bold, 'Compr.',       isHeader: true, isDark: true, align: pw.TextAlign.right),
-            _tableCell(bold, 'Depth',        isHeader: true, isDark: true, align: pw.TextAlign.right),
-            _tableCell(bold, 'CCF',          isHeader: true, isDark: true, align: pw.TextAlign.right),
-            _tableCell(bold, 'Grade',        isHeader: true, isDark: true, align: pw.TextAlign.right),
-          ],
-        ),
-        ...sessions.asMap().entries.map((e) {
-          final i          = e.key;
-          final s          = e.value;
-          final isAlt      = i.isOdd;
-          final gradeColor = s.isEmergency ? _kTextDisabled : _gradeColor(s.totalGrade);
-          return pw.TableRow(
-            decoration: pw.BoxDecoration(color: isAlt ? _kBgGrey : _kWhite),
-            children: [
-              _tableCell(font, '${sessions.length - i}', color: _kTextSecond),
-              _tableCell(font, s.dateFormatted),
-              _tableModeCell(bold, s),
-              pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                child: pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: pw.BoxDecoration(
-                      color: s.scenario == 'pediatric' ? _kPediatricBg : _kBrandLight,
-                      borderRadius: pw.BorderRadius.circular(3)),
-                  child: pw.Text(s.scenario == 'pediatric' ? 'Ped.' : 'Adult',
-                      style: pw.TextStyle(font: bold, fontSize: 7,
-                          color: s.scenario == 'pediatric' ? _kPediatric : _kBrandBlue)),
-                ),
-              ),
-              _tableCell(font, s.durationFormatted, align: pw.TextAlign.right),
-              _tableCell(font, '${s.compressionCount}', align: pw.TextAlign.right),
-              _tableCell(font,
-                  s.averageDepth > 0 ? '${s.averageDepth.toStringAsFixed(1)} cm' : '—',
-                  align: pw.TextAlign.right),
-              _tableCell(font, '${(s.handsOnRatio * 100).round()}%',
-                  align: pw.TextAlign.right,
-                  color: s.handsOnRatio >= 0.60 ? _kSuccess : _kWarning),
-              _tableCell(bold,
-                  s.isEmergency ? '—' : '${s.totalGrade.toStringAsFixed(1)}%',
-                  align: pw.TextAlign.right, color: gradeColor),
-            ],
-          );
-        }),
-      ],
-    );
   }
 
   // ── Section title ──────────────────────────────────────────────────────────
@@ -6606,7 +6005,6 @@ class ExportService {
     PdfColor? Function(int, double)? dotColor,
   }) {
     const double kLeftGutter   = 26;
-    const double kBottomGutter = 14;
 
     // Overall session span for the x axis (max t across all lines).
     double tMax = 0;
@@ -6833,7 +6231,9 @@ class ExportService {
         canvas.saveContext();
         canvas.setFillColor(l.color.shade(0.08));
         canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
-        for (final p in l.points) canvas.lineTo(xOf(p[0]), yOf(p[1]));
+        for (final p in l.points) {
+          canvas.lineTo(xOf(p[0]), yOf(p[1]));
+        }
         canvas.lineTo(xOf(l.points.last[0]), 0);
         canvas.lineTo(xOf(l.points.first[0]), 0);
         canvas.closePath();
@@ -6845,7 +6245,9 @@ class ExportService {
       canvas.setStrokeColor(l.color);
       canvas.setLineWidth(l.width);
       canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
-      for (final p in l.points) canvas.lineTo(xOf(p[0]), yOf(p[1]));
+      for (final p in l.points) {
+        canvas.lineTo(xOf(p[0]), yOf(p[1]));
+      }
       canvas.strokePath();
       canvas.restoreContext();
 
@@ -6908,7 +6310,9 @@ class ExportService {
     canvas.saveContext();
     canvas.setFillColor(_kBrandBlue.shade(0.12));
     canvas.moveTo(xOf(0), yOf(grades[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(grades[i]));
+    for (int i = 1; i < n; i++) {
+      canvas.lineTo(xOf(i), yOf(grades[i]));
+    }
     canvas.lineTo(xOf(n - 1), 0);
     canvas.lineTo(0, 0);
     canvas.closePath();
@@ -6920,7 +6324,9 @@ class ExportService {
     canvas.setStrokeColor(_kBrandBlue);
     canvas.setLineWidth(1.5);
     canvas.moveTo(xOf(0), yOf(grades[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(grades[i]));
+    for (int i = 1; i < n; i++) {
+      canvas.lineTo(xOf(i), yOf(grades[i]));
+    }
     canvas.strokePath();
     canvas.restoreContext();
 
@@ -6931,84 +6337,6 @@ class ExportService {
       canvas.saveContext();
       canvas.setFillColor(color);
       canvas.drawEllipse(xOf(i), yOf(g), 3.0, 3.0);
-      canvas.fillPath();
-      canvas.restoreContext();
-    }
-  }
-
-  /// Generic sparkline with target band — used for depth, rate, CCF, recoil trends.
-  static void _paintGenericSparkline(
-      PdfGraphics canvas, PdfPoint size, List<double> values, {
-        required double   targetMin,
-        required double   targetMax,
-        required PdfColor lineColor,
-      }) {
-    if (values.length < 2) return;
-
-    final n      = values.length;
-    final allMin = values.reduce((a, b) => a < b ? a : b);
-    final allMax = values.reduce((a, b) => a > b ? a : b);
-    // lo/hi: always bracket both data range AND target range, with a guard so hi > lo
-    final lo = (allMin < targetMin * 0.85 ? allMin * 0.9 : targetMin * 0.8).clamp(0.0, double.infinity);
-    final hi = (allMax > targetMax * 1.1  ? allMax * 1.1 : targetMax * 1.15) + 0.001; // +epsilon guards hi==lo
-
-    double xOf(int i) => i / (n - 1) * size.x;
-    double yOf(double v) => size.y - ((v - lo) / (hi - lo)).clamp(0.0, 1.0) * size.y;
-
-    // Target band
-    final bandTop    = yOf(targetMax);
-    final bandHeight = yOf(targetMin) - bandTop;
-    if (bandHeight > 0) {
-      canvas.saveContext();
-      canvas.setFillColor(_kSuccess.shade(0.12));
-      canvas.drawRect(0, bandTop, size.x, bandHeight);
-      canvas.fillPath();
-      canvas.restoreContext();
-
-      canvas.saveContext();
-      canvas.setStrokeColor(_kSuccess.shade(0.4));
-      canvas.setLineWidth(0.5);
-      canvas.moveTo(0, bandTop);
-      canvas.lineTo(size.x, bandTop);
-      canvas.strokePath();
-      canvas.restoreContext();
-
-      canvas.saveContext();
-      canvas.setStrokeColor(_kSuccess.shade(0.4));
-      canvas.setLineWidth(0.5);
-      canvas.moveTo(0, bandTop + bandHeight);
-      canvas.lineTo(size.x, bandTop + bandHeight);
-      canvas.strokePath();
-      canvas.restoreContext();
-    }
-
-    // Fill
-    canvas.saveContext();
-    canvas.moveTo(xOf(0), yOf(values[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(values[i]));
-    canvas.lineTo(xOf(n - 1), 0);
-    canvas.lineTo(0, 0);
-    canvas.closePath();
-    canvas.setFillColor(lineColor.shade(0.1));
-    canvas.fillPath();
-    canvas.restoreContext();
-
-    // Line
-    canvas.saveContext();
-    canvas.setStrokeColor(lineColor);
-    canvas.setLineWidth(1.2);
-    canvas.moveTo(xOf(0), yOf(values[0]));
-    for (int i = 1; i < n; i++) canvas.lineTo(xOf(i), yOf(values[i]));
-    canvas.strokePath();
-    canvas.restoreContext();
-
-    // Dots — colored by in/out target
-    for (int i = 0; i < n; i++) {
-      final v     = values[i];
-      final color = (v >= targetMin && v <= targetMax) ? _kSuccess : _kWarning;
-      canvas.saveContext();
-      canvas.setFillColor(color);
-      canvas.drawEllipse(xOf(i), yOf(v), 2.5, 2.5);
       canvas.fillPath();
       canvas.restoreContext();
     }
@@ -7112,12 +6440,6 @@ class ExportService {
     return _kError;
   }
 
-  static PdfColor _gradeColorForPct(double pct) {
-    if (pct >= 0.80) return _kSuccess;
-    if (pct >= 0.60) return _kWarning;
-    return _kError;
-  }
-
   /// CSV-safe string escaping — wraps in quotes if value contains comma, quote, or newline.
   static String _esc(String value) {
     if (value.contains(',') || value.contains('"') || value.contains('\n')) {
@@ -7161,12 +6483,6 @@ class ExportService {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data models
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _Cell {
-  final String label;
-  final String value;
-  const _Cell(this.label, this.value);
-}
 
 class _Metric {
   final String   label;

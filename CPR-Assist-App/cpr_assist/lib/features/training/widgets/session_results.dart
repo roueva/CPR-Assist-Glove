@@ -8,7 +8,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cpr_assist/core/core.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/session_provider.dart';
-import '../../account/screens/login_screen.dart';
 import '../screens/session_service.dart';
 import '../services/achievement_service.dart';
 import '../services/certificate_service.dart';

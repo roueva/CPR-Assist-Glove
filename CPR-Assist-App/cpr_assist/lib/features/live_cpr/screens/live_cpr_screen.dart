@@ -576,18 +576,10 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       return v > 0 ? v : null;
     }
 
-    int? readPositiveInt(String key) {
-      final raw = data[key];
-      if (raw == null) return null;
-      final v = (raw as num).toInt();
-      return v > 0 ? v : null;
-    }
-
     if (data['isContinuousData'] == true && !_isSessionActive && !_hasHandledEndPing) {
       ref.read(cprSessionActiveProvider.notifier).state = true;
     }
 
-    final rescuerSq = (data['rescuerSignalQuality'] as int?) ?? 0;
     final patientSq = (data['ppgSignalQuality'] as int?) ?? 0;
     final inPulseCheck = data['pulseCheckActive'] == true;
 
@@ -601,7 +593,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     final hrU    = readPositive('heartRateUser');
     final spo2U  = readPositive('spO2User');
     final tempU  = readPositive('rescuerTemperature');  // GXHT30, always valid
-    final humU   = readPositiveInt('rescuerHumidity');
 
     if (!mounted) return;
     setState(() {
@@ -858,12 +849,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                   if (goingToTraining && !isLoggedIn) {
                     if (!mounted) return;
                     final shouldLogin = await AppDialogs.promptLogin(context);
-                    if (shouldLogin != true || !mounted) return;
+                    if (shouldLogin != true || !mounted || !context.mounted) return;
                     await context.push(const LoginScreen());
                     if (!mounted) return;
                     if (!ref.read(authStateProvider).isLoggedIn) return;
                   }
 
+                  if (!context.mounted) return;
                   if (goingToTraining) {
                     final confirmed = await AppDialogs.confirmSwitchToTraining(context);
                     if (confirmed != true || !mounted) return;

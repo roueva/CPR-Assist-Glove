@@ -52,7 +52,7 @@ FlGridData cprChartGridData({
     drawVerticalLine: true,
     horizontalInterval: horizontalInterval,
     verticalInterval: cprChartGridInterval(minX, maxX),
-    getDrawingHorizontalLine: (_) => FlLine(
+    getDrawingHorizontalLine: (_) => const FlLine(
       color: AppColors.divider,
       strokeWidth: AppSpacing.dividerThickness,
     ),
@@ -220,8 +220,6 @@ AxisTitles buildCprTimeAxis({
   }
 
   final edgeTol    = interval * 0.1;
-  final minEdgeGap = interval * 0.5;
-  final lastGrid   = ((maxX - edgeTol) / interval).floor() * interval;
   final first      = (minX / interval).ceil() * interval;
 
   return AxisTitles(
@@ -758,7 +756,7 @@ class CprChartCard extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (_) => Dialog(
-        insetPadding: EdgeInsets.all(AppSpacing.md),
+        insetPadding: const EdgeInsets.all(AppSpacing.md),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
         ),

@@ -251,13 +251,13 @@ class SessionDetail {
     // Exclude unmeasured compressions (NaN depth sentinel set by
     // BLEConnection when a compression was counted but no valid depth
     // packet arrived) so a single dropout cannot NaN the fatigue score.
-    final _finiteComps =
+    final finiteComps =
     compressions.where((c) => c.depth.isFinite && c.depth > 0).toList();
-    if (_finiteComps.length >= 5) {
-      final peakDepth = _finiteComps
+    if (finiteComps.length >= 5) {
+      final peakDepth = finiteComps
           .map((c) => c.depth)
           .reduce((a, b) => a > b ? a : b);
-      final lastFive = _finiteComps.sublist(_finiteComps.length - 5);
+      final lastFive = finiteComps.sublist(finiteComps.length - 5);
       final lastAvg  =
           lastFive.map((c) => c.depth).reduce((a, b) => a + b) / 5;
       depthScore = ((peakDepth - lastAvg) / 2.0).clamp(0.0, 1.0) * 100;
@@ -434,10 +434,10 @@ class SessionDetail {
       // (NaN sentinel set in BLEConnection when a compression was counted
       // but no valid depth packet arrived). Prevents fake values from
       // dragging the session average down.
-      final _depthVals =
+      final depthVals =
       events.map((e) => e.depth).where((d) => d.isFinite && d > 0).toList();
-      avgDepth = _depthVals.isNotEmpty
-          ? _depthVals.reduce((a, b) => a + b) / _depthVals.length
+      avgDepth = depthVals.isNotEmpty
+          ? depthVals.reduce((a, b) => a + b) / depthVals.length
           : 0.0;
 
       // Use instantaneousRate when available; fall back to frequency for older data
@@ -461,11 +461,11 @@ class SessionDetail {
 
       // Depth standard deviation — same filtered set as avgDepth so a single
       // unmeasured compression cannot inflate or deflate the SD.
-      if (_depthVals.length > 1) {
-        final depthVariance = _depthVals
+      if (depthVals.length > 1) {
+        final depthVariance = depthVals
             .map((d) => (d - avgDepth) * (d - avgDepth))
             .reduce((a, b) => a + b) /
-            _depthVals.length;
+            depthVals.length;
         depthSD = sqrt(depthVariance);
       } else {
         depthSD = 0.0;

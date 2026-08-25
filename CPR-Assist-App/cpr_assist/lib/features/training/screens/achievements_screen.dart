@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:cpr_assist/features/training/screens/session_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

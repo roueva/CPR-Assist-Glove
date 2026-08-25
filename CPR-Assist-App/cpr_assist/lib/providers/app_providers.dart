@@ -301,7 +301,7 @@ final scenarioProvider = StateNotifierProvider<ScenarioNotifier, CprScenario>((r
 });
 
 class ScenarioNotifier extends StateNotifier<CprScenario> {
-  ScenarioNotifier(CprScenario initial) : super(initial);
+  ScenarioNotifier(super.initial);
 
   void setScenario(CprScenario s) => state = s;
 
@@ -661,7 +661,6 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _kAudio          = 'settings_audioFeedback';
   static const _kVisual         = 'settings_visualFeedback';
   static const _kScreenOn       = 'settings_keepScreenOn';
-  static const _kScenario = 'settings_scenario';
   static const _kAutoSwitch     = 'settings_autoSwitchToCPR';
   static const _kDisconnect     = 'settings_notifyOnDisconnect';
   static const _kLedBrightness  = 'settings_gloveLedBrightness';

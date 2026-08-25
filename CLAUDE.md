@@ -1,50 +1,89 @@
-# CPR Assist Glove — working rules
+# CPR Assist
 
-## Repo layout
-- `firmware/` — ESP32 Arduino/C++
-- `CPR-Assist-App/cpr_assist/` — Flutter app (package com.roueva.cpr_assist)
-- backend — Node.js/Express + PostgreSQL (Railway)
+Wearable CPR feedback system. ESP32 firmware + Flutter/Riverpod app +
+Node/PostgreSQL backend on Railway, over BLE. MSc thesis, AUTH. A user study with
+ethics approval is pending hardware validation, so correctness outranks features.
+
+Work plan and session prompts: `docs/TASKS.md`. Read it when I name a task.
 
 ## How to work
-- Surgical edits only. Never rewrite a whole file unless explicitly asked.
-- Read the actual source before proposing anything. Grep before asserting.
-- One batch at a time. Wait for confirmation before the next.
-- Run `flutter analyze` after every Flutter batch. Zero new issues.
-- Never use Write on an existing file. Read it first, then edit. Write is
-  for new files only.
-- Comment blocks describing UI structure or data semantics may be stale.
-  Verify against the actual code before acting on them.
 
-## Flutter design tokens — hard rules, no exceptions
+- Read the actual file before claiming anything about it. Never infer behaviour
+  from a filename, a comment, or an instruction earlier in this session.
+- Surgical edits. Do not rewrite a file unless I ask for a rewrite.
+- Show me the diff for one file before moving to the next.
+- If you think something in "Do not touch" is wrong, say so and stop. Do not fix it.
+- Audits are read-only. Write findings to a file, edit nothing, wait for approval.
+- Do not add features, abstractions, or error handling I did not ask for.
+- Never run flutter run or flutter build. I run those in my own terminal.
+  Long-lived builds get killed by the session supervisor and leave orphaned
+  JVMs behind. Edit the files, show me the diff, and stop.
+
+## Do not touch
+
+These are final and correct by design. Report a suspected problem; never fix one.
+
+- Grading — `session_service.dart:240–259`. No force-safety term, no fatigue
+  penalty, no timed_endurance scenario. Over-force and fatigue are standalone
+  metrics and live warnings only.
+- The confidence-based depth selector in `depth.cpp`. It replaced fixed-weight
+  fusion. Population defaults are intentional.
+- The exponential force model in `force.cpp`.
+- Posture from the palm IMU only. `wristAlignmentAngle` = palm pitch,
+  `compressionAxisDeviation` = palm roll. The wrist IMU is not fused.
+- Patient vitals gated by `pulseCheckActive` — `ble_manager.cpp:141`.
+- Pulse check gating: passive contact-plus-pause only. The glove never prompts the
+  rescuer to pause. Low SQI → Uncertain, never Absent.
+
+When code and `CPR_Assist_BLE_Spec_v3_1.md` disagree, the code is authoritative.
+Fix the spec.
+
+## Design tokens — no exceptions
+
 Single import: `import 'package:cpr_assist/core/core.dart'`
-- No `Color(0xFF...)` or `Colors.*` → `AppColors.*`
-- No raw numbers for padding/radius/size → `AppSpacing.*`
-- No inline `TextStyle(...)` → `AppTypography.*()`
-- No inline `BoxDecoration(...)` → `AppDecorations.*()`
-- No `ScaffoldMessenger` in widgets → `UIHelper.*`
-- No inline `showDialog()` → `AppDialogs.*`
-- No `Navigator.of(context).push(...)` → `context.push()`
-- No `MediaQuery.sizeOf(context)` → `context.screenWidth` / `context.screenHeight`
-- No magic numbers → `AppConstants.*` / `AEDMapUIConstants.*`
-- Every screen pads for the phone bottom navigation bar
+
+| Never | Use |
+|---|---|
+| `Color(0xFF...)`, `Colors.xxx` | `AppColors.xxx` |
+| raw numbers for padding/radius/size | `AppSpacing.xxx` |
+| inline `TextStyle(...)` | `AppTypography.xxx()` |
+| inline `BoxDecoration(...)` | `AppDecorations.xxx()` |
+| `ScaffoldMessenger` in widgets | `UIHelper.xxx()` |
+| inline `showDialog()` | `AppDialogs.xxx()` |
+| `Navigator.of(context)` | `context.push()` / `context.pop()` |
+| `MediaQuery.sizeOf(context).width` | `context.screenWidth` |
+| `MediaQuery.paddingOf(context).bottom` | `context.safeBottom` |
+| magic numbers | `AppConstants.xxx`, `AEDMapUIConstants.xxx` |
+
 If a token doesn't exist yet, add it to the core file first, then use it.
+Every screen must clear the phone's bottom navigation bar.
 
-## Auth rules
-- Login is NOT required to use the app.
-- Emergency mode: fully usable logged out. Never interrupt an active session.
-  Prompt once, non-blocking, only after the session ends.
-- Training mode: requires login. `AppDialogs.confirmSwitchToTraining` gated by
-  `AppDialogs.promptLogin`. Dismissed → stay in Emergency.
-- No login wall on launch, AED map, guide screen, or anywhere else.
-- Account/profile screens handle the unauthenticated state gracefully.
+**Exception:** `export_service.dart` uses `pw.TextStyle` / `pw.BoxDecoration` from
+the pdf package. Flutter tokens cannot apply there. Colours already bridge via
+`_pdf(AppColors.x)`. Leave it alone.
 
-## Locked — do not redesign
-- Force model is exponential: FORCE_BASELINE_V=0.4008f, FORCE_EXP_A=114.882626f,
-  FORCE_EXP_B=1.056205f, FORCE_EXP_C=5.212799f.
+## Auth
 
-## Clinical facts
-- The glove NEVER prompts the rescuer to pause for a pulse check.
-  A circulation check opens passively when the rescuer has already paused AND
-  the fingertip sensor detects carotid skin contact. Minimum 2 min between checks.
-- Rhythm check (AED/ECG) ≠ circulation check (manual palpation). Distinct.
-- CCF benchmark is ≥60% per AHA 2025, not ≥80%.
+Login is not required to use the app.
+
+- **Emergency mode** — no login gate, ever. Never interrupt an active session.
+  After it ends, prompt once, non-blocking.
+- **Training mode** — requires login. On switch attempt while logged out, show
+  `AppDialogs.confirmSwitchToTraining` blocked by `AppDialogs.promptLogin`.
+  Dismissing leaves the user in Emergency.
+- No login prompt anywhere else. Not on launch, the AED map, or the guide.
+- Account and profile screens work logged out.
+
+## Stack notes
+
+- Flutter/Riverpod, `flutter_blue_plus`, `google_maps_flutter`, `geolocator`.
+  **No go_router** — `context.push` wraps `Navigator` + `MaterialPageRoute`
+  (`app_extensions.dart:118`).
+- Firmware: Arduino/C++, ESP32, FreeRTOS. Two LSM6DSOX IMUs, FlexiForce A401,
+  MAX30102 ×2, MAX30205, GXHT30, via a TCA I2C mux.
+- Backend: Express + PostgreSQL on Railway. Timestamps are TIMESTAMPTZ.
+
+## Thesis prose style
+
+Short plain sentences. No em dashes. No semicolons as connectors. No bullet points
+or lists in body prose. Requirement-first paragraph openings. Flowing prose.

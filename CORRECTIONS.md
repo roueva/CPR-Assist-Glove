@@ -271,6 +271,35 @@ of `e.toString().contains('404')`.
       associated with a ventilation/pulse-check window, just in excess of
       the allowance; that wording is wrong for that portion.
 
+## Analyzer cleanup — unused_element_parameter (2026-08-25)
+- [x] Reviewed all 24 `unused_element_parameter` warnings from the analyzer
+      cleanup pass. Left all 24 in place — none are inert dead code.
+      - `reason` (app_dialogs.dart:379, `_SelftestRow`) is a lint false
+        positive: it IS passed at call sites (glove_diagnostic_sheet.dart:317,
+        319) via the `SelftestRow` typedef, and its value renders in the
+        selftest results dialog's failure-detail text
+        (app_dialogs.dart:595-599). The `unused_element_parameter` lint
+        appears not to resolve constructor calls made through a type alias.
+        Deleting it would silently drop the failure-reason text from the UI.
+      - The other 23 are optional parameters genuinely wired into real
+        internal logic (rendering, layout, behavior branches) on shared
+        private widgets/data classes — e.g. `isDisabled`/`disabledHint` on
+        `_PanelItem` (account_menu.dart, full dim + hint UI implemented),
+        `rows` on `_HistoryCard` (glove_diagnostic_sheet.dart, default used
+        by all 8 call sites), `focusNode` on `_AppTextField`
+        (login_screen.dart, wired into TextFormField), `width`/`height` on
+        PDF chart/table helper classes (export_service.dart), `badge`/
+        `badgeColor`/`borderColor`/`isEmergency` on timeline event widgets
+        (session_results_training_tabs.dart), and similar in
+        session_results_charts.dart, session_results_emergency.dart,
+        session_results_shared.dart, session_results_vitals_dialogs.dart,
+        settings_screen.dart, guide_screen.dart, leaderboard_screen.dart,
+        pulse_check_overlay.dart. No current caller overrides the default,
+        but the code path is live, not cruft.
+      Deleting all 24 would strip working (if currently unexercised)
+      capability rather than remove dead weight — left for a deliberate
+      decision rather than blind lint-driven deletion.
+
 ## Notes
 - M24 remains closed. kCmdStart/kCmdStop (0xF3/0xF4) stay commented on the
   app side. The firmware handler at cpr_glove.ino:200-206 is live and wired

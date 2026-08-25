@@ -357,8 +357,8 @@ class _ZoneBarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final trackY = size.height / 2;
-    final trackH = 4.0;
-    final dotR   = 5.0;
+    const trackH = 4.0;
+    const dotR   = 5.0;
     final range  = size.width;
     final usable = range - dotR * 2;
 
@@ -729,7 +729,7 @@ class _CompressionQualityCard extends StatelessWidget {
                             '${detail.frequencyConsistency.round()}%',
                             sub: 'How steady your rate was throughout'),
                     ]),
-                    _DetailSection('What this means',
+                    const _DetailSection('What this means',
                         body: 'Rate controls how often the heart is mechanically pumped. '
                             'Too fast (> 120 bpm) reduces cardiac fill time between compressions. '
                             'Too slow (< 100 bpm) reduces overall output. '
@@ -772,7 +772,7 @@ class _CompressionQualityCard extends StatelessWidget {
                       '${detail.depthRateCombo} / $total',
                       sub: '${comboPct.round()}% of all compressions'),
                 ]),
-                _DetailSection('What this means',
+                const _DetailSection('What this means',
                     body: 'This counts compressions where both depth AND rate were '
                         'correct at the same time.'
                         'You can score well on each individually while still missing '
@@ -803,7 +803,7 @@ class _CompressionQualityCard extends StatelessWidget {
                 label: 'Recoil',
                 score: recoilPct,
                 rows: detail.leaningCount == 0 && detail.overForceCount == 0
-                    ? [_TileRow('Perfect recoil ✓', '', color: AppColors.success)]
+                    ? [const _TileRow('Perfect recoil ✓', '', color: AppColors.success)]
                     : [
                   _TileRow('Leaning',
                       detail.leaningCount > 0
@@ -839,7 +839,7 @@ class _CompressionQualityCard extends StatelessWidget {
                           color: detail.overForceCount > 0
                               ? AppColors.error : AppColors.success),
                     ]),
-                    _DetailSection('What this means',
+                    const _DetailSection('What this means',
                         body: 'Full chest recoil allows the heart to refill with blood '
                             'between compressions. Leaning, even slightly, reduces '
                             'venous return and can cut CPR effectiveness by up to 30%. '
@@ -906,7 +906,7 @@ class _CompressionQualityCard extends StatelessWidget {
                                 : avgWristAngle <= 25  ? AppColors.warning
                                 : AppColors.error),
                     ]),
-                    _DetailSection('What this means',
+                    const _DetailSection('What this means',
                         body: 'Wrist alignment affects the direction of compression force. '
                             'A tilted wrist (> 15°) redirects force laterally rather than '
                             'straight down, reducing effective depth and increasing wrist '
@@ -954,7 +954,7 @@ class _CompressionQualityCard extends StatelessWidget {
                       sub: 'Longest unbroken run of perfect compressions'),
                   _DetailRow2('Total compressions', '$total'),
                 ]),
-                _DetailSection('What "perfect" means',
+                const _DetailSection('What "perfect" means',
                     body: 'A compression counts toward the streak only when depth, '
                         'rate, recoil, AND posture are all correct simultaneously. '
                         'It is the hardest metric to sustain and reflects true '
@@ -1338,7 +1338,7 @@ class _MetricDetailDialog extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1909,7 +1909,7 @@ class _TimelineRow extends StatelessWidget {
                             size: AppSpacing.iconSm - 4),
                       ),
                       CustomPaint(
-                        size: Size(_dotSize, _dotSize),
+                        size: const Size(_dotSize, _dotSize),
                         painter: _StrikethroughDotPainter(),
                       ),
                     ],

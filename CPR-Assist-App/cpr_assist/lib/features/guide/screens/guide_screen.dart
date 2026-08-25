@@ -167,10 +167,10 @@ class _ChainOfSurvivalScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GuideDetailScreen(
+    return const _GuideDetailScreen(
       title: 'Chain of survival',
       accentColor: AppColors.primary,
-      children: const [
+      children: [
         _ChainRow(),
         SizedBox(height: AppSpacing.sm),
         _InfoBanner(
@@ -608,10 +608,10 @@ class _CompressionsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GuideDetailScreen(
+    return const _GuideDetailScreen(
       title: 'Compressions & breathing',
       accentColor: AppColors.primary,
-      children: const [
+      children: [
         // ── Hand placement photo + notes ──────────────────────────────────
         _PhotoCard(
           assetPath: 'assets/icons/guide/detail_hand_placement.png',
@@ -739,10 +739,10 @@ class _AedDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GuideDetailScreen(
+    return const _GuideDetailScreen(
       title: 'AED',
       accentColor: AppColors.warning,
-      children: const [
+      children: [
         // ── What it looks like ────────────────────────────────────────────
         _PhotoCard(
           assetPath: 'assets/guide/detail_aed_cabinet.jpg',
@@ -883,10 +883,10 @@ class _QuickStepsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GuideDetailScreen(
+    return const _GuideDetailScreen(
       title: 'Quick steps',
       accentColor: AppColors.primary,
-      children: const [
+      children: [
         _SectionCard(
           titleIcon: Icons.format_list_numbered_rounded,
           titleIconColor: AppColors.primary,
@@ -958,7 +958,7 @@ class _PediatricDetailScreen extends StatelessWidget {
       accentColor: AppColors.pediatric,
       children: [
         // Two photos side by side
-        Row(
+        const Row(
           children: [
             Expanded(
               child: _LabelledPhoto(
@@ -967,7 +967,7 @@ class _PediatricDetailScreen extends StatelessWidget {
                 tint: AppColors.pediatric,
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            SizedBox(width: AppSpacing.sm),
             Expanded(
               child: _LabelledPhoto(
                 assetPath: 'assets/guide/detail_child_cpr.jpg',
@@ -1018,10 +1018,10 @@ class _StopRecoveryDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GuideDetailScreen(
+    return const _GuideDetailScreen(
       title: 'Stop & recovery',
       accentColor: AppColors.success,
-      children: const [
+      children: [
         // When to stop card
         _WhenToStopCard(),
         SizedBox(height: AppSpacing.sm),
@@ -1877,12 +1877,12 @@ class _PadPlacementSVG extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _PadLabel(
+              const _PadLabel(
                   number: '①',
                   text: 'Below right\ncollarbone',
                   color: AppColors.warning),
               const SizedBox(height: AppSpacing.md),
-              _PadLabel(
+              const _PadLabel(
                   number: '②',
                   text: 'Left side,\nbelow armpit',
                   color: AppColors.warning),
@@ -1954,14 +1954,14 @@ class _PediatricTable extends StatelessWidget {
       },
       children: [
         // Header row
-        TableRow(
-          decoration: const BoxDecoration(
+        const TableRow(
+          decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(color: AppColors.divider, width: 1.5),
             ),
           ),
           children: [
-            const SizedBox(height: AppSpacing.lg),
+            SizedBox(height: AppSpacing.lg),
             _TableHeader('Adult'),
             _TableHeader('Infant\n<1 yr', color: AppColors.pediatric),
             _TableHeader('Child\n1–8 yr', color: AppColors.pediatric),
@@ -2177,7 +2177,7 @@ class _AedSchematicPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: label,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: AppSpacing.guideSchematicLabelSize,
           fontWeight: FontWeight.w800,
           color: AppColors.textOnDark,

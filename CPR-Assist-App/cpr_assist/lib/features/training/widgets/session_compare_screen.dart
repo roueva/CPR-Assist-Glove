@@ -80,10 +80,12 @@ class _SessionCompareScreenState
         // when the backend lookup fails. This is what lets local-only
         // sessions show up in compare.
         final d = await service.fetchDetailForSummary(s, ownerId: ownerId);
-        if (mounted) setState(() {
+        if (mounted) {
+          setState(() {
           _details[key] = d;
           _loading[key] = false;
         });
+        }
       } catch (_) {
         if (mounted) setState(() => _loading[key] = false);
       }
@@ -110,7 +112,7 @@ class _SessionCompareScreenState
     final sessions = [...widget.sessions]
       ..sort((a, b) => (a.sessionStart ?? DateTime(0))
           .compareTo(b.sessionStart ?? DateTime(0)));
-    final slotColors = SessionCompareScreen._slotColors;
+    const slotColors = SessionCompareScreen._slotColors;
 
     final activeSessions  = [
       for (int i = 0; i < sessions.length; i++)
@@ -680,10 +682,6 @@ class _EmergencyOutcomeRow extends StatelessWidget {
       pulseColor = AppColors.textDisabled;
     }
 
-    final compliance = session.pulseChecksPrompted > 0
-        ? session.pulseChecksComplied / session.pulseChecksPrompted * 100
-        : null;
-
     return Row(
       children: [
         Container(
@@ -871,151 +869,6 @@ class _KeyStatsRow extends StatelessWidget {
   }
 }
 
-// ── Posture snapshot ──────────────────────────────────────────────────────────
-
-class _PostureCard extends StatelessWidget {
-  final List<SessionSummary>     sessions;
-  final Map<int, SessionDetail?> details;
-  final List<Color>              slotColors;
-
-  const _PostureCard({
-    required this.sessions,
-    required this.details,
-    required this.slotColors,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final sessionsWithDetail = sessions
-        .where((s) => details[s.selKey] != null)
-        .toList();
-    if (sessionsWithDetail.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      decoration: AppDecorations.card(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Posture',
-                    style: AppTypography.subheading(
-                        color: AppColors.textPrimary)),
-                const SizedBox(height: AppSpacing.xxs),
-                Text('Wrist alignment & good-posture rate',
-                    style: AppTypography.caption(
-                        color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          // Column headers
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Row(
-              children: [
-                const Expanded(flex: 3, child: SizedBox()),
-                Expanded(
-                  flex: 2,
-                  child: Text('Wrist °',
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled),
-                      textAlign: TextAlign.center),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text('Posture %',
-                      style: AppTypography.caption(
-                          color: AppColors.textDisabled),
-                      textAlign: TextAlign.center),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Divider(height: 1, color: AppColors.divider),
-          for (int i = 0; i < sessionsWithDetail.length; i++) ...[
-            _buildPostureRow(sessionsWithDetail[i],
-                sessions.indexOf(sessionsWithDetail[i]), slotColors),
-            if (i < sessionsWithDetail.length - 1)
-              const Divider(
-                  height: 1,
-                  indent: AppSpacing.md,
-                  endIndent: AppSpacing.md,
-                  color: AppColors.divider),
-          ],
-          const SizedBox(height: AppSpacing.xs),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostureRow(
-      SessionSummary s, int slotIdx, List<Color> colors) {
-    final d    = details[s.selKey]!;
-    final comps = d.compressions;
-
-    final avgAngle = comps.isEmpty
-        ? 0.0
-        : comps.map((c) => c.wristAlignmentAngle).reduce((a, b) => a + b) /
-        comps.length;
-    final postureGoodPct = comps.isEmpty
-        ? 0.0
-        : comps.where((c) => c.postureOk).length / comps.length * 100;
-
-    final angleColor = avgAngle <= 10
-        ? AppColors.success
-        : avgAngle <= 15
-        ? AppColors.warning
-        : AppColors.error;
-    final postureColor = postureGoodPct >= 80
-        ? AppColors.success
-        : postureGoodPct >= 60
-        ? AppColors.warning
-        : AppColors.error;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Container(
-                  width: AppSpacing.sm,
-                  height: AppSpacing.sm,
-                  decoration: BoxDecoration(
-                      color: colors[slotIdx], shape: BoxShape.circle),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text('S${s.sessionNumber ?? slotIdx + 1}',
-                    style: AppTypography.label(
-                        color: AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text('${avgAngle.toStringAsFixed(1)}°',
-                style: AppTypography.label(color: angleColor),
-                textAlign: TextAlign.center),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text('${postureGoodPct.toStringAsFixed(0)}%',
-                style: AppTypography.label(color: postureColor),
-                textAlign: TextAlign.center),
-          ),
-        ],
-      ),
-    );
-  }
-}
 // ─────────────────────────────────────────────────────────────────────────────
 // _TrendBanner — dark card showing grade progression arc
 // Visually distinct from all other white cards in the Overview tab.
@@ -2289,7 +2142,7 @@ class _MetricsTab extends StatelessWidget {
                     return last - baseline;
                   }).toList(),
                   format:  (v) => v != null
-                      ? '${v >= 0 ? '+' : ''}${v!.toStringAsFixed(0)} bpm'
+                      ? '${v >= 0 ? '+' : ''}${v.toStringAsFixed(0)} bpm'
                       : '—',
                   colorFn: (v) => v == null
                       ? AppColors.textDisabled
@@ -2582,8 +2435,8 @@ class _MetricGroup extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () => context.pop(),
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: AppSpacing.xs),
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: AppSpacing.xs),
                           child: Icon(Icons.close_rounded,
                               color: AppColors.textOnDark,
                               size: AppSpacing.iconSm),

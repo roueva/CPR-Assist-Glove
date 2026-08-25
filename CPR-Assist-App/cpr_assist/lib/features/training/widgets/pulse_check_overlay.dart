@@ -65,6 +65,7 @@ class _PulseCheckOverlayState extends State<PulseCheckOverlay> {
     });
   }
 
+  @override
   void dispose() {
     _elapsedTimer?.cancel();
     super.dispose();

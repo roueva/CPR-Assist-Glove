@@ -160,7 +160,7 @@ class _CollapsingTrainingLayoutState
           GestureDetector(
             behavior: HitTestBehavior.translucent,
             onVerticalDragUpdate: (d) {
-              final maxScroll = (_cardMax - _cardMin) + _pbMax;
+              const maxScroll = (_cardMax - _cardMin) + _pbMax;
               final raw = _collapseProgress - d.delta.dy / maxScroll;
               final clamped = raw.clamp(0.0, 1.0);
               if ((clamped - _collapseProgress).abs() > 0.001) {
@@ -225,8 +225,6 @@ class _CollapsingTrainingLayoutState
 
     final isLandscape = context.isLandscape;
     final double landscapeRingsOpacity = (1.0 - progress * 1.6).clamp(0.0, 1.0);
-    final double landscapeRingsScale = (1.0 - progress * 2.0).clamp(0.0, 1.0);
-
 
     final gradeRing = SizedBox(
       width:  isLandscape ? (availableH * 0.65).clamp(48.0, 100.0) : ringSize,
@@ -434,10 +432,9 @@ class _CollapsingTrainingLayoutState
     final double waveH         = lerpDouble(72,  0, progress)!;
     final double waveOpacity   = (1.0 - progress * 2.0).clamp(0.0, 1.0);
     final double bpmFont       = lerpDouble(45, 40, progress)!;
-    final double bpmOpacity    = 1.0;
+    const double bpmOpacity    = 1.0;
     final double statsOpacity  = (1.0 - progress * 1.6).clamp(0.0, 1.0);
     final double statsH        = lerpDouble(88,  0, progress)!;
-    final double labelFont     = lerpDouble(14, 11, progress)!;
 
     // ── Labels ──────────────────────────────────────────────────────────────
     final String headline = noCheck
@@ -565,7 +562,7 @@ class _CollapsingTrainingLayoutState
                         opacity: waveOpacity,
                         child: ClipRect(
                           child: _StoredPpgWave(
-                            samples:  ppgSamples!,
+                            samples:  ppgSamples,
                             color:    accentColor,
                             detected: detected == true,
                           ),
@@ -878,7 +875,7 @@ class _GradeInfoDialog extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1257,6 +1254,7 @@ class _PBBannerState extends State<_PBBanner>
     super.dispose();
   }
 
+  @override
   Widget build(BuildContext context) {
     if (!widget.isNewBest) return const SizedBox.shrink();
 

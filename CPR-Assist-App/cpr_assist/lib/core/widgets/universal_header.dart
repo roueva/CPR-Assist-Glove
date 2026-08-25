@@ -219,7 +219,7 @@ class _BleAndBatteryPill extends ConsumerWidget {
                       'assets/icons/glove_icon.svg',
                       width:  AppSpacing.iconMd,
                       height: AppSpacing.iconMd,
-                      colorFilter: ColorFilter.mode(
+                      colorFilter: const ColorFilter.mode(
                         AppColors.textSecondary,
                         BlendMode.srcIn,
                       ),
@@ -323,7 +323,7 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
         }
       } on FlutterBluePlusException {
         // User denied or error — show alert
-        if (mounted) {
+        if (context.mounted) {
           AppDialogs.showAlert(
             context,
             icon:      Icons.bluetooth_disabled_rounded,
@@ -384,7 +384,7 @@ class _GloveStatusDialogState extends State<_GloveStatusDialog>
                     child: Container(
                       width:  AppSpacing.iconLg,
                       height: AppSpacing.iconLg,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.headerSurface,
                         shape: BoxShape.circle,
                       ),
@@ -583,7 +583,7 @@ class _DeviceRow extends StatelessWidget {
         Container(
         width:  AppSpacing.iconBoxSize,
         height: AppSpacing.iconBoxSize,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: AppColors.primaryLight,
           shape: BoxShape.circle,
         ),
@@ -592,7 +592,7 @@ class _DeviceRow extends StatelessWidget {
           'assets/icons/glove_icon.svg',
           width:  AppSpacing.iconMd,
           height: AppSpacing.iconMd,
-          colorFilter: ColorFilter.mode(
+          colorFilter: const ColorFilter.mode(
             AppColors.primary,
             BlendMode.srcIn,
           ),

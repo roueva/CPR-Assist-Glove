@@ -118,7 +118,7 @@ class _FatigueDetailDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -162,7 +162,7 @@ class _FatigueDetailDialog extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bolt_rounded,
+                        const Icon(Icons.bolt_rounded,
                             size: AppSpacing.iconXs,
                             color: AppColors.warning),
                         const SizedBox(width: AppSpacing.xxs),
@@ -175,7 +175,7 @@ class _FatigueDetailDialog extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_outline_rounded,
+                        const Icon(Icons.check_circle_outline_rounded,
                             size: AppSpacing.iconXs,
                             color: AppColors.success),
                         const SizedBox(width: AppSpacing.xxs),
@@ -249,7 +249,7 @@ class _FatigueDetailDialog extends StatelessWidget {
                                 ? '$_firstRMSSD → $_lastRMSSD ms'
                                 : '—',
                             diffText: hasRMSSD
-                                ? '${rmssdDiff >= 0 ? '+' : ''}${rmssdDiff} ms'
+                                ? '${rmssdDiff >= 0 ? '+' : ''}$rmssdDiff ms'
                                 : null,
                             diffColor: rmssdDiff < -5
                                 ? AppColors.warning
@@ -560,7 +560,7 @@ class _HeartRateDetailDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -791,7 +791,7 @@ class _SpO2DetailDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -955,7 +955,7 @@ class _WristTempDetailDialog extends StatelessWidget {
     final last      = _lastTemp;
     final heroVal   = (last ?? temp).toStringAsFixed(1);
     final hasTrend  = first != null && last != null && (last - first).abs() >= 0.1;
-    final diff      = hasTrend ? last! - first! : 0.0;
+    final diff      = hasTrend ? last - first : 0.0;
     final diffColor = diff > 0.5 ? AppColors.warning : AppColors.success;
 
     return Dialog(
@@ -988,7 +988,7 @@ class _WristTempDetailDialog extends StatelessWidget {
                       style: AppTypography.heading(size: 16))),
                   IconButton(
                     onPressed: () => context.pop(),
-                    icon: Icon(Icons.close_rounded,
+                    icon: const Icon(Icons.close_rounded,
                         color: AppColors.textSecondary,
                         size: AppSpacing.iconMd),
                     padding: EdgeInsets.zero,
@@ -1278,76 +1278,6 @@ class _VitalInfoTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _VitalReadingTile — individual vital tile (HR, SpO2, temp)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VitalReadingTile extends StatelessWidget {
-  final String   label;
-  final String   value;
-  final String   unit;
-  final String   sub;
-  final Color    color;
-  final IconData icon;
-
-  const _VitalReadingTile({
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.sub,
-    required this.color,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm + AppSpacing.xs),
-      decoration: AppDecorations.greyInfoBox(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Label + icon
-          Row(
-            children: [
-              Icon(icon, size: AppSpacing.iconXs,
-                  color: AppColors.textDisabled),
-              const SizedBox(width: AppSpacing.xxs),
-              Text(label,
-                  style: AppTypography.caption(
-                      color: AppColors.textSecondary)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          // Big value + unit
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: value,
-                  style: AppTypography.numericDisplay(
-                      size: 24, color: color),
-                ),
-                TextSpan(
-                  text: ' $unit',
-                  style: AppTypography.bodyMedium(
-                      size: 12, color: color.withValues(alpha: 0.7)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          // Status label
-          Text(sub,
-              style: AppTypography.caption(
-                  color: color.withValues(alpha: 0.75))),
-        ],
-      ),
-    );
-  }
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
 // _SummaryOnlyMetrics
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1362,7 +1292,7 @@ class _SummaryOnlyMetrics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _EmptyState(
+    return const _EmptyState(
       icon:  Icons.bar_chart_rounded,
       title: 'Detailed metrics not available',
       body:  'Full metrics are only available for sessions loaded '

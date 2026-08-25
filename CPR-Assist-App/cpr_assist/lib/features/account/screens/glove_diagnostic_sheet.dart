@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:cpr_assist/core/core.dart';
-import '../../../providers/app_providers.dart';
 import '../../../services/ble/ble_connection.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,12 +169,6 @@ extension _DiagComponentExt on _DiagComponent {
     _DiagComponent.button          => 'Mode Button',
   };
 
-  bool get isCritical => switch (this) {
-    _DiagComponent.fsr || _DiagComponent.imuPalm ||
-    _DiagComponent.imuWrist || _DiagComponent.depthCombined => true,
-    _ => false,
-  };
-
   bool get hasCsvExport => switch (this) {
     _DiagComponent.dfplayer || _DiagComponent.motor ||
     _DiagComponent.neopixel || _DiagComponent.button => false,
@@ -201,9 +194,6 @@ class _GloveDiagnosticSheetState extends ConsumerState<GloveDiagnosticSheet> {
   int _warnMask    = 0;
   int _critMask    = 0;
   int _battPct     = 0;
-  int        _i2cScanMask    = 0;
-  int        _palmWhoAmI     = 0;
-  int        _wristWhoAmI    = 0;
   List<int>  _reasonCodes    = const [0, 0, 0, 0, 0, 0, 0, 0];
   bool _didRunQuickTest = false;
   StreamSubscription? _selfSub;
@@ -240,9 +230,6 @@ class _GloveDiagnosticSheetState extends ConsumerState<GloveDiagnosticSheet> {
         _warnMask = (d['selftestWarnMask']     as int?) ?? 0;
         _critMask = (d['selftestCriticalMask'] as int?) ?? 0;
         _battPct  = (d['selftestBatteryPct']   as int?) ?? 0;
-        _i2cScanMask = (d['selftestI2cScanMask'] as int?) ?? 0;
-        _palmWhoAmI  = (d['selftestPalmWhoAmI']  as int?) ?? 0;
-        _wristWhoAmI = (d['selftestWristWhoAmI'] as int?) ?? 0;
         _reasonCodes = ((d['selftestReasonCodes'] as List?) ?? const [])
             .cast<int>();
         if (_reasonCodes.length < 8) {
@@ -1097,7 +1084,6 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = List<_DiagSample>.unmodifiable(_buffer);
     final c = widget.component;
     return Scaffold(
       backgroundColor: AppColors.screenBgGrey,
@@ -1229,7 +1215,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'Depth', unit: 'cm',    value: (s) => s.depth,     fractionDigits: 1),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'Press the force sensor with your finger and watch the ADC and Force values rise. '
             'If ADC stays at 0: check MCP6002 power (pin 8 → 3.3V) and GND. '
             'If ADC stays at 4095: check VREF divider (10kΩ + 2kΩ). '
@@ -1248,7 +1234,6 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
     final accelMag = palm ? (s?.palmAccelMag ?? 0.0) : (s?.wristAccelMag ?? 0.0);
     final gravOk   = accelMag > 9.0 && accelMag < 10.5;
     final label    = palm ? 'Palm' : 'Wrist';
-    final angleVal = palm ? (s?.palmWristAngle ?? 0.0) : (s?.wristFlexion ?? 0.0);
     final angleLabel = palm ? 'Alignment angle' : 'Wrist flexion';
     return [
       _DiagCard(title: 'Live Readings', children: [
@@ -1389,7 +1374,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'SpO₂', unit: '%', value: (s) => s.spO2Patient, fractionDigits: 1),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'Place your fingertip firmly on the MAX30102 sensor (TCA channel 5, I²C 0x57). '
             'Signal quality should rise to ≥ ${AppConstants.diagPpgPatientTestMinQuality}. '
             'If quality stays at 0: check VIN, GND, SDA, SCL on TCA CH5.',
@@ -1463,7 +1448,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'SpO₂', unit: '%', value: (s) => s.spO2User, fractionDigits: 1),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'Rescuer PPG on TCA channel 4, I²C 0x57. '
             'Wear the glove and check if HR appears. '
             'Quality drops to 0 during compressions — this is expected.',
@@ -1528,7 +1513,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'Temp', unit: '°C', value: (s) => s.patientTempC, fractionDigits: 2),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'MAX30205 on TCA channel 2, I²C 0x48. Reading 0.00 °C = I²C not responding.',
       ),
     ];
@@ -1599,7 +1584,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'Hum', unit: '%', value: (s) => s.rescuerHumidity, fractionDigits: 0),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'GXHT30 on TCA channel 3, I²C 0x44. When worn on wrist: expect temp 30–36°C, humidity 50–80%RH.',
       ),
     ];
@@ -1628,7 +1613,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           setState(() { _actionFeedback = '✗ No audio. Check speaker wires and DFPlayer UART'; });
         }),
       ]),
-      _HintCard(
+      const _HintCard(
         'Audio feedback plays spoken compression cues and rhythm guidance during CPR. '
             'If silent: check the speaker is connected and the SD card is inserted in the DFPlayer module.',
       ),
@@ -1658,7 +1643,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           setState(() { _actionFeedback = '✗ No vibration. Check motor circuit'; });
         }),
       ]),
-      _HintCard(
+      const _HintCard(
         'Vibration feedback gives the rescuer a tactile pulse to maintain compression rhythm. '
             'If no vibration is felt: check that the motor is securely connected to the circuit board.',
       ),
@@ -1688,7 +1673,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           setState(() { _actionFeedback = '✗ LED issue. Check data line or individual LED'; });
         }),
       ]),
-      _HintCard(
+      const _HintCard(
         'The LED bar on the glove shows compression depth in real time — deeper compressions light more LEDs. '
             'If some LEDs are off or the wrong colour, one or more LEDs on the strip may need replacing.',
       ),
@@ -1734,7 +1719,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'Chg', unit: '', value: (s) => s.isCharging ? 1.0 : 0.0, fractionDigits: 0),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'Battery ADC on GPIO35 via 100kΩ+100kΩ divider. Charging detect on GPIO33 (HIGH = USB charging).',
       ),
     ];
@@ -1817,7 +1802,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
               ),
             ),
         ]),
-      _HintCard(
+      const _HintCard(
         'TCA9548A at 0x70 on SDA/SCL (GPIO21/22). I²C bus at 400kHz. '
             'If TCA itself not responding: check 3.3V power and 10kΩ RST pull-up.',
       ),
@@ -1836,7 +1821,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
   final List<int> _buttonPressTimes = [];
 
   List<Widget> _buildButton() {
-    final required = AppConstants.diagButtonTestRequiredPresses;
+    const required = AppConstants.diagButtonTestRequiredPresses;
     return [
       _DiagCard(title: 'Live State', children: [
         _DiagRow('Press events detected', '$_buttonPressCount'),
@@ -1844,7 +1829,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
       _DiagCard(title: 'Static Checks', children: [
         _CheckRow('Press events received', _buttonPressCount > 0,
             hint: 'No events → GPIO27 not pulling LOW, or button wiring fault'),
-        _CheckRow('Button on GPIO27, active LOW', true,
+        const _CheckRow('Button on GPIO27, active LOW', true,
             hint: '10kΩ pull-up to 3.3V required'),
       ]),
       _GuidedCheck(
@@ -1882,7 +1867,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
               ),
             ),
         ]),
-      _HintCard(
+      const _HintCard(
         'Button on GPIO27 with 10kΩ pull-up to 3.3V. Long press (>2s) cycles mode.',
       ),
     ];
@@ -1897,24 +1882,6 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
   // state machine, so we don't need CMD_START or any session at all. The
   // FSR + IMU + fusion still produce a `depth` value in real time (via the
   // force model fallback even without a session), so we plot that too.
-
-  int  _compTestPeakCount   = 0;
-  bool _compTestInRise      = false;
-  int  _compTestStartBufLen = 0;
-
-  void _onForceSampleForDepthTest(_DiagSample s) {
-    // Only count when widget.component == depthCombined and the user is
-    // running the guided test (started by _GuidedCheck). We use the
-    // _compTestStartBufLen marker to detect "test in progress".
-    if (widget.component != _DiagComponent.depthCombined) return;
-    if (_compTestStartBufLen == 0) return;
-    if (!_compTestInRise && s.force >= AppConstants.diagDepthTestPeakForceN) {
-      _compTestInRise = true;
-      _compTestPeakCount++;
-    } else if (_compTestInRise && s.force < AppConstants.diagDepthTestReleaseN) {
-      _compTestInRise = false;
-    }
-  }
 
   List<Widget> _buildDepthCombined() {
     final snapshot = List<_DiagSample>.unmodifiable(_buffer);
@@ -1939,7 +1906,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
             hint: 'Open the IMU — Wrist test to debug'),
       ]),
       if (!allUpstreamOk)
-        _HintCard(
+        const _HintCard(
           'Cannot run compression test — fix the upstream sensors above first. '
               'Compression detection fuses force + IMU; both must work.',
         )
@@ -1971,7 +1938,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
                     (m, x) => x.depth > m ? x.depth : m);
             final maxForce = window.fold<double>(0,
                     (m, x) => x.force > m ? x.force : m);
-            final req = AppConstants.diagDepthTestRequiredPeaks;
+            const req = AppConstants.diagDepthTestRequiredPeaks;
             if (peaks >= req) {
               return (passed: true,
               message: '$peaks/$req peaks, max ${maxForce.toStringAsFixed(0)} N, '
@@ -2006,7 +1973,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
           _HistoryColumn(header: 'Force', unit: 'N',  value: (s) => s.force, fractionDigits: 1),
         ],
       ),
-      _HintCard(
+      const _HintCard(
         'This test verifies the full compression-detection pipeline: '
             'FSR analog → ADC → force conversion → IMU integration → fusion → depth. '
             'If force peaks but depth stays at 0: IMU integration is broken. '
@@ -2473,7 +2440,11 @@ class _MultiTracePainter extends CustomPainter {
       for (int i = 0; i < pts.length; i++) {
         final x = i / (pts.length - 1) * plotWidth;
         final y = size.height - (pts[i] - minV) / range * size.height;
-        if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
       }
       canvas.drawPath(path, paint);
     }
