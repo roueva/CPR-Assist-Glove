@@ -1494,7 +1494,7 @@ class ExportService {
 
       final hasRecoilData =
           valleyMs > 0 ||
-              c.valleyDepth > 0 ||
+              c.residualLoadDepthCm > 0 ||
               c.recoilPhaseDurationMs > 0 ||
               c.leaningDetected;
 
@@ -1565,8 +1565,8 @@ class ExportService {
 
         downstrokeDuration: fmtInt(c.downstrokeTimeMs),
 
-        recoilDepth: c.valleyDepth > 0
-            ? c.valleyDepth.toStringAsFixed(2)
+        recoilDepth: c.residualLoadDepthCm > 0
+            ? c.residualLoadDepthCm.toStringAsFixed(2)
             : '',
         recoilDuration: recoilDur,
         recoilTargetMet: hasRecoilData ? _yn(c.recoilAchieved) : '',

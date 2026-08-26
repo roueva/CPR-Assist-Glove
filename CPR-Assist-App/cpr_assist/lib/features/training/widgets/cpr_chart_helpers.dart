@@ -330,7 +330,7 @@ AxisTitles buildCprRateLeftAxis({
 // ─────────────────────────────────────────────────────────────────────────────
 
 List<FlSpot> buildCprWaveform(List<dynamic> events) {
-  // events must have .timestampSec, .depth, .valleyDepth
+  // events must have .timestampSec, .depth, .residualLoadDepthCm
   if (events.isEmpty) return [];
   final spots = <FlSpot>[];
   for (int i = 0; i < events.length; i++) {
@@ -339,7 +339,7 @@ List<FlSpot> buildCprWaveform(List<dynamic> events) {
     final rawDepth = e.depth as double;
     if (!rawDepth.isFinite || rawDepth <= 0) continue;  // skip unmeasured comp
     final peak   = rawDepth.clamp(0.0, 10.0);
-    final rawVal = e.valleyDepth as double;
+    final rawVal = e.residualLoadDepthCm as double;
     final valley = rawVal > 0
         ? rawVal.clamp(0.0, (peak - 0.05).clamp(0.0, 10.0))
         : 0.0;

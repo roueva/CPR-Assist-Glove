@@ -114,7 +114,7 @@ firmware (verified by grep across all `.cpp`/`.h`/`.ino` in `CPR-Assist-Firmware
 | `getAdaptiveDepthMM()` | `imu.h:100` | `imu.cpp:617-639` | Its own header comment (`imu.cpp:609-616`) says it's a "backward-compatibility wrapper" kept so `depth.cpp` wouldn't need changes — but `depth.cpp` already calls `imuCombineDual()` directly (`depth.cpp:570-571`). The migration this function was staged for already happened; the wrapper was never deleted. |
 | `imuGetWorldVertAccelPalm()` / `imuGetWorldVertAccelWrist()` | `imu.h:111-112` | `imu.cpp:308-309` | Header comment says these are the new public accessors "for forward-looking clarity," replacing `imuGetMotionAccelPalm/Wrist`. Nothing calls the new names; `depth.cpp` still calls the old ones (`depth.cpp:380-381,398-399`), which read the same underlying `_aPalm`/`_aWrist` statics directly. |
 | `imuTriggerFastConverge()` | `imu.h:145` | `imu.cpp:360-366` | Superseded — `depth.cpp:313` calls `imuResetCF()` instead, with an inline comment `// was: imuTriggerFastConverge()`. |
-| `max30102DiagRescuerFiltered()` / `max30102DiagRescuerDc()` | `max30102.h:63-64` | `max30102.cpp:532-537` | Intended to feed a rescuer-channel diagnostic overlay (matches the app's `diagRescuerPpgFiltered` field, `ble_data_processor.dart:207`), but `ble_manager.cpp`'s diag block never calls either — see LIVE_STREAM diagnostic-overlay table above. |
+| ~~`max30102DiagRescuerFiltered()` / `max30102DiagRescuerDc()`~~ | `max30102.h:63-64` | `max30102.cpp:532-537` | **No longer dead — fixed in Block D.** Originally: intended to feed a rescuer-channel diagnostic overlay (matches the app's `diagRescuerPpgFiltered` field, `ble_data_processor.dart:207`), but `ble_manager.cpp`'s diag block never called either. Now called directly from `bleBuildDiagFrame()` (`ble_manager.cpp`), which replaced the old LIVE_STREAM diag overlay entirely — see "Block D fixes" below. |
 | `forceCalibLocked()` | `force.h:39` | `force.cpp:181-183` | Never called; `_calibLocked` is only read/written internally in `force.cpp` (`forceCalibAddSample`, `forceCalibCompute`). |
 | `forceCalibLock()` | `force.h:40` | `force.cpp:185-187` | Never called; `forceCalibCompute()` sets `_calibLocked = true` directly (`force.cpp:238`) instead of calling this setter. |
 | `forceResetCalibration()` | `force.h:18` | `force.cpp:262-278` | Never called. Its own comment (`force.cpp:263-267`) already flags this: "Locked builds never reset calibration, even if a future caller is wired up." No caller exists in either build configuration. |
@@ -129,10 +129,10 @@ firmware (verified by grep across all `.cpp`/`.h`/`.ino` in `CPR-Assist-Firmware
 
 | Function | Issue |
 |---|---|
-| `imuResetCF()` (`imu.cpp:600-607`) | Name implies an immediate reset. It actually only **arms a deferred reset** (`_pendingCFReset = true`) that fires later, once 300 ms of stillness is detected in `imuUpdateFilters()` (`imu.cpp:314-332`). A caller reading only the name/header (`imu.h:147`, which has no comment) would reasonably expect synchronous behaviour. |
-| `getAdaptiveDepthMM()` (`imu.cpp:617-639`) | Name still advertises "adaptive" dual-IMU blending, but per its own comment it is the *old*, pre-confidence-weighted approach, superseded by `imuCombineDual()`. Also dead (§A) — the mismatch is between the name/comment claiming current relevance and the code being retired. |
-| `max30102PatientContact()` vs `max30102PatientContactOk()` (`max30102.h:30,42`) | Two very similarly-named functions with materially different contracts: `...Contact()` is a stateless one-shot IR-DC probe safe to call anytime (used for the pulse-check *gate*, before a window opens); `...ContactOk()` returns *cached* state from the last full `max30102UpdatePatient()` pipeline run and is only valid once a window is open (the header even warns callers to check the update timestamp first). The naming makes it easy to reach for the wrong one — `cpr_glove.ino` itself needs a paragraph of comment (`cpr_glove.ino:1216-1225`) to explain why it doesn't just call the cached one everywhere. |
-| `bleDrainEventQueue()` (`ble_manager.cpp:247-265`) | "Drain" conventionally implies emptying the queue; the function sends exactly one queued item per call (by design, documented in `ble_manager.h:37`). Not a functional bug, but the name over-promises relative to `bleFlushEventQueue()`, which *does* empty it. |
+| ~~`imuResetCF()`~~ (`imu.cpp:600-607`) | **Fixed in Block E** — renamed to `imuArmCFReset()`, and `imu.h` now carries the doc comment it lacked. Originally: name implied an immediate reset, but it actually only **arms a deferred reset** (`_pendingCFReset = true`) that fires later, once 300 ms of stillness is detected in `imuUpdateFilters()` (`imu.cpp:314-332`). |
+| `getAdaptiveDepthMM()` (`imu.cpp:617-639`) | **Symbol deleted** (pre-existing "Fixes applied" #7, before Block C/D/E) — this row now describes code that no longer exists. Left as historical record per this doc's convention. |
+| ~~`max30102PatientContact()` vs `max30102PatientContactOk()`~~ (`max30102.h:30,42`) | **Fixed in Block B** — renamed to `max30102PatientContactProbe()` / `max30102PatientContactCached()` respectively, names now carry the contract the old names didn't. Originally: two very similarly-named functions with materially different contracts (`...Contact()` a stateless one-shot probe; `...ContactOk()` cached state only valid once a window is open) — the naming made it easy to reach for the wrong one. |
+| ~~`bleDrainEventQueue()`~~ (`ble_manager.cpp:247-265`) | **Fixed in Block E** — renamed to `bleSendNextEvent()`. Originally: "Drain" conventionally implies emptying the queue; the function sent exactly one queued item per call (by design), over-promising relative to `bleFlushEventQueue()`, which *does* empty it. |
 
 ---
 
@@ -149,34 +149,42 @@ firmware (verified by grep across all `.cpp`/`.h`/`.ino` in `CPR-Assist-Firmware
 
 ## D. Magic numbers in `depth.cpp` / `force.cpp` not defined in `config.h`
 
-### depth.cpp
+**Block E fixed all of `depth.cpp`'s rows and 9 of `force.cpp`'s 10 rows** —
+promoted to named `config.h` constants (see "Block E fixes" below for the
+full name list; `validDepth`'s 20-125mm gate stays deliberately independent
+of `IMU_CONF_DEPTH_MIN/MAX_MM`, named but not aligned, per explicit
+instruction). Tables kept below, struck through, as historical record of
+what each literal was and why — one row is only partially resolved and is
+called out.
+
+### depth.cpp — fully resolved
 
 | Value | Location | Purpose |
 |---|---|---|
-| `250` (ms) | `COMP_MIN_INTERVAL_MS`, `depth.cpp:43` | Minimum time between compression starts (240 BPM physical cap). |
-| `0.3f` (cm) | `depth.cpp:419` | Live-depth "ease down" hysteresis band. |
-| `0.15f` (cm) | `depth.cpp:423` | Live-depth noise floor. |
-| `0.10f` (cm) | `depth.cpp:434` | Display-depth noise floor. |
-| `20.0f`, `125.0f` (mm) | `depth.cpp:636` | `validDepth` range gate for storage/trend. `20.0f` happens to equal `IMU_CONF_DEPTH_MIN_MM`; `125.0f` does **not** match `IMU_CONF_DEPTH_MAX_MM` (80.0f) — comment explicitly says this legacy gate is "kept independent of the new IMU-confidence calibration gate," so the asymmetry is intentional, but neither bound is named. |
-| `40.0f`, `160.0f` (BPM) | `validRate()`, `depth.cpp:219` | Physiological sanity range for any rate value — distinct from (and wider than) `TARGET_RATE_MIN/MAX` (100/120). |
-| `0.55f`, `1.80f` (ratio) | `depth.cpp:676` | Single-cycle rate-jump plausibility bounds. |
-| `5` (compressions) | `depth.cpp:230` | Number of compressions used to lock the fatigue baseline — duplicates the intent of `FATIGUE_DEPTH_TREND_SAMPLES` (also 5) without referencing it. |
-| `0.6f`, `0.4f` | `depth.cpp:682` | `_instantRate` display-smoothing EMA weights. |
+| ~~`250` (ms)~~ | `COMP_MIN_INTERVAL_MS`, `depth.cpp:43` | Minimum time between compression starts (240 BPM physical cap). Now `config.h`, same name. |
+| ~~`0.3f` (cm)~~ | `depth.cpp:419` | Live-depth "ease down" hysteresis band. Now `LIVE_DEPTH_EASE_DOWN_CM`. |
+| ~~`0.15f` (cm)~~ | `depth.cpp:423` | Live-depth noise floor. Now `LIVE_DEPTH_NOISE_FLOOR_CM`. |
+| ~~`0.10f` (cm)~~ | `depth.cpp:434` | Display-depth noise floor. Now `DISPLAY_DEPTH_NOISE_FLOOR_CM`. |
+| ~~`20.0f`, `125.0f` (mm)~~ | `depth.cpp:636` | `validDepth` range gate for storage/trend. Now `VALID_DEPTH_MIN_MM`/`VALID_DEPTH_MAX_MM` — named but deliberately **not** aligned with `IMU_CONF_DEPTH_MIN/MAX_MM` (80.0f); the asymmetry was and remains intentional. |
+| ~~`40.0f`, `160.0f` (BPM)~~ | `validRate()`, `depth.cpp:219` | Physiological sanity range for any rate value. Now `VALID_RATE_MIN_BPM`/`VALID_RATE_MAX_BPM`. |
+| ~~`0.55f`, `1.80f` (ratio)~~ | `depth.cpp:676` | Single-cycle rate-jump plausibility bounds. Now `RATE_JUMP_MIN_RATIO`/`RATE_JUMP_MAX_RATIO`. |
+| ~~`5` (compressions)~~ | `depth.cpp:230` | Fatigue baseline lock — now references the existing `FATIGUE_DEPTH_TREND_SAMPLES` directly instead of duplicating its value. |
+| ~~`0.6f`, `0.4f`~~ | `depth.cpp:682` | `_rateJumpReference` (renamed from `_instantRate`, see Block E) EMA weights. Now `RATE_JUMP_EMA_OLD_WEIGHT`/`RATE_JUMP_EMA_NEW_WEIGHT`. |
 
-### force.cpp
+### force.cpp — resolved except the depth-range half of one row
 
 | Value | Location | Purpose |
 |---|---|---|
-| `50.0f` (N) | `depth.cpp` n/a — `force.cpp:81` | Boot-baseline sanity ceiling ("sensor was under load at boot"). |
-| `700.0f` (N) | `force.cpp:108` | ADC-glitch rejection ceiling — duplicates `FORCE_CONF_RANGE_MAX_N` (700.0f, `config.h:364`) as an independent literal rather than the macro. |
-| `0.5f` (factor) | `force.cpp:122` | In-session baseline-adapt eligibility multiplier on `FORCE_LEANING_THRESHOLD`. |
-| `30.0f`/`600.0f`/`20.0f`/`100.0f` and `100.0f`/`600.0f`/`40.0f`/`80.0f` | `force.cpp:156-160` | `LOW_FORCE_MODE` vs. real-manikin calibration-sample gating ranges. `30.0f`/`600.0f` happen to match `FORCE_BASELINE_MIN`/`FORCE_CONF_RANGE_MAX_N` but are re-literaled rather than referencing those macros. |
-| `5` (samples) ×2 | `force.cpp:194,224` | Minimum sample counts for fitting and for outlier-filtered refit. |
-| `2.0f` (factor) | `force.cpp:221` | Outlier-rejection residual multiplier. |
-| `0.70f`, `3.50f` | `force.cpp:233` | k acceptance range (explained in the surrounding comment, but not named constants). |
-| `0.15f` | `force.cpp:205` | Fallback k when `computeK()`'s denominator is ≤0. |
-| `30.0f` (N) | `forceConfidence()`, `force.cpp:314` | `rangeMargin` for the linear confidence taper at the edges of the operating range. |
-| `0.25f`, `0.85f`, `0.50f`, `0.70f` | `force.cpp:336-337` | Baseline-drift confidence-penalty thresholds/factors. |
+| ~~`50.0f` (N)~~ | `force.cpp:81` | Boot-baseline sanity ceiling. Now `FORCE_BOOT_BASELINE_CEILING_N`. |
+| ~~`700.0f` (N)~~ | `force.cpp:108` | ADC-glitch rejection ceiling. Now references `FORCE_CONF_RANGE_MAX_N` directly instead of duplicating the literal. |
+| ~~`0.5f` (factor)~~ | `force.cpp:122` | In-session baseline-adapt eligibility multiplier. Now `FORCE_BASELINE_ADAPT_LEANING_FRAC`. |
+| ~~`30.0f`/`600.0f`~~ **and** still-open `20.0f`/`100.0f`/`40.0f`/`80.0f` | `force.cpp:154-158` | `LOW_FORCE_MODE` vs. real-manikin calibration-sample gating ranges. The **force** bounds (`30.0f`→`FORCE_BASELINE_MIN`, `100.0f`/`600.0f`→`FORCE_CALIB_GATE_MIN_N`/`FORCE_CALIB_GATE_MAX_N`) are fixed. The **depth** bounds (`depthMin`/`depthMax` — `20.0f`/`100.0f` in `LOW_FORCE_MODE`, `40.0f`/`80.0f` otherwise) were never in scope for Block E (only the force literals were asked for) and are **still unnamed literals today** — genuinely open, not a documentation gap. |
+| ~~`5` (samples) ×2~~ | `force.cpp:194,224` | Minimum sample counts for fitting and for outlier-filtered refit. Now two distinct constants, `FORCE_CALIB_MIN_SAMPLES_TO_FIT`/`FORCE_CALIB_MIN_INLIERS_TO_REFIT` (kept separate since they're different gates that happened to share a value). |
+| ~~`2.0f` (factor)~~ | `force.cpp:221` | Outlier-rejection residual multiplier. Now `FORCE_CALIB_OUTLIER_RESIDUAL_MULT`. |
+| ~~`0.70f`, `3.50f`~~ | `force.cpp:233` | k acceptance range. Now `FORCE_CALIB_K_MIN`/`FORCE_CALIB_K_MAX`. |
+| ~~`0.15f`~~ | `force.cpp:205` | Fallback k when `computeK()`'s denominator is ≤0. Now `FORCE_CALIB_K_FALLBACK`. |
+| ~~`30.0f` (N)~~ | `forceConfidence()`, `force.cpp:314` | `rangeMargin` for the linear confidence taper. Now `FORCE_CONF_RANGE_MARGIN_N`. |
+| ~~`0.25f`, `0.85f`, `0.50f`, `0.70f`~~ | `force.cpp:336-337` | Baseline-drift confidence-penalty thresholds/factors. Now `FORCE_CONF_DRIFT_MODERATE_THRESHOLD`/`_PENALTY`, `FORCE_CONF_DRIFT_HEAVY_THRESHOLD`/`_PENALTY`. |
 
 ---
 

@@ -46,10 +46,10 @@ class CompressionEvent {
   /// Peak depth of this compression (cm).
   final double depth;
 
-  /// Minimum depth reached after this compression's peak before next downstroke.
-  /// ~0–0.5 cm = full recoil. > 0.5 cm = incomplete recoil.
-  /// 0.0 when not available (older firmware or history without valley data).
-  final double valleyDepth;
+  /// Force-to-depth proxy for the residual inter-compression load, not an
+  /// IMU depth reading. ~0–0.5 cm = full recoil. > 0.5 cm = incomplete recoil.
+  /// 0.0 when not available (older firmware or history without this data).
+  final double residualLoadDepthCm;
 
   /// Instantaneous rate from last two IBIs (BPM).
   /// Used for per-compression grading — more reactive than [frequency].
@@ -116,7 +116,7 @@ class CompressionEvent {
     required this.instantaneousRate,
     this.frequency         = 0.0,
     this.force             = 0.0,
-    this.valleyDepth       = 0.0,
+    this.residualLoadDepthCm = 0.0,
     required this.recoilAchieved,
     this.overForce         = false,
     this.postureOk         = false,
@@ -185,7 +185,7 @@ class CompressionEvent {
       frequency: (json['freq'] as num?)?.toDouble() ?? 0.0,
       force: (json['force'] as num?)?.toDouble() ?? 0.0,
       peakForce: (json['peak_force'] as num?)?.toDouble() ?? 0.0,
-      valleyDepth: (json['valley_depth'] as num?)?.toDouble() ?? 0.0,
+      residualLoadDepthCm: (json['valley_depth'] as num?)?.toDouble() ?? 0.0,
       recoilAchieved: json['recoil'] as bool? ?? false,
       overForce: json['over_force'] as bool? ?? false,
       postureOk: json['posture_ok'] as bool? ?? false,
@@ -215,7 +215,7 @@ class CompressionEvent {
     'instantaneous_rate':  instantaneousRate,
     'freq':                frequency,
     'force':               force,
-    'valley_depth':        valleyDepth,
+    'valley_depth':        residualLoadDepthCm,
     'recoil':              recoilAchieved,
     'over_force':          overForce,
     'posture_ok':          postureOk,

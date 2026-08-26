@@ -940,37 +940,56 @@ static void commsTask(void* pv) {
       if (_sessionRunning) stopSession();
       else startSession();
     } else if (btn == ButtonEvent::DoubleTap) {
-      // Cycle mode
-      SharedState snap = snapshotState();
-      GloveMode next = (GloveMode)(((int)snap.currentMode + 1) % 3);
-      portENTER_CRITICAL(&gStateMux);
-      gState.currentMode = next;
-      const bool fbOn = (next != GloveMode::NoFeedback);
-      gState.audioFeedbackEnabled = fbOn;
-      gState.hapticFeedbackEnabled = fbOn;
-      gState.visualFeedbackEnabled = fbOn;
-      portEXIT_CRITICAL(&gStateMux);
-      bleQueueEvent(bleBuildModeChange(next, 0));  // trigger=0 (button)
-      const uint8_t audioTrack[] = { AUDIO_MODE_EMERGENCY, AUDIO_MODE_TRAINING, AUDIO_MODE_NOFEEDBACK };
-      audioPlay(audioTrack[(int)next], AUDIO_PRI_MODE_CHANGE);
-      motorPulse(MOTOR_MEDIUM_MS);
-      neoModeChange(next);
+      // Mode must not change mid-session: switching kills audio/haptic/
+      // visual coaching mid-CPR (NoFeedback disables all three) and plays a
+      // spoken mode announcement — neither acceptable during a study
+      // session. Refused silently for now; rescuer feedback for a refused
+      // tap is a separate, not-yet-approved decision. Correct via
+      // LongPress: stop the session, change mode, restart.
+      if (!_sessionRunning) {
+        // Cycle mode
+        SharedState snap = snapshotState();
+        GloveMode next = (GloveMode)(((int)snap.currentMode + 1) % 3);
+        portENTER_CRITICAL(&gStateMux);
+        gState.currentMode = next;
+        const bool fbOn = (next != GloveMode::NoFeedback);
+        gState.audioFeedbackEnabled = fbOn;
+        gState.hapticFeedbackEnabled = fbOn;
+        gState.visualFeedbackEnabled = fbOn;
+        portEXIT_CRITICAL(&gStateMux);
+        bleQueueEvent(bleBuildModeChange(next, 0));  // trigger=0 (button)
+        const uint8_t audioTrack[] = { AUDIO_MODE_EMERGENCY, AUDIO_MODE_TRAINING, AUDIO_MODE_NOFEEDBACK };
+        audioPlay(audioTrack[(int)next], AUDIO_PRI_MODE_CHANGE);
+        motorPulse(MOTOR_MEDIUM_MS);
+        neoModeChange(next);
+      }
     } else if (btn == ButtonEvent::TripleTap) {
-      // Cycle scenario (works in and out of session)
-      SharedState snap = snapshotState();
-      Scenario next = (snap.currentScenario == Scenario::Adult)
-                        ? Scenario::Pediatric
-                        : Scenario::Adult;
-      portENTER_CRITICAL(&gStateMux);
-      gState.currentScenario = next;
-      gState.targetDepthMinMM = (next == Scenario::Pediatric) ? TARGET_DEPTH_MIN_PEDS : TARGET_DEPTH_MIN_ADULT;
-      gState.targetDepthMaxMM = (next == Scenario::Pediatric) ? TARGET_DEPTH_MAX_PEDS : TARGET_DEPTH_MAX_ADULT;
-      portEXIT_CRITICAL(&gStateMux);
-      bleQueueEvent(bleBuildScenarioChange(next, 0));
-      audioPlay((next == Scenario::Pediatric) ? AUDIO_SCENARIO_PEDS : AUDIO_SCENARIO_ADULT,
-                AUDIO_PRI_MODE_CHANGE);
-      motorPattern(MOTOR_SHORT_MS, MOTOR_SHORT_MS, 2);
-      neoScenarioChange(next);
+      // Scenario must not change mid-session: depth.cpp reads
+      // targetDepthMinMM/targetDepthMaxMM (and the overforce threshold)
+      // fresh on every depthUpdate() call, so a mid-session change
+      // immediately re-grades every subsequent compression against a
+      // different target with no marker in the stored record separating
+      // before/after — a silent data-corruption vector, not just a UX
+      // hiccup. Refused silently for now; rescuer feedback for a refused
+      // tap is a separate, not-yet-approved decision. Correct via
+      // LongPress: stop the session, change scenario, restart.
+      if (!_sessionRunning) {
+        // Cycle scenario
+        SharedState snap = snapshotState();
+        Scenario next = (snap.currentScenario == Scenario::Adult)
+                          ? Scenario::Pediatric
+                          : Scenario::Adult;
+        portENTER_CRITICAL(&gStateMux);
+        gState.currentScenario = next;
+        gState.targetDepthMinMM = (next == Scenario::Pediatric) ? TARGET_DEPTH_MIN_PEDS : TARGET_DEPTH_MIN_ADULT;
+        gState.targetDepthMaxMM = (next == Scenario::Pediatric) ? TARGET_DEPTH_MAX_PEDS : TARGET_DEPTH_MAX_ADULT;
+        portEXIT_CRITICAL(&gStateMux);
+        bleQueueEvent(bleBuildScenarioChange(next, 0));
+        audioPlay((next == Scenario::Pediatric) ? AUDIO_SCENARIO_PEDS : AUDIO_SCENARIO_ADULT,
+                  AUDIO_PRI_MODE_CHANGE);
+        motorPattern(MOTOR_SHORT_MS, MOTOR_SHORT_MS, 2);
+        neoScenarioChange(next);
+      }
     }
 
     // ── Session events ──────────────────────────────────────────────────────
