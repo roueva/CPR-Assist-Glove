@@ -746,3 +746,35 @@ documented earlier in this file. Deleted the parameter and the field.
 packet-parser field) stays — it still gates when `DIAG_FRAME` is meaningful
 to look at, and is now also the source of the `'diagActive'` map key that
 survives.
+
+---
+
+## Block E fixes — SESSION_END naming defects (rows above are now stale)
+
+Both naming defects recorded in the LIVE_STREAM/EVENT_CHANNEL tables above (§1
+row for `s.patientTemperatureLastPulseCheck`, §2 row for
+`s.rescuerTemperatureStart`/`s.rescuerTemperatureEnd`) describe app-side field
+names that no longer exist — fixed as part of the Block E naming pass. Per
+this doc's own convention, those rows are left as historical record rather
+than edited in place; this entry is the correction.
+
+- `patientTemperature` (in `ParsedBLEData._event`) renamed to
+  `patientTemperatureLastPulseCheck`, and split from the LIVE_STREAM field of
+  the same old name — they were previously the same Dart field serving two
+  different firmware concepts (see "Wrist-dropout investigation"-era Block C
+  fixes section above for the equivalent pattern). `ble_connection.dart`'s
+  SESSION_END map key and the watchdog-synthesised fallback map, and
+  `session_detail.dart`'s read, all updated to match.
+- App's `rescuerWristTempStart`/`rescuerWristTempEnd` renamed to
+  `rescuerTemperatureStart`/`rescuerTemperatureEnd`, matching firmware's own
+  name (chosen over the reverse because the app's own live field,
+  `rescuerTemperature`, already omits "Wrist" — firmware was the consistent
+  side, the app's SESSION_END fields were the outlier). Same three call
+  sites updated. `SessionDetail`'s own field names
+  (`rescuerWristTempStart`/`rescuerWristTempEnd`) were deliberately left
+  unchanged — internal Dart/JSON-column identifiers, not BLE wire names, same
+  precedent as the `valley_depth` JSON key note earlier in this document.
+
+No firmware bytes changed for either fix — SESSION_END 66-69 and 82-89 keep
+their existing layout; only the app-side names were brought in line with
+what the firmware already correctly calls them.

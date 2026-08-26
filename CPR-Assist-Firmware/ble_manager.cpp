@@ -215,7 +215,7 @@ void bleFlushEventQueue() {
   if (_eventQueue) xQueueReset(_eventQueue);
 }
 
-void bleDrainEventQueue() {
+void bleSendNextEvent() {
   if (!_connected || !_eventChar || !_eventQueue) return;
   BLEEventItem item;
   if (xQueueReceive(_eventQueue, &item, 0) == pdTRUE) {

@@ -51,8 +51,6 @@ static uint32_t _cntPosture = 0, _cntLeaning = 0, _cntOverForce = 0, _cntTooDeep
 static unsigned long _lastCompStartMs = 0;
 static unsigned long _thisCompStartMs = 0;
 
-static const unsigned long COMP_MIN_INTERVAL_MS = 250;  // ≥250ms between comp starts (max 240 BPM physical)
-
 static bool _wasLeaning = false;
 static unsigned long _leaningStartMs = 0;  // 0 = not currently above threshold
 static float _liveDepthCm = 0.0f;
@@ -226,7 +224,7 @@ static SelectorResult selectDepth(float imuMM, float forceMM,
 
 // ── Validated rate ────────────────────────────────────────────────────────────
 static float validRate(float r) {
-  return (r >= 40.0f && r <= 160.0f) ? r : 0.0f;
+  return (r >= VALID_RATE_MIN_BPM && r <= VALID_RATE_MAX_BPM) ? r : 0.0f;
 }
 
 // ── Fatigue detection ─────────────────────────────────────────────────────────
@@ -237,11 +235,11 @@ static bool _firstFiveLocked = false;
 static uint32_t _fatigueOnsetIndex = 0;
 
 static void checkFatigue(float peakMM, int compNum, SharedState& s, float userHrBpm) {
-  if (compNum == 5 && !_firstFiveLocked) {
-    // Lock first 5 compression average as baseline
+  if (compNum == FATIGUE_DEPTH_TREND_SAMPLES && !_firstFiveLocked) {
+    // Lock first FATIGUE_DEPTH_TREND_SAMPLES compression average as baseline
     float sum = 0;
-    for (int i = 0; i < 5 && i < _depthTrendFill; i++) sum += _depthTrendBuf[i];
-    int cnt = min(5, _depthTrendFill);
+    for (int i = 0; i < FATIGUE_DEPTH_TREND_SAMPLES && i < _depthTrendFill; i++) sum += _depthTrendBuf[i];
+    int cnt = min(FATIGUE_DEPTH_TREND_SAMPLES, _depthTrendFill);
     _firstFiveAvgMM = (cnt > 0 && sum > 0) ? sum / (float)cnt : peakMM;
     _firstFiveLocked = true;
   }
@@ -319,7 +317,7 @@ void depthSessionReset() {
 
   // Trigger fast CF convergence so the filter adapts quickly to the new
   // hand position on the manikin/patient. Mahony 2008.
-imuResetCF();
+imuArmCFReset();
 
   // Wrist dropout latch is session-scoped (FIRMWARE_PLAN Block C) — a new
   // participant/session must not inherit the previous one's latch.
@@ -425,11 +423,11 @@ if (_state == CompState::COMPRESSING) {
     if (rawCm < 0.0f) rawCm = 0.0f;
     if (rawCm > _liveDepthCm) _liveDepthCm = rawCm;  // monotonic within a stroke
     // allow it to ease down only if the raw value drops substantially
-    else if (rawCm < _liveDepthCm - 0.3f) _liveDepthCm = rawCm;
+    else if (rawCm < _liveDepthCm - LIVE_DEPTH_EASE_DOWN_CM) _liveDepthCm = rawCm;
   } else {
     _liveDepthCm = 0.0f;  // RELEASED → bar returns to zero
   }
-  if (_liveDepthCm < 0.15f) _liveDepthCm = 0.0f;  // floor sensor noise
+  if (_liveDepthCm < LIVE_DEPTH_NOISE_FLOOR_CM) _liveDepthCm = 0.0f;  // floor sensor noise
   // Display-only smoothed depth — follows the true integrated displacement up
   // AND down so the bar shows the whole motion. Separate from _liveDepthCm so
   // valley/recoil grading (line ~445) stays on the unchanged signal.
@@ -440,7 +438,7 @@ if (_state == CompState::COMPRESSING) {
                                  ? forceCalibK() * powf(forceN, DEPTH_EXPONENT) / 10.0f
                                  : 0.0f;  // truly released → rest at 0
   _displayDepthCm += LIVE_DEPTH_EMA_ALPHA * (dispTarget - _displayDepthCm);
-  if (_displayDepthCm < 0.10f) _displayDepthCm = 0.0f;
+  if (_displayDepthCm < DISPLAY_DEPTH_NOISE_FLOOR_CM) _displayDepthCm = 0.0f;
   s.depth = _displayDepthCm;
 
 // Clicker — fires the instant live depth crosses the lower target, once per
@@ -641,7 +639,7 @@ if (_state == CompState::COMPRESSING) {
               (_recoilValleyDepthMM < RECOIL_RESIDUAL_MAX_MM && _recoilValleyForceN < FORCE_LEANING_THRESHOLD) ? "RECOIL_OK" : "NO_RECOIL");
 #endif
 
-     bool validDepth = (imuMM > 20.0f && imuMM < 125.0f);  // legacy flag still used for storage gating below; kept independent of the new IMU-confidence calibration gate
+     bool validDepth = (imuMM > VALID_DEPTH_MIN_MM && imuMM < VALID_DEPTH_MAX_MM);  // legacy flag still used for storage gating below; kept independent of the new IMU-confidence calibration gate
      bool validForce = (_peakForce > FORCE_BASELINE_MIN);  // 30 N, single source of truth
 
       // Update gravity EMA (kept as fallback signal — see Chunk 1 Section 3.3)
@@ -682,13 +680,13 @@ if (_state == CompState::COMPRESSING) {
             float ratio = raw / _rateJumpReference;
             // Reject only physically-impossible single-cycle jumps (interval
             // halved or doubled). ±40% still passes a real fast/slow change.
-            if (ratio < 0.55f || ratio > 1.80f) plausible = false;
+            if (ratio < RATE_JUMP_MIN_RATIO || ratio > RATE_JUMP_MAX_RATIO) plausible = false;
           }
           if (plausible) {
             _gradeRate = raw;  // exact rate THIS comp
             _rateJumpReference = (_rateJumpReference <= 0.0f)
                              ? raw
-                             : 0.6f * _rateJumpReference + 0.4f * raw;  // EMA smoothing
+                             : RATE_JUMP_EMA_OLD_WEIGHT * _rateJumpReference + RATE_JUMP_EMA_NEW_WEIGHT * raw;  // EMA smoothing
             // Feed the 5-comp rolling buffer that backs s.frequency
             _rateBuf[_rateIdx] = raw;
             _rateIdx = (_rateIdx + 1) % 5;
@@ -812,7 +810,6 @@ if (_state == CompState::COMPRESSING) {
         c.postureOk = s.postureOk ? 1 : 0;
         c.wristAlignX10 = (uint8_t)constrain((int)(fabsf(s.wristAlignmentAngle) * 10.0f), 0, 255);
         c.axisDevX10 = (uint8_t)constrain((int)(fabsf(s.compressionAxisDeviation) * 10.0f), 0, 255);
-        for (int i = 0; i < 3; i++) c.reserved[i] = 0;
       }
 
       // Reset integration for next compression

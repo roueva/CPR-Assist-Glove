@@ -216,6 +216,7 @@
 #define FORCE_RELEASE_DONE 20.0f    // N — release confirmed
 #define FORCE_BASELINE_MIN 30.0f    // N — below this → zero depth
 #define FORCE_BASELINE_SAMPLES 50
+#define FORCE_BOOT_BASELINE_CEILING_N 50.0f  // boot-baseline candidate above this = sensor was under load at boot, retry
 #define RELEASE_CONFIRM_NEEDED 6
 // Force→depth power-law exponent. Derived from Tomlinson et al., Resuscitation
 // 2007 (n=91 OOHCA), anchored on F25=13.9kg→25mm and F38=27.5kg→38mm.
@@ -271,6 +272,7 @@
 
 
 #define FORCE_BASELINE_ADAPT_ALPHA 0.002f  // how fast baseline drifts down (per sample at 100Hz ≈ 5min to fully adapt)
+#define FORCE_BASELINE_ADAPT_LEANING_FRAC 0.5f  // in-session adapt eligibility: force must be within this fraction of FORCE_LEANING_THRESHOLD below baseline to count as a full release
 
 // LOW_FORCE_MODE: true = foam/hand testing. false = real manikin CPR.
 #define LOW_FORCE_MODE true
@@ -282,6 +284,18 @@
 #define TARGET_RATE_MIN 100.0f        // BPM
 #define TARGET_RATE_MAX 120.0f        // BPM
 #define FORCE_OVERFORCE_ADULT 600.0f  // N
+
+// validRate() physiological sanity range — distinct from (and wider than)
+// TARGET_RATE_MIN/MAX above, which are the grading target.
+#define VALID_RATE_MIN_BPM 40.0f
+#define VALID_RATE_MAX_BPM 160.0f
+
+// ── Rate-jump plausibility (depth.cpp _rateJumpReference) ────────────────────
+#define COMP_MIN_INTERVAL_MS 250UL  // ≥250ms between comp starts (max 240 BPM physical)
+#define RATE_JUMP_MIN_RATIO 0.55f   // reject single-cycle rate jumps below this ratio
+#define RATE_JUMP_MAX_RATIO 1.80f   // reject single-cycle rate jumps above this ratio
+#define RATE_JUMP_EMA_OLD_WEIGHT 0.6f  // weight on the previous _rateJumpReference
+#define RATE_JUMP_EMA_NEW_WEIGHT 0.4f  // weight on the new per-compression rate
 
 // Pediatric
 #define TARGET_DEPTH_MIN_PEDS 40.0f  // mm
@@ -306,6 +320,23 @@
 // compression ~20–25 (≈15–20 seconds). Softer surfaces or weak compressions
 // (below 200 N) take longer as those samples are rejected.
 #define MAX_CALIBRATION_SAMPLES 20
+
+// forceCalibCompute() gating and fit parameters.
+#define FORCE_CALIB_MIN_SAMPLES_TO_FIT 5      // below this, don't attempt a fit at all
+#define FORCE_CALIB_MIN_INLIERS_TO_REFIT 5    // below this, keep the pre-outlier-rejection fit
+#define FORCE_CALIB_OUTLIER_RESIDUAL_MULT 2.0f  // discard samples with residual > this × mean
+#define FORCE_CALIB_K_FALLBACK 0.15f  // used only if computeK()'s denominator is ≤0
+// k acceptance range — see forceCalibCompute() comment: wider than the
+// Tomlinson 2007 physiological spread (0.7–2.0) to also cover stiffer
+// training manikins. Outside this range the fit is suspect and reverts to
+// K_POPULATION_DEFAULT.
+#define FORCE_CALIB_K_MIN 0.70f
+#define FORCE_CALIB_K_MAX 3.50f
+// Calibration-sample gating ranges (forceCalibAddSample). FORCE_CALIB_GATE_MIN_N
+// is only used in the non-LOW_FORCE_MODE branch — the LOW_FORCE_MODE branch
+// uses FORCE_BASELINE_MIN instead (see force.cpp).
+#define FORCE_CALIB_GATE_MIN_N 100.0f
+#define FORCE_CALIB_GATE_MAX_N 600.0f
 
 // When 1, k is locked at K_STUDY_LOCKED from boot and never fitted from
 // session data — every participant is scored against the same pre-measured
@@ -346,6 +377,12 @@
 #define IMU_CONF_DEPTH_MIN_MM  20.0f
 #define IMU_CONF_DEPTH_MAX_MM  80.0f
 
+// depth.cpp's legacy validDepth gate (storage/trend gating) — deliberately
+// independent of IMU_CONF_DEPTH_MIN/MAX_MM above (kept that way, do not
+// align the values; see depth.cpp comment at validDepth's definition).
+#define VALID_DEPTH_MIN_MM 20.0f
+#define VALID_DEPTH_MAX_MM 125.0f
+
 
 // ── IMU axis mounting constants ───────────────────────────────────────────────
 // Determined empirically: glove flat on table palm-down, reading dominant axis.
@@ -365,6 +402,7 @@
 // In-range = high confidence (subject to calibration status).
 #define FORCE_CONF_RANGE_MIN_N 30.0f
 #define FORCE_CONF_RANGE_MAX_N 700.0f
+#define FORCE_CONF_RANGE_MARGIN_N 30.0f  // linear confidence taper width at the edges of the operating range
 
 // Confidence weight when k-fit is not yet complete (using population mean).
 // Per Tomlinson 2007, individual k varies 0.7–2.0 across patients, so the
@@ -372,6 +410,13 @@
 // phase keeps the selector preferring IMU when both paths are present.
 #define FORCE_CONF_PRECALIB    0.4f
 #define FORCE_CONF_POSTCALIB   0.9f
+
+// Baseline-drift confidence penalty (forceConfidence() component 3). Applied
+// when the adaptive baseline has drifted this far from its boot value.
+#define FORCE_CONF_DRIFT_MODERATE_THRESHOLD 0.25f
+#define FORCE_CONF_DRIFT_MODERATE_PENALTY   0.85f
+#define FORCE_CONF_DRIFT_HEAVY_THRESHOLD    0.50f
+#define FORCE_CONF_DRIFT_HEAVY_PENALTY      0.70f
 
 // Selector thresholds:
 
@@ -402,6 +447,9 @@
 #define CLICK_RESET_MM 20.0f  // mm — depth must drop below this to re-arm
 
 #define LIVE_DEPTH_EMA_ALPHA 0.5f  // bar smoothing; lower = smoother but laggier
+#define LIVE_DEPTH_EASE_DOWN_CM 0.3f  // live depth only eases down (vs. snapping) once the raw value drops this far below it
+#define LIVE_DEPTH_NOISE_FLOOR_CM 0.15f  // live depth below this floors to 0 (sensor noise)
+#define DISPLAY_DEPTH_NOISE_FLOOR_CM 0.10f  // display-smoothed depth below this floors to 0
 
 // ── Compression quality tracking ─────────────────────────────────────────────
 // Consecutive bad compressions before audio fires

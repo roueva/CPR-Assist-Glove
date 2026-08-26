@@ -77,7 +77,7 @@ float v_rel = v - FORCE_BASELINE_V;
     float candidate = _baselineSum / FORCE_BASELINE_SAMPLES;
     // If baseline is unrealistically high, the sensor was under load at boot.
     // Reset and try again — this loop will re-run on next call.
-    if (candidate > 50.0f) {
+    if (candidate > FORCE_BOOT_BASELINE_CEILING_N) {
       _baselineSum = 0;
       _baselineCnt = 0;
       return false;
@@ -117,7 +117,7 @@ float v_rel = v - FORCE_BASELINE_V;
   if (f < _baseline) {
     if (!_sessionActive) {
       forceUpdateBaseline(f);
-    } else if ((f - _baseline) < (FORCE_LEANING_THRESHOLD * 0.5f)) {
+    } else if ((f - _baseline) < (FORCE_LEANING_THRESHOLD * FORCE_BASELINE_ADAPT_LEANING_FRAC)) {
       forceUpdateBaseline(f);
     }
   }
@@ -151,10 +151,10 @@ void forceCalibAddSample(float forceN, float imuDepthMM) {
   if (_calibComplete || _calibCount >= MAX_CALIBRATION_SAMPLES) return;
 
 #if LOW_FORCE_MODE
-  const float forceMin = FORCE_BASELINE_MIN, forceMax = 600.0f;
+  const float forceMin = FORCE_BASELINE_MIN, forceMax = FORCE_CALIB_GATE_MAX_N;
   const float depthMin = 20.0f, depthMax = 100.0f;
 #else
-  const float forceMin = 100.0f, forceMax = 600.0f;
+  const float forceMin = FORCE_CALIB_GATE_MIN_N, forceMax = FORCE_CALIB_GATE_MAX_N;
 const float depthMin = 40.0f, depthMax = 80.0f;
 #endif
 
@@ -181,7 +181,7 @@ float forceCalibK() {
 }
 
 void forceCalibCompute() {
-  if (_calibCount < 5) return;
+  if (_calibCount < FORCE_CALIB_MIN_SAMPLES_TO_FIT) return;
 
   // Fit k: minimise sum of (depth - k*force^exp)^2
   auto computeK = [&](bool* mask) -> float {
@@ -192,7 +192,7 @@ void forceCalibCompute() {
       num += _calibDepths[i] * fp;
       den += fp * fp;
     }
-    return (den > 0) ? num / den : 0.15f;
+    return (den > 0) ? num / den : FORCE_CALIB_K_FALLBACK;
   };
 
   float k = computeK(nullptr);
@@ -208,10 +208,10 @@ void forceCalibCompute() {
   bool inlier[MAX_CALIBRATION_SAMPLES];
   int nIn = 0;
   for (int i = 0; i < _calibCount; i++) {
-    inlier[i] = (residuals[i] <= 2.0f * meanRes);
+    inlier[i] = (residuals[i] <= FORCE_CALIB_OUTLIER_RESIDUAL_MULT * meanRes);
     if (inlier[i]) nIn++;
   }
-  if (nIn >= 5) k = computeK(inlier);
+  if (nIn >= FORCE_CALIB_MIN_INLIERS_TO_REFIT) k = computeK(inlier);
 
 // Acceptance range is wider than the Tomlinson 2007 physiological spread
   // (individual k ≈ 0.7–2.0 across human chests, derived from F25 std dev
@@ -220,7 +220,7 @@ void forceCalibCompute() {
   // widened to 0.70–3.50 to cover both. If the fit still lands outside this
   // wider range, the calibration data is suspect — revert to the population
   // mean and let the next session's calibration try again.
- if (k < 0.70f || k > 3.50f) k = K_POPULATION_DEFAULT;
+ if (k < FORCE_CALIB_K_MIN || k > FORCE_CALIB_K_MAX) k = K_POPULATION_DEFAULT;
   _calibK = k;
   Serial.printf("[FORCE-CALIB] k fitted = %.4f from %d samples\n", _calibK, _calibCount);
   _calibComplete = true;
@@ -282,7 +282,7 @@ float forceConfidence(float peakForceN) {
   }
   // Linear taper near the edges of the operating range for graceful behavior.
   float cRange = 1.0f;
-  const float rangeMargin = 30.0f;
+  const float rangeMargin = FORCE_CONF_RANGE_MARGIN_N;
   if (peakForceN < FORCE_CONF_RANGE_MIN_N + rangeMargin) {
     cRange = (peakForceN - FORCE_CONF_RANGE_MIN_N) / rangeMargin;
   } else if (peakForceN > FORCE_CONF_RANGE_MAX_N - rangeMargin) {
@@ -304,8 +304,8 @@ float forceConfidence(float peakForceN) {
   float cBaseline = 1.0f;
   if (_bootBaseline > 1.0f) {
     const float drift = fabsf(_bootBaseline - _baseline) / _bootBaseline;
-    if (drift > 0.25f) cBaseline = 0.85f;  // significant drift — slight penalty
-    if (drift > 0.50f) cBaseline = 0.70f;  // heavy drift — larger penalty
+    if (drift > FORCE_CONF_DRIFT_MODERATE_THRESHOLD) cBaseline = FORCE_CONF_DRIFT_MODERATE_PENALTY;  // significant drift — slight penalty
+    if (drift > FORCE_CONF_DRIFT_HEAVY_THRESHOLD) cBaseline = FORCE_CONF_DRIFT_HEAVY_PENALTY;  // heavy drift — larger penalty
   }
 
   return cRange * cCalib * cBaseline;

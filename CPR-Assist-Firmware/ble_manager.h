@@ -35,7 +35,7 @@ bool bleConnected();
 // ── Packet senders (called from comms task) ───────────────────────────────────
 void bleSendLiveStream(const SharedState& s);
 void bleQueueEvent(const BLEEventItem& item);  // thread-safe enqueue
-void bleDrainEventQueue();                     // send one item per call
+void bleSendNextEvent();                        // send one item per call
 void bleFlushEventQueue();                     // discard all queued events (called on reconnect)
 
 // ── Packet builders ───────────────────────────────────────────────────────────

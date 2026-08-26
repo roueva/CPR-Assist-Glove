@@ -140,7 +140,12 @@ struct DualIMUResult {
 DualIMUResult imuCombineDual(float palmMM, float wristMM,
                              float palmConf, float wristConf);
 
-void imuResetCF();
+// Arms a DEFERRED CF reset — does not reset immediately. The reset fires
+// later, once imuUpdateFilters() observes ~300ms of continuous stillness
+// (accel magnitude within 3% of 1g), so the gravity reference is captured
+// with the hand actually in compression position rather than mid-air while
+// the user is still positioning it. Call at session start.
+void imuArmCFReset();
 
 // Expose integration states for use in depth.cpp
 extern IntegState integPalm;

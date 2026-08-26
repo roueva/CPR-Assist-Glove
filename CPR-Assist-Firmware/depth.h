@@ -14,7 +14,6 @@ struct StoredCompression {
   uint8_t postureOk;
   uint8_t wristAlignX10;
   uint8_t axisDevX10;
-  uint8_t reserved[3];
 } __attribute__((packed));
 
 

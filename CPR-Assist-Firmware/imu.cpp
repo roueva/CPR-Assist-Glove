@@ -30,7 +30,7 @@ static float _aWrist = 0.0f;
 // Set to >0 at session start to use CF_ALPHA_FAST for rapid convergence.
 static uint8_t _cfFastConvergeTicksLeft = 0;
 
-// Deferred CF reset state — armed by imuResetCF(), fires after stillness.
+// Deferred CF reset state — armed by imuArmCFReset(), fires after stillness.
 static bool _pendingCFReset = false;
 static uint8_t _stillTicks = 0;
 
@@ -611,7 +611,7 @@ const bool wristOk = (wristMM >= 5.0f && wristMM <= 80.0f);
 }
 
 
-void imuResetCF() {
+void imuArmCFReset() {
   // Don't re-zero immediately — arm a deferred reset that fires once the
   // glove has been still (hand flat on chest) for ~300ms. This guarantees
   // the gravity reference is captured with the hand in compression position,

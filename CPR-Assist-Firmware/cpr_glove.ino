@@ -1554,7 +1554,7 @@ bool cycleReached = (ventComps > 0
     }
 
     // ── BLE event queue ─────────────────────────────────────────────────────
-    bleDrainEventQueue();
+    bleSendNextEvent();
 
     // ── Audio update (playback-finished detection) ───────────────────────────
     audioUpdate();
