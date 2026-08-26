@@ -543,9 +543,37 @@
 #define DFPLAYER_MAX_VOLUME 30
 
 // ── Battery ───────────────────────────────────────────────────────────────────
-#define BAT_VOLTAGE_MIN 3.0f  // V → 0%
-#define BAT_VOLTAGE_MAX 4.2f  // V → 100%
-#define BAT_ADC_DIVIDER 2.0f  // voltage divider ratio
+// The PowerBoost 500C cuts out around 3.2V, so the cell never actually reaches
+// 3.0V in service — 3.45f is the lowest voltage the gauge can observe before
+// the glove dies, matching the bottom of BAT_LIPO_CURVE below.
+#define BAT_VOLTAGE_MIN 3.45f  // V → 0%
+#define BAT_VOLTAGE_MAX 4.2f   // V → 100%
+#define BAT_ADC_DIVIDER 2.0f   // voltage divider ratio
+
+// Piecewise-linear LiPo discharge curve (volts -> percent), open-circuit-ish
+// rest voltage. Interpolated linearly between adjacent points; clamped outside
+// the range.
+struct BatCurvePoint {
+  float volts;
+  uint8_t percent;
+};
+static const BatCurvePoint BAT_LIPO_CURVE[] = {
+  {4.20f, 100}, {4.06f, 85}, {3.98f, 75}, {3.92f, 65}, {3.87f, 55},
+  {3.82f, 45},  {3.79f, 35}, {3.75f, 25}, {3.71f, 15}, {3.65f, 8},
+  {3.45f, 0},
+};
+#define BAT_LIPO_CURVE_LEN (sizeof(BAT_LIPO_CURVE) / sizeof(BAT_LIPO_CURVE[0]))
+
+#define BAT_PCT_EMA_ALPHA 0.2f  // smooths reported percentage
+
+// Settle time after the charger is unplugged, before re-seeding the gauge
+// from a fresh voltage reading. A LiPo cell reads artificially high right
+// after charge current stops (surface-charge effect) and relaxes toward
+// true open-circuit voltage within a few seconds for a small cell — this is
+// a coarse breakpoint-table gauge, not a fuel-gauge IC doing true OCV
+// settling (which can take minutes), so 5 s is a practical compromise
+// between reading a still-inflated rail and making the rescuer wait.
+#define BAT_CHARGE_SETTLE_MS 5000UL
 
 // ── LittleFS offline storage ──────────────────────────────────────────────────
 #define STORAGE_MAX_SESSIONS 20
