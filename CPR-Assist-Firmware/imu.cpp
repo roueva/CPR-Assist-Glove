@@ -14,6 +14,10 @@ static bool _wristOk = false;
 static bool _wristDropped = false;
 static int _wristDropoutCount = 0;
 
+// Sticky per-session record — see imuWristDroppedDuringSession() in imu.h.
+// Set alongside _wristDropped, cleared only by imuResetWristDropout().
+static bool _wristDroppedDuringSession = false;
+
 CompFilter cfPalm, cfWrist;
 GravityEstimate gravPalm, gravWrist;
 IntegState integPalm, integWrist;
@@ -516,13 +520,37 @@ DualIMUResult imuCombineDual(float palmMM, float wristMM,
 const float wristConfGated = (wristMM >= 5.0f && wristMM <= 80.0f) ? wristConf : 0.0f;
 
   // Wrist unavailable — palm only.
-  if (!_wristOk || _wristDropped || wristMM <= 0.0f) {
+  if (!_wristOk || _wristDropped) {
     r.depthMM            = palmMM;
     r.combinedConfidence = palmConfGated;
     r.usedPalm           = true;
     r.usedWrist          = false;
     return r;
   }
+
+  // ── Wrist dropout detection (restored — FIRMWARE_PLAN Block C) ────────────
+  // A bad stroke (wristMM <= 0) only counts once the wrist's own gravity EMA
+  // has converged (gravWrist.cycles >= GRAV_MIN_CYCLES_WRIST) — before that a
+  // zero reading is expected startup behaviour, not a fault. WRIST_DROPOUT_LIMIT
+  // consecutive bad strokes latches _wristDropped; any good stroke resets the
+  // counter. The latch is session-scoped (cleared by imuResetWristDropout(),
+  // called from depthSessionReset()) — see FIRMWARE_PLAN Block C for the
+  // rationale against a power-cycle-scoped latch.
+  if (wristMM <= 0.0f) {
+    if (gravWrist.cycles >= GRAV_MIN_CYCLES_WRIST) {
+      _wristDropoutCount++;
+      if (_wristDropoutCount >= WRIST_DROPOUT_LIMIT) {
+        _wristDropped = true;
+        _wristDroppedDuringSession = true;
+      }
+    }
+    r.depthMM            = palmMM;
+    r.combinedConfidence = palmConfGated;
+    r.usedPalm           = true;
+    r.usedWrist          = false;
+    return r;
+  }
+  _wristDropoutCount = 0;
 
   // Both available. Decide weighting using gated confidences.
   const bool palmReliable  = (palmConfGated  >= SELECTOR_HARD_FAIL_CONF);
@@ -664,4 +692,14 @@ float imuConfidence(const IntegState& s) {
 
 bool imuWristDropped() {
   return _wristDropped;
+}
+
+bool imuWristDroppedDuringSession() {
+  return _wristDroppedDuringSession;
+}
+
+void imuResetWristDropout() {
+  _wristDropped = false;
+  _wristDropoutCount = 0;
+  _wristDroppedDuringSession = false;
 }

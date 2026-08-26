@@ -100,6 +100,18 @@ void resetIntegration(IntegState& s);
 bool imuIsCalibrated();  // true once gravity converged
 bool imuWristDropped();
 
+// Sticky per-session record: true if the wrist dropout latch fired at ANY
+// point during the current session, independent of whatever imuWristDropped()
+// is doing live. Exists so the SESSION_END record of "was the wrist trusted
+// this session" can't be changed by a future edit to the live latch's own
+// clear/retry behaviour. Reset only by imuResetWristDropout().
+bool imuWristDroppedDuringSession();
+
+// Clears the wrist dropout latch and its counter, and resets the per-session
+// sticky record. Call once from depthSessionReset() so a new session/
+// participant does not inherit the previous one's latch.
+void imuResetWristDropout();
+
 // ── Chunk 1 Change 2 — Aase boundary-correction helper ─────────────────────
 // Called once at the moment of force-release to back-correct peakDepthM for
 // linear bias accumulated during the stroke. Captures vResidualAtRelease

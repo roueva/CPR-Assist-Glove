@@ -320,6 +320,10 @@ void depthSessionReset() {
   // Trigger fast CF convergence so the filter adapts quickly to the new
   // hand position on the manikin/patient. Mahony 2008.
 imuResetCF();
+
+  // Wrist dropout latch is session-scoped (FIRMWARE_PLAN Block C) — a new
+  // participant/session must not inherit the previous one's latch.
+  imuResetWristDropout();
 }
 
 void depthInit() {
@@ -763,6 +767,7 @@ if (_state == CompState::COMPRESSING) {
       s.compressionCount = (int32_t)_totalCompressions;
       s.imuCalibrated = imuIsCalibrated();
       s.wristDropped = imuWristDropped();
+      s.wristDroppedDuringSession = imuWristDroppedDuringSession();
       s.depthTrend = depthTrend();
 
       // Timestamps

@@ -135,6 +135,11 @@ struct SharedState {
   bool pulseDetected;
   uint16_t noFlowIntervals;
   uint8_t rescuerSwapCount;
+  // Sticky per-session record — true if the wrist dropout latch fired at any
+  // point this session. Distinct from the live wristDropped above: this one
+  // only clears at depthSessionReset(), so a momentary recovery mid-session
+  // can't erase the fact that the wrist was untrusted for part of it.
+  bool wristDroppedDuringSession;
 
   // ── Target overrides (from app commands)
   float targetDepthMinMM;  // default from scenario
