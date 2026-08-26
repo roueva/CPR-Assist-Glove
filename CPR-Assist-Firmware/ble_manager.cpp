@@ -182,35 +182,6 @@ void bleSendLiveStream(const SharedState& s) {
   buf[106] = s.lastPeakConfidence;
   buf[107] = s.lastPeakDepthSource;
 
-  // ── Diagnostic mode — overwrite reserved bytes with diag data ────────────
-  if (diagActive) {
-    // Bytes 52–53: raw FSR ADC value (int16, little-endian)
-    int16_t rawAdc = (int16_t)analogRead(PIN_FSR_ADC);
-    buf[52] = rawAdc & 0xFF;
-    buf[53] = (rawAdc >> 8) & 0xFF;
-    // Byte 54: palm IMU WHO_AM_I (0x6C = correct)
-    buf[54] = diagPalmWhoAmI;
-    // Byte 55: wrist IMU WHO_AM_I
-    buf[55] = diagWristWhoAmI;
-    // Byte 86: I2C scan result bitmask
-    buf[86] = diagI2cScanResult;
-    // Byte 87: last diag action result
-    buf[87] = diagActionResult;
-   // Bytes 102–103: palm motion-accel × 100 (int16 mg, ±32g)
-    // Bytes 104–105: wrist motion-accel × 100 (int16 mg, ±32g)
-    int16_t palmMg = (int16_t)constrain((int)(imuGetMotionAccelPalm() * 100.0f), -32768, 32767);
-    int16_t wristMg = (int16_t)constrain((int)(imuGetMotionAccelWrist() * 100.0f), -32768, 32767);
-    buf[102] = palmMg & 0xFF;
-    buf[103] = (palmMg >> 8) & 0xFF;
-    buf[104] = wristMg & 0xFF;
-    buf[105] = (wristMg >> 8) & 0xFF;
-    // In diag mode, overwrite confidence/source bytes with diag-active flag
-    buf[106] = 1;
-    buf[107] = 0x00;
-  }
-  // In normal mode, buf[106] = lastPeakConfidence and buf[107] = lastPeakDepthSource
-  // were already written above and must NOT be overwritten here.
-
 #if BLE_DEBUG_SERIAL
   static uint32_t _liveLogCount = 0;
   // Throttle: LIVE_STREAM is 10 Hz (Spec v3.1). Log 1 in 25 (~0.4 Hz) to keep Serial readable.
@@ -315,7 +286,7 @@ BLEEventItem bleBuildSessionEnd(const SharedState& s) {
   uint16_t ttf = (uint16_t)constrain((int)s.timeToFirstCompressionMs, 0, 65535);
   b[93] = (uint8_t)(ttf & 0xFF);
   b[94] = (uint8_t)((ttf >> 8) & 0xFF);
-  // byte 95: reserved
+  b[95] = s.wristDroppedDuringSession ? 1 : 0;
   return item;
 }
 
@@ -340,7 +311,8 @@ BLEEventItem bleBuildPulseCheckStart(uint16_t intervalNum, uint32_t elapsedMs) {
 }
 
 BLEEventItem bleBuildPulseCheckResult(uint8_t classification, float bpm,
-                                      uint8_t confidence, uint8_t detA, uint8_t detB) {
+                                      uint8_t confidence, uint8_t detA, uint8_t detB,
+                                      uint8_t refSource) {
   auto item = makeItem(BLEEventType::PulseCheckResult);
   item.data[0] = PKT_PULSE_CHECK_RESULT;
   item.data[1] = classification;
@@ -348,6 +320,9 @@ BLEEventItem bleBuildPulseCheckResult(uint8_t classification, float bpm,
   item.data[6] = confidence;
   item.data[7] = detA;
   item.data[8] = detB;
+  // byte 9 — self-detection guard reference source (FIRMWARE_PLAN Block C):
+  // 0=NONE 1=LIVE 2=PAUSED. Data capture only, no effect on gating.
+  item.data[9] = refSource;
   return item;
 }
 
@@ -411,5 +386,51 @@ BLEEventItem bleBuildScenarioChange(Scenario sc, uint8_t trigger) {
   item.data[0] = PKT_SCENARIO_CHANGE;
   item.data[1] = (uint8_t)sc;
   item.data[2] = trigger;
+  return item;
+}
+
+// ── DIAG_FRAME — diagnostic-mode telemetry, own packet (FIRMWARE_PLAN Block D) ─
+// Replaces the old LIVE_STREAM diag overlay, which aliased bytes that carry
+// real fields (residualLoadDepthCm 52-55, inVentilationWindow 86,
+// lastPeakDepthCm/Confidence/Source 102-107) in normal mode. Queued at
+// DIAG_FRAME_INTERVAL_MS from cpr_glove.ino's main loop while diagActive.
+//
+//   byte 0     packet type (PKT_DIAG_FRAME)
+//   byte 1-2   raw FSR ADC                        i16 LE
+//   byte 3     diagPalmWhoAmI                      u8
+//   byte 4     diagWristWhoAmI                     u8
+//   byte 5     diagI2cScanResult                   u8
+//   byte 6     diagActionResult                     u8
+//   byte 7-8   palm motion accel × 100 (mg)        i16 LE
+//   byte 9-10  wrist motion accel × 100 (mg)       i16 LE
+//   byte 11-12 rescuer PPG filtered AC (counts)    i16 LE — doc'd ±300, ample
+//   byte 13-16 rescuer PPG DC (counts)             u32 LE — raw IR count,
+//              an integer quantity (bench-observed up to ~138000, overflows
+//              i16/u16); u32 not f32 since the sensor has no sub-count
+//              precision to represent.
+//   byte 17-95 unused (zero-filled by makeItem())
+BLEEventItem bleBuildDiagFrame() {
+  auto item = makeItem(BLEEventType::DiagFrame);
+  uint8_t* b = item.data;
+  b[0] = PKT_DIAG_FRAME;
+
+  int16_t rawAdc = (int16_t)analogRead(PIN_FSR_ADC);
+  packU16(b, 1, (uint16_t)rawAdc);
+
+  b[3] = diagPalmWhoAmI;
+  b[4] = diagWristWhoAmI;
+  b[5] = diagI2cScanResult;
+  b[6] = diagActionResult;
+
+  int16_t palmMg  = (int16_t)constrain((int)(imuGetMotionAccelPalm()  * 100.0f), -32768, 32767);
+  int16_t wristMg = (int16_t)constrain((int)(imuGetMotionAccelWrist() * 100.0f), -32768, 32767);
+  packU16(b, 7, (uint16_t)palmMg);
+  packU16(b, 9, (uint16_t)wristMg);
+
+  int16_t rescuerFiltered = (int16_t)constrain((int)max30102DiagRescuerFiltered(), -32768, 32767);
+  packU16(b, 11, (uint16_t)rescuerFiltered);
+
+  packU32(b, 13, (uint32_t)max30102DiagRescuerDc());
+
   return item;
 }

@@ -19,7 +19,8 @@ enum class BLEEventType : uint8_t {
   PendingLocalData,
   LocalSessionChunk,
   SelftestResult,
-  ScenarioChange
+  ScenarioChange,
+  DiagFrame
 };
 
 struct BLEEventItem {
@@ -43,7 +44,8 @@ BLEEventItem bleBuildSessionEnd(const SharedState& s);
 BLEEventItem bleBuildVentilationWindow(uint16_t cycleNum, uint8_t breathsExpected);
 BLEEventItem bleBuildPulseCheckStart(uint16_t intervalNum, uint32_t elapsedMs);
 BLEEventItem bleBuildPulseCheckResult(uint8_t classification, float bpm,
-                                      uint8_t confidence, uint8_t detA, uint8_t detB);
+                                      uint8_t confidence, uint8_t detA, uint8_t detB,
+                                      uint8_t refSource);
 BLEEventItem bleBuildModeChange(GloveMode mode, uint8_t trigger);
 BLEEventItem bleBuildTwoMinAlert(uint8_t alertNum);
 BLEEventItem bleBuildFatigueAlert(uint8_t score);
@@ -52,6 +54,11 @@ BLEEventItem bleBuildLocalSessionChunk(uint8_t sessIdx, uint8_t chunkIdx,
                                        uint8_t totalChunks, const uint8_t* payload92);
 BLEEventItem bleBuildSelftestResult(const SelfTestResult& r);
 BLEEventItem bleBuildScenarioChange(Scenario sc, uint8_t trigger);
+
+// Diagnostic-mode telemetry, queued at DIAG_FRAME_INTERVAL_MS while diagActive
+// (cpr_glove.ino main loop). Replaces the old LIVE_STREAM diag overlay —
+// reads the same live/cached diag sources directly, no parameters needed.
+BLEEventItem bleBuildDiagFrame();
 
 // ── Callbacks (set by session manager) ───────────────────────────────────────
 // Called when the app sends a command over EVENT_CHANNEL

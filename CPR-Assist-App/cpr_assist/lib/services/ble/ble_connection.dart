@@ -97,6 +97,19 @@ class BLEConnection {
   int  _reconnectAttempts = 0;
   int _scanAttempts = 0;
   bool _diagActive = false;
+  // Latest DIAG_FRAME values (FIRMWARE_PLAN Block D) — DIAG_FRAME is its own
+  // EVENT_CHANNEL packet on its own ~4Hz cadence, independent of LIVE_STREAM.
+  // Cached here and folded into the map built on each LIVE_STREAM tick so
+  // dataStream's shape/cadence is unchanged for consumers (glove_diagnostic_sheet.dart).
+  int?    _diagRawFsrAdc;
+  int?    _diagPalmWhoAmI;
+  int?    _diagWristWhoAmI;
+  int?    _diagI2cScanMask;
+  int?    _diagActionResult;
+  double? _diagPalmAccelMag;
+  double? _diagWristAccelMag;
+  double? _diagRescuerPpgFiltered;
+  double? _diagRescuerPpgDc;
   static const int _maxScanAttempts = 8; // 8 × 15s ≈ 2 min
 
   BluetoothDevice?                        _connectedDevice;
@@ -445,7 +458,7 @@ class BLEConnection {
 
   // ── LIVE_STREAM packet handler ────────────────────────────────────────────
   void _handleLivePacket(List<int> packet) {
-    final parsed = _processor.parseLiveStream(packet, diagActive: _diagActive);
+    final parsed = _processor.parseLiveStream(packet);
     if (parsed == null) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -503,16 +516,16 @@ class BLEConnection {
     if (_sessionActive && parsed.isContinuousData &&
         parsed.compressionCount > _lastCompressionCount) {
       _lastCompressionCount = parsed.compressionCount;
-      // The valleyDepth in this packet is the recoil of the PREVIOUS compression
+      // The residualLoadDepthCm in this packet is the recoil of the PREVIOUS compression
       // (the inter-compression minimum between comp N-1 and comp N, captured at
       // the start of comp N's downstroke in depth.cpp). Patch it retroactively
       // onto the last stored event so each compression holds its own valley.
-      if (_compressionEvents.isNotEmpty && parsed.valleyDepth > 0) {
+      if (_compressionEvents.isNotEmpty && parsed.residualLoadDepthCm > 0) {
         final last = _compressionEvents.last;
         _compressionEvents[_compressionEvents.length - 1] = CompressionEvent(
           timestampMs:         last.timestampMs,
           depth:               last.depth,
-          valleyDepth: parsed.valleyDepth,
+          residualLoadDepthCm: parsed.residualLoadDepthCm,
           instantaneousRate:   last.instantaneousRate,
           frequency:           last.frequency,
           force:               last.force,
@@ -668,22 +681,25 @@ class BLEConnection {
       // Session state
       'sessionActive':      parsed.sessionActive,
       'currentMode':        parsed.currentMode,
-      'feedbackEnabled':    parsed.feedbackEnabled,
+      'audioFeedbackEnabled':   parsed.audioFeedbackEnabled,
+      'hapticFeedbackEnabled':  parsed.hapticFeedbackEnabled,
+      'visualFeedbackEnabled':  parsed.visualFeedbackEnabled,
       'batteryPercentage':  parsed.batteryPercentage,
       'isCharging':         parsed.isCharging,
       'peakTimestampMs':   parsed.peakTimestampMs,
       'valleyTimestampMs': parsed.valleyTimestampMs,
       'lastPeakDepthCm':   _lastRecordedPeakDepth,
 
-      'diagRawFsrAdc':     parsed.diagRawFsrAdc,
-      'diagPalmWhoAmI':    parsed.diagPalmWhoAmI,
-      'diagWristWhoAmI':   parsed.diagWristWhoAmI,
-      'diagI2cScanMask':   parsed.diagI2cScanMask,
-      'diagActionResult':  parsed.diagActionResult,
-      'diagPalmAccelMag':   parsed.diagPalmAccelMag,
-      'diagWristAccelMag':  parsed.diagWristAccelMag,
-      'diagRescuerPpgFiltered': parsed.diagRescuerPpgFiltered,
-      'diagActive':         parsed.diagActive,
+      'diagRawFsrAdc':     _diagRawFsrAdc,
+      'diagPalmWhoAmI':    _diagPalmWhoAmI,
+      'diagWristWhoAmI':   _diagWristWhoAmI,
+      'diagI2cScanMask':   _diagI2cScanMask,
+      'diagActionResult':  _diagActionResult,
+      'diagPalmAccelMag':   _diagPalmAccelMag,
+      'diagWristAccelMag':  _diagWristAccelMag,
+      'diagRescuerPpgFiltered': _diagRescuerPpgFiltered,
+      'diagRescuerPpgDc':       _diagRescuerPpgDc,
+      'diagActive':         _diagActive,
     });
   }
 
@@ -979,6 +995,25 @@ class BLEConnection {
       _dataController.add(result);
       onSelftestResult?.call(result);
 
+      return;
+    }
+
+    // ── DIAG_FRAME (FIRMWARE_PLAN Block D) ────────────────────────────────
+    // Own packet, ~4Hz, independent of LIVE_STREAM. Cache only — no
+    // dataStream push here. The values are folded into the map built on
+    // the next LIVE_STREAM tick (_handleLivePacket above), so consumers
+    // (glove_diagnostic_sheet.dart) see the same combined-map shape/cadence
+    // as before this packet existed.
+    if (parsed.isDiagFrame) {
+      _diagRawFsrAdc          = parsed.diagRawFsrAdc;
+      _diagPalmWhoAmI         = parsed.diagPalmWhoAmI;
+      _diagWristWhoAmI        = parsed.diagWristWhoAmI;
+      _diagI2cScanMask        = parsed.diagI2cScanMask;
+      _diagActionResult       = parsed.diagActionResult;
+      _diagPalmAccelMag       = parsed.diagPalmAccelMag;
+      _diagWristAccelMag      = parsed.diagWristAccelMag;
+      _diagRescuerPpgFiltered = parsed.diagRescuerPpgFiltered;
+      _diagRescuerPpgDc       = parsed.diagRescuerPpgDc;
       return;
     }
   }

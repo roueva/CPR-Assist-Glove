@@ -62,19 +62,12 @@ claims (marked below) — they were not otherwise audited.
 | `gState.lastPeakConfidence` | 0-100 | `selectDepth()` confidence ×100 (`depth.cpp:591`). | 106 u8 | `lastPeakConfidence` | confidence badge |
 | `gState.lastPeakDepthSource` | enum 0-7 | `DepthSource` from `selectDepth()` (`depth.cpp:592`). | 107 u8 | `lastPeakDepthSource` | source badge |
 
-### Diagnostic-mode overlay (only when `diagActive`)
+### Diagnostic-mode data
 
-| Firmware variable | Unit | Derivation | BLE byte(s) | App field |
-|---|---|---|---|---|
-| raw FSR ADC | counts | `analogRead(PIN_FSR_ADC)` (`ble_manager.cpp:188-190`). | 52-53 i16 | `diagRawFsrAdc` |
-| `diagPalmWhoAmI` | reg value | `imuReadWhoAmI()` on `CMD_DIAG_START` (`cpr_glove.ino:321`). | 54 u8 | `diagPalmWhoAmI` |
-| `diagWristWhoAmI` | reg value | Same, wrist channel (`cpr_glove.ino:322`). | 55 u8 | `diagWristWhoAmI` |
-| — | — | **UNDOCUMENTED / unimplemented.** `ble_data_processor.dart:207` reads bytes 70-71 as `diagRescuerPpgFiltered` ("rescuer PPG filtered AC sample"). The firmware's diag overlay block (`ble_manager.cpp:186-210`) never writes bytes 70-71 — they still carry whatever the normal-mode `patientTemperature` u16 packer wrote at line 149 (patient temp × 100, or 0 if no contact). `max30102DiagRescuerFiltered()`/`max30102DiagRescuerDc()` exist in `max30102.cpp:532-537` for exactly this purpose but are **never called** anywhere (see §A). The app field is reading mislabeled/stale data, not rescuer PPG. | 70-71 | `diagRescuerPpgFiltered` |
-| `diagI2cScanResult` | bitmask | `selftestI2CScan()` on `CMD_DIAG_ACTION` (`cpr_glove.ino:352`). | 86 u8 | `diagI2cScanMask` |
-| `diagActionResult` | code | Last diag action result code (`cpr_glove.ino:339-364`). | 87 u8 | `diagActionResult` |
-| palm motion accel | mg×100 | `imuGetMotionAccelPalm()*100`, clamped i16 (`ble_manager.cpp:201-203`). | 102-103 i16 | `diagPalmAccelMag` |
-| wrist motion accel | mg×100 | `imuGetMotionAccelWrist()*100`, clamped i16 (`ble_manager.cpp:202,205-206`). | 104-105 i16 | `diagWristAccelMag` |
-| literal `1` | flag | Diag-active marker, overwrites `lastPeakConfidence`'s byte (`ble_manager.cpp:208`). | 106 u8 | (consumed as `lastPeakConfidence`, gated off by app when `diagActive`) |
+No longer a LIVE_STREAM overlay. Moved to its own EVENT_CHANNEL packet,
+`DIAG_FRAME` — see "Block D fixes" at the end of this document for the byte
+layout and why the overlay design (aliasing bytes 52-55/86-87/102-107, which
+carry real fields in normal mode) was replaced.
 
 ---
 
@@ -598,3 +591,158 @@ only. `depthSessionReset()` itself was not modified, per instruction.
   `ble_connection.dart:648` puts it into the broadcast map, but nothing in
   any screen, widget, or session-recording path reads it back out. Same
   "plumbed but never consumed" shape as the old `feedbackEnabled` bool.
+
+---
+
+## Block C fixes — wrist dropout + pulse-check provenance
+
+Firmware and app code edited per explicit instruction (`FIRMWARE_PLAN.md`
+Block C, both items explicitly authorised — normally-protected code). As
+with "Fixes applied" above, prior sections describing pre-fix code are left
+as historical record and not retroactively edited in place.
+
+1. **Wrist dropout detection restored.** The counter/latch logic described
+   in "Wrist-dropout investigation" above (previously only inside the
+   deleted `getAdaptiveDepthMM()`) is now live inside `imuCombineDual()`
+   (`imu.cpp`), gated the same way: `wristMM <= 0.0f` only counts once
+   `gravWrist.cycles >= GRAV_MIN_CYCLES_WRIST`, any good stroke resets the
+   counter, `WRIST_DROPOUT_LIMIT` consecutive bad strokes sets
+   `_wristDropped = true`. LIVE_STREAM byte 51 (`wristDropped`, table row
+   above) now reflects a live detector instead of a permanently-`false`
+   value — the row's derivation text is otherwise still accurate; only its
+   line citation (`imu.cpp:617-626`, the old dead function) is now stale,
+   since the logic lives in `imuCombineDual()` instead. Confidence
+   weighting and fusion math were not touched.
+2. **Latch is session-scoped, not power-cycle-scoped.** Decision made
+   explicitly, not inferred: `_wristDropped` and its counter are cleared by
+   a new `imuResetWristDropout()`, called from `depthSessionReset()`.
+   Rationale given: a study participant must not inherit the previous
+   participant's latch.
+3. **New sticky per-session record — `SESSION_END` byte 95,
+   `wristDroppedDuringSession`.** Because the live latch now clears every
+   session, a separate flag (`_wristDroppedDuringSession` in `imu.cpp`,
+   cleared only by the same `imuResetWristDropout()`) records whether the
+   dropout fired at any point during the session, so the transmitted
+   session record still states whether the wrist was trusted even after
+   the live flag has cleared for the next session. Byte 95 was previously
+   reserved/always-0 — confirmed unused against both `ble_manager.cpp` and
+   `ble_data_processor.dart` before use.
+4. **New `PULSE_CHECK_RESULT` byte 9 — `pulseCheckRefSource`.** The
+   self-detection guard's reference source (`refSource` in
+   `cpr_glove.ino`, previously a `Serial.printf`-only string under
+   `BLE_DEBUG_SERIAL`, which is 0 in study builds — i.e. previously
+   discarded exactly when the thesis needed it) is now also encoded
+   numerically as `refSourceCode` (`PULSE_REF_SOURCE_NONE/LIVE/PAUSED` =
+   0/1/2, `config.h`) and transmitted. Byte 9 was free — confirmed unused
+   against `ble_data_processor.dart`'s existing parser before use.
+   Data-capture only: does not change the passive contact-plus-pause
+   pulse-check gating policy.
+
+New/updated rows:
+
+| Firmware variable | Unit | Derivation | BLE byte(s) | App field |
+|---|---|---|---|---|
+| `s.wristDroppedDuringSession` | bool (u8) | `_wristDroppedDuringSession` — latches true the same moment `_wristDropped` does inside `imuCombineDual()`; cleared only by `imuResetWristDropout()` at `depthSessionReset()` (`imu.cpp`). | SESSION_END 95 u8 | `wristDroppedDuringSession` |
+| `refSourceCode` | enum 0-2 | Self-detection guard's reference source at pulse-check-window close: 0=NONE (guard ran with no usable reference), 1=LIVE (`snap.heartRateUser`/`rescuerSignalQuality`), 2=PAUSED (`snap.rescuerHRLastPause`/`rescuerSQLastPause`) (`cpr_glove.ino`). | PULSE_CHECK_RESULT 9 u8 | `pulseCheckRefSource` |
+
+---
+
+## Block D fixes — diagnostic frame
+
+Firmware and app code edited per explicit instruction (`FIRMWARE_PLAN.md`
+Block D). As with Blocks B/C above, prior sections describing pre-fix code
+are left as historical record and not retroactively edited in place, with
+one exception: the "Diagnostic-mode overlay" table under §1 LIVE_STREAM was
+deleted outright (not just annotated), per explicit instruction, since it
+described a byte-aliasing scheme that no longer exists and would actively
+mislead a future reader using this document as a live wire reference — unlike
+Blocks B/C's fixes, which corrected behavior of fields that still exist at
+the same bytes.
+
+**Problem this fixes:** `bleSendLiveStream()`'s diag block overwrote bytes
+that carry real fields in normal mode — `residualLoadDepthCm` (52-55),
+`inVentilationWindow` (86), `lastPeakDepthCm`/`lastPeakConfidence`/
+`lastPeakDepthSource` (102-107) — held together entirely by five matching
+`diagActive` guards in `ble_data_processor.dart`. Missing one guard, or
+adding a field in that byte range without checking for the overlay, would
+have the app silently read diagnostic data (e.g. a raw FSR ADC count) as one
+of those normal-mode fields with no error.
+
+**Fix:** diagnostic telemetry moved to its own EVENT_CHANNEL packet type,
+`DIAG_FRAME` (`PKT_DIAG_FRAME 0x0D`), queued independently of LIVE_STREAM.
+LIVE_STREAM is now single-purpose — the `if (diagActive) { ... }` overlay
+block and its "must NOT be overwritten" guard comment are deleted from
+`bleSendLiveStream()` (`ble_manager.cpp`), and all five `diagActive` guards
+are deleted from `ble_data_processor.dart`'s LIVE_STREAM parser (three of
+them — `lastPeakDepthCm`/`lastPeakConfidence`/`lastPeakDepthSource` — become
+unconditional reads; `inVentilationWindow` likewise; `residualLoadDepthCm`
+likewise).
+
+**`DIAG_FRAME` byte layout** (`bleBuildDiagFrame()`, `ble_manager.cpp`):
+
+| Byte | Field | Type | Source |
+|---|---|---|---|
+| 0 | packet type | u8 | `PKT_DIAG_FRAME` |
+| 1-2 | raw FSR ADC | i16 LE | `analogRead(PIN_FSR_ADC)`, sampled at push time |
+| 3 | `diagPalmWhoAmI` | u8 | cached, set on `CMD_DIAG_START` |
+| 4 | `diagWristWhoAmI` | u8 | cached, set on `CMD_DIAG_START` |
+| 5 | `diagI2cScanResult` | u8 | cached, set on `CMD_DIAG_ACTION`/`DIAG_ACTION_I2C_SCAN` |
+| 6 | `diagActionResult` | u8 | cached, set on any diag action |
+| 7-8 | palm motion accel ×100 (mg) | i16 LE | `imuGetMotionAccelPalm()`, sampled at push time |
+| 9-10 | wrist motion accel ×100 (mg) | i16 LE | `imuGetMotionAccelWrist()`, sampled at push time |
+| 11-12 | rescuer PPG filtered (counts) | i16 LE | `max30102DiagRescuerFiltered()` — doc'd ±300, i16 ample |
+| 13-16 | rescuer PPG DC (counts) | **u32 LE** | `max30102DiagRescuerDc()` |
+| 17-95 | unused | — | zero-filled by `makeItem()` |
+
+The DC field is **u32, not f32**, per explicit correction during review: `dc`
+tracks the raw IR ADC count directly (`s.dc = rawIR` EMA, `max30102.cpp:183-188`)
+— an integer quantity with no sub-count precision to represent, so f32 would
+imply precision the sensor doesn't have. It also can't fit i16/u16: bench
+comment elsewhere in this file records good-contact DC around 138,000,
+already established as the reason this field was mis-sized in the first
+place (see `diagRescuerPpgFiltered` entry in the now-deleted overlay table
+above — the app was reading the wrong bytes entirely, so the width question
+never previously surfaced).
+
+**Wiring the two previously-dead diag accessors:** `max30102DiagRescuerFiltered()`
+and `max30102DiagRescuerDc()` (`max30102.cpp:532-537`) had zero callers before
+this fix — see §A. They are now called directly inside `bleBuildDiagFrame()`.
+This is also the fix for the app-side defect this document already flagged:
+`ble_data_processor.dart`'s old `diagRescuerPpgFiltered` field was reading
+bytes 70-71, which the diag overlay never wrote (they carried stale
+`patientTemperature` data instead). `DIAG_FRAME` bytes 11-16 now carry the
+real values.
+
+**Cadence — 4Hz, approved as proposed:** queued from `cpr_glove.ino`'s main
+loop (next to the `LIVE_STREAM_INTERVAL_MS` block) at `DIAG_FRAME_INTERVAL_MS`
+(250ms, `config.h`), only while `diagActive`. Chosen over matching
+LIVE_STREAM's 10Hz to stay light on `EVENT_CHANNEL`'s single-item queue
+(`bleDrainEventQueue()` sends one item per call with a 20ms gap,
+`ble_manager.cpp`), since diag mode is bench-only and never concurrent with a
+live session needing that bandwidth for session-lifecycle/pulse-check events.
+
+**App-side merge — `ble_connection.dart`, approved as proposed:**
+`DIAG_FRAME` arrives on its own cadence via `_handleEventPacket()`, which now
+caches its nine fields into instance state (`_diagRawFsrAdc` etc.) and
+returns — no separate `dataStream` push. Those cached values are folded into
+the single combined map still built on every LIVE_STREAM tick
+(`_handleLivePacket()`), so `dataStream`'s shape and 10Hz cadence are
+unchanged for consumers. `glove_diagnostic_sheet.dart` needed **zero
+changes** — it already reads these exact map keys (`d['diagRawFsrAdc']`
+etc.) and has no idea they now arrive via two independently-timed BLE
+packets instead of one.
+
+**Dead `diagActive` plumbing deleted, confirmed safe first:** removing the
+five guards left `parseLiveStream()`'s `{bool diagActive = false}` parameter
+and `ParsedBLEData.diagActive` field with nothing left to gate. Grepped
+`lib/` for `.diagActive` and `'diagActive'` before deleting: the only reader
+of `ParsedBLEData.diagActive` was `ble_connection.dart:688`
+(`'diagActive': parsed.diagActive` in the broadcast map), and the map key
+`'diagActive'` itself has zero readers anywhere in `lib/features/` — same
+"plumbed but never consumed" shape as `wristDropped`/`feedbackEnabled`
+documented earlier in this file. Deleted the parameter and the field.
+`ble_connection.dart`'s own `_diagActive` instance bool (tracks
+`sendDiagStart()`/`sendDiagStop()` app-side state, unrelated to the deleted
+packet-parser field) stays — it still gates when `DIAG_FRAME` is meaningful
+to look at, and is now also the source of the `'diagActive'` map key that
+survives.

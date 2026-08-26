@@ -42,6 +42,7 @@ const int kPacketPendingLocalData  = 0x09;
 const int kPacketLocalSessionChunk = 0x0A;
 const int kPacketSelftestResult    = 0x0B;
 const int kPacketScenarioChange = 0x0C;
+const int kPacketDiagFrame = 0x0D;
 const int kCmdSetScenario = 0xFD;
 
 
@@ -93,7 +94,7 @@ class BLEDataProcessor {
   //  49     uint8    rescuerFatigueScore 0–100
   //  50     uint8    imuCalibrated       0/1
   //  51     uint8    wristDropped        0/1
-  //  52–55  float32  valleyDepth         cm
+  //  52–55  float32  residualLoadDepthCm cm (force-to-depth proxy, not an IMU depth reading)
   //  56–59  float32  heartRatePatient    BPM (pulse check only)
   //  60–63  float32  spO2Patient         % (pulse check only)
   //  64–67  float32  ppgRaw              0–1 (pulse check only)
@@ -112,7 +113,7 @@ class BLEDataProcessor {
   //  88     uint8    sessionActive       0/1
   //  89     uint8    pulseCheckActive    0/1
   //  90     uint8    currentMode         0/1/2
-  //  91     uint8    feedbackEnabled     0/1
+  //  91     uint8    feedback bitmask    bit0=audio bit1=haptic bit2=visual
   //  92     uint8    batteryPercentage   0–100
   //  93     uint8    isCharging          0/1
   //  94–97  uint32   peakTimestampMs     ms since session start when peak locked
@@ -128,7 +129,7 @@ class BLEDataProcessor {
   //   This fits cleanly in 2 bytes with no overlap into neighbouring fields.
   //   Firmware must use: uint16_t raw = (uint16_t)(celsius * 100);
 
-  ParsedBLEData? parseLiveStream(List<int> data, {bool diagActive = false}) {
+  ParsedBLEData? parseLiveStream(List<int> data) {
     if (data.length != kLiveStreamSize) {
       debugPrint(
         'BLEDataProcessor: LIVE_STREAM wrong length ${data.length} '
@@ -166,21 +167,8 @@ class BLEDataProcessor {
       final rescuerFatigueScore = b.getUint8(49);
       final imuCalibrated       = b.getUint8(50) == 1;
       final wristDropped        = b.getUint8(51) == 1;
-      final valleyDepth = diagActive ? 0.0 : b.getFloat32(52, Endian.little);
-      // bytes 53–55 reserved
-
-      // ── DIAGNOSTIC OVERLAY (only meaningful when glove is in diag mode) ────
-      // Diagnostic mode overlays the same byte regions used for valleyDepth
-      // (52–55), reserved (86–87), and lastPeakDepthCm (102–105). The glove
-      // sets diagActive = true on CMD_DIAG_START, so the consumer (diag sheet)
-      // simply trusts these fields. In normal mode these read as 0/zeroed.
-      final diagRawFsrAdc    = b.getInt16(52, Endian.little);
-      final diagPalmWhoAmI   = b.getUint8(54);
-      final diagWristWhoAmI  = b.getUint8(55);
-      final diagI2cScanMask  = b.getUint8(86);
-      final diagActionResult = b.getUint8(87);
-      final diagPalmAccelMag  = b.getInt16(102, Endian.little) / 100.0;
-      final diagWristAccelMag = b.getInt16(104, Endian.little) / 100.0;
+      final residualLoadDepthCm = b.getFloat32(52, Endian.little);
+      // bytes 53–55 are the remaining 3 of this float32's 4 bytes, not reserved
 
       // ── PATIENT VITALS ────────────────────────────────────────────────────
       final heartRatePatient  = b.getFloat32(56, Endian.little);
@@ -203,27 +191,26 @@ class BLEDataProcessor {
 
       final rescuerPI            = b.getUint8(84);
       final rescuerHumidityRaw   = b.getUint8(85);
-      // Rescuer PPG filtered AC sample — overlaid into bytes 70–71 in diag mode
-      final diagRescuerPpgFiltered = b.getInt16(70, Endian.little).toDouble();
-      final inVentilationWindow  = !diagActive && b.getUint8(86) == 1;
+      final inVentilationWindow  = b.getUint8(86) == 1;
       // byte 87 reserved
 
       // ── SESSION STATE ─────────────────────────────────────────────────────
       final sessionActive     = b.getUint8(88) == 1;
       final pulseCheckActive  = b.getUint8(89) == 1;
       final currentMode       = b.getUint8(90);
-      final feedbackEnabled   = b.getUint8(91) == 1;
+      final feedbackMask         = b.getUint8(91);
+      final audioFeedbackEnabled   = (feedbackMask & 0x01) != 0;
+      final hapticFeedbackEnabled  = (feedbackMask & 0x02) != 0;
+      final visualFeedbackEnabled  = (feedbackMask & 0x04) != 0;
       final batteryPercentage = b.getUint8(92);
       final isCharging        = b.getUint8(93) == 1;
       // COMPRESSION TIMESTAMPS (94–101)
       final peakTimestampMs   = b.getUint32(94, Endian.little);
       final valleyTimestampMs = b.getUint32(98, Endian.little);
-      final lastPeakDepthCm = diagActive ? 0.0 : b.getFloat32(102, Endian.little);
+      final lastPeakDepthCm = b.getFloat32(102, Endian.little);
       // Chunk 4 Change 20 — selector telemetry (BLE spec v3.1 bytes 106–107).
-      // In diag mode bytes 102–105 carry motion-accel data, so the confidence
-      // bytes are also meaningless then — gate them on !diagActive.
-      final lastPeakConfidence  = diagActive ? 0 : b.getUint8(106);
-      final lastPeakDepthSource = diagActive ? 0 : b.getUint8(107);
+      final lastPeakConfidence  = b.getUint8(106);
+      final lastPeakDepthSource = b.getUint8(107);
 
       // ── Derived: effective depth ──────────────────────────────────────────
       final axisRad    = compressionAxisDeviation * 3.141592653589793 / 180.0;
@@ -258,7 +245,7 @@ class BLEDataProcessor {
         wristFlexionAngle:        wristFlexionAngle,
         compressionAxisDeviation: compressionAxisDeviation,
         depthTrend:               depthTrend,
-        valleyDepth:              valleyDepth,
+        residualLoadDepthCm:      residualLoadDepthCm,
         effectiveDepth:           effectiveDepth,
         // Flags
         recoilAchieved:      recoilAchieved,
@@ -290,7 +277,9 @@ class BLEDataProcessor {
         pulseCheckActive:   pulseCheckActive,
         inVentilationWindow: inVentilationWindow,
         currentMode:        currentMode,
-        feedbackEnabled:    feedbackEnabled,
+        audioFeedbackEnabled:   audioFeedbackEnabled,
+        hapticFeedbackEnabled:  hapticFeedbackEnabled,
+        visualFeedbackEnabled:  visualFeedbackEnabled,
         batteryPercentage:  battPct,
         isCharging:         battPct != null ? isCharging : null,
         peakTimestampMs:   peakTimestampMs,
@@ -298,15 +287,6 @@ class BLEDataProcessor {
         lastPeakDepthCm:    lastPeakDepthCm,
         lastPeakConfidence: lastPeakConfidence,
         lastPeakDepthSource: lastPeakDepthSource,
-        diagRawFsrAdc:    diagRawFsrAdc,
-        diagActive:       diagActive,
-        diagPalmWhoAmI:   diagPalmWhoAmI,
-        diagWristWhoAmI:  diagWristWhoAmI,
-        diagI2cScanMask:  diagI2cScanMask,
-        diagActionResult: diagActionResult,
-        diagPalmAccelMag: diagPalmAccelMag,
-        diagWristAccelMag:        diagWristAccelMag,
-        diagRescuerPpgFiltered:   diagRescuerPpgFiltered,
       );
     } catch (e) {
       debugPrint('BLEDataProcessor: LIVE_STREAM parse error — $e');
@@ -370,7 +350,8 @@ class BLEDataProcessor {
       //  91      uint8   noFlowIntervals
       //  92      uint8   rescuerSwapCount
       //  93–94   uint16  timeToFirstCompressionMs  (ms, little-endian)
-      //  95      reserved
+      //  95      uint8   wristDroppedDuringSession  (1 = wrist IMU dropout
+      //          latch fired at any point this session)
 
         case kPacketSessionEnd:
           final patTempEnd       = b.getFloat32(66, Endian.little);
@@ -404,6 +385,7 @@ class BLEDataProcessor {
             noFlowIntervalsEnd:  b.getUint8(91),
             rescuerSwapCountEnd: b.getUint8(92),
             timeToFirstCompressionMs: b.getUint16(93, Endian.little),
+            wristDroppedDuringSession: b.getUint8(95),
           );
 
       // ── 0x03 VENTILATION_WINDOW ──────────────────────────────────────────
@@ -430,6 +412,8 @@ class BLEDataProcessor {
       // byte[6]   uint8   confidencePct   0–100
       // byte[7]   uint8   detectorACount
       // byte[8]   uint8   detectorBCount
+      // byte[9]   uint8   pulseCheckRefSource  0=none 1=live 2=paused —
+      //           self-detection guard's reference source. Data capture only.
         case kPacketPulseCheckResult:
           return ParsedBLEData._event(
             isPulseCheckResult: true,
@@ -438,6 +422,7 @@ class BLEDataProcessor {
             confidencePct:       b.getUint8(6),
             detectorACount:      b.getUint8(7),
             detectorBCount:      b.getUint8(8),
+            pulseCheckRefSource: b.getUint8(9),
           );
 
       // ── 0x06 MODE_CHANGE ─────────────────────────────────────────────────
@@ -515,6 +500,34 @@ class BLEDataProcessor {
             scenarioChangeTrigger: b.getUint8(2),
           );
 
+      // ── 0x0D DIAG_FRAME ──────────────────────────────────────────────────
+      // Diagnostic-mode telemetry, own packet (FIRMWARE_PLAN Block D). Queued
+      // by the glove at ~4Hz while a diag session is open — replaces the old
+      // LIVE_STREAM diag overlay, which aliased real fields (residualLoadDepthCm,
+      // inVentilationWindow, lastPeakDepthCm/Confidence/Source).
+      // byte[1–2]   int16   rawFsrAdc
+      // byte[3]     uint8   palmWhoAmI
+      // byte[4]     uint8   wristWhoAmI
+      // byte[5]     uint8   i2cScanMask
+      // byte[6]     uint8   actionResult
+      // byte[7–8]   int16   palmAccelMag × 100 (mg)
+      // byte[9–10]  int16   wristAccelMag × 100 (mg)
+      // byte[11–12] int16   rescuerPpgFiltered (counts)
+      // byte[13–16] uint32  rescuerPpgDc (counts — integer quantity, not scaled)
+        case kPacketDiagFrame:
+          return ParsedBLEData._event(
+            isDiagFrame:            true,
+            diagRawFsrAdc:          b.getInt16(1, Endian.little),
+            diagPalmWhoAmI:         b.getUint8(3),
+            diagWristWhoAmI:        b.getUint8(4),
+            diagI2cScanMask:        b.getUint8(5),
+            diagActionResult:       b.getUint8(6),
+            diagPalmAccelMag:       b.getInt16(7, Endian.little) / 100.0,
+            diagWristAccelMag:      b.getInt16(9, Endian.little) / 100.0,
+            diagRescuerPpgFiltered: b.getInt16(11, Endian.little).toDouble(),
+            diagRescuerPpgDc:       b.getUint32(13, Endian.little).toDouble(),
+          );
+
         default:
           debugPrint(
             'BLEDataProcessor: unknown EVENT_CHANNEL type '
@@ -564,6 +577,7 @@ class ParsedBLEData {
   final bool isPendingLocalData;
   final bool isLocalSessionChunk;
   final bool isSelftestResult;
+  final bool isDiagFrame;
 
   // ── LIVE_STREAM: core compression ────────────────────────────────────────
   final double depth;
@@ -578,7 +592,7 @@ class ParsedBLEData {
   final double wristFlexionAngle;
   final double compressionAxisDeviation;
   final double depthTrend;          // 5-comp rolling avg depth
-  final double valleyDepth;         // minimum depth after last peak (recoil quality)
+  final double residualLoadDepthCm; // force-to-depth proxy of residual inter-compression load, not an IMU depth reading
   final double effectiveDepth;      // depth × cos(axisDeviation)
 
   // ── LIVE_STREAM: per-compression flags ───────────────────────────────────
@@ -614,7 +628,9 @@ class ParsedBLEData {
   final bool  pulseCheckActive;
   final bool  inVentilationWindow;
   final int   currentMode;          // 0=Emergency 1=Training 2=No-Feedback
-  final bool  feedbackEnabled;
+  final bool  audioFeedbackEnabled;
+  final bool  hapticFeedbackEnabled;
+  final bool  visualFeedbackEnabled;
   final int?  batteryPercentage;
   final bool? isCharging;
 
@@ -629,18 +645,6 @@ class ParsedBLEData {
   //   6=CALIBRATING, 7=INVALID
   final int lastPeakConfidence;
   final int lastPeakDepthSource;
-
-  // ── LIVE_STREAM: diagnostic overlay (only valid when glove in diag mode) ──
-  final int    diagRawFsrAdc;
-  final int    diagPalmWhoAmI;
-  final int    diagWristWhoAmI;
-  final int    diagI2cScanMask;
-  final int    diagActionResult;
-  final double diagPalmAccelMag;
-  final double diagWristAccelMag;
-  final double diagRescuerPpgFiltered;
-
-  final bool   diagActive;
 
   // ── SESSION_END summary fields ────────────────────────────────────────────
   final int    totalCompressions;
@@ -663,6 +667,9 @@ class ParsedBLEData {
   final int    noFlowIntervalsEnd;  // count of unplanned pauses > 2 s
   final int    rescuerSwapCountEnd; // TWO_MIN_ALERT events fired
   final int    timeToFirstCompressionMs; // ms from SESSION_START to first compression peak
+  // Sticky per-session record — 1 if the wrist IMU dropout latch fired at any
+  // point this session, independent of the live wristDropped flag above.
+  final int?   wristDroppedDuringSession;
   // Rescuer vitals captured at last pause
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
@@ -682,6 +689,9 @@ class ParsedBLEData {
   final int?    confidencePct;
   final int?    detectorACount;
   final int?    detectorBCount;
+  // Self-detection guard's reference source: 0=none 1=live 2=paused.
+  // Data capture only — see cpr_glove.ino's refSourceCode.
+  final int?    pulseCheckRefSource;
 
   // ── MODE_CHANGE fields ────────────────────────────────────────────────────
   final int? modeChangeTrigger; // 0=button 1=app command
@@ -711,6 +721,19 @@ class ParsedBLEData {
   final int? selftestWristWhoAmI;
   final List<int>? selftestReasonCodes;
 
+  // ── DIAG_FRAME fields (own EVENT_CHANNEL packet — FIRMWARE_PLAN Block D) ──
+  // Only meaningful while a diag session is open; queued at ~4Hz by the
+  // glove, independent of LIVE_STREAM. Null until the first frame arrives.
+  final int?    diagRawFsrAdc;
+  final int?    diagPalmWhoAmI;
+  final int?    diagWristWhoAmI;
+  final int?    diagI2cScanMask;
+  final int?    diagActionResult;
+  final double? diagPalmAccelMag;
+  final double? diagWristAccelMag;
+  final double? diagRescuerPpgFiltered;
+  final double? diagRescuerPpgDc;
+
   const ParsedBLEData({
     this.isLiveStream          = false,
     this.isStartPing           = false,
@@ -728,6 +751,7 @@ class ParsedBLEData {
     this.isPendingLocalData    = false,
     this.isLocalSessionChunk   = false,
     this.isSelftestResult      = false,
+    this.isDiagFrame           = false,
     this.depth                 = 0,
     this.frequency             = 0,
     this.force                 = 0,
@@ -738,7 +762,7 @@ class ParsedBLEData {
     this.wristFlexionAngle     = 0,
     this.compressionAxisDeviation = 0,
     this.depthTrend            = 0,
-    this.valleyDepth           = 0,
+    this.residualLoadDepthCm   = 0,
     this.effectiveDepth        = 0,
     this.recoilAchieved        = false,
     this.leaningDetected       = false,
@@ -766,7 +790,9 @@ class ParsedBLEData {
     this.pulseCheckActive      = false,
     this.inVentilationWindow = false,
     this.currentMode           = 0,
-    this.feedbackEnabled       = true,
+    this.audioFeedbackEnabled   = true,
+    this.hapticFeedbackEnabled  = true,
+    this.visualFeedbackEnabled  = true,
     this.batteryPercentage,
     this.isCharging,
     this.peakTimestampMs   = 0,
@@ -774,15 +800,6 @@ class ParsedBLEData {
     this.lastPeakDepthCm    = 0,
     this.lastPeakConfidence = 0,
     this.lastPeakDepthSource = 0,
-    this.diagRawFsrAdc    = 0,
-    this.diagPalmWhoAmI   = 0,
-    this.diagWristWhoAmI  = 0,
-    this.diagI2cScanMask  = 0,
-    this.diagActionResult = 0,
-    this.diagPalmAccelMag = 0,
-    this.diagWristAccelMag = 0,
-    this.diagRescuerPpgFiltered = 0,
-    this.diagActive       = false,
     this.totalCompressions     = 0,
     this.correctDepth          = 0,
     this.correctFrequency      = 0,
@@ -803,6 +820,7 @@ class ParsedBLEData {
     this.noFlowIntervalsEnd    = 0,
     this.rescuerSwapCountEnd   = 0,
     this.timeToFirstCompressionMs = 0,
+    this.wristDroppedDuringSession,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
     this.rescuerWristTempStart,
@@ -815,6 +833,7 @@ class ParsedBLEData {
     this.confidencePct,
     this.detectorACount,
     this.detectorBCount,
+    this.pulseCheckRefSource,
     this.modeChangeTrigger,
     this.twoMinAlertNumber,
     this.fatigueAlertScore,
@@ -831,6 +850,15 @@ class ParsedBLEData {
     this.selftestPalmWhoAmI,
     this.selftestWristWhoAmI,
     this.selftestReasonCodes,
+    this.diagRawFsrAdc,
+    this.diagPalmWhoAmI,
+    this.diagWristWhoAmI,
+    this.diagI2cScanMask,
+    this.diagActionResult,
+    this.diagPalmAccelMag,
+    this.diagWristAccelMag,
+    this.diagRescuerPpgFiltered,
+    this.diagRescuerPpgDc,
   });
 
   /// Named constructor for EVENT_CHANNEL packets.
@@ -851,6 +879,7 @@ class ParsedBLEData {
     bool   isPendingLocalData    = false,
     bool   isLocalSessionChunk   = false,
     bool   isSelftestResult      = false,
+    bool   isDiagFrame           = false,
     int    currentMode           = 0,
     int    totalCompressions     = 0,
     int    correctDepth          = 0,
@@ -872,6 +901,7 @@ class ParsedBLEData {
     int    noFlowIntervalsEnd    = 0,
     int    rescuerSwapCountEnd   = 0,
     int timeToFirstCompressionMs = 0,
+    int?   wristDroppedDuringSession,
     double? patientTemperature,
     double? rescuerHRLastPause,
     double? rescuerSpO2LastPause,
@@ -885,6 +915,7 @@ class ParsedBLEData {
     int?   confidencePct,
     int?   detectorACount,
     int?   detectorBCount,
+    int?   pulseCheckRefSource,
     int?   modeChangeTrigger,
     int?   twoMinAlertNumber,
     int?   fatigueAlertScore,
@@ -901,6 +932,15 @@ class ParsedBLEData {
     int?       selftestPalmWhoAmI,
     int?       selftestWristWhoAmI,
     List<int>? selftestReasonCodes,
+    int?    diagRawFsrAdc,
+    int?    diagPalmWhoAmI,
+    int?    diagWristWhoAmI,
+    int?    diagI2cScanMask,
+    int?    diagActionResult,
+    double? diagPalmAccelMag,
+    double? diagWristAccelMag,
+    double? diagRescuerPpgFiltered,
+    double? diagRescuerPpgDc,
   }) : this(
     isStartPing:           isStartPing,
     isEndPing:             isEndPing,
@@ -916,6 +956,7 @@ class ParsedBLEData {
     isPendingLocalData:    isPendingLocalData,
     isLocalSessionChunk:   isLocalSessionChunk,
     isSelftestResult:      isSelftestResult,
+    isDiagFrame:           isDiagFrame,
     currentMode:           currentMode,
     totalCompressions:     totalCompressions,
     correctDepth:          correctDepth,
@@ -937,6 +978,7 @@ class ParsedBLEData {
     noFlowIntervalsEnd:    noFlowIntervalsEnd,
     rescuerSwapCountEnd:   rescuerSwapCountEnd,
     timeToFirstCompressionMs: timeToFirstCompressionMs,
+    wristDroppedDuringSession: wristDroppedDuringSession,
     patientTemperature:    patientTemperature,
     rescuerHRLastPause:    rescuerHRLastPause,
     rescuerSpO2LastPause:  rescuerSpO2LastPause,
@@ -950,6 +992,7 @@ class ParsedBLEData {
     confidencePct:         confidencePct,
     detectorACount:        detectorACount,
     detectorBCount:        detectorBCount,
+    pulseCheckRefSource:   pulseCheckRefSource,
     modeChangeTrigger:     modeChangeTrigger,
     twoMinAlertNumber:     twoMinAlertNumber,
     fatigueAlertScore:     fatigueAlertScore,
@@ -966,5 +1009,14 @@ class ParsedBLEData {
     selftestPalmWhoAmI:   selftestPalmWhoAmI,
     selftestWristWhoAmI:  selftestWristWhoAmI,
     selftestReasonCodes:  selftestReasonCodes,
+    diagRawFsrAdc:         diagRawFsrAdc,
+    diagPalmWhoAmI:        diagPalmWhoAmI,
+    diagWristWhoAmI:       diagWristWhoAmI,
+    diagI2cScanMask:       diagI2cScanMask,
+    diagActionResult:      diagActionResult,
+    diagPalmAccelMag:      diagPalmAccelMag,
+    diagWristAccelMag:     diagWristAccelMag,
+    diagRescuerPpgFiltered: diagRescuerPpgFiltered,
+    diagRescuerPpgDc:      diagRescuerPpgDc,
   );
 }

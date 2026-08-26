@@ -49,6 +49,7 @@
 #define LIVE_STREAM_SIZE 108
 #define EVENT_CHANNEL_SIZE 96
 #define LIVE_STREAM_INTERVAL_MS 100  // 10 Hz — reduces BLE congestion; still smooth enough for display
+#define DIAG_FRAME_INTERVAL_MS 250   // 4 Hz — smooth enough to watch live, light on the shared EVENT_CHANNEL queue
 
 // EVENT_CHANNEL packet types (glove → app)
 #define PKT_SESSION_START 0x01
@@ -63,6 +64,13 @@
 #define PKT_LOCAL_SESSION_CHUNK 0x0A
 #define PKT_SELFTEST_RESULT 0x0B
 #define PKT_SCENARIO_CHANGE 0x0C
+#define PKT_DIAG_FRAME 0x0D
+
+// PULSE_CHECK_RESULT byte 9 — self-detection guard's reference source
+// (FIRMWARE_PLAN Block C). Data-capture only, does not affect gating.
+#define PULSE_REF_SOURCE_NONE   0  // neither live nor paused reference passed PULSE_MIN_SIGNAL_QUALITY
+#define PULSE_REF_SOURCE_LIVE   1  // snap.heartRateUser / rescuerSignalQuality, contemporaneous with window close
+#define PULSE_REF_SOURCE_PAUSED 2  // snap.rescuerHRLastPause / rescuerSQLastPause, captured at window-open
 
 // EVENT_CHANNEL commands (app → glove)
 #define CMD_MODE_SET 0xF1

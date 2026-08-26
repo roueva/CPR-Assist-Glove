@@ -789,6 +789,7 @@ static void sensorTask(void* pv) {
     gState.rescuerFatigueScore = local.rescuerFatigueScore;
     gState.imuCalibrated = local.imuCalibrated;
     gState.wristDropped = local.wristDropped;
+    gState.wristDroppedDuringSession = local.wristDroppedDuringSession;
     gState.residualLoadDepthCm = local.residualLoadDepthCm;
     gState.totalCompressions = local.totalCompressions;
     gState.correctDepth = local.correctDepth;
@@ -819,6 +820,7 @@ static void sensorTask(void* pv) {
 // ── COMMS TASK (Core 0, ~various rates) ──────────────────────────────────────
 static void commsTask(void* pv) {
   unsigned long lastLiveMs = 0;
+  unsigned long lastDiagFrameMs = 0;
   unsigned long lastNeoMs = 0;
   unsigned long lastBatMs = 0;
   unsigned long lastVitalsMs = 0;
@@ -1299,10 +1301,12 @@ bool cycleReached = (ventComps > 0
             float refHrBpm = 0.0f;
             uint8_t refSigQuality = 0;
             const char* refSource = "none";
+            uint8_t refSourceCode = PULSE_REF_SOURCE_NONE;
             if (liveRefOk) {
               refHrBpm = snap.heartRateUser;
               refSigQuality = snap.rescuerSignalQuality;
               refSource = "live";
+              refSourceCode = PULSE_REF_SOURCE_LIVE;
             } else if (pausedRefOk) {
               // On a backstop close (WINDOW_MAX_BACKSTOP_MS) this snapshot
               // can be the full window old — but a backstop close already
@@ -1314,6 +1318,7 @@ bool cycleReached = (ventComps > 0
               refHrBpm = snap.rescuerHRLastPause;
               refSigQuality = snap.rescuerSQLastPause;
               refSource = "paused";
+              refSourceCode = PULSE_REF_SOURCE_PAUSED;
             }
 
             uint8_t cls = max30102ClassifyPulse(
@@ -1330,7 +1335,7 @@ bool cycleReached = (ventComps > 0
 
             bleQueueEvent(bleBuildPulseCheckResult(
               cls, estimatedBpm, snap.ppgSignalQuality,
-              snap.detectorACount, snap.detectorBCount));
+              snap.detectorACount, snap.detectorBCount, refSourceCode));
 
             if (_storedPulseCount < STORAGE_MAX_PULSE_CHECKS) {
               StoredPulseCheck& p = _storedPulses[_storedPulseCount++];
@@ -1417,6 +1422,14 @@ bool cycleReached = (ventComps > 0
       lastLiveMs = now;
       SharedState snap = snapshotState();
       bleSendLiveStream(snap);
+    }
+
+    // ── DIAG_FRAME at 4Hz (DIAG_FRAME_INTERVAL_MS) while diagActive ─────────
+    // Own EVENT_CHANNEL packet (FIRMWARE_PLAN Block D) — replaces the old
+    // LIVE_STREAM diag overlay. Only queued while a diag session is open.
+    if (bleConnected() && diagActive && (now - lastDiagFrameMs) >= DIAG_FRAME_INTERVAL_MS) {
+      lastDiagFrameMs = now;
+      bleQueueEvent(bleBuildDiagFrame());
     }
 
     // ── NeoPixel at 20Hz ────────────────────────────────────────────────────
