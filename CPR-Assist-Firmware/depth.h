@@ -14,11 +14,7 @@ struct StoredCompression {
   uint8_t postureOk;
   uint8_t wristAlignX10;
   uint8_t axisDevX10;
-  // Change 23 — IMU-measured residual depth at valley (mm × 10).
-  // Lets analysis distinguish "force says recoil OK" from "IMU says recoil OK".
-  // Tomlinson 2007 mean residual depth was 3 ± 2 mm; we expect most values 0–5.
-  uint8_t residualDepthX10;
-  uint8_t reserved[3];   // reduced from [4] to [3]
+  uint8_t reserved[3];
 } __attribute__((packed));
 
 
@@ -30,9 +26,6 @@ void depthUpdate(float forceN, float dt, SharedState& s, GloveMode mode, Scenari
 
 // Per-session reset
 void depthSessionReset();
-
-// Rolling rate (BPM)
-float depthGetRate();
 
 void depthSkipNextRate();
 

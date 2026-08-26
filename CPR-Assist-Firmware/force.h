@@ -15,7 +15,6 @@ bool forceCalibComplete();
 void forceCalibCompute();  // fits k from collected samples
 float forceCalibK();
 void forceUpdateBaseline(float rawForceN);  // call at 100Hz from sensorTask when no session active
-void forceResetCalibration();   // wipe baseline + k, forces re-learn
 
 // ── Chunk 4 Change 18 — per-stroke force-path confidence ───────────────────
 // Returns confidence in [0.0, 1.0] reflecting how trustworthy the force-derived
@@ -35,6 +34,3 @@ void forceSetSessionActive(bool active);  // call from startSession / stopSessio
 void forceTestRead(int& rawAdc, float& voltage, float& rawForceN,
                    float& baseline, float& filteredN);
 #endif
-
-bool forceCalibLocked();
-void forceCalibLock();

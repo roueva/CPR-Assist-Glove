@@ -178,14 +178,6 @@ bool forceCalibComplete() {
 // When FORCE_CALIB_LOCK = 1, k is fitted once and never refitted.
 // Useful for validating on a single surface with all subjects using identical k.
 
-bool forceCalibLocked() {
-  return _calibLocked;
-}
-
-void forceCalibLock() {
-  _calibLocked = true;
-}
-
 float forceCalibK() {
   return _calibK;
 }
@@ -258,25 +250,6 @@ void forceUpdateBaseline(float rawForceN) {
   if (_baseline < 0.0f) _baseline = 0.0f;
   if (_baseline > _bootBaseline) _baseline = _bootBaseline;
 }
-
-void forceResetCalibration() {
-#if FORCE_CALIB_LOCK
-  // Locked builds never reset calibration, even if a future caller is
-  // wired up — k stays at K_STUDY_LOCKED for the life of the build. This
-  // is structural, not merely a consequence of no caller existing today.
-  return;
-#endif
-  _baselineReady = false;
-  _lpfState = 0.0f;
-  _baselineSum   = 0;
-  _baselineCnt   = 0;
-  _baseline      = 0;
-  _bootBaseline  = 0;
-  _calibComplete = false;
-  _calibCount    = 0;
-  _calibK        = K_POPULATION_DEFAULT;  // physiological default until next session re-learns
-}
-
 
 // ── Chunk 4 Change 18 — per-stroke force confidence ──────────────────────────
 // Returns confidence in [0.0, 1.0] reflecting how trustworthy the force-derived

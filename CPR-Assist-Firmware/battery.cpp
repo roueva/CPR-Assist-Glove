@@ -37,6 +37,3 @@ uint8_t batteryPercent() {
 bool batteryCharging() {
   return _charging;
 }
-float batteryVoltage() {
-  return _voltage;
-}

@@ -131,7 +131,7 @@ void bleSendLiveStream(const SharedState& s) {
   buf[49] = s.rescuerFatigueScore;
   buf[50] = s.imuCalibrated ? 1 : 0;
   buf[51] = s.wristDropped ? 1 : 0;
-  packF32(buf, 52, s.valleyDepth);
+  packF32(buf, 52, s.residualLoadDepthCm);
 
   // PATIENT VITALS (56–71) — valid during pulse check ONLY. All patient
   // fields (incl. temperature) are zeroed outside a pulse-check window so
@@ -217,13 +217,13 @@ void bleSendLiveStream(const SharedState& s) {
   if ((_liveLogCount++ % 25) == 0) {
     Serial.printf(
       "[LIVE] d=%.1fcm f=%.0fN rate=%.0f cnt=%lu inCyc=%lu "
-      "recoil=%d lean=%d over=%d valley=%.2fcm | "
+      "recoil=%d lean=%d over=%d resLoad=%.2fcm | "
       "rHR=%.0f rSpO2=%.0f rSQ=%u rTemp=%.1f rHum=%u | "
       "pulseAct=%d sessAct=%d mode=%u\n",
       s.depth, s.force, s.instantaneousRate,
       (unsigned long)s.compressionCount, (unsigned long)s.compressionInCycle,
       s.recoilAchieved ? 1 : 0, s.leaningDetected ? 1 : 0,
-      s.overForceFlag ? 1 : 0, s.valleyDepth,
+      s.overForceFlag ? 1 : 0, s.residualLoadDepthCm,
       s.heartRateUser, s.spO2User, s.rescuerSignalQuality,
       s.rescuerTemperature, (unsigned)s.rescuerHumidity,
       s.pulseCheckActive ? 1 : 0, s.sessionActive ? 1 : 0,

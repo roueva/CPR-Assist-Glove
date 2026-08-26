@@ -40,7 +40,7 @@ struct SharedState {
   // for thesis analysis. Both updated atomically with lastPeakDepthCm.
   uint8_t lastPeakConfidence;   // 0–100, overall confidence in lastPeakDepthCm
   uint8_t lastPeakDepthSource;  // DepthSource enum value (see depth.cpp)
-  float frequency;          // BPM, instantaneous (last 2 compressions)
+  float frequency;          // BPM, 5-compression rolling average
   float force;              // N
   float instantaneousRate;  // BPM, last-2-comp
   int32_t compressionCount;
@@ -62,7 +62,7 @@ struct SharedState {
   uint8_t rescuerFatigueScore;  // 0–100
   bool imuCalibrated;
   bool wristDropped;
-  float valleyDepth;  // cm
+  float residualLoadDepthCm;  // cm — force-to-depth proxy from residual inter-compression load, not an IMU depth measurement
 
   uint32_t peakTimestampMs;    // ms since session start when peak was locked
   uint32_t valleyTimestampMs;  // ms since session start when valley was confirmed

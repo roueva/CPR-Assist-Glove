@@ -429,7 +429,7 @@ static void startSession() {
   gState.leaningDetected = false;
   gState.overForceFlag = false;
   gState.postureOk = true;
-  gState.valleyDepth = 0.0f;
+  gState.residualLoadDepthCm = 0.0f;
   gState.depth = 0.0f;
   gState.lastPeakDepthCm = 0.0f;
   gState.force = 0.0f;
@@ -789,7 +789,7 @@ static void sensorTask(void* pv) {
     gState.rescuerFatigueScore = local.rescuerFatigueScore;
     gState.imuCalibrated = local.imuCalibrated;
     gState.wristDropped = local.wristDropped;
-    gState.valleyDepth = local.valleyDepth;
+    gState.residualLoadDepthCm = local.residualLoadDepthCm;
     gState.totalCompressions = local.totalCompressions;
     gState.correctDepth = local.correctDepth;
     gState.correctFrequency = local.correctFrequency;
@@ -1587,9 +1587,6 @@ void setup() {
 // (recommend 10k, not 100k) restores EN high on switch-open. Keep this pin
 // permanently high-impedance so the GPIO can never latch EN low and block
 // a restart. Do not add digitalWrite() to this pin anywhere.
-#if MANIKIN_CALIBRATION_LOG
-  Serial.println(F("CALIB,n,peakF_N,palmMM,wristMM,imuMM,forceMM,calibK,finalMM,strokeMs"));
-#endif
   pinMode(PIN_EN_CONTROL, INPUT);
   // Initialise shared state
   memset(&gState, 0, sizeof(gState));

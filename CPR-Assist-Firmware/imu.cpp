@@ -302,12 +302,6 @@ static float worldVertAccel(const IMURaw& raw, const CompFilter& cf) {
   return a_motion;
 }
 
-// Chunk 1 Change 1 — public accessors for the world-frame vertical accel.
-// Same semantics as the old imuGetMotionAccelPalm/Wrist — kept for source
-// compatibility. New name in the .h for forward-looking clarity.
-float imuGetWorldVertAccelPalm()  { return _aPalm; }
-float imuGetWorldVertAccelWrist() { return _aWrist; }
-
 // ── Public update (called every sample in sensor task) ────────────────────────
 
 void imuUpdateFilters(const IMURaw& palm, const IMURaw& wrist, float dt) {
@@ -355,14 +349,6 @@ void imuEndCycle(bool validForce) {
   if (!validForce) return;
   gravCycleUpdate(gravPalm);
   if (_wristOk && !_wristDropped) gravCycleUpdate(gravWrist);
-}
-
-void imuTriggerFastConverge() {
-  // Called at session start. The hand has just been repositioned on the
-  // manikin — use CF_ALPHA_FAST for 60 ticks (~0.6s) to converge quickly
-  // to the new hand orientation before the first compression.
-  // Literature: Mahony 2008 — variable gain complementary filter.
-  _cfFastConvergeTicksLeft = 60;
 }
 
 // ── Angle outputs ─────────────────────────────────────────────────────────────
@@ -605,39 +591,6 @@ void imuResetCF() {
   _pendingCFReset = true;
   _stillTicks = 0;
 }
-
-// ── Backward-compatibility wrapper ───────────────────────────────────────────
-// depth.cpp currently calls getAdaptiveDepthMM(palmMM, wristMM). To minimize
-// the depth.cpp diff, keep this function as a thin wrapper that calls the
-// new combine. It loses the confidence return value, so depth.cpp should
-// gradually migrate to imuCombineDual. For now, it computes confidences
-// internally so existing call sites continue working.
-//
-// (depth.cpp will be updated in Section 5 to use imuCombineDual directly.)
-float getAdaptiveDepthMM(float palmMM, float wristMM) {
-  if (!_wristOk || _wristDropped) return palmMM;
-  bool wristConverged = (gravWrist.cycles >= GRAV_MIN_CYCLES_WRIST);
-  if (wristMM <= 0.0f) {
-    if (wristConverged) {
-      _wristDropoutCount++;
-      if (_wristDropoutCount >= WRIST_DROPOUT_LIMIT) _wristDropped = true;
-    }
-    return palmMM;
-  }
-  _wristDropoutCount = 0;
-
-  // For the wrapper, we don't have IntegState access here, so we can't
-  // compute confidence. Use a degraded version: agreement-only weighting,
-  // similar to the old code but cleaner.
-  const float diff = fabsf(palmMM - wristMM);
-  const float agreement = 1.0f - fminf(1.0f, diff / SELECTOR_AGREE_THRESHOLD_MM);
-  // When they agree, average; when they disagree, weight toward palm
-  // (the more rigidly-mounted IMU, per design assumption).
-  const float wPalm  = 0.5f + (1.0f - agreement) * 0.3f;
-  const float wWrist = 1.0f - wPalm;
-  return wPalm * palmMM + wWrist * wristMM;
-}
-
 
 // ── Status ────────────────────────────────────────────────────────────────────
 bool imuIsCalibrated() {

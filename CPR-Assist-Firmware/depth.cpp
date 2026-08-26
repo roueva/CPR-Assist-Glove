@@ -72,7 +72,6 @@ static float _lastPeakMM = 0.0f;
 
 static unsigned long _peakTimestampMs = 0;
 static unsigned long _valleyTimestampMs = 0;
-static float _prevValleyDepth = 0.0f;     // valley from previous cycle, used for recoil check
 static float _prevValleyForce = 9999.0f;  // min inter-compression force for recoil check
 static float _recoilValleyDepthMM = 9999.0f;
 static float _recoilValleyForceN = 9999.0f;
@@ -276,7 +275,6 @@ void depthSessionReset() {
   _compressionInCycle = 0;
   _totalCompressions = 0;
   _cntDepth = _cntFreq = _cntRecoil = _cntCombo = _cntPosture = _cntLeaning = _cntOverForce = _cntTooDeep = 0;
-  _prevValleyDepth = 0.0f;
   _prevValleyForce = 9999.0f;
   _lastCompStartMs = 0;
   _thisCompStartMs = 0;
@@ -310,14 +308,11 @@ void depthSessionReset() {
 
   // Trigger fast CF convergence so the filter adapts quickly to the new
   // hand position on the manikin/patient. Mahony 2008.
-imuResetCF();  // was: imuTriggerFastConverge()
+imuResetCF();
 }
 
 void depthInit() {
   depthSessionReset();
-}
-float depthGetRate() {
-  return _gradeRate;
 }
 
 bool depthIsReleased() {
@@ -356,8 +351,7 @@ void depthFinalizeLastValley() {
 
   // Mirror the assignment that depth.cpp:343 would do at next-comp-start.
   _recoilValleyDepthMM = _valleyDepth * 10.0f;     // cm → mm
-  _recoilValleyForceN  = _prevValleyForce;
-  _prevValleyDepth     = _valleyDepth;
+  _recoilValleyForceN  = (_prevValleyForce < 9000.0f) ? _prevValleyForce : 9999.0f;
   _trackingValley      = false;
 
   // Note: this only updates the internal state. The recoil grade for the
@@ -513,7 +507,6 @@ if (_state == CompState::COMPRESSING) {
       // completion block grades the correct compression's recoil.
       _recoilValleyDepthMM = (_trackingValley && _valleyDepth < 9000.0f) ? (_valleyDepth * 10.0f) : 9999.0f;
       _recoilValleyForceN = (_prevValleyForce < 9000.0f) ? _prevValleyForce : 9999.0f;
-      _prevValleyDepth = (_trackingValley && _valleyDepth < 9000.0f) ? _valleyDepth : 9999.0f;
 
       // Start valley tracking after peak
       _trackingValley = false;
@@ -770,7 +763,7 @@ if (_state == CompState::COMPRESSING) {
       // forceToDepth returns mm, divide by 10 for cm.
 {
     const float valF = (_recoilValleyForceN < 9000.0f) ? _recoilValleyForceN : 0.0f;
-    s.valleyDepth = (valF > 0.5f)
+    s.residualLoadDepthCm = (valF > 0.5f)
         ? forceCalibK() * powf(valF, DEPTH_EXPONENT) / 10.0f  // mm → cm
         : 0.0f;
 }

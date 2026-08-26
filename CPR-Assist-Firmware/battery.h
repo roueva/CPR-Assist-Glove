@@ -9,4 +9,3 @@ void batteryInit();
 void batteryUpdate();      // call every ~1s from comms task
 uint8_t batteryPercent();  // 0–100
 bool batteryCharging();
-float batteryVoltage();

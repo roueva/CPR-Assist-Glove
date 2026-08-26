@@ -97,19 +97,8 @@ float imuGetMotionAccelWrist();
 void integrateCompression(IntegState& s, float a_ms2, float dt);
 void resetIntegration(IntegState& s);
 
-float getAdaptiveDepthMM(float palmMM, float wristMM);  // wrist dropout + blending
-
 bool imuIsCalibrated();  // true once gravity converged
 bool imuWristDropped();
-
-
-// ── Chunk 1 Change 1/2 — refactored motion accel using CF orientation ──────
-// Returns motion acceleration in m/s² along the world-vertical axis, computed
-// by rotating raw accel into the world frame via the complementary filter's
-// pitch/roll, then taking the Z-component and subtracting 9.81. Replaces the
-// gravity-EMA + dot-product approach. Lee/Park 2021 (Biosensors 11:35) flow.
-float imuGetWorldVertAccelPalm();
-float imuGetWorldVertAccelWrist();
 
 // ── Chunk 1 Change 2 — Aase boundary-correction helper ─────────────────────
 // Called once at the moment of force-release to back-correct peakDepthM for
@@ -129,7 +118,7 @@ float imuConfidence(const IntegState& s);
 // ── Chunk 4 Change 19 — confidence-weighted dual-IMU combine ───────────────
 // Returns best-available IMU depth combining palm and wrist. If one is
 // high-confidence and the other low, prefers the high. If both agree,
-// averages them. Replaces the old diff-based weighting in getAdaptiveDepthMM.
+// averages them. Replaces the old diff-based weighting approach.
 struct DualIMUResult {
   float depthMM;
   float combinedConfidence;
@@ -138,11 +127,6 @@ struct DualIMUResult {
 };
 DualIMUResult imuCombineDual(float palmMM, float wristMM,
                              float palmConf, float wristConf);
-
-// ── Mahony 2008 adaptive CF gain ──────────────────────────────────────────
-// Call at session start to trigger fast CF convergence to the new hand
-// orientation. Uses CF_ALPHA_FAST for 60 ticks (~0.6s).
-void imuTriggerFastConverge();
 
 void imuResetCF();
 

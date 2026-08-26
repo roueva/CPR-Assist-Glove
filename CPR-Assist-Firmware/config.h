@@ -430,8 +430,6 @@
 #define VENTILATION_GRACE_MS 2500UL  // reflex comps in this window after the prompt don't count
 
 // ── Pulse check ───────────────────────────────────────────────────────────────
-#define PULSE_CHECK_INTERVAL_MS 120000UL  // unused, retained pending cleanup
-
 // Passive contact+pause gate — the glove never prompts. A circulation check
 // opens only when the rescuer has already stopped compressions on their own
 // AND the fingertip sensor confirms carotid contact. No time-based trigger.
@@ -467,12 +465,6 @@
 #define WINDOW_RESUME_COMP_COUNT 2        // comps after a real pause that close the window normally
 #define WINDOW_RESUME_PROMPT_MS 10000UL   // play "resume compressions" once at this elapsed time
 #define WINDOW_MAX_BACKSTOP_MS 100000UL    // hard close even if rescuer never does anything
-
-// Legacy names kept as aliases so existing pulse-check code referencing the
-// old identifiers still compiles. Do NOT use these in new code.
-#define PULSE_CHECK_DURATION_MS WINDOW_PAUSE_COMPLIANT_MS
-#define PULSE_CHECK_MAX_WINDOW_MS WINDOW_MAX_BACKSTOP_MS
-#define PULSE_CHECK_RESUME_PROMPT_MS WINDOW_RESUME_PROMPT_MS
 
 // ── Two-minute swap alert ─────────────────────────────────────────────────────
 #define TWO_MIN_ALERT_INTERVAL_MS 120000UL  // every 2 min per AHA 2020
