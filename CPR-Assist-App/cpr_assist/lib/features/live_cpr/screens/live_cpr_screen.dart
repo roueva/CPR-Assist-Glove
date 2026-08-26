@@ -61,7 +61,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
   double   _displayDepth            = 0.0;
   double   _displayFrequency        = 0.0;
   double _peakDepth               = 0.0;
-  double _valleyDepth             = 0.0;
   int    _lastSeenCompressionCount = 0;
   DateTime? _sessionStartTime;
 
@@ -477,6 +476,12 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── MODE_CHANGE from glove button ──────────────────────────────────────
     if (data['isModeChange'] == true) {
+      // Intentional: the app must never switch mode mid-session — an active
+      // Emergency session must not be interrupted, and switching to/from
+      // Training mid-session would change grading eligibility under a
+      // participant's feet. This guard only blocks the live UI reaction;
+      // the event itself is still captured regardless — see
+      // BLEConnection.modeChangeTimestampsMs/Values/Triggers.
       if (_isSessionActive) return;
       final newModeInt = data['currentMode'] as int? ?? 0;
       final newMode    = AppMode.fromBleValue(newModeInt);
@@ -502,6 +507,11 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── SCENARIO_CHANGE from glove button ──────────────────────────────────
     if (data['isScenarioChange'] == true) {
+      // Intentional: the app must never switch scenario mid-session — the
+      // depth target and overforce threshold must not move under a
+      // participant mid-CPR. This guard only blocks the live UI reaction;
+      // the event itself is still captured regardless — see
+      // BLEConnection.scenarioChangeTimestampsMs/Values/Triggers.
       if (_isSessionActive) return;
       final newScenario = data['scenarioFromGlove'] as int? ?? 0;
       ref.read(scenarioProvider.notifier).setFromGlove(newScenario);
@@ -630,10 +640,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
       if (data.containsKey('recoilAchieved')) {
         _recoilAchieved = data['recoilAchieved'] as bool;
-        if (_recoilAchieved) {
-          final vd = (data['valleyDepth'] as num?)?.toDouble() ?? 0.0;
-          if (vd >= 0) _valleyDepth = vd;
-        }
       }
 
       if (data.containsKey('compressionInCycle')) {
@@ -751,6 +757,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
       scenario: _sessionStartScenario ?? ref.read(scenarioProvider).sessionScenarioString,
       ventilationRatio: ref.read(settingsProvider).ventilationRatio,
       twoMinAlertTimestampsMs: List.from(bleConn.twoMinAlertTimestampsMs),
+      twoMinAlertNumbers: List.from(bleConn.twoMinAlertNumbers),
+      modeChangeTimestampsMs: List.from(bleConn.modeChangeTimestampsMs),
+      modeChangeValues: List.from(bleConn.modeChangeValues),
+      modeChangeTriggers: List.from(bleConn.modeChangeTriggers),
+      scenarioChangeTimestampsMs: List.from(bleConn.scenarioChangeTimestampsMs),
+      scenarioChangeValues: List.from(bleConn.scenarioChangeValues),
+      scenarioChangeTriggers: List.from(bleConn.scenarioChangeTriggers),
       fatigueAlertTimestampMs: bleConn.fatigueAlertTimestampMs,
       fatigueAlertScore: bleConn.fatigueAlertScore,
     );
@@ -909,7 +922,6 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
                       LiveCprMetricsCard(
                         depth:              _displayDepth,
                         peakDepth:          _peakDepth,
-                        valleyDepth:        _valleyDepth,
                         frequency:          _displayFrequency,
                         cprTime:            _displaySessionDuration,
                         compressionCount:   _displayCompressionCount,

@@ -67,6 +67,10 @@ class BLEConnection {
   int    _sessionMode        = 0;   // 0=emergency 1=training 2=no_feedback
   bool   _sessionActive      = false;
   bool   _pulseCheckOpen     = false;
+  // Cached from the most recent PULSE_CHECK_START; consumed (and cleared) by
+  // the matching PULSE_CHECK_RESULT. Null means no START was seen for this
+  // window — see the PULSE_CHECK_RESULT handler below.
+  int?   _lastPulseCheckStartInterval;
 
   final List<double> _ppgBuffer = [];   // accumulates ppgRaw during pulse check window
   double _bestPatientSpO2 = 0.0;        // best spO2Patient reading during pulse check
@@ -77,8 +81,25 @@ class BLEConnection {
 
   // ── Alert timestamps (captured at receive time, session-relative ms) ──────
   final List<int> _twoMinAlertTimestampsMs = [];
+  // Firmware's own alert number, index-aligned with _twoMinAlertTimestampsMs.
+  final List<int> _twoMinAlertNumbers = [];
   int? _fatigueAlertTimestampMs;       // null if not fired
   int? _fatigueAlertScore;             // null if not fired
+
+  // Mode/scenario change events (Item 3/4, option C). Recorded here
+  // unconditionally whenever _sessionActive, independent of whether
+  // live_cpr_screen.dart's own MODE_CHANGE/SCENARIO_CHANGE handlers act on
+  // the event — those deliberately ignore it mid-session (see the comment
+  // there), but the event itself must still be captured: the glove's button
+  // can cycle mode/scenario mid-session (cpr_glove.ino DoubleTap/TripleTap,
+  // no session-active guard on the firmware side today), and an accidental
+  // tap must be visible in the record even though the app refuses to act on it.
+  final List<int> _modeChangeTimestampsMs = [];
+  final List<int> _modeChangeValues = [];      // GloveMode enum value after the change
+  final List<int> _modeChangeTriggers = [];    // 0=button 1=app command
+  final List<int> _scenarioChangeTimestampsMs = [];
+  final List<int> _scenarioChangeValues = [];  // Scenario enum value after the change
+  final List<int> _scenarioChangeTriggers = [];  // 0=button 1=app command
 
   // ── Offline session chunk reassembly ──────────────────────────────────────
   /// sessionIndex → list of received chunks (each 92 bytes). Index is the
@@ -157,8 +178,16 @@ class BLEConnection {
   List<RescuerVitalSnapshot> get rescuerVitalSnapshots => List.unmodifiable(_rescuerVitalSnapshots);
 
   List<int> get twoMinAlertTimestampsMs => List.unmodifiable(_twoMinAlertTimestampsMs);
+  List<int> get twoMinAlertNumbers      => List.unmodifiable(_twoMinAlertNumbers);
   int? get fatigueAlertTimestampMs => _fatigueAlertTimestampMs;
   int? get fatigueAlertScore => _fatigueAlertScore;
+
+  List<int> get modeChangeTimestampsMs => List.unmodifiable(_modeChangeTimestampsMs);
+  List<int> get modeChangeValues       => List.unmodifiable(_modeChangeValues);
+  List<int> get modeChangeTriggers     => List.unmodifiable(_modeChangeTriggers);
+  List<int> get scenarioChangeTimestampsMs => List.unmodifiable(_scenarioChangeTimestampsMs);
+  List<int> get scenarioChangeValues       => List.unmodifiable(_scenarioChangeValues);
+  List<int> get scenarioChangeTriggers     => List.unmodifiable(_scenarioChangeTriggers);
 
   /// Mode string for the current/last session ("emergency" / "training" / "training_no_feedback").
   String get sessionMode {
@@ -734,7 +763,15 @@ class BLEConnection {
       _compressionEvents.clear();
       _ventilationEvents.clear();
       _pulseCheckEvents.clear();
+      _lastPulseCheckStartInterval = null;
       _twoMinAlertTimestampsMs.clear();
+      _twoMinAlertNumbers.clear();
+      _modeChangeTimestampsMs.clear();
+      _modeChangeValues.clear();
+      _modeChangeTriggers.clear();
+      _scenarioChangeTimestampsMs.clear();
+      _scenarioChangeValues.clear();
+      _scenarioChangeTriggers.clear();
       _prevValleyTimestampMs = 0;
       _fatigueAlertTimestampMs = null;
       _fatigueAlertScore = null;
@@ -792,18 +829,31 @@ class BLEConnection {
         'noFlowIntervals':     parsed.noFlowIntervalsEnd,
         'rescuerSwapCount':    parsed.rescuerSwapCountEnd,
         'timeToFirstCompressionMs': parsed.timeToFirstCompressionMs,
+        'wristDroppedDuringSession': parsed.wristDroppedDuringSession,
         'pulseDetected':       parsed.pulseDetected,
         // Biometrics
-        'patientTemperature':  parsed.patientTemperature,
+        'patientTemperatureLastPulseCheck': parsed.patientTemperatureLastPulseCheck,
         'rescuerHRLastPause':     parsed.rescuerHRLastPause,
         'rescuerSpO2LastPause':   parsed.rescuerSpO2LastPause,
-        'rescuerWristTempStart':  parsed.rescuerWristTempStart,
-        'rescuerWristTempEnd':    parsed.rescuerWristTempEnd,
+        'rescuerTemperatureStart': parsed.rescuerTemperatureStart,
+        'rescuerTemperatureEnd':   parsed.rescuerTemperatureEnd,
       });
       return;
     }
 
     if (parsed.isScenarioChange) {
+      // Recorded regardless of _sessionActive gating downstream — the glove
+      // can cycle scenario mid-session (TripleTap, no firmware guard), which
+      // silently moves the depth target and overforce threshold for every
+      // compression graded from this point on. That must be visible in the
+      // record even though the app itself never reacts to this event while
+      // a session is running (see live_cpr_screen.dart's guard).
+      if (_sessionActive) {
+        final timestampMs = now - _sessionStartMs;
+        _scenarioChangeTimestampsMs.add(timestampMs);
+        _scenarioChangeValues.add(parsed.scenarioFromGlove ?? 0);
+        _scenarioChangeTriggers.add(parsed.scenarioChangeTrigger ?? 0);
+      }
       debugPrint('BLE: SCENARIO_CHANGE scenario=${parsed.scenarioFromGlove}');
       _dataController.add({
         'isScenarioChange':      true,
@@ -835,6 +885,7 @@ class BLEConnection {
     // ── PULSE_CHECK_START ────────────────────────────────────────────────────
     if (parsed.isPulseCheckStart) {
       _pulseCheckOpen = true;
+      _lastPulseCheckStartInterval = parsed.intervalNumber;
       debugPrint('BLE: PULSE_CHECK_START interval=${parsed.intervalNumber}');
       _dataController.add({
         'isPulseCheckStart': true,
@@ -847,9 +898,20 @@ class BLEConnection {
     if (parsed.isPulseCheckResult) {
       _pulseCheckOpen = false;
       final timestampMs = now - _sessionStartMs;
+      // parsed.intervalNumber is ALWAYS null here — only PULSE_CHECK_START
+      // carries that field, and this `parsed` is the RESULT packet's own
+      // parse. Use the value cached from the matching START instead; fall
+      // back to the running counter only if no START was seen for this
+      // window (e.g. a dropped START packet), and record which happened so
+      // the desync is visible in the data rather than silent.
+      final cachedInterval = _lastPulseCheckStartInterval;
+      final intervalFromStart = cachedInterval != null;
+      final resolvedInterval = cachedInterval ?? (_pulseCheckEvents.length + 1);
+      _lastPulseCheckStartInterval = null;
       _pulseCheckEvents.add(PulseCheckEvent(
         timestampMs:    timestampMs,
-        intervalNumber: parsed.intervalNumber ?? _pulseCheckEvents.length + 1,
+        intervalNumber: resolvedInterval,
+        intervalFromStart: intervalFromStart,
         classification: parsed.pulseClassification ?? 0,
         detectedBpm:    _plausibleBpm(parsed.detectedBPM),
         confidence:     parsed.confidencePct ?? 0,
@@ -857,6 +919,7 @@ class BLEConnection {
         detectorBCount: parsed.detectorBCount ?? 0,
         ppgSamples:     List<double>.from(_ppgBuffer),
         patientSpO2:    _bestPatientSpO2,
+        refSource:      parsed.pulseCheckRefSource ?? 0,
       ));
       _ppgBuffer.clear();
       _bestPatientSpO2 = 0.0;
@@ -878,6 +941,16 @@ class BLEConnection {
     // ── MODE_CHANGE ──────────────────────────────────────────────────────────
     if (parsed.isModeChange) {
       _sessionMode = parsed.currentMode;
+      // Recorded regardless of _sessionActive gating downstream — see the
+      // matching comment on SCENARIO_CHANGE above. The app never reacts to
+      // this event live while a session is running (live_cpr_screen.dart's
+      // guard), but an accidental mid-session tap must still show up here.
+      if (_sessionActive) {
+        final timestampMs = now - _sessionStartMs;
+        _modeChangeTimestampsMs.add(timestampMs);
+        _modeChangeValues.add(parsed.currentMode);
+        _modeChangeTriggers.add(parsed.modeChangeTrigger ?? 0);
+      }
       debugPrint('BLE: MODE_CHANGE newMode=${parsed.currentMode}');
       _dataController.add({
         'isModeChange':       true,
@@ -890,7 +963,10 @@ class BLEConnection {
     // ── TWO_MIN_ALERT ────────────────────────────────────────────────────────
     if (parsed.isTwoMinAlert) {
       final timestampMs = now - _sessionStartMs;
-      if (_sessionActive) _twoMinAlertTimestampsMs.add(timestampMs);
+      if (_sessionActive) {
+        _twoMinAlertTimestampsMs.add(timestampMs);
+        _twoMinAlertNumbers.add(parsed.twoMinAlertNumber ?? 0);
+      }
       debugPrint('BLE: TWO_MIN_ALERT #${parsed.twoMinAlertNumber} @ ${timestampMs}ms');
       _dataController.add({
         'isTwoMinAlert':    true,
@@ -1245,12 +1321,13 @@ class BLEConnection {
           'noFlowIntervals':          0,
           'rescuerSwapCount':         0,
           'timeToFirstCompressionMs': 0,
+          'wristDroppedDuringSession': null,
           'pulseDetected':            null,
-          'patientTemperature':       null,
+          'patientTemperatureLastPulseCheck': null,
           'rescuerHRLastPause':       null,
           'rescuerSpO2LastPause':     null,
-          'rescuerWristTempStart':    null,
-          'rescuerWristTempEnd':      null,
+          'rescuerTemperatureStart':  null,
+          'rescuerTemperatureEnd':    null,
           ...snap,
           'isStartPing':     false,
           'isEndPing':       true,

@@ -348,6 +348,13 @@ class SessionService {
     int?      fatigueAlertTimestampMs,
     int?      fatigueAlertScore,
     List<int> twoMinAlertTimestampsMs = const [],
+    List<int> twoMinAlertNumbers      = const [],
+    List<int> modeChangeTimestampsMs = const [],
+    List<int> modeChangeValues       = const [],
+    List<int> modeChangeTriggers     = const [],
+    List<int> scenarioChangeTimestampsMs = const [],
+    List<int> scenarioChangeValues       = const [],
+    List<int> scenarioChangeTriggers     = const [],
     String mode     = 'emergency',
     String scenario = 'standard_adult',
     String ventilationRatio = '30:2',
@@ -369,6 +376,13 @@ class SessionService {
       fatigueAlertTimestampMs: fatigueAlertTimestampMs,
       fatigueAlertScore:       fatigueAlertScore,
       twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
+      twoMinAlertNumbers:      twoMinAlertNumbers,
+      modeChangeTimestampsMs: modeChangeTimestampsMs,
+      modeChangeValues:       modeChangeValues,
+      modeChangeTriggers:     modeChangeTriggers,
+      scenarioChangeTimestampsMs: scenarioChangeTimestampsMs,
+      scenarioChangeValues:       scenarioChangeValues,
+      scenarioChangeTriggers:     scenarioChangeTriggers,
     );
 
     // Single authoritative pause/ventilation computation.

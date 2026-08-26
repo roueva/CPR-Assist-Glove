@@ -20,6 +20,10 @@ Work plan and session prompts: `docs/TASKS.md`. Read it when I name a task.
   JVMs behind. Edit the files, show me the diff, and stop.
 - Any change to a BLE-facing field must update firmware/SIGNALS.md in the
   same commit.
+- A new BLE field is a FIVE-layer change: firmware, parser, Flutter model,
+  Postgres column and INSERT, and the read-back SELECT. Trace it all the way
+  to a re-fetched session in the same session. Stopping early produces a
+  field that looks implemented and records nothing.
 
 ## Do not touch
 

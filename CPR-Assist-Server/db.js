@@ -134,6 +134,7 @@ async function ensureSessionTables() {
               hands_on_ratio          FLOAT        DEFAULT 1,
 no_flow_time            FLOAT        DEFAULT 0,
 no_flow_intervals       INT          DEFAULT 0,
+no_flow_intervals_firmware INT       DEFAULT 0,
 unplanned_pause_time    FLOAT        DEFAULT 0,
 unplanned_pause_count   INT          DEFAULT 0,
 rate_variability        FLOAT        DEFAULT 0,
@@ -146,6 +147,7 @@ rate_variability        FLOAT        DEFAULT 0,
                 pulse_checks_prompted   INT          DEFAULT 0,
                 pulse_checks_complied   INT          DEFAULT 0,
                 pulse_detected_final    BOOLEAN      DEFAULT false,
+                wrist_dropped_during_session BOOLEAN DEFAULT false,
                 patient_temperature     FLOAT,
                 patient_spo2_last_check FLOAT,
                 rescuer_hr_last_pause   FLOAT,
@@ -159,7 +161,14 @@ rate_variability        FLOAT        DEFAULT 0,
                 note                    VARCHAR(500),
 fatigue_alert_timestamp_ms INTEGER,
 fatigue_alert_score INTEGER,
-two_min_alert_timestamps_ms INTEGER[]
+two_min_alert_timestamps_ms INTEGER[],
+two_min_alert_numbers INTEGER[],
+mode_change_timestamps_ms INTEGER[],
+mode_change_values INTEGER[],
+mode_change_triggers INTEGER[],
+scenario_change_timestamps_ms INTEGER[],
+scenario_change_values INTEGER[],
+scenario_change_triggers INTEGER[]
             );
         `);
 
@@ -222,6 +231,7 @@ two_min_alert_timestamps_ms INTEGER[]
                 session_id       BIGINT  NOT NULL REFERENCES cpr_sessions(id) ON DELETE CASCADE,
                 timestamp_ms     INT     NOT NULL,
                 interval_number  INT     NOT NULL,
+                interval_from_start BOOLEAN DEFAULT false,
                 classification   INT     DEFAULT 0,
                 detected         BOOLEAN DEFAULT false,
                 detected_bpm     FLOAT   DEFAULT 0,
@@ -229,6 +239,7 @@ two_min_alert_timestamps_ms INTEGER[]
                 perfusion_index  INT     DEFAULT 0,
                 detector_a_count INT     DEFAULT 0,
                 detector_b_count INT     DEFAULT 0,
+                ref_source       INT     DEFAULT 0,
                 user_decision    VARCHAR(20),
                 patient_spo2     FLOAT   DEFAULT 0,
                 ppg_samples      JSONB
@@ -356,6 +367,26 @@ END $$`,
             `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS classification   INT DEFAULT 0`,
             `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS detector_a_count INT DEFAULT 0`,
             `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS detector_b_count INT DEFAULT 0`,
+
+            // Block C — wrist dropout + pulse-check provenance (FIRMWARE_PLAN)
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS wrist_dropped_during_session BOOLEAN DEFAULT false`,
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS ref_source INT DEFAULT 0`,
+
+            // Discarded-fields fix — PULSE_CHECK intervalNumber provenance,
+            // firmware no-flow count, TWO_MIN_ALERT numbers
+            `ALTER TABLE session_pulse_checks ADD COLUMN IF NOT EXISTS interval_from_start BOOLEAN DEFAULT false`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS no_flow_intervals_firmware INT DEFAULT 0`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS two_min_alert_numbers INTEGER[]`,
+
+            // Item 3/4 option C — mid-session mode/scenario change events
+            // (captured even though the app refuses to act on them live;
+            // see BLEConnection.modeChangeTimestampsMs/SCENARIO_CHANGE handler)
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS mode_change_timestamps_ms INTEGER[]`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS mode_change_values INTEGER[]`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS mode_change_triggers INTEGER[]`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS scenario_change_timestamps_ms INTEGER[]`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS scenario_change_values INTEGER[]`,
+            `ALTER TABLE cpr_sessions ADD COLUMN IF NOT EXISTS scenario_change_triggers INTEGER[]`,
 
             // session_rescuer_vitals — columns added in v3.0
             `ALTER TABLE session_rescuer_vitals ADD COLUMN IF NOT EXISTS rmssd         FLOAT DEFAULT 0`,

@@ -14,7 +14,6 @@ import 'package:cpr_assist/core/core.dart';
 
 class AnimatedDepthBar extends StatefulWidget {
   final double depth;           // live cm from BLE, 0–8
-  final double valleyDepth;     // actual recoil floor cm from firmware
   final bool   recoilAchieved;  // true = full chest recoil
   final double targetDepthCm;
   final double targetDepthMaxCm;
@@ -27,7 +26,6 @@ class AnimatedDepthBar extends StatefulWidget {
     required this.depth,
     required this.targetDepthCm,
     required this.targetDepthMaxCm,
-    this.valleyDepth       = 0.0,
     this.recoilAchieved    = false,
     this.maxDepthCm        = 6.5,
     this.sessionActive     = false,

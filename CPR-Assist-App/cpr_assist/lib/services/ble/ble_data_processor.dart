@@ -340,12 +340,12 @@ class BLEDataProcessor {
       //  54–57   uint32  fatigueOnsetIndex
       //  58–61   float32 peakDepth
       //  62–65   float32 compressionDepthSD
-      //  66–69   float32 patientTemperature
-      //  70–73   reserved (rescuer wrist temp at start/end at 82–89)
+      //  66–69   float32 patientTemperatureLastPulseCheck
+      //  70–73   reserved (rescuer temp at start/end at 82–89)
       //  74–77   float32 rescuerHRLastPause
       //  78–81   float32 rescuerSpO2LastPause
-//  82–85   float32 rescuerWristTempStart
-//  86–89   float32 rescuerWristTempEnd
+//  82–85   float32 rescuerTemperatureStart
+//  86–89   float32 rescuerTemperatureEnd
       //  90      uint8   pulseDetected
       //  91      uint8   noFlowIntervals
       //  92      uint8   rescuerSwapCount
@@ -376,11 +376,11 @@ class BLEDataProcessor {
             fatigueOnsetIndex:   b.getUint32(54, Endian.little),
             peakDepth:           b.getFloat32(58, Endian.little),
             compressionDepthSD:  b.getFloat32(62, Endian.little),
-            patientTemperature:    (patTempEnd     > 10 && patTempEnd     < 50) ? patTempEnd     : null,
+            patientTemperatureLastPulseCheck: (patTempEnd     > 10 && patTempEnd     < 50) ? patTempEnd     : null,
             rescuerHRLastPause:    b.getFloat32(74, Endian.little),
             rescuerSpO2LastPause:  b.getFloat32(78, Endian.little),
-            rescuerWristTempStart: (wristTempStart > 10 && wristTempStart < 50) ? wristTempStart : null,
-            rescuerWristTempEnd:   (wristTempEnd   > 10 && wristTempEnd   < 50) ? wristTempEnd   : null,
+            rescuerTemperatureStart: (wristTempStart > 10 && wristTempStart < 50) ? wristTempStart : null,
+            rescuerTemperatureEnd:   (wristTempEnd   > 10 && wristTempEnd   < 50) ? wristTempEnd   : null,
             pulseDetected:       b.getUint8(90),
             noFlowIntervalsEnd:  b.getUint8(91),
             rescuerSwapCountEnd: b.getUint8(92),
@@ -670,11 +670,14 @@ class ParsedBLEData {
   // Sticky per-session record — 1 if the wrist IMU dropout latch fired at any
   // point this session, independent of the live wristDropped flag above.
   final int?   wristDroppedDuringSession;
+  // Last value captured with finger on sensor during a pulse check — distinct
+  // from the live per-tick `patientTemperature` above (LIVE_STREAM section).
+  final double? patientTemperatureLastPulseCheck;
   // Rescuer vitals captured at last pause
   final double? rescuerHRLastPause;
   final double? rescuerSpO2LastPause;
-  final double? rescuerWristTempStart;
-  final double? rescuerWristTempEnd;
+  final double? rescuerTemperatureStart;
+  final double? rescuerTemperatureEnd;
 
   // ── VENTILATION_WINDOW fields ─────────────────────────────────────────────
   final int? cycleNumber;
@@ -821,10 +824,11 @@ class ParsedBLEData {
     this.rescuerSwapCountEnd   = 0,
     this.timeToFirstCompressionMs = 0,
     this.wristDroppedDuringSession,
+    this.patientTemperatureLastPulseCheck,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
-    this.rescuerWristTempStart,
-    this.rescuerWristTempEnd,
+    this.rescuerTemperatureStart,
+    this.rescuerTemperatureEnd,
     this.cycleNumber,
     this.ventilationsExpected,
     this.intervalNumber,
@@ -902,11 +906,11 @@ class ParsedBLEData {
     int    rescuerSwapCountEnd   = 0,
     int timeToFirstCompressionMs = 0,
     int?   wristDroppedDuringSession,
-    double? patientTemperature,
+    double? patientTemperatureLastPulseCheck,
     double? rescuerHRLastPause,
     double? rescuerSpO2LastPause,
-    double? rescuerWristTempStart,
-    double? rescuerWristTempEnd,
+    double? rescuerTemperatureStart,
+    double? rescuerTemperatureEnd,
     int?   cycleNumber,
     int?   ventilationsExpected,
     int?   intervalNumber,
@@ -979,11 +983,11 @@ class ParsedBLEData {
     rescuerSwapCountEnd:   rescuerSwapCountEnd,
     timeToFirstCompressionMs: timeToFirstCompressionMs,
     wristDroppedDuringSession: wristDroppedDuringSession,
-    patientTemperature:    patientTemperature,
+    patientTemperatureLastPulseCheck: patientTemperatureLastPulseCheck,
     rescuerHRLastPause:    rescuerHRLastPause,
     rescuerSpO2LastPause:  rescuerSpO2LastPause,
-    rescuerWristTempStart: rescuerWristTempStart,
-    rescuerWristTempEnd:   rescuerWristTempEnd,
+    rescuerTemperatureStart: rescuerTemperatureStart,
+    rescuerTemperatureEnd:   rescuerTemperatureEnd,
     cycleNumber:           cycleNumber,
     ventilationsExpected:  ventilationsExpected,
     intervalNumber:        intervalNumber,

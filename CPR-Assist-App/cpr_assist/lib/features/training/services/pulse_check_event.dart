@@ -15,6 +15,13 @@ class PulseCheckEvent {
   /// Which 2-minute interval triggered this check (starts at 1).
   final int intervalNumber;
 
+  /// True if [intervalNumber] came from the firmware's own PULSE_CHECK_START
+  /// field (the reliable case). False means no matching START was seen for
+  /// this window (e.g. a dropped BLE packet) and intervalNumber instead
+  /// fell back to a locally-counted value, which can desync from the
+  /// glove's own numbering — this flag makes that visible in the data.
+  final bool intervalFromStart;
+
   /// 3-way classification per spec v3.0:
   /// 0 = ABSENT  — no pulse detected
   /// 1 = UNCERTAIN — weak signal, verify manually
@@ -69,9 +76,15 @@ class PulseCheckEvent {
   /// Same rule as VentilationEvent.compliant.
   final bool compliant;
 
+  /// Self-detection guard's reference source at window close (FIRMWARE_PLAN
+  /// Block C, PULSE_CHECK_RESULT byte 9). Data capture only, no effect on
+  /// classification: 0=NONE (no usable reference), 1=LIVE, 2=PAUSED.
+  final int refSource;
+
   PulseCheckEvent({
     required this.timestampMs,
     required this.intervalNumber,
+    this.intervalFromStart = false,
     this.classification  = 0,
     this.detectorACount  = 0,
     this.detectorBCount  = 0,
@@ -83,6 +96,7 @@ class PulseCheckEvent {
     this.patientSpO2 = 0.0,
     this.durationSec = 0.0,
     this.compliant   = false,
+    this.refSource   = 0,
   });
 
   double get timestampSec => timestampMs / 1000.0;
@@ -91,6 +105,7 @@ class PulseCheckEvent {
     return PulseCheckEvent(
       timestampMs:    (json['ts']               as num).toInt(),
       intervalNumber: (json['interval_number']  as num).toInt(),
+      intervalFromStart: json['interval_from_start'] as bool? ?? false,
       // classification is primary; fall back to bool detected for old records
       classification: (json['classification']   as num?)?.toInt()
           ?? ((json['detected'] as bool? ?? false) ? 2 : 0),
@@ -105,12 +120,14 @@ class PulseCheckEvent {
       compliant:    json['compliant']    as bool?             ?? false,
       ppgSamples: (json['ppg_samples'] as List<dynamic>?)
           ?.map((v) => (v as num).toDouble()).toList() ?? const [],
+      refSource: (json['ref_source'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'ts':               timestampMs,
     'interval_number':  intervalNumber,
+    'interval_from_start': intervalFromStart,
     'classification':   classification,
     'detected':         detected,          // keep for backend backward compat
     'detected_bpm':     detectedBpm,
@@ -123,12 +140,14 @@ class PulseCheckEvent {
     'duration_sec': durationSec,
     'compliant':    compliant,
     if (ppgSamples.isNotEmpty) 'ppg_samples': ppgSamples,
+    'ref_source': refSource,
   };
 
   PulseCheckEvent copyWith({double? durationSec, bool? compliant, String? userDecision}) =>
       PulseCheckEvent(
         timestampMs:    timestampMs,
         intervalNumber: intervalNumber,
+        intervalFromStart: intervalFromStart,
         classification: classification,
         detectorACount: detectorACount,
         detectorBCount: detectorBCount,
@@ -140,5 +159,6 @@ class PulseCheckEvent {
         patientSpO2:    patientSpO2,
         durationSec:    durationSec ?? this.durationSec,
         compliant:      compliant   ?? this.compliant,
+        refSource:      refSource,
       );
 }

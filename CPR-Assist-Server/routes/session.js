@@ -191,9 +191,15 @@ module.exports = function (pool) {
     //                      wrist_flexion, axis_dev, effective_depth,
     //                      peak_force, downstroke_time_ms
     //   ventilations[]   : ts, cycle_number, duration_sec, compliant
-    //   pulse_checks[]   : ts, interval_number, classification, detected,
+    //   pulse_checks[]   : ts, interval_number, interval_from_start (true if
+    //                      interval_number came from the glove's own
+    //                      PULSE_CHECK_START, false = locally-counted
+    //                      fallback — no START was seen for this window),
+    //                      classification, detected,
     //                      detected_bpm, confidence, perfusion_index,
-    //                      detector_a_count, detector_b_count, user_decision
+    //                      detector_a_count, detector_b_count, user_decision,
+    //                      ref_source (self-detection guard reference source:
+    //                      0=none 1=live 2=paused — data capture only)
     //   rescuer_vitals[] : ts, heart_rate, spo2, rmssd, rescuer_pi,
     //                      temperature, fatigue_score, signal_quality, pause_type
     router.post('/detail', authenticate, async (req, res, next) => {
@@ -267,22 +273,26 @@ module.exports = function (pool) {
                     leaning_count, over_force_count, too_deep_count,
                     average_depth, average_frequency, average_effective_depth,
                     peak_depth, depth_sd, depth_consistency, freq_consistency,
-                   hands_on_ratio, no_flow_time, no_flow_intervals,
+                   hands_on_ratio, no_flow_time, no_flow_intervals, no_flow_intervals_firmware,
 unplanned_pause_time, unplanned_pause_count,
 rate_variability, time_to_first_comp, consecutive_good_peak,
                     fatigue_onset_index, rescuer_swap_count,
                     ventilation_count, ventilation_compliance, correct_ventilations,
                    pulse_checks_prompted, pulse_checks_complied, pulse_detected_final,
+                   wrist_dropped_during_session,
 patient_temperature, patient_spo2_last_check,
 rescuer_hr_last_pause, rescuer_spo2_last_pause,
 rescuer_wrist_temp_start, rescuer_wrist_temp_end,
                     user_heart_rate, user_temperature,
                     session_duration, total_grade, fatigue_alert_timestamp_ms,
-                    fatigue_alert_score, two_min_alert_timestamps_ms
+                    fatigue_alert_score, two_min_alert_timestamps_ms, two_min_alert_numbers,
+                    mode_change_timestamps_ms, mode_change_values, mode_change_triggers,
+                    scenario_change_timestamps_ms, scenario_change_values, scenario_change_triggers
                 ) VALUES (
                     $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
                    $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-                   $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50
+                   $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,
+                   $54,$55,$56,$57,$58,$59
                 )
                 ON CONFLICT (user_id, session_start) DO UPDATE SET
                     mode                   = EXCLUDED.mode,
@@ -307,6 +317,7 @@ rescuer_wrist_temp_start, rescuer_wrist_temp_end,
                     hands_on_ratio         = EXCLUDED.hands_on_ratio,
                     no_flow_time           = EXCLUDED.no_flow_time,
                     no_flow_intervals      = EXCLUDED.no_flow_intervals,
+                    no_flow_intervals_firmware = EXCLUDED.no_flow_intervals_firmware,
                     unplanned_pause_time   = EXCLUDED.unplanned_pause_time,
 unplanned_pause_count  = EXCLUDED.unplanned_pause_count,
                     rate_variability       = EXCLUDED.rate_variability,
@@ -320,6 +331,7 @@ unplanned_pause_count  = EXCLUDED.unplanned_pause_count,
                     pulse_checks_prompted  = EXCLUDED.pulse_checks_prompted,
                     pulse_checks_complied  = EXCLUDED.pulse_checks_complied,
                     pulse_detected_final   = EXCLUDED.pulse_detected_final,
+                    wrist_dropped_during_session = EXCLUDED.wrist_dropped_during_session,
                     patient_temperature    = EXCLUDED.patient_temperature,
                     patient_spo2_last_check = EXCLUDED.patient_spo2_last_check,
                     rescuer_hr_last_pause  = EXCLUDED.rescuer_hr_last_pause,
@@ -332,7 +344,14 @@ unplanned_pause_count  = EXCLUDED.unplanned_pause_count,
                     total_grade            = EXCLUDED.total_grade,
 fatigue_alert_timestamp_ms = EXCLUDED.fatigue_alert_timestamp_ms,
 fatigue_alert_score        = EXCLUDED.fatigue_alert_score,
-two_min_alert_timestamps_ms = EXCLUDED.two_min_alert_timestamps_ms
+two_min_alert_timestamps_ms = EXCLUDED.two_min_alert_timestamps_ms,
+two_min_alert_numbers = EXCLUDED.two_min_alert_numbers,
+mode_change_timestamps_ms = EXCLUDED.mode_change_timestamps_ms,
+mode_change_values = EXCLUDED.mode_change_values,
+mode_change_triggers = EXCLUDED.mode_change_triggers,
+scenario_change_timestamps_ms = EXCLUDED.scenario_change_timestamps_ms,
+scenario_change_values = EXCLUDED.scenario_change_values,
+scenario_change_triggers = EXCLUDED.scenario_change_triggers
                 RETURNING id`,
                 [
                     userId,                            // $1
@@ -361,32 +380,41 @@ two_min_alert_timestamps_ms = EXCLUDED.two_min_alert_timestamps_ms
                     d.hands_on_ratio ?? 1,             // $22
                     d.no_flow_time ?? 0,               // $23
                     d.no_flow_intervals ?? 0,          // $24
-                    d.unplanned_pause_time ?? 0,       // $25
-                    d.unplanned_pause_count ?? 0,      // $26
-                    d.rate_variability ?? 0,           // $27
-                    d.time_to_first_comp ?? 0,     // $28
-                    d.consecutive_good_peak ?? 0,     // $29
-                    d.fatigue_onset_index ?? 0,     // $30
-                    d.rescuer_swap_count ?? 0,     // $31
-                    d.ventilation_count ?? 0,     // $32
-                    d.ventilation_compliance ?? 0,     // $33
-                    d.correct_ventilations ?? 0,     // $34
-                    d.pulse_checks_prompted ?? 0,     // $35
-                    d.pulse_checks_complied ?? 0,     // $36
-                    d.pulse_detected_final ?? false, // $37
-                    d.patient_temperature ?? null,      // $38
-                    patientSpO2LastCheck,               // $39
-                    d.rescuer_hr_last_pause ?? null,    // $40
-                    d.rescuer_spo2_last_pause ?? null,  // $41
-                    d.rescuer_wrist_temp_start ?? null, // $42
-                    d.rescuer_wrist_temp_end ?? null,   // $43
-                    d.user_heart_rate ?? null,          // $44
-                    d.user_temperature ?? null,         // $45
-                    d.session_duration ?? 0,            // $46
-                    resolvedGrade,                      // $47
-                    d.fatigue_alert_timestamp_ms ?? null,   // $48
-                    d.fatigue_alert_score ?? null,          // $49
-                    d.two_min_alert_timestamps_ms ?? null,  // $50
+                    d.no_flow_intervals_firmware ?? 0, // $25
+                    d.unplanned_pause_time ?? 0,       // $26
+                    d.unplanned_pause_count ?? 0,      // $27
+                    d.rate_variability ?? 0,           // $28
+                    d.time_to_first_comp ?? 0,     // $29
+                    d.consecutive_good_peak ?? 0,     // $30
+                    d.fatigue_onset_index ?? 0,     // $31
+                    d.rescuer_swap_count ?? 0,     // $32
+                    d.ventilation_count ?? 0,     // $33
+                    d.ventilation_compliance ?? 0,     // $34
+                    d.correct_ventilations ?? 0,     // $35
+                    d.pulse_checks_prompted ?? 0,     // $36
+                    d.pulse_checks_complied ?? 0,     // $37
+                    d.pulse_detected_final ?? false, // $38
+                    d.wrist_dropped_during_session ?? false, // $39
+                    d.patient_temperature ?? null,      // $40
+                    patientSpO2LastCheck,               // $41
+                    d.rescuer_hr_last_pause ?? null,    // $42
+                    d.rescuer_spo2_last_pause ?? null,  // $43
+                    d.rescuer_wrist_temp_start ?? null, // $44
+                    d.rescuer_wrist_temp_end ?? null,   // $45
+                    d.user_heart_rate ?? null,          // $46
+                    d.user_temperature ?? null,         // $47
+                    d.session_duration ?? 0,            // $48
+                    resolvedGrade,                      // $49
+                    d.fatigue_alert_timestamp_ms ?? null,   // $50
+                    d.fatigue_alert_score ?? null,          // $51
+                    d.two_min_alert_timestamps_ms ?? null,  // $52
+                    d.two_min_alert_numbers ?? null,        // $53
+                    d.mode_change_timestamps_ms ?? null,        // $54
+                    d.mode_change_values ?? null,               // $55
+                    d.mode_change_triggers ?? null,             // $56
+                    d.scenario_change_timestamps_ms ?? null,    // $57
+                    d.scenario_change_values ?? null,           // $58
+                    d.scenario_change_triggers ?? null,         // $59
                 ]
             );
 
@@ -457,15 +485,16 @@ VALUES ($1,$2,$3,$4,$5)`,
             for (const p of pulseChecks) {
                 await client.query(
                     `INSERT INTO session_pulse_checks
-                    (session_id, timestamp_ms, interval_number,
+                    (session_id, timestamp_ms, interval_number, interval_from_start,
  classification, detected, detected_bpm, confidence,
  perfusion_index, detector_a_count, detector_b_count,
- user_decision, patient_spo2, ppg_samples)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+ user_decision, patient_spo2, ppg_samples, ref_source)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
                     [
                         sessionId,
                         p.ts,
                         p.interval_number,
+                        p.interval_from_start ?? false,               // $4
                         p.classification ?? 0,
                         p.detected ?? ((p.classification ?? 0) === 2),
                         p.detected_bpm ?? 0,
@@ -474,8 +503,9 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
                         p.detector_a_count ?? 0,
                         p.detector_b_count ?? 0,
                         p.user_decision ?? null,
-                        p.patient_spo2 ?? 0,                          // $12
-                        p.ppg_samples ? JSON.stringify(p.ppg_samples) : null,  // $13
+                        p.patient_spo2 ?? 0,                          // $13
+                        p.ppg_samples ? JSON.stringify(p.ppg_samples) : null,  // $14
+                        p.ref_source ?? 0,                            // $15
                     ]
                 );
             }
@@ -631,6 +661,7 @@ valley_ts
                 pool.query(
                     `SELECT timestamp_ms    AS ts,
         interval_number,
+        interval_from_start,
         classification,
         detected,
         detected_bpm,
@@ -640,7 +671,8 @@ valley_ts
         detector_b_count,
         user_decision,
         patient_spo2,
-        ppg_samples
+        ppg_samples,
+        ref_source
  FROM session_pulse_checks
  WHERE session_id = $1
  ORDER BY timestamp_ms`,

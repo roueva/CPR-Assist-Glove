@@ -72,6 +72,13 @@ class SessionDetail {
   /// Includes planned ventilation and pulse-check pauses.
   final int noFlowIntervals;
 
+  /// Firmware's own no-flow-interval count (SESSION_END byte 91), carried
+  /// through unchanged — NOT recomputed. Kept alongside [noFlowIntervals]
+  /// (the app's post-hoc recomputation from the compression timeline, which
+  /// remains the value the UI displays) so the two independent measurements
+  /// can be cross-validated.
+  final int noFlowIntervalsFirmware;
+
   /// Total seconds of no-compression gaps > 2 seconds that do NOT overlap
   /// ventilation windows or pulse-check windows.
   final double unplannedPauseTime;
@@ -102,6 +109,26 @@ class SessionDetail {
   /// alerts than the app captured (e.g. session was reconstructed from offline storage).
   final List<int> twoMinAlertTimestampsMs;
 
+  /// Firmware's own alert number for each TWO_MIN_ALERT event, index-aligned
+  /// with [twoMinAlertTimestampsMs] (same index = same event). Lets the two
+  /// be checked against each other.
+  final List<int> twoMinAlertNumbers;
+
+  // ── Mid-session mode/scenario changes (Item 3/4, option C) ────────────────
+  // The glove's button can cycle mode/scenario mid-session (no firmware
+  // guard). The app deliberately never reacts to this live (mode/scenario
+  // must not move under a participant mid-session — see
+  // live_cpr_screen.dart's MODE_CHANGE/SCENARIO_CHANGE handlers), but the
+  // event itself is still recorded here so an accidental tap is visible in
+  // the data instead of silently discarded. All three lists per event type
+  // are index-aligned (same index = same event).
+  final List<int> modeChangeTimestampsMs;
+  final List<int> modeChangeValues;      // GloveMode enum value after the change
+  final List<int> modeChangeTriggers;    // 0=button 1=app command
+  final List<int> scenarioChangeTimestampsMs;
+  final List<int> scenarioChangeValues;  // Scenario enum value after the change
+  final List<int> scenarioChangeTriggers; // 0=button 1=app command
+
   // ── Ventilation ───────────────────────────────────────────────────────────
   final int    ventilationCount;
   final double ventilationCompliance; // % (0–100)
@@ -110,6 +137,11 @@ class SessionDetail {
   final int  pulseChecksPrompted;
   final int  pulseChecksComplied;
   final bool pulseDetectedFinal;
+
+  // ── Wrist IMU status (Block C, SESSION_END byte 95) ──────────────────────
+  /// True if the wrist dropout latch fired at any point during this session.
+  /// Session-scoped and sticky — distinct from any per-compression flag.
+  final bool wristDroppedDuringSession;
 
   /// Last valid patient SpO₂ from pulse check windows. Null if never captured.
   double? get patientSpO2LastCheck {
@@ -177,6 +209,7 @@ class SessionDetail {
     this.handsOnRatio            = 1.0,
     this.noFlowTime              = 0.0,
     this.noFlowIntervals         = 0,
+    this.noFlowIntervalsFirmware = 0,
     this.rateVariability         = 0.0,
     this.unplannedPauseTime      = 0.0,
     this.unplannedPauseCount     = 0,
@@ -187,11 +220,19 @@ class SessionDetail {
     this.fatigueAlertTimestampMs,
     this.fatigueAlertScore,
     this.twoMinAlertTimestampsMs = const [],
+    this.twoMinAlertNumbers      = const [],
+    this.modeChangeTimestampsMs = const [],
+    this.modeChangeValues       = const [],
+    this.modeChangeTriggers     = const [],
+    this.scenarioChangeTimestampsMs = const [],
+    this.scenarioChangeValues       = const [],
+    this.scenarioChangeTriggers     = const [],
     this.ventilationCount        = 0,
     this.ventilationCompliance   = 0.0,
     this.pulseChecksPrompted     = 0,
     this.pulseChecksComplied     = 0,
     this.pulseDetectedFinal      = false,
+    this.wristDroppedDuringSession = false,
     this.patientTemperature,
     this.rescuerHRLastPause,
     this.rescuerSpO2LastPause,
@@ -372,6 +413,13 @@ class SessionDetail {
     int? fatigueAlertTimestampMs,
     int? fatigueAlertScore,
     List<int> twoMinAlertTimestampsMs = const [],
+    List<int> twoMinAlertNumbers      = const [],
+    List<int> modeChangeTimestampsMs = const [],
+    List<int> modeChangeValues       = const [],
+    List<int> modeChangeTriggers     = const [],
+    List<int> scenarioChangeTimestampsMs = const [],
+    List<int> scenarioChangeValues       = const [],
+    List<int> scenarioChangeTriggers     = const [],
   }) {
 
     // ── App-computed metrics from compression stream ─────────────────────────
@@ -508,6 +556,7 @@ class SessionDetail {
       handsOnRatio:           handsOnRatio,
       noFlowTime:             noFlowTime,
       noFlowIntervals:        noFlowIntervals,
+      noFlowIntervalsFirmware: summaryPacket['noFlowIntervals'] as int? ?? 0,
       unplannedPauseTime:     unplannedPauseTime,
       unplannedPauseCount:    unplannedPauseCount,
       rateVariability:        rateVariability,
@@ -518,17 +567,25 @@ class SessionDetail {
       fatigueAlertTimestampMs: fatigueAlertTimestampMs,
       fatigueAlertScore:       fatigueAlertScore,
       twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
+      twoMinAlertNumbers:      twoMinAlertNumbers,
+      modeChangeTimestampsMs: modeChangeTimestampsMs,
+      modeChangeValues:       modeChangeValues,
+      modeChangeTriggers:     modeChangeTriggers,
+      scenarioChangeTimestampsMs: scenarioChangeTimestampsMs,
+      scenarioChangeValues:       scenarioChangeValues,
+      scenarioChangeTriggers:     scenarioChangeTriggers,
       correctVentilations:    summaryPacket['correctVentilations'] as int? ?? 0,
       ventilationCount:       summaryPacket['totalVentilations']   as int? ?? ventilationEvents.length,
       ventilationCompliance:  0.0,   // computed in applyPauseModel
       pulseChecksPrompted:    summaryPacket['pulseChecksPrompted'] as int?    ?? 0,
       pulseChecksComplied:    summaryPacket['pulseChecksComplied'] as int?    ?? 0,
       pulseDetectedFinal:     (summaryPacket['pulseDetected']      as int?    ?? 0) == 1,
-      patientTemperature:     (summaryPacket['patientTemperature'] as num?)?.toDouble(),
+      wristDroppedDuringSession: (summaryPacket['wristDroppedDuringSession'] as int? ?? 0) == 1,
+      patientTemperature:     (summaryPacket['patientTemperatureLastPulseCheck'] as num?)?.toDouble(),
       rescuerHRLastPause:     (summaryPacket['rescuerHRLastPause'] as num?)?.toDouble(),
       rescuerSpO2LastPause:   (summaryPacket['rescuerSpO2LastPause'] as num?)?.toDouble(),
-      rescuerWristTempStart:  (summaryPacket['rescuerWristTempStart'] as num?)?.toDouble(),
-      rescuerWristTempEnd:    (summaryPacket['rescuerWristTempEnd']   as num?)?.toDouble(),
+      rescuerWristTempStart:  (summaryPacket['rescuerTemperatureStart'] as num?)?.toDouble(),
+      rescuerWristTempEnd:    (summaryPacket['rescuerTemperatureEnd']   as num?)?.toDouble(),
       sessionDuration:        sessionDurationSecs,
       // Emergency sessions never have a grade — enforced here and on the backend
       totalGrade:             mode == 'emergency' ? 0.0 : totalGrade,
@@ -571,6 +628,7 @@ class SessionDetail {
       handsOnRatio:           (json['hands_on_ratio']           as num?)?.toDouble() ?? 1.0,
       noFlowTime:             (json['no_flow_time']             as num?)?.toDouble() ?? 0.0,
       noFlowIntervals:        (json['no_flow_intervals']        as num?)?.toInt()    ?? 0,
+      noFlowIntervalsFirmware: (json['no_flow_intervals_firmware'] as num?)?.toInt() ?? 0,
       unplannedPauseTime:     (json['unplanned_pause_time'] as num?)?.toDouble() ?? 0.0,
       unplannedPauseCount:    (json['unplanned_pause_count'] as num?)?.toInt() ?? 0,
       rateVariability:        (json['rate_variability']         as num?)?.toDouble() ?? 0.0,
@@ -583,11 +641,27 @@ class SessionDetail {
       twoMinAlertTimestampsMs: ((json['two_min_alert_timestamps_ms'] as List<dynamic>?) ?? [])
           .map((e) => (e as num).toInt())
           .toList(),
+      twoMinAlertNumbers: ((json['two_min_alert_numbers'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt())
+          .toList(),
+      modeChangeTimestampsMs: ((json['mode_change_timestamps_ms'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
+      modeChangeValues: ((json['mode_change_values'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
+      modeChangeTriggers: ((json['mode_change_triggers'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
+      scenarioChangeTimestampsMs: ((json['scenario_change_timestamps_ms'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
+      scenarioChangeValues: ((json['scenario_change_values'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
+      scenarioChangeTriggers: ((json['scenario_change_triggers'] as List<dynamic>?) ?? [])
+          .map((e) => (e as num).toInt()).toList(),
       ventilationCount:       (json['ventilation_count']        as num?)?.toInt()    ?? 0,
       ventilationCompliance:  (json['ventilation_compliance']   as num?)?.toDouble() ?? 0.0,
       pulseChecksPrompted:    (json['pulse_checks_prompted']    as num?)?.toInt()    ?? 0,
       pulseChecksComplied:    (json['pulse_checks_complied']    as num?)?.toInt()    ?? 0,
       pulseDetectedFinal:      json['pulse_detected_final']     as bool?             ?? false,
+      wristDroppedDuringSession: json['wrist_dropped_during_session'] as bool? ?? false,
       patientTemperature:     (json['patient_temperature']      as num?)?.toDouble(),
       rescuerHRLastPause:     (json['rescuer_hr_last_pause']    as num?)?.toDouble(),
       rescuerSpO2LastPause:   (json['rescuer_spo2_last_pause']  as num?)?.toDouble(),
@@ -650,6 +724,7 @@ class SessionDetail {
     'hands_on_ratio':           _fin(handsOnRatio),
     'no_flow_time':             _fin(noFlowTime),
     'no_flow_intervals':        noFlowIntervals,
+    'no_flow_intervals_firmware': noFlowIntervalsFirmware,
     'unplanned_pause_time':     _fin(unplannedPauseTime),
     'unplanned_pause_count':    unplannedPauseCount,
     'rate_variability':         _fin(rateVariability),
@@ -661,11 +736,24 @@ class SessionDetail {
     if (fatigueAlertScore       != null) 'fatigue_alert_score':        fatigueAlertScore,
     if (twoMinAlertTimestampsMs.isNotEmpty)
       'two_min_alert_timestamps_ms': twoMinAlertTimestampsMs,
+    if (twoMinAlertNumbers.isNotEmpty)
+      'two_min_alert_numbers': twoMinAlertNumbers,
+    if (modeChangeTimestampsMs.isNotEmpty) ...{
+      'mode_change_timestamps_ms': modeChangeTimestampsMs,
+      'mode_change_values':        modeChangeValues,
+      'mode_change_triggers':      modeChangeTriggers,
+    },
+    if (scenarioChangeTimestampsMs.isNotEmpty) ...{
+      'scenario_change_timestamps_ms': scenarioChangeTimestampsMs,
+      'scenario_change_values':        scenarioChangeValues,
+      'scenario_change_triggers':      scenarioChangeTriggers,
+    },
     'ventilation_count':        ventilationCount,
     'ventilation_compliance':   _fin(ventilationCompliance),
     'pulse_checks_prompted':    pulseChecksPrompted,
     'pulse_checks_complied':    pulseChecksComplied,
     'pulse_detected_final':     pulseDetectedFinal,
+    'wrist_dropped_during_session': wristDroppedDuringSession,
     if (_finN(patientTemperature) != null)
       'patient_temperature': _finN(patientTemperature),
 
@@ -731,6 +819,7 @@ class SessionDetail {
         handsOnRatio:           handsOnRatio,
         noFlowTime:             noFlowTime,
         noFlowIntervals:        noFlowIntervals,
+        noFlowIntervalsFirmware: noFlowIntervalsFirmware,
         unplannedPauseTime:     unplannedPauseTime,
         unplannedPauseCount:    unplannedPauseCount,
         rateVariability:        rateVariability,
@@ -741,11 +830,19 @@ class SessionDetail {
         fatigueAlertTimestampMs: fatigueAlertTimestampMs,
         fatigueAlertScore:       fatigueAlertScore,
         twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
+        twoMinAlertNumbers:      twoMinAlertNumbers,
+        modeChangeTimestampsMs: modeChangeTimestampsMs,
+        modeChangeValues:       modeChangeValues,
+        modeChangeTriggers:     modeChangeTriggers,
+        scenarioChangeTimestampsMs: scenarioChangeTimestampsMs,
+        scenarioChangeValues:       scenarioChangeValues,
+        scenarioChangeTriggers:     scenarioChangeTriggers,
         ventilationCount:       ventilationCount,
         ventilationCompliance:  ventilationCompliance,
         pulseChecksPrompted:    pulseChecksPrompted,
         pulseChecksComplied:    pulseChecksComplied,
         pulseDetectedFinal:     pulseDetectedFinal,
+        wristDroppedDuringSession: wristDroppedDuringSession,
         patientTemperature:     patientTemperature,
         rescuerHRLastPause:     rescuerHRLastPause,
         rescuerSpO2LastPause:   rescuerSpO2LastPause,
@@ -799,6 +896,7 @@ class SessionDetail {
         handsOnRatio:           handsOnRatio,
         noFlowTime:             noFlowTime,
         noFlowIntervals:        noFlowIntervals,
+        noFlowIntervalsFirmware: noFlowIntervalsFirmware,
         unplannedPauseTime:     unplannedPauseTime,
         unplannedPauseCount:    unplannedPauseCount,
         rateVariability:        rateVariability,
@@ -809,11 +907,19 @@ class SessionDetail {
         fatigueAlertTimestampMs: fatigueAlertTimestampMs,
         fatigueAlertScore:       fatigueAlertScore,
         twoMinAlertTimestampsMs: twoMinAlertTimestampsMs,
+        twoMinAlertNumbers:      twoMinAlertNumbers,
+        modeChangeTimestampsMs: modeChangeTimestampsMs,
+        modeChangeValues:       modeChangeValues,
+        modeChangeTriggers:     modeChangeTriggers,
+        scenarioChangeTimestampsMs: scenarioChangeTimestampsMs,
+        scenarioChangeValues:       scenarioChangeValues,
+        scenarioChangeTriggers:     scenarioChangeTriggers,
         ventilationCount:       ventilationCount,
         ventilationCompliance:  ventilationCompliance,
         pulseChecksPrompted:    pulseChecksPrompted,
         pulseChecksComplied:    pulseChecksComplied,
         pulseDetectedFinal:     pulseDetectedFinal,
+        wristDroppedDuringSession: wristDroppedDuringSession,
         patientTemperature:     patientTemperature,
         rescuerHRLastPause:     rescuerHRLastPause,
         rescuerSpO2LastPause:   rescuerSpO2LastPause,
