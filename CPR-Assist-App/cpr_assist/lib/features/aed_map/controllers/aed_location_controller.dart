@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../../../core/core.dart';
 import '../../../../providers/app_providers.dart';
@@ -404,13 +405,14 @@ class AEDLocationController {
   // LOCATION PERMISSION + SERVICE PROMPT (resume / recenter flows)
   // ══════════════════════════════════════════════════════════════════════════
 
-  /// Opens the OS location-settings screen. Unlike the old `location`-package
-  /// call this replaced, it does not wait for the user to enable and return —
-  /// `_resumeApp()` in AEDMapWidget re-checks service status and finishes
-  /// setup when the app comes back to the foreground.
+  /// Prompts for GPS service enable via the OS dialog, then sets up location.
   Future<bool> promptAndEnableLocationService() async {
-    await Geolocator.openLocationSettings();
-    return false;
+    final locService = loc.Location();
+    final enabled = await locService.requestService();
+    if (!enabled) return false;
+    await Future.delayed(const Duration(milliseconds: 500));
+    await setupLocationAfterEnable();
+    return true;
   }
 
   // ══════════════════════════════════════════════════════════════════════════

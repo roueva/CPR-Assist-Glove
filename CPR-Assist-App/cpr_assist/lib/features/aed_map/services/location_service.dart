@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../../core/core.dart';
 
@@ -57,15 +58,10 @@ class LocationService {
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        // Opens the OS settings screen; it doesn't wait for the user to
-        // enable and return. AEDMapWidget's _resumeApp() re-checks service
-        // status and finishes setup when the app comes back to the
-        // foreground, clearing this snackbar then.
-        if (context.mounted) {
-          UIHelper.showLoading(context, 'Waiting for location to be enabled…');
-        }
-        await Geolocator.openLocationSettings();
-        return false;
+        final locService = loc.Location();
+        final enabled = await locService.requestService();
+        if (!enabled) return false;
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       final currentPermission = await Geolocator.checkPermission();

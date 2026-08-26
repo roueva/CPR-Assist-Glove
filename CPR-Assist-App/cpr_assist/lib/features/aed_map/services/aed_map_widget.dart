@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../../core/core.dart';
 import '../../../main.dart';
@@ -261,14 +262,12 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
           );
         } else if (hasPermission && !isServiceEnabled) {
           if (!mounted) return;
-          // Opens the OS settings screen; it doesn't wait for the user to
-          // enable and return. _resumeApp() re-checks service status,
-          // finishes GPS setup, and clears this snackbar when the app comes
-          // back to the foreground.
-          if (capturedContext.mounted) {
-            UIHelper.showLoading(capturedContext, 'Waiting for location to be enabled…');
+          final locService = loc.Location();
+          final enabled = await locService.requestService();
+          if (enabled && mounted) {
+            await Future.delayed(const Duration(milliseconds: 500));
+            await _locationController.setupLocationAfterEnable();
           }
-          await Geolocator.openLocationSettings();
         }
 
         // Step 6: Fetch fresh AEDs.
@@ -726,12 +725,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     if (allowLocationPrompt) {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        // Opens the OS settings screen; it doesn't wait for the user to
-        // enable and return. _resumeApp() finishes setup and clears this
-        // snackbar when the app comes back to the foreground.
-        if (mounted) {
-          UIHelper.showLoading(context, 'Waiting for location to be enabled…');
-        }
         final enabled = await _locationController.promptAndEnableLocationService();
         if (!enabled) return;
       }
@@ -884,10 +877,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       return;
     }
     _lastResumeTime = now;
-
-    // Clears the "waiting for location to be enabled" snackbar (if any) —
-    // the user is back from Settings one way or another.
-    if (mounted) UIHelper.clearSnackbars(context);
 
     final isServiceEnabled = await Geolocator.isLocationServiceEnabled();
     final hasPermission    = await _locationService.hasPermission;
