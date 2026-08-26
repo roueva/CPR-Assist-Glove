@@ -337,6 +337,13 @@
 // uses FORCE_BASELINE_MIN instead (see force.cpp).
 #define FORCE_CALIB_GATE_MIN_N 100.0f
 #define FORCE_CALIB_GATE_MAX_N 600.0f
+// Same gate, depth half. Same non-LOW_FORCE_MODE / LOW_FORCE_MODE split as
+// the force bounds above — LOW_FORCE_MODE widens the accepted depth range
+// to match its wider force range.
+#define FORCE_CALIB_GATE_DEPTH_MIN_MM 40.0f
+#define FORCE_CALIB_GATE_DEPTH_MAX_MM 80.0f
+#define FORCE_CALIB_GATE_LOWFORCE_DEPTH_MIN_MM 20.0f
+#define FORCE_CALIB_GATE_LOWFORCE_DEPTH_MAX_MM 100.0f
 
 // When 1, k is locked at K_STUDY_LOCKED from boot and never fitted from
 // session data — every participant is scored against the same pre-measured
@@ -549,6 +556,9 @@
 #define MOTOR_VENT_ON_MS 200
 #define MOTOR_VENT_OFF_MS 200
 #define MOTOR_VENT_REPS 3
+#define MOTOR_REFUSED_GAP_MS 40  // tighter than MOTOR_SHORT_MS's 80ms gap, so the
+                                  // refused-tap 3-pulse pattern reads as a faster
+                                  // tempo than startSession()'s 3-pulse (80/80) pattern
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 // Track numbers (DFPlayer 0001.mp3 … 0026.mp3)

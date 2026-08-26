@@ -152,10 +152,10 @@ void forceCalibAddSample(float forceN, float imuDepthMM) {
 
 #if LOW_FORCE_MODE
   const float forceMin = FORCE_BASELINE_MIN, forceMax = FORCE_CALIB_GATE_MAX_N;
-  const float depthMin = 20.0f, depthMax = 100.0f;
+  const float depthMin = FORCE_CALIB_GATE_LOWFORCE_DEPTH_MIN_MM, depthMax = FORCE_CALIB_GATE_LOWFORCE_DEPTH_MAX_MM;
 #else
   const float forceMin = FORCE_CALIB_GATE_MIN_N, forceMax = FORCE_CALIB_GATE_MAX_N;
-const float depthMin = 40.0f, depthMax = 80.0f;
+  const float depthMin = FORCE_CALIB_GATE_DEPTH_MIN_MM, depthMax = FORCE_CALIB_GATE_DEPTH_MAX_MM;
 #endif
 
   if (forceN < forceMin || forceN > forceMax) return;

@@ -943,9 +943,10 @@ static void commsTask(void* pv) {
       // Mode must not change mid-session: switching kills audio/haptic/
       // visual coaching mid-CPR (NoFeedback disables all three) and plays a
       // spoken mode announcement — neither acceptable during a study
-      // session. Refused silently for now; rescuer feedback for a refused
-      // tap is a separate, not-yet-approved decision. Correct via
-      // LongPress: stop the session, change mode, restart.
+      // session. A refused tap gets a distinct 3-pulse haptic (tight
+      // spacing) rather than failing silently, so the rescuer doesn't just
+      // tap again harder. Correct via LongPress: stop the session, change
+      // mode, restart.
       if (!_sessionRunning) {
         // Cycle mode
         SharedState snap = snapshotState();
@@ -962,6 +963,11 @@ static void commsTask(void* pv) {
         audioPlay(audioTrack[(int)next], AUDIO_PRI_MODE_CHANGE);
         motorPulse(MOTOR_MEDIUM_MS);
         neoModeChange(next);
+      } else {
+        // Refused: 3 tight-spaced pulses. Distinct by count from the
+        // per-compression click (1) and scenario-confirm (2), and by tempo
+        // from startSession()'s own 3-pulse pattern (80/80 vs. 80/40 here).
+        motorPattern(MOTOR_SHORT_MS, MOTOR_REFUSED_GAP_MS, 3);
       }
     } else if (btn == ButtonEvent::TripleTap) {
       // Scenario must not change mid-session: depth.cpp reads
@@ -970,9 +976,10 @@ static void commsTask(void* pv) {
       // immediately re-grades every subsequent compression against a
       // different target with no marker in the stored record separating
       // before/after — a silent data-corruption vector, not just a UX
-      // hiccup. Refused silently for now; rescuer feedback for a refused
-      // tap is a separate, not-yet-approved decision. Correct via
-      // LongPress: stop the session, change scenario, restart.
+      // hiccup. A refused tap gets a distinct 3-pulse haptic (tight
+      // spacing) rather than failing silently, so the rescuer doesn't just
+      // tap again harder. Correct via LongPress: stop the session, change
+      // scenario, restart.
       if (!_sessionRunning) {
         // Cycle scenario
         SharedState snap = snapshotState();
@@ -989,6 +996,11 @@ static void commsTask(void* pv) {
                   AUDIO_PRI_MODE_CHANGE);
         motorPattern(MOTOR_SHORT_MS, MOTOR_SHORT_MS, 2);
         neoScenarioChange(next);
+      } else {
+        // Refused: same 3-pulse tight-spaced pattern as the DoubleTap
+        // refusal above — one signal for "tap refused," regardless of
+        // which gesture triggered it.
+        motorPattern(MOTOR_SHORT_MS, MOTOR_REFUSED_GAP_MS, 3);
       }
     }
 

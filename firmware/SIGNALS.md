@@ -16,7 +16,7 @@ claims (marked below) — they were not otherwise audited.
 | Firmware variable | Unit | Derivation | BLE byte(s) | App field | UI label |
 |---|---|---|---|---|---|
 | `gState.depth` | cm | `_displayDepthCm`, an EMA of the live integrated palm depth (or a force-derived lean estimate when released), written in `depth.cpp:427-435`. | 0-3 f32 | `depth` | depth bar |
-| `gState.frequency` | BPM | 5-compression rolling average from `rollingRate()` (`depth.cpp:58-63,756`). **DEFECT** — see §A/comment below. | 4-7 f32 | `frequency` | rate gauge (display) |
+| `gState.frequency` | BPM | 5-compression rolling average from `rollingRate()` (`depth.cpp:58-63,756`). ~~**DEFECT**~~ — comment was stale, not the derivation; fixed, see "Fixes applied" item 3 below. | 4-7 f32 | `frequency` | rate gauge (display) |
 | `gState.force` | N | Last `forceRead()` value, filtered force in Newtons (`depth.cpp:823`). | 8-11 f32 | `force` | none (internal) |
 | `gState.instantaneousRate` | BPM | `_gradeRate`: the exact rate from the single most-recently-completed compression's own inter-compression interval (`depth.cpp:679,757`). | 12-15 f32 | `instantaneousRate` | grading only |
 | `gState.compressionCount` | count | `_totalCompressions`, incremented on every compression start including pre-calibration (`depth.cpp:495,758`). | 16-19 i32 | `compressionCount` | compression counter |
@@ -149,13 +149,14 @@ firmware (verified by grep across all `.cpp`/`.h`/`.ino` in `CPR-Assist-Firmware
 
 ## D. Magic numbers in `depth.cpp` / `force.cpp` not defined in `config.h`
 
-**Block E fixed all of `depth.cpp`'s rows and 9 of `force.cpp`'s 10 rows** —
-promoted to named `config.h` constants (see "Block E fixes" below for the
-full name list; `validDepth`'s 20-125mm gate stays deliberately independent
-of `IMU_CONF_DEPTH_MIN/MAX_MM`, named but not aligned, per explicit
-instruction). Tables kept below, struck through, as historical record of
-what each literal was and why — one row is only partially resolved and is
-called out.
+**Blocks E and this pass fixed all rows in both tables** — promoted to named
+`config.h` constants, listed inline per row below (this promotion isn't
+covered by the "Block E fixes" section further down — that entry is about
+SESSION_END field renames only, a separate piece of the same block).
+`validDepth`'s 20-125mm gate stays deliberately independent of
+`IMU_CONF_DEPTH_MIN/MAX_MM`, named but not aligned, per explicit
+instruction. Tables kept below, struck through, as historical record of
+what each literal was and why.
 
 ### depth.cpp — fully resolved
 
@@ -171,14 +172,14 @@ called out.
 | ~~`5` (compressions)~~ | `depth.cpp:230` | Fatigue baseline lock — now references the existing `FATIGUE_DEPTH_TREND_SAMPLES` directly instead of duplicating its value. |
 | ~~`0.6f`, `0.4f`~~ | `depth.cpp:682` | `_rateJumpReference` (renamed from `_instantRate`, see Block E) EMA weights. Now `RATE_JUMP_EMA_OLD_WEIGHT`/`RATE_JUMP_EMA_NEW_WEIGHT`. |
 
-### force.cpp — resolved except the depth-range half of one row
+### force.cpp — fully resolved
 
 | Value | Location | Purpose |
 |---|---|---|
 | ~~`50.0f` (N)~~ | `force.cpp:81` | Boot-baseline sanity ceiling. Now `FORCE_BOOT_BASELINE_CEILING_N`. |
 | ~~`700.0f` (N)~~ | `force.cpp:108` | ADC-glitch rejection ceiling. Now references `FORCE_CONF_RANGE_MAX_N` directly instead of duplicating the literal. |
 | ~~`0.5f` (factor)~~ | `force.cpp:122` | In-session baseline-adapt eligibility multiplier. Now `FORCE_BASELINE_ADAPT_LEANING_FRAC`. |
-| ~~`30.0f`/`600.0f`~~ **and** still-open `20.0f`/`100.0f`/`40.0f`/`80.0f` | `force.cpp:154-158` | `LOW_FORCE_MODE` vs. real-manikin calibration-sample gating ranges. The **force** bounds (`30.0f`→`FORCE_BASELINE_MIN`, `100.0f`/`600.0f`→`FORCE_CALIB_GATE_MIN_N`/`FORCE_CALIB_GATE_MAX_N`) are fixed. The **depth** bounds (`depthMin`/`depthMax` — `20.0f`/`100.0f` in `LOW_FORCE_MODE`, `40.0f`/`80.0f` otherwise) were never in scope for Block E (only the force literals were asked for) and are **still unnamed literals today** — genuinely open, not a documentation gap. |
+| ~~`30.0f`/`600.0f`/`20.0f`/`100.0f`~~ and ~~`100.0f`/`600.0f`/`40.0f`/`80.0f`~~ | `force.cpp:154-158` | `LOW_FORCE_MODE` vs. real-manikin calibration-sample gating ranges. Block E fixed the force bounds (`FORCE_BASELINE_MIN`, `FORCE_CALIB_GATE_MIN_N`/`MAX_N`) but left the depth bounds raw — out of that block's stated scope. Fixed this pass: `depthMin`/`depthMax` are now `FORCE_CALIB_GATE_LOWFORCE_DEPTH_MIN_MM`/`MAX_MM` (20/100) and `FORCE_CALIB_GATE_DEPTH_MIN_MM`/`MAX_MM` (40/80). |
 | ~~`5` (samples) ×2~~ | `force.cpp:194,224` | Minimum sample counts for fitting and for outlier-filtered refit. Now two distinct constants, `FORCE_CALIB_MIN_SAMPLES_TO_FIT`/`FORCE_CALIB_MIN_INLIERS_TO_REFIT` (kept separate since they're different gates that happened to share a value). |
 | ~~`2.0f` (factor)~~ | `force.cpp:221` | Outlier-rejection residual multiplier. Now `FORCE_CALIB_OUTLIER_RESIDUAL_MULT`. |
 | ~~`0.70f`, `3.50f`~~ | `force.cpp:233` | k acceptance range. Now `FORCE_CALIB_K_MIN`/`FORCE_CALIB_K_MAX`. |
@@ -190,11 +191,14 @@ called out.
 
 ## Summary of defects requiring attention
 
-1. **`shared_state.h:44`** — `frequency`'s comment ("instantaneous (last 2 compressions)") contradicts its actual derivation, a 5-compression rolling average (`depth.cpp:53,756`) — and contradicts the correct documentation already in `ble_data_processor.dart:78`. Stale comment, same class of issue as the recent "stale comments" cleanup commits on this branch.
-2. **BLE byte 91 / `feedbackEnabled`** — firmware packs a 3-bit per-channel mask; the app parses it as `== 1`, which is false whenever more than just audio feedback is enabled (i.e., almost always, given the firmware's own defaults). Cross-file, `ble_manager.cpp:168-170` vs `ble_data_processor.dart:215`.
-3. **Diagnostic overlay bytes 70-71 / `diagRescuerPpgFiltered`** — app expects rescuer-channel filtered PPG data here; firmware's diag block never writes these bytes, and the two firmware functions that look purpose-built for it (`max30102DiagRescuerFiltered/Dc`) are never called.
-4. **`cpr_glove.ino:1590`** — `#if MANIKIN_CALIBRATION_LOG` references a macro that doesn't exist (renamed to `DEPTH_PIPELINE_LOG` per `config.h:254`). The block is permanently dead code (always evaluates false).
-5. **`StoredCompression::residualDepthX10`** — declared with a literature-referenced comment describing intended behavior, never implemented. If this metric matters for the thesis analysis, it is currently not being captured anywhere (not in the live struct population, not in storage serialization).
+**All 5 items below are now resolved** — kept as historical record of what
+the original audit found; each line names where the fix landed.
+
+1. ~~**`shared_state.h:44`**~~ — `frequency`'s comment ("instantaneous (last 2 compressions)") contradicted its actual derivation, a 5-compression rolling average (`depth.cpp:53,756`). **Fixed** — see "Fixes applied" item 3 below (pre-dates this session's Blocks C/D/E).
+2. ~~**BLE byte 91 / `feedbackEnabled`**~~ — firmware packed a 3-bit per-channel mask; the app parsed it as `== 1`, false whenever more than just audio feedback was enabled. **Fixed** — `ble_data_processor.dart:202-204` now decodes the mask bit-by-bit (`feedbackMask & 0x01/0x02/0x04`), matching `ble_manager.cpp:168-170`.
+3. ~~**Diagnostic overlay bytes 70-71 / `diagRescuerPpgFiltered`**~~ — app expected rescuer-channel filtered PPG data here; firmware's diag block never wrote these bytes, and `max30102DiagRescuerFiltered/Dc` were never called. **Fixed in Block D** — both functions are now wired into `bleBuildDiagFrame()` (`ble_manager.cpp:430,433`); see the DIAG_FRAME section below for the full byte layout.
+4. ~~**`cpr_glove.ino:1590`**~~ — `#if MANIKIN_CALIBRATION_LOG` referenced a macro that doesn't exist (renamed to `DEPTH_PIPELINE_LOG`). **Fixed** — see "Fixes applied" item 4 below (pre-dates this session's Blocks C/D/E).
+5. ~~**`StoredCompression::residualDepthX10`**~~ — declared with a literature-referenced comment describing intended behavior, never implemented. **Resolved by removal, not implementation** — the field (and the adjacent unused `reserved[3]`) is no longer in `StoredCompression` (`depth.h:8-17`); it was deleted as dead code in the "remove dead symbols" pass rather than wired up. If this metric still matters for the thesis analysis, it needs to be re-added and implemented from scratch, not recovered.
 
 Everything in CLAUDE.md's "Do not touch" list (grading formula, depth selector,
 force model, palm-only posture, pulse-check gating) was read for this audit
