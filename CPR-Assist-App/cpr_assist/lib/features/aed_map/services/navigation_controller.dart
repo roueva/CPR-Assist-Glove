@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -15,16 +16,26 @@ class NavigationController {
   Timer? _userInteractionDebouncer;
 
   NavigationState _navigationState   = NavigationState.inactive;
-  double?   _currentHeading;
   DateTime? _lastCompassUpdate;
   DateTime? _lastProgrammaticMoveTime;
   DateTime? _lastUserTouchTime;
   bool      _showRecenterButton      = false;
-  LatLng?   _currentUserLocation;
   LatLng?   _previousUserLocation;
   DateTime? _lastLocationUpdateTime;
-  Timer?    _predictionTimer;
   bool      _isRecenterInProgress    = false;
+
+  // ── Single camera driver ─────────────────────────────────────────────────
+  // GPS and compass only ever write these targets. The Ticker below is the
+  // only thing that ever calls moveCamera — nothing else touches the camera
+  // once navigation is active, so there is no animation to cancel and no
+  // driver to fight.
+  LatLng?   _targetPosition;
+  double?   _targetBearing;
+  Ticker?   _cameraTicker;
+  Duration  _lastCameraTick = Duration.zero;
+  LatLng?   _cameraPosition;
+  double    _cameraBearing  = 0.0;
+  double    _cameraZoom     = AppConstants.navigationZoom;
 
   // Callbacks
   final VoidCallback?       _onStateChanged;
@@ -40,7 +51,7 @@ class NavigationController {
 
   NavigationState get navigationState  => _navigationState;
   bool            get showRecenterButton => _showRecenterButton;
-  double?         get currentHeading   => _currentHeading;
+  double?         get currentHeading   => _targetBearing;
   bool            get isActive         => _navigationState != NavigationState.inactive;
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -53,7 +64,7 @@ class NavigationController {
 
   /// Update the current user location.
   void updateUserLocation(LatLng location) {
-    _currentUserLocation = location;
+    _targetPosition = location;
 
     if (_navigationState == NavigationState.compassTracking) {
       if (_wasRecentUserTouch()) {
@@ -64,29 +75,8 @@ class NavigationController {
         return;
       }
 
-      _updateSpeedAndBearing(location);
-      _updateCameraToLocation(location);
-    } else if (_navigationState != NavigationState.inactive && _mapController != null) {
-      if (_wasRecentUserTouch() || _showRecenterButton) {
-        if (!_showRecenterButton) {
-          _showRecenterButton = true;
-          _onRecenterButtonVisibilityChanged?.call(true);
-        }
-        return;
-      }
-
-      _lastProgrammaticMoveTime = DateTime.now();
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target:  location,
-            zoom:    AppConstants.navigationZoom,
-            tilt:    AppConstants.navigationTilt,
-            bearing: _currentHeading ?? 0.0,
-          ),
-        ),
-        duration: const Duration(milliseconds: 400),
-      );
+      _updateLocationHistory(location);
+      _ensureCameraTicker();
     }
   }
 
@@ -102,7 +92,7 @@ class NavigationController {
     }
 
     debugPrint('Starting navigation mode with location tracking...');
-    _currentUserLocation = userLocation;
+    _targetPosition = userLocation;
 
     await _enterNavigationMode(userLocation, destination);
 
@@ -126,18 +116,19 @@ class NavigationController {
     _showRecenterButton = false;
     _onRecenterButtonVisibilityChanged?.call(false);
 
-    _lastProgrammaticMoveTime = DateTime.now();
-    _mapController!.animateCamera(
-      CameraUpdate.newLatLngZoom(destination, AppConstants.compassOnlyZoom),
-    );
+    _cameraZoom     = AppConstants.compassOnlyZoom;
+    _targetPosition = destination;
+    _cameraPosition = destination;
+    _cameraBearing  = _targetBearing ?? 0.0;
 
     _startCompassTracking();
+    _ensureCameraTicker();
     _notifyStateChanged();
   }
 
   /// Returns the current compass heading (bearing to destination requires GPS).
   double calculateBearingToDestination(LatLng destination) {
-    return _currentHeading ?? 0.0;
+    return _targetBearing ?? 0.0;
   }
 
   /// Handle camera move started events.
@@ -165,16 +156,16 @@ class NavigationController {
     debugPrint('🎯 Recentering and resuming compass tracking');
 
     _isRecenterInProgress = true;
-    _currentUserLocation  = userLocation;
-    _navigationState      = NavigationState.compassTracking;
-    _showRecenterButton   = false;
+    _targetPosition        = userLocation;
+    _navigationState       = NavigationState.compassTracking;
+    _showRecenterButton    = false;
     _onRecenterButtonVisibilityChanged?.call(false);
 
     _lastProgrammaticMoveTime = DateTime.now();
     _lastUserTouchTime        = null;
 
     if (_mapController != null) {
-      double targetBearing = _currentHeading ?? 0.0;
+      double targetBearing = _targetBearing ?? 0.0;
 
       FlutterCompass.events?.take(1).timeout(
         const Duration(milliseconds: 100),
@@ -183,12 +174,12 @@ class NavigationController {
             (event) {
           if (event.heading != null) targetBearing = event.heading!;
         },
-        onDone:  () => _performRecenterAnimation(userLocation, targetBearing),
-        onError: (_) => _performRecenterAnimation(userLocation, targetBearing),
+        onDone:  () => _completeRecenter(targetBearing),
+        onError: (_) => _completeRecenter(targetBearing),
       );
 
       if (FlutterCompass.events == null) {
-        _performRecenterAnimation(userLocation, targetBearing);
+        _completeRecenter(targetBearing);
       }
     }
   }
@@ -200,13 +191,15 @@ class NavigationController {
     _navigationState    = NavigationState.inactive;
     _showRecenterButton = false;
     _stopCompassTracking();
-    _stopPredictionUpdates();
+    _stopCameraTicker();
     _userInteractionDebouncer?.cancel();
     _onRecenterButtonVisibilityChanged?.call(false);
     _notifyStateChanged();
 
     _previousUserLocation  = null;
     _lastLocationUpdateTime = null;
+    _targetPosition = null;
+    _cameraPosition = null;
   }
 
   /// Dispose of all resources.
@@ -219,10 +212,12 @@ class NavigationController {
     _userInteractionDebouncer?.cancel();
     _userInteractionDebouncer = null;
 
-    _stopPredictionUpdates();
+    _cameraTicker?.dispose();
+    _cameraTicker = null;
 
     _mapController        = null;
-    _currentUserLocation  = null;
+    _targetPosition        = null;
+    _cameraPosition        = null;
     _previousUserLocation = null;
 
     _navigationState    = NavigationState.inactive;
@@ -231,7 +226,7 @@ class NavigationController {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  void _updateSpeedAndBearing(LatLng location) {
+  void _updateLocationHistory(LatLng location) {
     final now = DateTime.now();
 
     if (_previousUserLocation != null && _lastLocationUpdateTime != null) {
@@ -247,71 +242,29 @@ class NavigationController {
     _lastLocationUpdateTime = now;
   }
 
-  void _stopPredictionUpdates() {
-    _predictionTimer?.cancel();
-    _predictionTimer = null;
-  }
-
-  void _updateCameraToLocation(LatLng location) {
-    if (_mapController == null) return;
-    if (_wasRecentUserTouch()) {
-      if (!_showRecenterButton) {
-        _showRecenterButton = true;
-        _onRecenterButtonVisibilityChanged?.call(true);
-      }
-      return;
-    }
-
-    _lastProgrammaticMoveTime = DateTime.now();
-
-    // Always prefer compass heading for bearing — movement bearing is unreliable
-    // at walking speeds and freezes when the user stops.
-    final cameraHeading = _currentHeading ?? 0.0;
-
-    _mapController!.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target:  location,
-          zoom:    AppConstants.navigationZoom,
-          tilt:    AppConstants.navigationTilt,
-          bearing: cameraHeading,
-        ),
-      ),
-      duration: const Duration(milliseconds: 800),
-    );
-  }
-
   Future<void> _enterNavigationMode(LatLng userLocation, LatLng destination) async {
     _lastProgrammaticMoveTime = DateTime.now();
 
+    double initialBearing = 0.0;
     try {
-      double initialBearing = 0.0;
-
-      try {
-        final compassEvent = await FlutterCompass.events?.first.timeout(
-          const Duration(seconds: 2),
-        );
-        initialBearing = compassEvent?.heading ?? 0.0;
-        debugPrint('🧭 Got initial bearing: ${initialBearing.toStringAsFixed(1)}°');
-      } catch (e) {
-        debugPrint('⚠️ Could not get initial compass reading, using 0°');
-      }
-
-      await _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target:  userLocation,
-            zoom:    AppConstants.navigationZoom,
-            tilt:    AppConstants.navigationTilt,
-            bearing: initialBearing,
-          ),
-        ),
+      final compassEvent = await FlutterCompass.events?.first.timeout(
+        const Duration(seconds: 2),
       );
-
-      debugPrint('✅ Navigation mode entered successfully');
+      initialBearing = compassEvent?.heading ?? 0.0;
+      debugPrint('🧭 Got initial bearing: ${initialBearing.toStringAsFixed(1)}°');
     } catch (e) {
-      debugPrint('⚠️ Error entering navigation mode: $e');
+      debugPrint('⚠️ Could not get initial compass reading, using 0°');
     }
+
+    _cameraZoom     = AppConstants.navigationZoom;
+    _targetBearing  = initialBearing;
+    _targetPosition = userLocation;
+    _cameraPosition = userLocation;
+    _cameraBearing  = initialBearing;
+
+    _ensureCameraTicker();
+
+    debugPrint('✅ Navigation mode entered successfully');
   }
 
   void _startCompassTracking() {
@@ -337,8 +290,6 @@ class NavigationController {
 
       if (event.heading == null) return;
 
-      if (event.accuracy != null) _handleCompassAccuracy(event.accuracy!);
-
       final now = DateTime.now();
       if (_lastCompassUpdate != null &&
           now.difference(_lastCompassUpdate!).inMilliseconds <
@@ -347,50 +298,22 @@ class NavigationController {
       }
       _lastCompassUpdate = now;
 
-      if (_currentHeading != null) {
-        final bearingDiff = (event.heading! - _currentHeading!).abs();
+      if (_targetBearing != null) {
+        final bearingDiff = _shortestBearingDelta(_targetBearing!, event.heading!).abs();
         if (bearingDiff < 1.0) return;
 
-        final interpolated = _interpolateBearing(_currentHeading!, event.heading!, 0.15);
-        _currentHeading = interpolated;
-        _updateCameraWithCompass(interpolated);
+        _targetBearing = _interpolateBearing(_targetBearing!, event.heading!, 0.15);
       } else {
-        _currentHeading = event.heading;
-        _updateCameraWithCompass(event.heading!);
+        _targetBearing = event.heading;
       }
+
+      _ensureCameraTicker();
     });
   }
 
-  void _handleCompassAccuracy(double accuracy) {
-    if (accuracy < 0.3) {
-      debugPrint('⚠️ Compass accuracy low ($accuracy) - consider showing calibration hint');
-    }
-  }
-
   double _interpolateBearing(double from, double to, double factor) {
-    double difference = to - from;
-    if (difference > 180) difference -= 360;
-    if (difference < -180) difference += 360;
-    return from + (difference * factor);
-  }
-
-  void _updateCameraWithCompass(double heading) {
-    if (_mapController == null || _currentUserLocation == null) return;
-    if (_wasRecentUserTouch()) return;
-
-    _lastProgrammaticMoveTime = DateTime.now();
-
-    _mapController!.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target:  _currentUserLocation!,
-          zoom:    AppConstants.navigationZoom,
-          tilt:    AppConstants.navigationTilt,
-          bearing: heading,
-        ),
-      ),
-      duration: const Duration(milliseconds: 150),
-    );
+    final difference = _shortestBearingDelta(from, to);
+    return _normalizeBearing(from + difference * factor);
   }
 
   void _handleUserInteraction() {
@@ -406,36 +329,14 @@ class NavigationController {
     _userInteractionDebouncer = Timer(AppConstants.mapAnimationDelay, _notifyStateChanged);
   }
 
-  void _performRecenterAnimation(LatLng userLocation, double bearing) {
-    _lastProgrammaticMoveTime = DateTime.now();
-    _lastUserTouchTime        = null;
+  void _completeRecenter(double bearing) {
+    _targetBearing = bearing;
+    _ensureCameraTicker();
 
-    _mapController!.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target:  userLocation,
-          zoom:    AppConstants.navigationZoom,
-          tilt:    AppConstants.navigationTilt,
-          bearing: bearing,
-        ),
-      ),
-      duration: const Duration(milliseconds: AppConstants.navigationRecenterDurationMs),
-    ).then((_) {
-      debugPrint('🎯 Recenter completed');
-      _lastProgrammaticMoveTime = DateTime.now();
-      _lastUserTouchTime        = null;
-      _isRecenterInProgress     = false;
-
-      Future.delayed(AppConstants.mapAnimationDelay, () {
-        _lastProgrammaticMoveTime = DateTime.now();
-      });
-
-      _notifyStateChanged();
-    }).catchError((Object error) {
-      debugPrint('⚠️ Recenter failed: $error');
+    Timer(const Duration(milliseconds: AppConstants.navigationRecenterDurationMs), () {
       _isRecenterInProgress = false;
-      _showRecenterButton   = false;
-      _onRecenterButtonVisibilityChanged?.call(false);
+      _lastUserTouchTime    = null;
+      _notifyStateChanged();
     });
   }
 
@@ -459,7 +360,96 @@ class NavigationController {
 
   void _notifyStateChanged() => _onStateChanged?.call();
 
+  // ── Camera ticker — the single driver ────────────────────────────────────
+
+  void _ensureCameraTicker() {
+    final ticker = _cameraTicker ??= Ticker(_onCameraTick);
+    if (!ticker.isTicking) {
+      _lastCameraTick = Duration.zero;
+      ticker.start();
+    }
+  }
+
+  void _stopCameraTicker() {
+    _cameraTicker?.stop();
+  }
+
+  void _onCameraTick(Duration elapsed) {
+    final dtMs = (elapsed - _lastCameraTick).inMicroseconds / 1000.0;
+    _lastCameraTick = elapsed;
+    if (dtMs <= 0) return;
+
+    // Stop rather than idle-tick at 60fps: no map/target, the user is
+    // dragging, or the camera has already caught up to its targets. GPS and
+    // compass updates call _ensureCameraTicker() again whenever there is
+    // fresh work to do.
+    if (_mapController == null || _targetPosition == null || _wasRecentUserTouch()) {
+      _cameraTicker?.stop();
+      return;
+    }
+
+    final target = _targetPosition!;
+    final targetBearing = _targetBearing ?? _cameraBearing;
+    final atTargetPosition = _cameraPosition != null &&
+        _calculateDistance(_cameraPosition!, target) < AppConstants.cameraSnapDistanceMeters;
+    final atTargetBearing =
+        _shortestBearingDelta(_cameraBearing, targetBearing).abs() < AppConstants.cameraSnapBearingDegrees;
+    if (atTargetPosition && atTargetBearing) {
+      _cameraTicker?.stop();
+      return;
+    }
+
+    final current = _cameraPosition ?? target;
+
+    final positionT = _smoothingFactor(dtMs, AppConstants.cameraPositionSmoothingMs);
+    var newPosition = LatLng(
+      current.latitude  + (target.latitude  - current.latitude)  * positionT,
+      current.longitude + (target.longitude - current.longitude) * positionT,
+    );
+    if (_calculateDistance(newPosition, target) < AppConstants.cameraSnapDistanceMeters) {
+      newPosition = target;
+    }
+
+    final bearingT = _smoothingFactor(dtMs, AppConstants.cameraBearingSmoothingMs);
+    var newBearing = _interpolateBearing(_cameraBearing, targetBearing, bearingT);
+    if (_shortestBearingDelta(newBearing, targetBearing).abs() < AppConstants.cameraSnapBearingDegrees) {
+      newBearing = targetBearing;
+    }
+
+    _cameraPosition = newPosition;
+    _cameraBearing  = newBearing;
+    _lastProgrammaticMoveTime = DateTime.now();
+
+    _mapController!.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target:  newPosition,
+          zoom:    _cameraZoom,
+          tilt:    AppConstants.navigationTilt,
+          bearing: newBearing,
+        ),
+      ),
+    );
+  }
+
+  double _smoothingFactor(double dtMs, double timeConstantMs) {
+    final factor = 1 - exp(-dtMs / timeConstantMs);
+    return factor.clamp(0.0, 1.0);
+  }
+
   // ── Math helpers ──────────────────────────────────────────────────────────
+
+  double _shortestBearingDelta(double from, double to) {
+    double difference = to - from;
+    if (difference > 180) difference -= 360;
+    if (difference < -180) difference += 360;
+    return difference;
+  }
+
+  double _normalizeBearing(double bearing) {
+    final normalized = bearing % 360;
+    return normalized < 0 ? normalized + 360 : normalized;
+  }
 
   double _calculateDistance(LatLng from, LatLng to) {
     const earthRadius = 6371000.0;

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart' as loc;
 
 import '../../../core/core.dart';
 
@@ -13,6 +12,7 @@ class LocationService {
 
   StreamSubscription<Position>? _positionSubscription;
   Timer? _improvementTimer;
+  int _accuracyUpgradeToken = 0;
   static StreamController<bool>? _locationServiceController;
   static Timer? _locationServiceTimer;
   static StreamSubscription<ServiceStatus>? _serviceStatusSubscription;
@@ -57,10 +57,15 @@ class LocationService {
     try {
       final isEnabled = await Geolocator.isLocationServiceEnabled();
       if (!isEnabled) {
-        final locService = loc.Location();
-        final enabled = await locService.requestService();
-        if (!enabled) return false;
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Opens the OS settings screen; it doesn't wait for the user to
+        // enable and return. AEDMapWidget's _resumeApp() re-checks service
+        // status and finishes setup when the app comes back to the
+        // foreground, clearing this snackbar then.
+        if (context.mounted) {
+          UIHelper.showLoading(context, 'Waiting for location to be enabled…');
+        }
+        await Geolocator.openLocationSettings();
+        return false;
       }
 
       final currentPermission = await Geolocator.checkPermission();
@@ -264,14 +269,22 @@ class LocationService {
     required bool isNavigating,
     required int distanceFilter,
   }) async {
+    // Two rapid calls (e.g. navigation toggled on then off) would otherwise
+    // both resume from the isLocationServiceEnabled() await and both assign
+    // _positionSubscription — whichever assigns second silently orphans the
+    // other's stream. Only the most recent call is allowed to proceed past it.
+    final token = ++_accuracyUpgradeToken;
+
     _positionSubscription?.cancel();
+    _positionSubscription = null;
 
     if (!await Geolocator.isLocationServiceEnabled()) {
       debugPrint('🔴 Location services disabled - cannot upgrade accuracy');
       return;
     }
 
-    final accuracy = isNavigating ? LocationAccuracy.high : LocationAccuracy.medium;
+    if (token != _accuracyUpgradeToken) return; // superseded — let the newer call win
+
     debugPrint('📍 GPS Phase 2: ${isNavigating ? 'HIGH' : 'MEDIUM'} accuracy');
 
     if (isNavigating) {
@@ -290,7 +303,7 @@ class LocationService {
     } else {
       _positionSubscription = Geolocator.getPositionStream(
         locationSettings: LocationSettings(
-          accuracy:       accuracy,
+          accuracy:       LocationAccuracy.medium,
           distanceFilter: distanceFilter,
         ),
       ).listen(
@@ -310,7 +323,9 @@ class LocationService {
     _upgradeToTargetAccuracy(
       onLocationUpdate: onLocationUpdate,
       isNavigating:     isNavigating,
-      distanceFilter:   isNavigating ? AppConstants.locationFilterHigh : AppConstants.locationFilterMedium,
+      // Only read when isNavigating is false — the isNavigating branch
+      // hardcodes distanceFilter: 0 regardless of what's passed here.
+      distanceFilter:   AppConstants.locationFilterMedium,
     );
   }
 

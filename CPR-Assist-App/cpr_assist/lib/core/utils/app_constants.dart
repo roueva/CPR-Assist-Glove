@@ -37,7 +37,6 @@ class AppConstants {
   static const int locationFilterLowest = 100;
   static const int locationFilterLow    = 50;
   static const int locationFilterMedium = 25;
-  static const int locationFilterHigh   = 10;
 
   static const double locationMinMovement  = 5.0;   // GPS jitter threshold
   static const double locationSigMovement  = 20.0;  // Meaningful position change
@@ -64,6 +63,15 @@ class AppConstants {
   static const double  greeceZoom             = 6.0;
   static const double  maxMapZoom             = 18.0;
   static const LatLng  greeceCenter           = LatLng(39.0742, 21.8243);
+
+  /// Navigation camera — single Ticker-driven follow model.
+  /// Time constants (ms) for exponential smoothing of position/bearing toward
+  /// their GPS/compass targets; snap thresholds avoid perpetual imperceptible
+  /// moveCamera calls once the camera has effectively caught up.
+  static const double cameraPositionSmoothingMs = 300.0;
+  static const double cameraBearingSmoothingMs  = 200.0;
+  static const double cameraSnapDistanceMeters  = 0.5;
+  static const double cameraSnapBearingDegrees  = 0.3;
 
   static const double rerouteThresholdMeters      = 50.0;
   static const double offRouteDistanceThreshold   = 25.0;
