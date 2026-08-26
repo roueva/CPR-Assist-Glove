@@ -5,5 +5,5 @@
 #include "config.h"
 
 bool max30205Init();
-float max30205ReadCelsius();  // returns 0 if not ready or out of range
+bool max30205ReadCelsius(float& out);  // false if not ready or out of range
 bool max30205Ok();

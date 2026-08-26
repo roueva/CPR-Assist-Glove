@@ -37,6 +37,17 @@ static uint32_t _cntDepth = 0, _cntFreq = 0, _cntRecoil = 0, _cntCombo = 0;
 static uint32_t _cntPosture = 0, _cntLeaning = 0, _cntOverForce = 0, _cntTooDeep = 0;
 
 // ── Rate tracking ─────────────────────────────────────────────────────────────
+// Three parallel notions of "rate" live below — conflating them caused the
+// frequency-comment bug:
+//   _gradeRate    — exact rate of the compression that just completed. Feeds
+//                   quality grading AND reaches BLE via s.instantaneousRate
+//                   (spec §3 byte 12–15).
+//   rollingRate() — 5-compression rolling average of accepted rates, backed
+//                   by _rateBuf. Reaches BLE via s.frequency (spec §3 byte 4–7).
+//   _rateJumpReference — exponentially smoothed rate used only internally, as
+//                   the reference value for the plausibility check that
+//                   rejects a doubled/halved interval. Never written to
+//                   shared state; does not reach BLE.
 static unsigned long _lastCompStartMs = 0;
 static unsigned long _thisCompStartMs = 0;
 
@@ -47,8 +58,8 @@ static unsigned long _leaningStartMs = 0;  // 0 = not currently above threshold
 static float _liveDepthCm = 0.0f;
 static float _displayDepthCm = 0.0f;  // EMA-smoothed, display only
 
-// ── Instantaneous rate (last 2 compressions) ──────────────────────────────────
-static float _instantRate = 0.0f;
+// ── Rate-jump plausibility reference — EMA-smoothed, internal only ──────────
+static float _rateJumpReference = 0.0f;
 
 // ── Rolling rate (5-compression average) — spec §3 byte 4–7 `frequency` ───────
 static float _rateBuf[5] = { 0 };
@@ -278,7 +289,7 @@ void depthSessionReset() {
   _prevValleyForce = 9999.0f;
   _lastCompStartMs = 0;
   _thisCompStartMs = 0;
-  _instantRate = 0;
+  _rateJumpReference = 0;
   memset(_rateBuf, 0, sizeof(_rateBuf));
   _rateIdx = 0;
   _rateFill = 0;
@@ -648,8 +659,9 @@ if (_state == CompState::COMPRESSING) {
       // Two rates are kept:
       //  • _gradeRate  — THIS compression's actual rate. Used for quality
       //    grading so every single compression is judged on its own merit.
-      //  • _instantRate — lightly smoothed, for the live display only, so the
-      //    on-screen number doesn't flicker on normal cycle-to-cycle jitter.
+      //  • _rateJumpReference — lightly smoothed, internal only. Its sole job
+      //    is to be the "last known good" rate that the plausibility check
+      //    below compares against; it never reaches a display or BLE field.
       // Outlier rejection (a single physically-impossible doubled/halved
       // interval) is applied to BOTH, but a genuine sustained rate change is
       // never hidden from grading.
@@ -662,23 +674,23 @@ if (_state == CompState::COMPRESSING) {
         float raw = validRate(60.0f / intv);
         if (raw > 0) {
           bool plausible = true;
-          if (_instantRate > 0.0f) {
-            float ratio = raw / _instantRate;
+          if (_rateJumpReference > 0.0f) {
+            float ratio = raw / _rateJumpReference;
             // Reject only physically-impossible single-cycle jumps (interval
             // halved or doubled). ±40% still passes a real fast/slow change.
             if (ratio < 0.55f || ratio > 1.80f) plausible = false;
           }
           if (plausible) {
             _gradeRate = raw;  // exact rate THIS comp
-            _instantRate = (_instantRate <= 0.0f)
+            _rateJumpReference = (_rateJumpReference <= 0.0f)
                              ? raw
-                             : 0.6f * _instantRate + 0.4f * raw;  // display smoothing
+                             : 0.6f * _rateJumpReference + 0.4f * raw;  // EMA smoothing
             // Feed the 5-comp rolling buffer that backs s.frequency
             _rateBuf[_rateIdx] = raw;
             _rateIdx = (_rateIdx + 1) % 5;
             if (_rateFill < 5) _rateFill++;
           }
-          // if implausible: keep previous _gradeRate AND _instantRate
+          // if implausible: keep previous _gradeRate AND _rateJumpReference
         }
       }
       if (_skipNextRate) _skipNextRate = false;  // consumed

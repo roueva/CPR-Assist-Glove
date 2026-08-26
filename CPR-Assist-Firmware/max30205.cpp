@@ -39,17 +39,17 @@ bool max30205Ok() {
   return _ok;
 }
 
-float max30205ReadCelsius() {
-  if (!_ok) return 0.0f;
+bool max30205ReadCelsius(float& out) {
+  if (!_ok) return false;
 
   tcaSelect(TCA_CH_MAX30205);
 
   Wire.beginTransmission(MAX30205_ADDR);
   Wire.write(MAX30205_REG_TEMP);
-  if (Wire.endTransmission(false) != 0) return 0.0f;
+  if (Wire.endTransmission(false) != 0) return false;
 
   Wire.requestFrom((uint8_t)MAX30205_ADDR, (uint8_t)2);
-  if (Wire.available() < 2) return 0.0f;
+  if (Wire.available() < 2) return false;
 
   uint8_t msb = Wire.read();
   uint8_t lsb = Wire.read();
@@ -57,6 +57,7 @@ float max30205ReadCelsius() {
   float temp = raw * 0.00390625f;
 
   // Sanity check: human skin 15–42°C
-  if (temp < 15.0f || temp > 42.0f) return 0.0f;
-  return temp;
+  if (temp < 15.0f || temp > 42.0f) return false;
+  out = temp;
+  return true;
 }

@@ -26,7 +26,7 @@ static bool _rescuerOk = false;
 static bool _patientOk = false;
 
 // Cached anyContact from the most recent max30102UpdatePatient() call, plus
-// the millis() it was written at — surfaced via max30102PatientContactOk()
+// the millis() it was written at — surfaced via max30102PatientContactCached()
 // / max30102PatientContactUpdateMs() so callers can tell a fresh reading
 // from one left over from before their window opened.
 static bool _patientContactOk = false;
@@ -459,11 +459,11 @@ if (_pSampleClockMs == 0) _pSampleClockMs = millis();
   pi = (uint8_t)constrain(qi * 10.0f, 0.0f, 255.0f);
 }
 
-bool max30102PatientContactOk() {
+bool max30102PatientContactCached() {
   return _patientContactOk;
 }
 
-// millis() at which max30102PatientContactOk()'s value was last written.
+// millis() at which max30102PatientContactCached()'s value was last written.
 // Callers should ignore the cached value unless this is later than their
 // own window's start time — otherwise it may be a stale pre-window reading.
 unsigned long max30102PatientContactUpdateMs() {
@@ -475,7 +475,7 @@ unsigned long max30102PatientContactUpdateMs() {
 // threshold. No bandpass/envelope/beat detection, and never touches _pP —
 // safe to call before a window opens (or after one closes) without
 // disturbing the state max30102UpdatePatient() uses.
-bool max30102PatientContact() {
+bool max30102PatientContactProbe() {
   if (!_patientOk) return false;
   tcaSelect(TCA_CH_MAX30102_P);
   _patient.check();

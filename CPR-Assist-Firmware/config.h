@@ -204,11 +204,6 @@
 #define FORCE_EXP_B       1.056205f
 #define FORCE_EXP_C       5.212799f
 
-// Old quadratic coefficients — kept for reference, no longer used
-// #define FORCE_C0 7.46f
-// #define FORCE_C1 61.55f
-// #define FORCE_C2 77.80f
-
 #define FORCE_COMPRESS_START 30.0f  // N — compression begins
 #define FORCE_RELEASE_DONE 20.0f    // N — release confirmed
 #define FORCE_BASELINE_MIN 30.0f    // N — below this → zero depth

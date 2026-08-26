@@ -27,9 +27,9 @@ void max30102UpdatePatient(float& hrBpm, float& spO2, float& ppgRaw,
 // it's free to call every loop tick. Check max30102PatientContactUpdateMs()
 // against your own window's start time before trusting this — it may be a
 // stale reading from before max30102UpdatePatient() was being called at all.
-bool max30102PatientContactOk();
+bool max30102PatientContactCached();
 
-// millis() at which max30102PatientContactOk()'s value was last written.
+// millis() at which max30102PatientContactCached()'s value was last written.
 unsigned long max30102PatientContactUpdateMs();
 
 // Reset patient detector counts — call once at the START of each pulse check window.
@@ -39,7 +39,7 @@ void max30102ResetPatientDetectors();
 // level only — no bandpass, no envelope, no beat detection — and does not
 // touch the state max30102UpdatePatient() uses. Safe to call before a
 // window opens (or after one closes) without disturbing the pipeline.
-bool max30102PatientContact();
+bool max30102PatientContactProbe();
 
 // Clear rescuer beat-detection state. Call at session start so the first beat
 // after a long idle isn't rejected by the 2000ms inter-beat limit.

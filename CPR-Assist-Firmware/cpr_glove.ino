@@ -1150,7 +1150,7 @@ bool cycleReached = (ventComps > 0
         if ((pollPreOpen || pollRearm) && (now - _pulseGatePollMs) >= 200) {
           _pulseGatePollMs = now;
           xSemaphoreTake(gI2CMutex, portMAX_DELAY);
-          bool contact = max30102PatientContact();
+          bool contact = max30102PatientContactProbe();
           xSemaphoreGive(gI2CMutex);
 
           if (pollPreOpen) {
@@ -1218,13 +1218,12 @@ bool cycleReached = (ventComps > 0
         // pulseCheckActive. No new I2C here.
         // Gated on freshness, not a fixed warmup: right at open, the vitals
         // block may not have run yet with pulseCheckActive freshly true, so
-        // its cached reading can be stale (from before this window existed,
-        // likely false). Only trust it once it was actually written after
-        // this window opened — otherwise a stale false reading could start
-        // the no-contact debounce right at open and close the window despite
-        // genuine contact.
+        // the cache can predate this window (likely false). Only trust it
+        // once it was actually written after this window opened — otherwise
+        // a stale false reading could start the no-contact debounce right at
+        // open and close the window despite genuine contact.
         if (_inPulseCheck && max30102PatientContactUpdateMs() > _pulseCheckStartMs) {
-          if (max30102PatientContactOk()) {
+          if (max30102PatientContactCached()) {
             _pulseGateNoContactMs = 0;
           } else if (_pulseGateNoContactMs == 0) {
             _pulseGateNoContactMs = now;
@@ -1504,7 +1503,8 @@ bool cycleReached = (ventComps > 0
         }
 
         // 2. Read carotid skin temp from MAX30205 (same fingertip)
-        float patTemp = max30205ReadCelsius();
+        float patTemp = 0.0f;
+        bool patTempOk = max30205ReadCelsius(patTemp);
         xSemaphoreGive(gI2CMutex);
 
         portENTER_CRITICAL(&gStateMux);
@@ -1521,8 +1521,8 @@ bool cycleReached = (ventComps > 0
         // pipeline is already gated on, instead of re-deriving contact from
         // a coarse batch-averaged threshold on ppgRaw — independent of PPG
         // pulsatility, a pulseless patient still has warm skin.
-        bool contactOk = max30102PatientContactOk();
-        if (contactOk && patTemp > 0) {
+        bool contactOk = max30102PatientContactCached();
+        if (contactOk && patTempOk) {
           gState.patientTemperature = patTemp;
           gState.patientTemperatureLastPulseCheck = patTemp;
         }

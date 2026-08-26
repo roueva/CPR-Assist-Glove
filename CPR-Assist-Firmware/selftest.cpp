@@ -155,8 +155,8 @@ static SensorResult probeMAX30205() {
   }
   // Read a real temperature — distinguishes "ACK but no conversion" from
   // a fully working sensor.
-  float t = max30205ReadCelsius();
-  if (t >= 10.0f && t <= 50.0f) {
+  float t = 0.0f;
+  if (max30205ReadCelsius(t) && t >= 10.0f && t <= 50.0f) {
     return { SELFTEST_BIT_TEMP, true, false, SELFTEST_REASON_OK };
   }
   return { SELFTEST_BIT_TEMP, false, false, SELFTEST_REASON_BAD_READING };

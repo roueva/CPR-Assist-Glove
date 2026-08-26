@@ -18,6 +18,8 @@ Work plan and session prompts: `docs/TASKS.md`. Read it when I name a task.
 - Never run flutter run or flutter build. I run those in my own terminal.
   Long-lived builds get killed by the session supervisor and leave orphaned
   JVMs behind. Edit the files, show me the diff, and stop.
+- Any change to a BLE-facing field must update firmware/SIGNALS.md in the
+  same commit.
 
 ## Do not touch
 

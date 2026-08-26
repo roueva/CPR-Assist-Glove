@@ -65,7 +65,6 @@ bool forceInit() {
   int raw = analogRead(PIN_FSR_ADC);
   float v = (raw / 4095.0f) * 3.3f;
 
-  // float f = FORCE_C0 + FORCE_C1 * v + FORCE_C2 * v * v;
 // // If exponential instead of float f:
 float v_rel = v - FORCE_BASELINE_V;
   float f = FORCE_EXP_A * (expf(FORCE_EXP_B * v_rel) - 1.0f) + FORCE_EXP_C;
@@ -100,12 +99,11 @@ float forceRead() {
 
   int raw = analogRead(PIN_FSR_ADC);
   float v = (raw / 4095.0f) * 3.3f;
-  // float f = FORCE_C0 + FORCE_C1 * v + FORCE_C2 * v * v;
 //   // If exponential instead of float f
 float v_rel = v - FORCE_BASELINE_V;
   float f = FORCE_EXP_A * (expf(FORCE_EXP_B * v_rel) - 1.0f) + FORCE_EXP_C;
 
-  if (f > 700.0f) f = 0.0f;  // ADC glitch rejection
+  if (f > FORCE_CONF_RANGE_MAX_N) f = 0.0f;  // ADC glitch rejection
 
   // Adaptive baseline update.
   //  - Out of session: track resting force whenever below current baseline.
@@ -153,7 +151,7 @@ void forceCalibAddSample(float forceN, float imuDepthMM) {
   if (_calibComplete || _calibCount >= MAX_CALIBRATION_SAMPLES) return;
 
 #if LOW_FORCE_MODE
-  const float forceMin = 30.0f, forceMax = 600.0f;
+  const float forceMin = FORCE_BASELINE_MIN, forceMax = 600.0f;
   const float depthMin = 20.0f, depthMax = 100.0f;
 #else
   const float forceMin = 100.0f, forceMax = 600.0f;
@@ -322,13 +320,12 @@ void forceTestRead(int& rawAdc, float& voltage, float& rawForceN,
   rawAdc = analogRead(PIN_FSR_ADC);
   voltage = (rawAdc / 4095.0f) * 3.3f;
 
-  // rawForceN = FORCE_C0 + FORCE_C1 * voltage + FORCE_C2 * voltage * voltage;
 //   // If exponential instead of rawforceN:
 float v_rel = voltage - FORCE_BASELINE_V;
   rawForceN = FORCE_EXP_A * (expf(FORCE_EXP_B * v_rel) - 1.0f) + FORCE_EXP_C;
 
 
-  if (rawForceN > 700.0f) rawForceN = 0.0f;
+  if (rawForceN > FORCE_CONF_RANGE_MAX_N) rawForceN = 0.0f;
   baseline = _baseline;
   filteredN = max(0.0f, rawForceN - _baseline);
 }
