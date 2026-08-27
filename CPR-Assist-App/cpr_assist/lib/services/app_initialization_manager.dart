@@ -79,6 +79,10 @@ class AppInitializationManager {
   /// Returns the single shared initialization future.
   /// Safe to call multiple times — computation runs only once.
   static Future<InitializationResult> initializeApp(AEDService aedRepository) {
+    // Every statement in _run() must handle its own errors. Anything that
+    // throws here is silently discarded into an empty InitializationResult —
+    // cached location and cached AEDs included — with only this debugPrint
+    // to show it happened.
     _initFuture ??= _run(aedRepository).catchError((Object e, StackTrace st) {
       debugPrint('AppInit failed: $e\n$st');
       _initFuture = null; // allow retry
