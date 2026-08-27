@@ -97,6 +97,7 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
         onStopNavigationGPS: () => _locationController.stopGPSTracking(),
         onStartNavigationGPS: () =>
             _locationController.startGPSTracking(isNavigating: true),
+        onFreshGPSFix: (location) => _locationController.markRealGPSFix(location),
       ),
     );
     _routingCoordinator.navigationController = _navigationController;

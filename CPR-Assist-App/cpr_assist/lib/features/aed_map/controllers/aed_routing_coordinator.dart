@@ -57,6 +57,10 @@ class AEDRoutingCallbacks {
   /// Switch GPS to navigation accuracy.
   final Future<void> Function() onStartNavigationGPS;
 
+  /// Called when a fresh high-accuracy fix is obtained mid-navigation-start,
+  /// so the location controller's real-fix state stays in sync.
+  final void Function(LatLng location) onFreshGPSFix;
+
   const AEDRoutingCallbacks({
     required this.onStateChanged,
     required this.onArrived,
@@ -64,6 +68,7 @@ class AEDRoutingCallbacks {
     required this.onCloserAEDFound,
     required this.onStopNavigationGPS,
     required this.onStartNavigationGPS,
+    required this.onFreshGPSFix,
   });
 }
 
@@ -293,6 +298,7 @@ class AEDRoutingCoordinator {
           _ref
               .read(mapStateProvider.notifier)
               .updateUserLocation(currentLocation);
+          _callbacks.onFreshGPSFix(currentLocation);
           debugPrint('✅ Got fresh HIGH accuracy location: $currentLocation');
           if (context.mounted) UIHelper.clearSnackbars(context);
         }
