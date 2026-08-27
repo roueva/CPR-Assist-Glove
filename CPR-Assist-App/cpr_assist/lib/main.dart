@@ -33,6 +33,8 @@ void main() async {
     overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
   );
 
+  dotenvReady = dotenv.load(fileName: '.env');
+
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -41,7 +43,6 @@ void main() async {
   );
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
-    dotenvReady = dotenv.load(fileName: '.env');
     await dotenvReady;
     NetworkService.startConnectivityMonitoring(  // dotenv gone, this stays
       interval: AppConstants.connectivityCheckInterval,

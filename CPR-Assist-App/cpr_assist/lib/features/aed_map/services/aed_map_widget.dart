@@ -178,13 +178,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     try {
       final aedRepository = ref.read(aedServiceProvider);
-      String? apiKey;
-      try {
-        apiKey = NetworkService.googleMapsApiKey;
-      } catch (_) {
-        apiKey = null; // dotenv not loaded yet — will be set later
-      }
-      _routingCoordinator.setApiKey(apiKey);
+      unawaited(dotenvReady.then((_) {
+        if (!mounted) return;
+        _routingCoordinator.setApiKey(NetworkService.googleMapsApiKey);
+      }));
 
       _clusterManager = cluster_pkg.ClusterManager<AEDClusterItem>(
         [],
