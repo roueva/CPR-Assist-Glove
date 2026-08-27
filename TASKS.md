@@ -313,6 +313,14 @@ partial failure orphans migrated sessions permanently (data on disk,
 unreachable via `\_readIndex`, not self-healing on retry). Also:
 `jsonDecode(raw)` at `:246` is outside the inner try, so one malformed
 `session\_local\_keys` value aborts the whole migration. No completion marker.
+* R2 — `flutter\_foreground\_task` creates a second `FlutterEngine`
+unconditionally on service start (`ForegroundTask.kt:41-49`), so two engines
+are live during any BLE CPR session. Geolocator counts engines process-wide
+and refuses to stop its native location service while a second one is
+attached, leaving the OS location indicator on after navigation is
+cancelled. Dart-side subscription does cancel correctly, so no data is
+collected. **Confirm on a profile build with no glove connected before
+fixing** — the observed log line may have been a hot-reload artifact.
 
 **Do before the study, not after:**
 Capture one real session's raw BLE bytes, freeze as a test fixture, assert the
