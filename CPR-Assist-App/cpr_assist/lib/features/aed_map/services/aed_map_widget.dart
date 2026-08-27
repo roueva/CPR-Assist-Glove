@@ -85,6 +85,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
     _routingCoordinator = AEDRoutingCoordinator(
       ref: ref,
+      isUsingCachedLocation: () => _locationController.isUsingCachedLocation,
+      isLocationTooOld: () => _locationController.isLocationTooOld(),
       callbacks: AEDRoutingCallbacks(
         onStateChanged: () {
           if (mounted) setState(() {});
@@ -320,12 +322,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     final bool wasLocationNull = previousLocation == null;
 
     mapNotifier.updateUserLocation(location);
-
-    _routingCoordinator.isUsingCachedLocation =
-        _locationController.isUsingCachedLocation;
-
-    _routingCoordinator.isLocationTooOld =
-        _locationController.isLocationTooOld();
 
     if (wasLocationNull) {
       _locationController.cacheUserRegion(location);
@@ -743,8 +739,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     }
 
     // ── 3. Update location in state and clear stale distances ─────────────────
-    // Notify controller so it updates _hasRealGPSFix and _isUsingCachedLocation.
-// We call the internal state setters directly since this is a one-shot fix, not a stream event.
     final previousLocation = ref.read(mapStateProvider).userLocation;
     final movedFar = previousLocation == null ||
         LocationService.distanceBetween(previousLocation, freshLocation) >=
@@ -756,8 +750,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
       CacheService.clearDistanceCache();
       _routingCoordinator.clearPreloadedRoutes();
     }
-    _routingCoordinator.isUsingCachedLocation = false;
-    _routingCoordinator.isLocationTooOld = false;
 
     // ── 4. Phase 1: immediate straight-line sort + open-AED promotion ─────────
     final aedRepository = ref.read(aedServiceProvider);

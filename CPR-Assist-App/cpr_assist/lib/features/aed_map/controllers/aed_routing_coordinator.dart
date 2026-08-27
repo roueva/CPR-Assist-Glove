@@ -93,13 +93,15 @@ class AEDRoutingCoordinator {
   DateTime? _lastOffRouteBannerTime;
   DateTime? _lastCloserAEDNotification;
 
-  // ── Location-freshness flags (supplied by location controller) ─────────────
-  bool isUsingCachedLocation = false;
-  bool isLocationTooOld = false;
+  // ── Location-freshness callbacks (read live from the location controller) ──
+  final bool Function() isUsingCachedLocation;
+  final bool Function() isLocationTooOld;
 
   AEDRoutingCoordinator({
     required WidgetRef ref,
     required AEDRoutingCallbacks callbacks,
+    required this.isUsingCachedLocation,
+    required this.isLocationTooOld,
   })  : _ref = ref,
         _callbacks = callbacks;
 
@@ -134,7 +136,8 @@ class AEDRoutingCoordinator {
     mapNotifier.showNavigationPreview(aedLocation);
 
     final aed      = _findAED(aedLocation, currentState.aedList);
-    final isTooOld = _isLocationTooOld(currentState);
+    final usingCachedLocation = isUsingCachedLocation();
+    final isTooOld = isLocationTooOld();
 
     // Background preload of both transport modes (fire-and-forget).
     if (!isTooOld && !currentState.isOffline && _googleMapsApiKey != null) {
@@ -199,7 +202,7 @@ class AEDRoutingCoordinator {
     // ── Render ──────────────────────────────────────────────────────────────
     if (routeResult != null && !isTooOld) {
       final shouldShowGray =
-          isUsingCachedLocation || currentState.isOffline;
+          usingCachedLocation || currentState.isOffline;
 
       final polyline = shouldShowGray
           ? _greyPolyline(routeResult)
@@ -270,6 +273,7 @@ class AEDRoutingCoordinator {
       }) async {
     final currentState = _ref.read(mapStateProvider);
     LatLng? currentLocation = currentState.userLocation;
+    final usingCachedLocation = isUsingCachedLocation();
 
     // Get a fresh high-accuracy fix if we only have a cached/stale location.
     if (currentLocation != null && isUsingCachedOrStaleLocation) {
@@ -367,7 +371,7 @@ class AEDRoutingCoordinator {
     // ── Display route or offline estimation ──────────────────────────────────
     if (routeResult != null && !routeResult.isOffline) {
       final shouldShowGray =
-          isUsingCachedLocation || currentState.isOffline || isStale;
+          usingCachedLocation || currentState.isOffline || isStale;
 
       final polyline = shouldShowGray
           ? _greyPolyline(routeResult)
@@ -1079,10 +1083,6 @@ class AEDRoutingCoordinator {
   bool _shouldShowOffRouteBanner() {
     if (_lastOffRouteBannerTime == null) return true;
     return DateTime.now().difference(_lastOffRouteBannerTime!).inSeconds >= 10;
-  }
-
-  bool _isLocationTooOld(AEDMapState state) {
-    return isLocationTooOld;
   }
 
   LatLng? _getNextWaypointAhead(
