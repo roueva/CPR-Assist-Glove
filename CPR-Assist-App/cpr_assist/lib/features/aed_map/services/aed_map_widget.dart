@@ -204,8 +204,10 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
         // Step 1: Seed cached location.
         if (result.userLocation != null) {
-          await _handleLocationUpdate(result.userLocation!,
-              fromCache: result.isLocationCached);
+          await _locationController.processLocationUpdate(
+              result.userLocation!,
+              fromCache: result.isLocationCached,
+              cachedAt: result.locationAge);
           if (result.isLocationCached) {
             if (mounted) setState(() {});
           }
@@ -952,7 +954,8 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     _lastBackgroundTime = DateTime.now();
 
     final currentState = ref.read(mapStateProvider);
-    if (currentState.userLocation != null) {
+    if (currentState.userLocation != null &&
+        _locationController.hasRealGPSFix) {
       CacheService.saveLastAppState(
         currentState.userLocation!,
         currentState.navigation.transportMode,

@@ -281,6 +281,7 @@ class AppConstants {
   // LOCATION STALENESS
   // ═══════════════════════════════════════════════════════
 
+  static const int locationFreshHours = 1;
   static const int locationStaleHours = 5;
 
   // ═══════════════════════════════════════════════════════

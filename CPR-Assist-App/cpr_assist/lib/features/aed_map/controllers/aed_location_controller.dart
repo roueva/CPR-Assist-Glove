@@ -59,7 +59,6 @@ class AEDLocationController {
 
   // ── Location freshness ─────────────────────────────────────────────────────
   DateTime? _locationLastUpdated;
-  bool _isUsingCachedLocation = false;
   bool _hasRealGPSFix = false;
   bool _isSettingUpLocation = false;
   bool _hasRequestedPermission = false;
@@ -71,26 +70,27 @@ class AEDLocationController {
   bool get isManuallySearchingGPS => _isManuallySearchingGPS;
   bool get gpsSearchSuccess => _gpsSearchSuccess;
   bool get hasRealGPSFix => _hasRealGPSFix;
-  bool get isUsingCachedLocation => _isUsingCachedLocation;
+  bool get isUsingCachedLocation => !_hasRealGPSFix;
   DateTime? get locationLastUpdated => _locationLastUpdated;
   bool get hasRequestedPermission => _hasRequestedPermission;
 
   bool isLocationStale() {
-    if (!_isUsingCachedLocation || _locationLastUpdated == null) return false;
+    if (_hasRealGPSFix || _locationLastUpdated == null) return false;
     final age = DateTime.now().difference(_locationLastUpdated!).inHours;
-    return age >= 1 && age < 5;
+    return age >= AppConstants.locationFreshHours &&
+        age < AppConstants.locationStaleHours;
   }
 
   bool isLocationTooOld() {
-    if (!_isUsingCachedLocation || _locationLastUpdated == null) return false;
-    return DateTime.now().difference(_locationLastUpdated!).inHours >= 5;
+    if (_hasRealGPSFix || _locationLastUpdated == null) return false;
+    return DateTime.now().difference(_locationLastUpdated!).inHours >=
+        AppConstants.locationStaleHours;
   }
 
   /// Called when a one-shot GPS fix is obtained outside the normal stream
   /// (e.g. recenter button). Updates internal freshness flags.
   void markRealGPSFix(LatLng location) {
     _hasRealGPSFix = true;
-    _isUsingCachedLocation = false;
     _locationLastUpdated = DateTime.now();
     cacheUserRegion(location);
   }
@@ -279,17 +279,16 @@ class AEDLocationController {
 
   /// Full location-update pipeline (also called externally with fromCache=true).
   Future<void> processLocationUpdate(LatLng location,
-      {bool fromCache = false}) async {
+      {bool fromCache = false, DateTime? cachedAt}) async {
     final bool isFirstRealGPSFix = !fromCache && !_hasRealGPSFix;
 
     if (!fromCache) {
       _locationLastUpdated = DateTime.now();
-      _isUsingCachedLocation = false;
       if (!_hasRealGPSFix) {
         _hasRealGPSFix = true;
       }
     } else {
-      _isUsingCachedLocation = true;
+      _locationLastUpdated = cachedAt ?? _locationLastUpdated;
     }
 
     final currentState = _ref.read(mapStateProvider);
@@ -340,12 +339,14 @@ class AEDLocationController {
     }
 
     // ── Persist app state ─────────────────────────────────────────────────
-    final latestState = _ref.read(mapStateProvider);
-    if (latestState.userLocation != null) {
-      CacheService.saveLastAppState(
-        latestState.userLocation!,
-        latestState.navigation.transportMode,
-      );
+    if (!fromCache) {
+      final latestState = _ref.read(mapStateProvider);
+      if (latestState.userLocation != null) {
+        CacheService.saveLastAppState(
+          latestState.userLocation!,
+          latestState.navigation.transportMode,
+        );
+      }
     }
   }
 
