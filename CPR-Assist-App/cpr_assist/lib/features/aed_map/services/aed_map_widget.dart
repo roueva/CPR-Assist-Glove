@@ -66,7 +66,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   Timer? _transportModeDebouncer;
   DateTime? _lastResumeTime;
   DateTime? _lastBackgroundTime;
-  DateTime? _lastProgrammaticCameraMove;
 
   // ══════════════════════════════════════════════════════════════════════════
   // INIT & DISPOSE
@@ -674,12 +673,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   // ══════════════════════════════════════════════════════════════════════════
 
   void _onCameraMoveStarted() {
-    if (_lastProgrammaticCameraMove != null &&
-        DateTime.now().difference(_lastProgrammaticCameraMove!) <
-            const Duration(milliseconds: AppConstants.programmaticMoveDurationMs)) {
-      return;
-    }
-
     if (ref.read(mapStateProvider).navigation.hasStarted) {
       _navigationController?.onCameraMoveStarted();
     }
@@ -694,12 +687,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     // interpolate from the moment navigation begins.
     _navigationController?.syncCameraPosition(position);
 
-    if (_lastProgrammaticCameraMove != null &&
-        DateTime.now().difference(_lastProgrammaticCameraMove!) <
-            const Duration(milliseconds: AppConstants.programmaticMoveDurationMs)) {
-      return;
-    }
-
     if (ref.read(mapStateProvider).navigation.hasStarted) {
       _navigationController?.onCameraMoved();
     }
@@ -707,11 +694,6 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
 
   void _onCameraIdle() async {
     if (_isLoadingAEDs) return;
-    if (_lastProgrammaticCameraMove != null &&
-        DateTime.now().difference(_lastProgrammaticCameraMove!) <
-            const Duration(milliseconds: 800)) {
-      return;
-    }
 
     if (_mapController != null) {
       _clusterManager?.updateMap();

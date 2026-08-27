@@ -92,7 +92,6 @@ class AEDRoutingCoordinator {
   LatLng? _lastRouteUpdateLocation;
   DateTime? _lastOffRouteBannerTime;
   DateTime? _lastCloserAEDNotification;
-  DateTime? _lastProgrammaticCameraMove;
 
   // ── Location-freshness flags (supplied by location controller) ─────────────
   bool isUsingCachedLocation = false;
@@ -121,8 +120,6 @@ class AEDRoutingCoordinator {
   // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> showNavigationPreviewForAED(LatLng aedLocation) async {
-    _lastProgrammaticCameraMove = DateTime.now();
-
     final currentState   = _ref.read(mapStateProvider);
     final mapNotifier    = _ref.read(mapStateProvider.notifier);
     final LatLng? currentLocation = currentState.userLocation;
@@ -216,11 +213,11 @@ class AEDRoutingCoordinator {
             LocationService.distanceBetween(currentLocation, aedLocation),
       );
 
-      _lastProgrammaticCameraMove = DateTime.now();
       await mapViewController?.zoomToUserAndAED(
         userLocation:    currentLocation,
         aedLocation:     aedLocation,
         polylinePoints:  routeResult.points,
+        force: true,
       );
     } else if (isTooOld) {
       mapNotifier.updateRoute(null, '', 0);
@@ -249,11 +246,11 @@ class AEDRoutingCoordinator {
 
       mapNotifier.updateRoute(null, estimatedTime, estimatedDistance);
 
-      _lastProgrammaticCameraMove = DateTime.now();
       await mapViewController?.zoomToUserAndAED(
         userLocation:   currentLocation,
         aedLocation:    aedLocation,
         polylinePoints: const [],
+        force: true,
       );
     }
   }
@@ -1170,16 +1167,6 @@ class AEDRoutingCoordinator {
           : [],
       width: 4,
     );
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // PROGRAMMATIC CAMERA MOVE TIMESTAMP
-  // ══════════════════════════════════════════════════════════════════════════
-
-  DateTime? get lastProgrammaticCameraMove => _lastProgrammaticCameraMove;
-
-  void markProgrammaticCameraMove() {
-    _lastProgrammaticCameraMove = DateTime.now();
   }
 
   // ══════════════════════════════════════════════════════════════════════════

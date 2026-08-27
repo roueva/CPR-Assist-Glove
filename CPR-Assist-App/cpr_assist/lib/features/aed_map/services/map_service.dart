@@ -207,8 +207,9 @@ class MapViewController {
     required List<LatLng> polylinePoints,
     double padding            = AEDMapUIConstants.mapOverviewPadding,
     double ghostPaddingFactor = AEDMapUIConstants.mapGhostPaddingFactor,
+    bool force = false,
   }) async {
-    if (_isAnimating) return;
+    if (_isAnimating && !force) return;
     _isAnimating = true;
 
     try {
