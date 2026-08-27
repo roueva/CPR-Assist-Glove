@@ -304,8 +304,9 @@ class AEDLocationController {
       }
     }
 
-    // Skip tiny moves when not navigating
-    if (!wasLocationNull && !fromCache) {
+    // Skip tiny moves when not navigating (never on the first real GPS fix —
+    // that's a state transition, not a redundant stream update).
+    if (!wasLocationNull && !fromCache && !isFirstRealGPSFix) {
       final distance = LocationService.distanceBetween(previousLocation, location);
       final threshold = currentState.navigation.hasStarted ? 1.0 : 5.0;
       if (distance < threshold) {
