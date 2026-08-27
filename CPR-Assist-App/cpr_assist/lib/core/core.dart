@@ -9,6 +9,7 @@ export 'theme/app_theme.dart';
 export 'utils/app_constants.dart';
 export 'utils/ui_helper.dart';
 export 'utils/app_extensions.dart';
+export 'utils/verbose_log.dart';
 
 // Widgets
 export 'widgets/app_dialogs.dart';

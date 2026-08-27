@@ -56,10 +56,10 @@ class MapViewController {
       }
 
       final closestAEDs = getClosestAEDsToPoint(userLocation, aedLocations, 2);
-      debugPrint('🎯 closestAEDs for bounds: $closestAEDs');
+      verboseDebugPrint('🎯 closestAEDs for bounds: $closestAEDs');
 
       final bounds = getBoundsFromPoints([userLocation, ...closestAEDs]);
-      debugPrint('📦 bounds: SW=${bounds.southwest}, NE=${bounds.northeast}');
+      verboseDebugPrint('📦 bounds: SW=${bounds.southwest}, NE=${bounds.northeast}');
 
       await controller.animateCamera(
         CameraUpdate.newLatLngBounds(bounds, padding),

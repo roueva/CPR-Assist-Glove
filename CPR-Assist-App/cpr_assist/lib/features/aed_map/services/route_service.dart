@@ -161,7 +161,7 @@ class RouteService {
       for (final mode in modesToCheck) {
         final cachedRoute = CacheService.getCachedRoute(userLocation, aed.location, mode);
         if (cachedRoute != null) {
-          debugPrint('📦 Found cached $mode route for AED ${aed.id}');
+          verboseDebugPrint('📦 Found cached $mode route for AED ${aed.id}');
           onRouteLoaded(aed, mode, cachedRoute);
         }
       }
@@ -396,12 +396,12 @@ class RoutePreloader {
         if (cachedRoute != null && !cachedRoute.isOffline) {
           onRouteLoaded(aed, cachedRoute);
           cachedCount++;
-          debugPrint('📦 [${i + 1}/$maxRoutes] Using cached route for AED ${aed.id}');
+          verboseDebugPrint('📦 [${i + 1}/$maxRoutes] Using cached route for AED ${aed.id}');
           await Future.delayed(AppConstants.apiCallDelay);
           continue;
         }
 
-        debugPrint('🌐 [${i + 1}/$maxRoutes] Fetching route for AED ${aed.id}...');
+        verboseDebugPrint('🌐 [${i + 1}/$maxRoutes] Fetching route for AED ${aed.id}...');
         final routeService = RouteService(_apiKey);
 
         final routeResult = await routeService.fetchRoute(
@@ -418,18 +418,18 @@ class RoutePreloader {
               'aed_${aed.id}_$transportMode',
               routeResult.actualDistance!,
             );
-            debugPrint('✅ Cached REAL distance for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance!)}');
+            verboseDebugPrint('✅ Cached REAL distance for AED ${aed.id}: ${LocationService.formatDistance(routeResult.actualDistance!)}');
           }
 
           onRouteLoaded(aed, routeResult);
           fetchedCount++;
           failureCount = 0;
 
-          debugPrint('✅ [${i + 1}/$maxRoutes] Cached route for AED ${aed.id}: '
+          verboseDebugPrint('✅ [${i + 1}/$maxRoutes] Cached route for AED ${aed.id}: '
               '${LocationService.formatDistance(routeResult.actualDistance ?? 0)} (${routeResult.duration})');
         } else {
           failureCount++;
-          debugPrint('⚠️ [${i + 1}/$maxRoutes] Failed to get route for AED ${aed.id}');
+          verboseDebugPrint('⚠️ [${i + 1}/$maxRoutes] Failed to get route for AED ${aed.id}');
         }
 
         if (i < closestAEDs.length - 1) {
@@ -441,7 +441,7 @@ class RoutePreloader {
         }
       } catch (e) {
         failureCount++;
-        debugPrint('❌ Error preloading route for AED ${aed.id}: $e');
+        verboseDebugPrint('❌ Error preloading route for AED ${aed.id}: $e');
 
         if (i < closestAEDs.length - 1) {
           await Future.delayed(const Duration(seconds: 2));

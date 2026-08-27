@@ -199,7 +199,7 @@ class CacheService {
         final cachedOrigin = LatLng(double.parse(parts[0]), double.parse(parts[1]));
         final distance = LocationService.distanceBetween(origin, cachedOrigin);
         if (distance <= maxDistanceMeters) {
-          debugPrint('📍 Found nearby cached route (${distance.round()}m away)');
+          verboseDebugPrint('📍 Found nearby cached route (${distance.round()}m away)');
           return route;
         }
       } catch (_) {

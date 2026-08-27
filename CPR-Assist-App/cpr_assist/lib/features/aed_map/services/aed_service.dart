@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../../../core/utils/app_constants.dart';
+import '../../../core/core.dart';
 import '../widgets/availability_parser.dart';
 import '../../../models/aed_models.dart';
 import 'cache_service.dart';
@@ -192,13 +192,13 @@ class AEDService {
         final cachedRoute = CacheService.getCachedRoute(userLocation, aed.location, transportMode);
         if (cachedRoute != null && cachedRoute.actualDistance != null) {
           CacheService.setDistance(cacheKey, cachedRoute.actualDistance!, isRoad: true);
-          debugPrint('✅ Road distance from route cache for AED ${aed.id}');
+          verboseDebugPrint('✅ Road distance from route cache for AED ${aed.id}');
           return;
         }
 
         // 2. Check distance-only cache (road-flagged).
         if (CacheService.isRoadDistance(cacheKey) && CacheService.getDistance(cacheKey) != null) {
-          debugPrint('✅ Road distance from distance cache for AED ${aed.id}');
+          verboseDebugPrint('✅ Road distance from distance cache for AED ${aed.id}');
           return;
         }
 
@@ -209,16 +209,16 @@ class AEDService {
         if (routeResult?.actualDistance != null) {
           CacheService.setCachedRoute(userLocation, aed.location, transportMode, routeResult!);
           CacheService.setDistance(cacheKey, routeResult.actualDistance!, isRoad: true);
-          debugPrint('✅ Fetched & cached road distance for AED ${aed.id}: ${routeResult.distanceText}');
+          verboseDebugPrint('✅ Fetched & cached road distance for AED ${aed.id}: ${routeResult.distanceText}');
         } else {
           // API failed — fall back to straight-line estimate.
           final straightDistance = LocationService.distanceBetween(userLocation, aed.location);
           final adjustedDistance = straightDistance * getTransportModeMultiplier(transportMode);
           CacheService.setDistance(cacheKey, adjustedDistance);
-          debugPrint('⚠️ API failed for AED ${aed.id}, using straight-line estimate');
+          verboseDebugPrint('⚠️ API failed for AED ${aed.id}, using straight-line estimate');
         }
       } catch (e) {
-        debugPrint('❌ Error improving distance for AED ${aed.id}: $e');
+        verboseDebugPrint('❌ Error improving distance for AED ${aed.id}: $e');
         final cacheKey = _getDistanceCacheKey(aed.id, transportMode);
         final straightDistance = LocationService.distanceBetween(userLocation, aed.location);
         CacheService.setDistance(cacheKey, straightDistance * getTransportModeMultiplier(transportMode));
