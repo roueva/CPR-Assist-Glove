@@ -221,6 +221,7 @@ class AEDRoutingCoordinator {
       );
     } else if (isTooOld) {
       mapNotifier.updateRoute(null, '', 0);
+      await mapViewController?.zoomToAED(aedLocation);
     } else {
       // Offline estimation.
       final estimatedDistance = AEDService.calculateEstimatedDistance(

@@ -795,10 +795,16 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
 
   Widget _buildStatusBanners(bool isOfflineRoute) {
     final showNoGps = !widget.userLocationAvailable;
-    final showOffline  = widget.config.isOffline;
-    final showCached = widget.config.isUsingCachedLocation && widget.userLocationAvailable;
+    final showOffline = widget.config.isOffline;
+    final showTooOld = widget.config.locationAge != null &&
+        widget.config.locationAge! >= AppConstants.locationStaleHours;
+    final showCached = widget.config.isUsingCachedLocation &&
+        widget.userLocationAvailable &&
+        !showTooOld;
 
-    if (!showNoGps && !showOffline && !showCached) return const SizedBox.shrink();
+    if (!showNoGps && !showOffline && !showCached && !showTooOld) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -830,6 +836,15 @@ class _AEDNavigationPanelState extends State<AEDNavigationPanel> {
               bg: AppColors.primaryLight,
               isSpinner: true,
               tooltip: 'Using cached location, getting current GPS position…',
+            ),
+          if (showTooOld)
+            const _StatusChip(
+              icon: Icons.location_disabled,
+              label: 'Position stale',
+              color: AppColors.warning,
+              bg: AppColors.warningBg,
+              tooltip: 'Last known position is over '
+                  '${AppConstants.locationStaleHours} hours old · distance hidden',
             ),
         ],
       ),
