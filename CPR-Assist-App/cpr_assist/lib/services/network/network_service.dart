@@ -119,12 +119,16 @@ class NetworkService {
   // ── Base URL & API keys ───────────────────────────────────────────────────
 
   static String get baseUrl {
+    if (!dotenv.isInitialized) {
+      throw StateError('NetworkService.baseUrl read before dotenv.load() completed');
+    }
     final url = dotenv.env['BASE_URL'];
     if (url == null || url.isEmpty) throw Exception('BASE_URL missing from .env');
     return url;
   }
 
   static String? get googleMapsApiKey {
+    if (!dotenv.isInitialized) return null;
     final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
     if (key == null || key.isEmpty) {
       debugPrint('GOOGLE_MAPS_API_KEY missing from .env');
@@ -220,7 +224,6 @@ class NetworkService {
         Map<String, dynamic>? body,
         bool requiresAuth = false,
       }) async {
-    final url   = Uri.parse('$baseUrl$endpoint');
     final token = await getToken();
 
     if (requiresAuth && (token == null || token.isEmpty)) {
@@ -233,6 +236,7 @@ class NetworkService {
     };
 
     try {
+      final url = Uri.parse('$baseUrl$endpoint');
       final http.Response response;
       switch (method) {
         case 'POST':
