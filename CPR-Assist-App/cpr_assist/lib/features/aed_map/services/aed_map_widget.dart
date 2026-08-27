@@ -743,10 +743,17 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
     // ── 3. Update location in state and clear stale distances ─────────────────
     // Notify controller so it updates _hasRealGPSFix and _isUsingCachedLocation.
 // We call the internal state setters directly since this is a one-shot fix, not a stream event.
+    final previousLocation = ref.read(mapStateProvider).userLocation;
+    final movedFar = previousLocation == null ||
+        LocationService.distanceBetween(previousLocation, freshLocation) >=
+            AppConstants.cacheInvalidationDistance;
+
     _locationController.markRealGPSFix(freshLocation);
     ref.read(mapStateProvider.notifier).updateUserLocation(freshLocation);
-    CacheService.clearDistanceCache();
-    _routingCoordinator.clearPreloadedRoutes();
+    if (movedFar) {
+      CacheService.clearDistanceCache();
+      _routingCoordinator.clearPreloadedRoutes();
+    }
     _routingCoordinator.isUsingCachedLocation = false;
     _routingCoordinator.isLocationTooOld = false;
 
