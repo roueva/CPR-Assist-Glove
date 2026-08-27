@@ -321,6 +321,17 @@ attached, leaving the OS location indicator on after navigation is
 cancelled. Dart-side subscription does cancel correctly, so no data is
 collected. **Confirm on a profile build with no glove connected before
 fixing** — the observed log line may have been a hot-reload artifact.
+* [x] A10 — `AEDRoutingCoordinator.isUsingCachedLocation` and
+`.isLocationTooOld` were plain fields, cached mirrors of
+`AEDLocationController` state, synced only inside `\_handleLocationUpdate`.
+Anything reading them between location updates — e.g.
+`showNavigationPreviewForAED`'s `shouldShowGray` — saw a stale snapshot, not
+live state. Replaced both with injected callbacks
+(`final bool Function() isUsingCachedLocation;`) reading the controller
+directly; dead `\_isLocationTooOld(state)` removed. Fixed 2026-08-28.
+* [x] A11 — `startNavigation`'s mid-navigation fresh GPS fix bypassed
+`markRealGPSFix`, leaving `hasRealGPSFix` false despite a confirmed fix.
+Fixed 2026-08-28.
 
 **Do before the study, not after:**
 Capture one real session's raw BLE bytes, freeze as a test fixture, assert the
