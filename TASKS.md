@@ -305,6 +305,15 @@ Nothing optional. Run immediately before the first participant.
 * \[ ] `dev\_preview\_screen.dart` excluded from the release build
 * \[ ] No debug screens reachable
 
+**Known bugs (fix before the study):**
+
+* M1 — `SessionLocalStorage.migrateLegacyUnscopedData()`: index is persisted
+once after the loop while per-key writes/removes commit inside it, so a
+partial failure orphans migrated sessions permanently (data on disk,
+unreachable via `\_readIndex`, not self-healing on retry). Also:
+`jsonDecode(raw)` at `:246` is outside the inner try, so one malformed
+`session\_local\_keys` value aborts the whole migration. No completion marker.
+
 **Do before the study, not after:**
 Capture one real session's raw BLE bytes, freeze as a test fixture, assert the
 parsed output and the final grade. Highest-value item here. It turns every fix
