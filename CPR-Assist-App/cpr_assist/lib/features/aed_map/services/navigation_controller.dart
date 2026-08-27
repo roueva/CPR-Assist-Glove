@@ -62,6 +62,17 @@ class NavigationController {
     debugPrint('🎮 NavigationController initialized with map controller');
   }
 
+  /// Keeps the ticker's model of "where the camera currently is" honest by
+  /// reading it back from GoogleMap's own onCameraMove reports — the only
+  /// source of truth for the actual on-screen camera, including drags and
+  /// this app's other camera animations (e.g. the initial AED overview zoom).
+  /// Without this, a fresh entry into navigation has nothing but a guess to
+  /// interpolate from.
+  void syncCameraPosition(CameraPosition position) {
+    _cameraPosition = position.target;
+    _cameraBearing  = position.bearing;
+  }
+
   /// Update the current user location.
   void updateUserLocation(LatLng location) {
     _targetPosition = location;
@@ -118,8 +129,6 @@ class NavigationController {
 
     _cameraZoom     = AppConstants.compassOnlyZoom;
     _targetPosition = destination;
-    _cameraPosition = destination;
-    _cameraBearing  = _targetBearing ?? 0.0;
 
     _startCompassTracking();
     _ensureCameraTicker();
@@ -259,8 +268,6 @@ class NavigationController {
     _cameraZoom     = AppConstants.navigationZoom;
     _targetBearing  = initialBearing;
     _targetPosition = userLocation;
-    _cameraPosition = userLocation;
-    _cameraBearing  = initialBearing;
 
     _ensureCameraTicker();
 

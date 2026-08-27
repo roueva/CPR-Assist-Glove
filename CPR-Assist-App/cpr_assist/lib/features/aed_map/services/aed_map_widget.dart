@@ -688,6 +688,12 @@ class _AEDMapWidgetState extends ConsumerState<AEDMapWidget>
   void _onCameraMoved(CameraPosition position) {
     _clusterManager?.onCameraMove(position);
 
+    // Always keep the nav camera's "where is it right now" model in sync
+    // with reality — including moves before navigation starts (e.g. the
+    // initial AED overview zoom) — so the ticker has something real to
+    // interpolate from the moment navigation begins.
+    _navigationController?.syncCameraPosition(position);
+
     if (_lastProgrammaticCameraMove != null &&
         DateTime.now().difference(_lastProgrammaticCameraMove!) <
             const Duration(milliseconds: AppConstants.programmaticMoveDurationMs)) {

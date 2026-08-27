@@ -66,12 +66,14 @@ class AppConstants {
 
   /// Navigation camera — single Ticker-driven follow model.
   /// Time constants (ms) for exponential smoothing of position/bearing toward
-  /// their GPS/compass targets; snap thresholds avoid perpetual imperceptible
-  /// moveCamera calls once the camera has effectively caught up.
-  static const double cameraPositionSmoothingMs = 300.0;
-  static const double cameraBearingSmoothingMs  = 200.0;
-  static const double cameraSnapDistanceMeters  = 0.5;
-  static const double cameraSnapBearingDegrees  = 0.3;
+  /// their GPS/compass targets. This is a decay rate, not a fixed duration —
+  /// a large initial gap (e.g. panning in from the AED overview) still takes
+  /// proportionally longer to close than routine GPS jitter does. Snap
+  /// thresholds cut the long asymptotic tail short once it's imperceptible.
+  static const double cameraPositionSmoothingMs = 120.0;
+  static const double cameraBearingSmoothingMs  = 100.0;
+  static const double cameraSnapDistanceMeters  = 1.5;
+  static const double cameraSnapBearingDegrees  = 1.0;
 
   static const double rerouteThresholdMeters      = 50.0;
   static const double offRouteDistanceThreshold   = 25.0;
