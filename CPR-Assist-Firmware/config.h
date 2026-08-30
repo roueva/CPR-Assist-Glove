@@ -270,6 +270,15 @@
 //     Move glove a known distance; it reports palmMM / wristMM measured.
 #define IMU_TEST_LOG        0
 
+#define STUDY_BUILD 0   // set to 1 for participant sessions
+
+#if STUDY_BUILD
+  #if BLE_DEBUG_SERIAL || DEPTH_PIPELINE_LOG || DEPTH_SELECTOR_LOG \
+   || FORCE_TEST_LOG || IMU_TEST_LOG
+    #error "STUDY_BUILD=1 requires all debug log flags to be 0"
+  #endif
+#endif
+
 
 #define FORCE_BASELINE_ADAPT_ALPHA 0.002f  // how fast baseline drifts down (per sample at 100Hz ≈ 5min to fully adapt)
 #define FORCE_BASELINE_ADAPT_LEANING_FRAC 0.5f  // in-session adapt eligibility: force must be within this fraction of FORCE_LEANING_THRESHOLD below baseline to count as a full release
