@@ -270,6 +270,14 @@ class SessionService {
   //   Posture consistency      8%
   //   Hands-on ratio           4%
   //   Time to first comp       4%  (pediatric urgency)
+  //
+  // Ventilation compliance special case: a session with zero detected
+  // ventilations scores 100 on this component, not 0. The system cannot
+  // distinguish a rescuer performing compression-only CPR from a
+  // ventilation window the sensor failed to detect, so not penalising is
+  // the safer default. This applies to pediatric sessions too, where
+  // ventilations are expected — a pediatric session with zero detected
+  // windows still scores 100 here, same as adult.
 
   double calculateGradeFromDetail(SessionDetail s) {
     // Emergency sessions never have a grade

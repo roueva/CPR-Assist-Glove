@@ -6147,8 +6147,9 @@ class ExportService {
 
   /// The single plot painter — gridlines, band, guides, every line, dots.
   /// Replaces _paintDepthChart/_paintRateChart/_paintForceChart/
-  /// _paintPostureChart/_paintVitalsChart/_paintGradeSparkline/
-  /// _paintGenericSparkline.
+  /// _paintPostureChart/_paintVitalsChart/_paintGenericSparkline.
+  /// _paintGradeSparkline is still separate — its grade-band backgrounds
+  /// don't fit this painter's generic band/guide model.
   static void _paintPlot(
       PdfGraphics canvas, PdfPoint size, {
         required List<_ChartLine> lines,

@@ -8,17 +8,18 @@
       thesis's stated k values, in either mode. The thesis states the
       firmware starts at k=1.30 and that the user study runs with k=3.45
       locked. Neither value exists in the code:
-        - K_POPULATION_DEFAULT (config.h:190) is 1.7131f, not 1.30.
-        - 1.35f is commented out directly below it (config.h:192) — an
+        - K_POPULATION_DEFAULT is 1.7131f, not 1.30.
+        - 1.35f is commented out directly below K_POPULATION_DEFAULT — an
           earlier value, not the current one, and not 1.30 either.
-        - config.h:308's workflow comment references "calibK ≠ 1.3500" as
-          the value to compare a fresh fit against — another 1.35, not 1.30.
-        - FORCE_CALIB_LOCK (config.h:311) is 0 — k is NOT locked. The
+        - The (since-rewritten) FORCE_CALIB_LOCK workflow comment referenced
+          "calibK ≠ 1.3500" as the value to compare a fresh fit against —
+          another 1.35, not 1.30.
+        - FORCE_CALIB_LOCK is 0 — k is NOT locked. The
           "3.45 locked" claim in the thesis describes a state the firmware
           is not currently built to.
         - 3.45 does not appear anywhere in the firmware.
         - The eight Little Anne manikin values annotated beside
-          K_POPULATION_DEFAULT (config.h:190: 2.9612, 2.8710, 2.7046,
+          K_POPULATION_DEFAULT (2.9612, 2.8710, 2.7046,
           2.9585, 3.0136, 2.6200, 2.5847, 2.9615) average 2.83, not 3.45 —
           so even if 3.45 were meant to derive from those runs, it isn't
           their mean, and there are eight of them, not the ten the thesis
@@ -26,9 +27,10 @@
       Root cause: K_POPULATION_DEFAULT is being asked to serve two
       incompatible roles — the literature-derived population-mean fallback
       for uncalibrated human chests in Emergency mode (Tomlinson 2007,
-      k≈1.35 rounded, per the derivation comment at config.h:182-187), and
-      the slot for a hardcoded locked manikin k per the
-      calibrate-then-lock workflow documented at config.h:189 and :304-309.
+      k≈1.35 rounded, per the Tomlinson-derivation comment above
+      K_POPULATION_DEFAULT), and the slot for a hardcoded locked manikin k
+      per the calibrate-then-lock workflow documented in the comments above
+      K_POPULATION_DEFAULT and around FORCE_CALIB_LOCK.
       Whoever last set it to 1.7131f (the Little Anne bench-derived value)
       overwrote the literature fallback without introducing a separate
       constant for the locked-study role, so neither the thesis's 1.30
@@ -42,13 +44,14 @@
       comes from (which/how many calibration runs) before it can be
       written down with an honest comment.
       RESOLVED — confirmed the thesis values are correct and the firmware
-      had drifted. K_POPULATION_DEFAULT is now 1.30f (config.h:189), with
+      had drifted. K_POPULATION_DEFAULT is now 1.30f, with
       its comment carrying only the Tomlinson 2007 derivation. A new
-      K_STUDY_LOCKED 3.45f (config.h:195) holds the Little Anne study k —
+      K_STUDY_LOCKED 3.45f holds the Little Anne study k —
       averaged from 10 independent runs of ~30 compressions each — and is
       wired in as _calibK's initial/reset value in force.cpp whenever
-      FORCE_CALIB_LOCK is 1. FORCE_CALIB_LOCK (config.h:315) flipped to 1.
-      The surrounding workflow comments (config.h:182-195 and :304-315)
+      FORCE_CALIB_LOCK is 1. FORCE_CALIB_LOCK flipped to 1.
+      The surrounding workflow comments above K_POPULATION_DEFAULT/
+      K_STUDY_LOCKED and around FORCE_CALIB_LOCK
       were rewritten to describe the two constants' separate roles instead
       of the old hardcode-k-into-K_POPULATION_DEFAULT workflow.
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
@@ -116,8 +119,10 @@
       it. Needs a sweep of every reader of heartRateUser (firmware and app)
       to confirm each one either checks signal quality or has a reason not
       to.
-- [ ] `imu.cpp:4` comment says ±8g/0x5C, should be ±4g/0x4A
-- [ ] `config.h:142` comment says ±2g, confirm ±4g and fix comment
+- [x] `imu.cpp`'s file-header comment said ±8g/0x5C; now correctly reads
+      ±4g/0x4A, matching `IMU_CTRL1_XL_VALUE`. Confirmed fixed 2026-08-30.
+- [x] The comment above `IMU_CTRL1_XL_VALUE` in `config.h` said ±2g; now
+      correctly reads ±4g. Confirmed fixed 2026-08-30.
 - [ ] Before user study: MANIKIN_CALIBRATION_LOG=0, BLE_DEBUG_SERIAL=0
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Patient PPG FIFO overflowed:
       max30102UpdatePatient was folded into the 500 ms rescuer vitals block,
@@ -162,7 +167,8 @@
       resume compressions → closes; pause again without lifting → NO second window;
       lift and replace → second window opens.
 - [ ] Confirm the 200 ms pause-time contact probe doesn't inflate sensorTask dt
-      (depth integral is the validated output — see mutex note at cpr_glove.ino:1307).
+      (depth integral is the validated output — see the `sensorTask()`
+      gI2CMutex-contention notes in `cpr_glove.ino`).
 - [ ] HARDWARE — validate both patient PPG fixes above, separately:
       (1) 100 ms drain: patient HR (heartRatePatient) is no longer inflated
       relative to a known-good reference (pulse oximeter or manual count)
@@ -203,10 +209,17 @@
       rates genuinely didn't agree.
 
 ## App
-- [ ] Demote PulseCheckOverlay from full-screen blocking to non-blocking card
-- [ ] Remove compliance metrics from pulse check UI
-- [ ] Fix two overclaiming strings in UI
-- [ ] CCF benchmark display ≥80% → ≥60%
+- [x] PulseCheckOverlay is now a non-blocking card in the Live CPR screen's
+      scrollable content column, not a modal — confirmed via the widget's own
+      file-header comment in `pulse_check_overlay.dart`. Fixed 2026-08-30.
+- [x] Compliance metrics removed from the pulse check UI — classification,
+      BPM, and confidence are stored in the session record and shown only on
+      the results screen, never on the live card. Confirmed 2026-08-30.
+- [x] CCF benchmark display now reads ≥60% everywhere it's graded against
+      (`export_service.dart`, `session_compare_screen.dart`). Confirmed
+      2026-08-30. `quiz_screen.dart`'s "Target is ≥60%, ideally ≥80%" is
+      separate educational copy, not this defect — flagged separately, not
+      changed.
 
 ## Token audit
 - [x] Baseline recorded — 198 real violations
@@ -247,7 +260,8 @@ of `e.toString().contains('404')`.
       when those screens are next touched.
 
 ## UI
-- [ ] Open design decision: aed_map_cards.dart:170 still tints the ETA
+- [ ] Open design decision: `_AEDCardInternal`'s `timeColor`
+      (`aed_map_cards.dart`) still tints the ETA
       time/icon with `AppColors.aedNavGreen`/`AppColors.primary` (walking/
       driving), while the route polyline itself now draws in `success`/
       `primaryAlt` (see buildRoutePolyline in route_service.dart). Both are
@@ -258,27 +272,31 @@ of `e.toString().contains('404')`.
       10 s pause. VentilationEvent/PulseCheckEvent display `durationSec`
       capped at `maxAcceptablePauseSec` (10 s) with a compliant marker, so
       a pause that ran 4.5x over shows identically to an honest 10 s pause
-      in the in-app timeline (session_results_training_tabs.dart:1703),
-      the PDF ventilation log (export_service.dart:4450-4461), and the PDF
-      timeline (export_service.dart:5373-5377). The overrun IS correctly
+      in the in-app timeline (`_SessionTimelineSection` in
+      `session_results_training_tabs.dart`),
+      the PDF ventilation log (`_ventilationTable` in `export_service.dart`),
+      and the PDF timeline (`_buildSessionTimeline` in `export_service.dart`).
+      The overrun IS correctly
       counted in the session-level unplannedPauseTime/unplannedPauseCount
-      aggregate via the Behavior-Y branch (session_detail.dart:916-936),
+      aggregate via `SessionDetail.applyPauseModel`,
       but nothing links that summary back to the specific row that caused
       it. Proposed fix: carry the true (uncapped) duration alongside
       cappedDur and suppress the success marker on rows that overran.
-      Also fix the imprecise note at export_service.dart:3901 — it reads
-      "not explained by ventilation/pulse checks", but Behavior-Y time IS
+      Also fix the imprecise note in `_twoColumnMetrics`
+      (`export_service.dart`) — it reads
+      "not explained by ventilation/pulse checks", but this time IS
       associated with a ventilation/pulse-check window, just in excess of
       the allowance; that wording is wrong for that portion.
 
 ## Analyzer cleanup — unused_element_parameter (2026-08-25)
 - [x] Reviewed all 24 `unused_element_parameter` warnings from the analyzer
       cleanup pass. Left all 24 in place — none are inert dead code.
-      - `reason` (app_dialogs.dart:379, `_SelftestRow`) is a lint false
-        positive: it IS passed at call sites (glove_diagnostic_sheet.dart:317,
-        319) via the `SelftestRow` typedef, and its value renders in the
-        selftest results dialog's failure-detail text
-        (app_dialogs.dart:595-599). The `unused_element_parameter` lint
+      - `reason` (`_SelftestRow` in `app_dialogs.dart`) is a lint false
+        positive: it IS passed at call sites in
+        `glove_diagnostic_sheet.dart`'s selftest-row construction, via the
+        `SelftestRow` typedef, and its value renders in
+        `_SelftestResultsDialog`'s failure-detail text
+        (`app_dialogs.dart`). The `unused_element_parameter` lint
         appears not to resolve constructor calls made through a type alias.
         Deleting it would silently drop the failure-reason text from the UI.
       - The other 23 are optional parameters genuinely wired into real
@@ -302,13 +320,13 @@ of `e.toString().contains('404')`.
 
 ## Notes
 - M24 remains closed. kCmdStart/kCmdStop (0xF3/0xF4) stay commented on the
-  app side. The firmware handler at cpr_glove.ino:200-206 is live and wired
-  to startSession()/stopSession(), but the app deliberately has no caller —
+  app side. The CMD_START/CMD_STOP cases in `onAppCommand()` are live and
+  wired to startSession()/stopSession(), but the app deliberately has no caller —
   session start/stop is owned by the glove's physical button. Adding a
   sendStart/sendStop caller is a BLE behaviour change against locked
   Spec v3.1 and needs an explicit decision, not an uncommenting.
 - Unresolved comment ambiguities from the firmware comment audit — could not
   tell whether the comment or the code drifted, left as-is pending judgement:
-  - `depth.cpp:636` — `validDepth` "used for storage gating" may be true at one remove (feeds stored depth SD) rather than wrong; not clearly one or the other.
-  - `depth.cpp:472,820` — wrist flexion "signed ±45" isn't enforced anywhere; unclear if that's a dropped clamp or just an expected range.
-  - `depth.cpp:413` — "jitters ±cm at 25 Hz" matches neither the 100 Hz update rate nor the 20 Hz NeoPixel render rate; unclear which was meant.
+  - `validDepth`'s "used for storage gating" comment (`depth.cpp`) may be true at one remove (feeds stored depth SD) rather than wrong; not clearly one or the other.
+  - `imuGetWristFlexionDeg()`'s two call sites in `depth.cpp` — "signed ±45" isn't enforced anywhere; unclear if that's a dropped clamp or just an expected range.
+  - `depthUpdate()`'s live-depth comment in `depth.cpp` — "jitters ±cm at 25 Hz" matches neither the 100 Hz update rate nor the 20 Hz NeoPixel render rate; unclear which was meant.

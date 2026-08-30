@@ -8,8 +8,6 @@ what I approve. Never audit and edit in the same pass.
 
 Project rules live in `/CLAUDE.md` and load automatically. Don't restate them.
 
-**Status:** 0 sent · 1–6 pending
-
 \---
 
 ## 0\. Health check
@@ -241,10 +239,11 @@ in the codebase; check scroll on a mid-range phone. Verify content against AHA
 state. `:31` → `context.safeBottom`.
 * **Quiz** — verify answers against AHA 2025. `:179`, `:401` → `context.safeBottom`.
 * **Certificates** — `certificate\_service.dart` (114 lines). Guest or absent name.
-* **Export PDF** — the chart canvas bug is already fixed (35 save / 35 restore,
-balanced). Add a header comment declaring the `pw.` token exemption, or a future
-audit re-flags it and someone breaks the PDF. Test with a 1-compression and a
-500-compression session.
+* **Export PDF** — the chart canvas smear bug is CLOSED, confirmed 2026-08-30
+(26 save / 26 restore, balanced — every `setFillColor`/`setStrokeColor` call
+individually wrapped, no orphans). Still open: add a header comment declaring
+the `pw.` token exemption, or a future audit re-flags it and someone breaks
+the PDF. Test with a 1-compression and a 500-compression session.
 
 Violations elsewhere:
 
@@ -262,6 +261,12 @@ capture-before-async-gap pattern — verify, then comment it.
 * `session\_compare\_screen.dart:2558` → `context.screenHeight \* 0.75`
 * Friends tab is a dead placeholder with a non-functional search bar
 (`leaderboard\_screen.dart:658–695`). Hide it or make it honest before the study.
+* Known issue, not urgent — `session\_history.dart`'s `\_apply()` sort switch:
+on the "All" mode tab, `case 'grade\_low'`/`'grade\_high'` compares `totalGrade`
+across a mixed list, so Emergency sessions' `0.0` sentinel participates in the
+sort ordering. No incorrect value is ever displayed — the card branches on
+`isEmergency` first — but Emergency sessions always sort as lowest-grade.
+Decide whether to exclude them from grade sorts or leave as-is.
 
 Then add CI so none of it returns. All five must output nothing:
 
@@ -306,6 +311,11 @@ Nothing optional. Run immediately before the first participant.
 * \[ ] No debug screens reachable
 
 **Known bugs (fix before the study):**
+
+`CORRECTIONS.md` is the authoritative pre-study gate — firmware/hardware
+corrections and their validation state live there, not here. This list is
+app-side bugs only; the two are not merged, since `CORRECTIONS.md` gets
+archived once the study starts and this file doesn't.
 
 * M1 — `SessionLocalStorage.migrateLegacyUnscopedData()`: index is persisted
 once after the loop while per-key writes/removes commit inside it, so a

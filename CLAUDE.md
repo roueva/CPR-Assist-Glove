@@ -29,7 +29,8 @@ Work plan and session prompts: `docs/TASKS.md`. Read it when I name a task.
 
 These are final and correct by design. Report a suspected problem; never fix one.
 
-- Grading — `session_service.dart:240–259`. No force-safety term, no fatigue
+- Grading — `calculateGradeFromDetail` in `session_service.dart`. No
+  force-safety term, no fatigue
   penalty, no timed_endurance scenario. Over-force and fatigue are standalone
   metrics and live warnings only.
 - The confidence-based depth selector in `depth.cpp`. It replaced fixed-weight
@@ -37,7 +38,8 @@ These are final and correct by design. Report a suspected problem; never fix one
 - The exponential force model in `force.cpp`.
 - Posture from the palm IMU only. `wristAlignmentAngle` = palm pitch,
   `compressionAxisDeviation` = palm roll. The wrist IMU is not fused.
-- Patient vitals gated by `pulseCheckActive` — `ble_manager.cpp:141`.
+- Patient vitals gated by `pulseCheckActive` — the patient-vitals block
+  inside `bleSendLiveStream()` in `ble_manager.cpp`.
 - Pulse check gating: passive contact-plus-pause only. The glove never prompts the
   rescuer to pause. Low SQI → Uncertain, never Absent.
 
@@ -84,7 +86,7 @@ Login is not required to use the app.
 
 - Flutter/Riverpod, `flutter_blue_plus`, `google_maps_flutter`, `geolocator`.
   **No go_router** — `context.push` wraps `Navigator` + `MaterialPageRoute`
-  (`app_extensions.dart:118`).
+  (`BuildContextNavigation.push` in `app_extensions.dart`).
 - Firmware: Arduino/C++, ESP32, FreeRTOS. Two LSM6DSOX IMUs, FlexiForce A401,
   MAX30102 ×2, MAX30205, GXHT30, via a TCA I2C mux.
 - Backend: Express + PostgreSQL on Railway. Timestamps are TIMESTAMPTZ.

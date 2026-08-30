@@ -11,11 +11,11 @@ explicit instruction on a third.
 
 Project rules are in `/CLAUDE.md` and load automatically. Don't restate them.
 
-**Status:** A–K pending
-
 ---
 
 ## A. Battery
+
+**Done** — `cc53193`.
 
 Isolated, touches nothing else. Do it first.
 
@@ -68,6 +68,8 @@ than the nominal 2.0.
 
 ## B. Naming and duplication
 
+**Done** — `bdcbc8d`.
+
 ```
 Cleanup pass. Report the diff per file. No builds.
 
@@ -100,6 +102,8 @@ selector, the force model, or pulse-check gating policy.
 ---
 
 ## C. Wrist dropout + pulse-check provenance
+
+**Done** — `450d11a` + `f273fcb`.
 
 Both touch normally-protected code. Review the diff carefully.
 
@@ -158,6 +162,8 @@ participant's dropout — but that's a hardware judgement call.
 
 ## D. Diagnostic frame
 
+**Done** — `f273fcb`.
+
 The last real structural change in the firmware.
 
 Bytes 52–55, 86–87, 102–107 are aliased between live data and diagnostics. It
@@ -201,6 +207,8 @@ old aliasing corrupted.
 ---
 
 ## E. Remaining names, numbers, and dead fields
+
+**Done** — `9c4f381`.
 
 Block B only covered literals duplicating an existing macro. These are the
 rest.
@@ -348,6 +356,8 @@ Output goes in the paper's methods section, so the work counts twice.
 
 ## I. Hardware validation
 
+**Pending hardware.**
+
 **Not a Claude Code task.** Everything since the defense — the pulse-check
 redesign, the force calibration, the depth selector, and all of blocks A–G —
 is committed and unvalidated on hardware.
@@ -397,6 +407,8 @@ Do this **before** the study, not after.
 ---
 
 ## K. Pre-study flags
+
+**Pending hardware.**
 
 Last thing before the first participant. Verify on the flashed firmware, not
 in the source.
