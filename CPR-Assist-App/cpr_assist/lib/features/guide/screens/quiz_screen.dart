@@ -79,7 +79,7 @@ class _QuizScreenState extends State<QuizScreen> {
         'Time from collapse to first defibrillation',
       ],
       correct:  0,
-      explanation: 'CCF is the proportion of resuscitation time spent doing compressions. Target is ≥ 60%, ideally ≥ 80%.',
+      explanation: 'CCF is the proportion of resuscitation time spent doing compressions. Target is ≥ 60%.',
     ),
     _Question(
       question: 'When should an AED be used?',
