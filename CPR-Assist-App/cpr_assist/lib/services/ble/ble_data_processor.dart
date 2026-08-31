@@ -514,6 +514,14 @@ class BLEDataProcessor {
       // byte[9–10]  int16   wristAccelMag × 100 (mg)
       // byte[11–12] int16   rescuerPpgFiltered (counts)
       // byte[13–16] uint32  rescuerPpgDc (counts — integer quantity, not scaled)
+      // byte[17]    uint8   buildFlags — bit0 STUDY_BUILD, bit1 BLE_DEBUG_SERIAL,
+      //             bit2 DEPTH_PIPELINE_LOG, bit3 DEPTH_SELECTOR_LOG,
+      //             bit4 FORCE_TEST_LOG, bit5 IMU_TEST_LOG
+      // byte[18–21] uint32  buildStamp — bit-packed compile date+time, not a
+      //             real epoch (no RTC on the glove): bits 0-6 year-2000,
+      //             bits 7-10 month, bits 11-15 day, bits 16-20 hour,
+      //             bits 21-26 minute, bits 27-31 reserved. Read raw here;
+      //             unpacked for display in glove_diagnostic_sheet.dart.
         case kPacketDiagFrame:
           return ParsedBLEData._event(
             isDiagFrame:            true,
@@ -526,6 +534,8 @@ class BLEDataProcessor {
             diagWristAccelMag:      b.getInt16(9, Endian.little) / 100.0,
             diagRescuerPpgFiltered: b.getInt16(11, Endian.little).toDouble(),
             diagRescuerPpgDc:       b.getUint32(13, Endian.little).toDouble(),
+            diagBuildFlags:         b.getUint8(17),
+            diagBuildStamp:         b.getUint32(18, Endian.little),
           );
 
         default:
@@ -736,6 +746,8 @@ class ParsedBLEData {
   final double? diagWristAccelMag;
   final double? diagRescuerPpgFiltered;
   final double? diagRescuerPpgDc;
+  final int?    diagBuildFlags;
+  final int?    diagBuildStamp;
 
   const ParsedBLEData({
     this.isLiveStream          = false,
@@ -863,6 +875,8 @@ class ParsedBLEData {
     this.diagWristAccelMag,
     this.diagRescuerPpgFiltered,
     this.diagRescuerPpgDc,
+    this.diagBuildFlags,
+    this.diagBuildStamp,
   });
 
   /// Named constructor for EVENT_CHANNEL packets.
@@ -945,6 +959,8 @@ class ParsedBLEData {
     double? diagWristAccelMag,
     double? diagRescuerPpgFiltered,
     double? diagRescuerPpgDc,
+    int?    diagBuildFlags,
+    int?    diagBuildStamp,
   }) : this(
     isStartPing:           isStartPing,
     isEndPing:             isEndPing,
@@ -1022,5 +1038,7 @@ class ParsedBLEData {
     diagWristAccelMag:     diagWristAccelMag,
     diagRescuerPpgFiltered: diagRescuerPpgFiltered,
     diagRescuerPpgDc:      diagRescuerPpgDc,
+    diagBuildFlags:        diagBuildFlags,
+    diagBuildStamp:        diagBuildStamp,
   );
 }

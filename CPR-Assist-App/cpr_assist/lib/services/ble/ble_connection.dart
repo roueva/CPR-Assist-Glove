@@ -131,6 +131,8 @@ class BLEConnection {
   double? _diagWristAccelMag;
   double? _diagRescuerPpgFiltered;
   double? _diagRescuerPpgDc;
+  int?    _diagBuildFlags;
+  int?    _diagBuildStamp;
   static const int _maxScanAttempts = 8; // 8 × 15s ≈ 2 min
 
   BluetoothDevice?                        _connectedDevice;
@@ -728,6 +730,8 @@ class BLEConnection {
       'diagWristAccelMag':  _diagWristAccelMag,
       'diagRescuerPpgFiltered': _diagRescuerPpgFiltered,
       'diagRescuerPpgDc':       _diagRescuerPpgDc,
+      'diagBuildFlags':         _diagBuildFlags,
+      'diagBuildStamp':         _diagBuildStamp,
       'diagActive':         _diagActive,
     });
   }
@@ -1090,6 +1094,8 @@ class BLEConnection {
       _diagWristAccelMag      = parsed.diagWristAccelMag;
       _diagRescuerPpgFiltered = parsed.diagRescuerPpgFiltered;
       _diagRescuerPpgDc       = parsed.diagRescuerPpgDc;
+      _diagBuildFlags         = parsed.diagBuildFlags;
+      _diagBuildStamp         = parsed.diagBuildStamp;
       return;
     }
   }

@@ -8,6 +8,7 @@
 #include <BLE2902.h>
 #include <freertos/queue.h>
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 #include "imu.h"
 #include "max30102.h"
@@ -408,7 +409,51 @@ BLEEventItem bleBuildScenarioChange(Scenario sc, uint8_t trigger) {
 //              an integer quantity (bench-observed up to ~138000, overflows
 //              i16/u16); u32 not f32 since the sensor has no sub-count
 //              precision to represent.
-//   byte 17-95 unused (zero-filled by makeItem())
+//   byte 17    buildFlags                          u8 — bit0 STUDY_BUILD,
+//              bit1 BLE_DEBUG_SERIAL, bit2 DEPTH_PIPELINE_LOG,
+//              bit3 DEPTH_SELECTOR_LOG, bit4 FORCE_TEST_LOG, bit5 IMU_TEST_LOG
+//   byte 18-21 buildStamp                          u32 LE — bit-packed
+//              compile date+time (no RTC on this board, so not a real
+//              epoch): bits 0-6 year-2000, bits 7-10 month, bits 11-15
+//              day, bits 16-20 hour, bits 21-26 minute, bits 27-31
+//              reserved
+//   byte 22-95 reserved (zero-filled by makeItem())
+
+// One-time parse of __DATE__/__TIME__ into the bit-packed buildStamp above.
+// Cached — no reason to redo the string parse on every 4Hz DIAG_FRAME tick.
+// No time.h/mktime: this is a compile-time fingerprint, not a real
+// timestamp, so it doesn't need calendar math, just the raw fields.
+static uint32_t diagBuildStamp() {
+  static uint32_t stamp = 0;
+  static bool computed = false;
+  if (!computed) {
+    computed = true;
+
+    // __DATE__ is "Mmm dd yyyy" (day is space-padded, e.g. "Jan  1 2026").
+    // atoi() skips leading whitespace, so atoi(__DATE__ + 4) handles that
+    // case without any special-casing.
+    static const char monthNames[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    char monStr[4] = { __DATE__[0], __DATE__[1], __DATE__[2], '\0' };
+    const char* p = strstr(monthNames, monStr);
+    int month = p ? (int)(p - monthNames) / 3 + 1 : 1;
+    int day   = atoi(__DATE__ + 4);
+    int year  = atoi(__DATE__ + 7);
+
+    // __TIME__ is fixed-width "hh:mm:ss".
+    int hour   = atoi(__TIME__);
+    int minute = atoi(__TIME__ + 3);
+
+    uint32_t y  = (uint32_t)(year - 2000) & 0x7F;  // bits 0-6
+    uint32_t mo = (uint32_t)month         & 0x0F;  // bits 7-10
+    uint32_t d  = (uint32_t)day           & 0x1F;  // bits 11-15
+    uint32_t h  = (uint32_t)hour          & 0x1F;  // bits 16-20
+    uint32_t mi = (uint32_t)minute        & 0x3F;  // bits 21-26
+
+    stamp = y | (mo << 7) | (d << 11) | (h << 16) | (mi << 21);
+  }
+  return stamp;
+}
+
 BLEEventItem bleBuildDiagFrame() {
   auto item = makeItem(BLEEventType::DiagFrame);
   uint8_t* b = item.data;
@@ -431,6 +476,16 @@ BLEEventItem bleBuildDiagFrame() {
   packU16(b, 11, (uint16_t)rescuerFiltered);
 
   packU32(b, 13, (uint32_t)max30102DiagRescuerDc());
+
+  uint8_t buildFlags = 0;
+  buildFlags |= (STUDY_BUILD        ? (1 << 0) : 0);
+  buildFlags |= (BLE_DEBUG_SERIAL   ? (1 << 1) : 0);
+  buildFlags |= (DEPTH_PIPELINE_LOG ? (1 << 2) : 0);
+  buildFlags |= (DEPTH_SELECTOR_LOG ? (1 << 3) : 0);
+  buildFlags |= (FORCE_TEST_LOG     ? (1 << 4) : 0);
+  buildFlags |= (IMU_TEST_LOG       ? (1 << 5) : 0);
+  b[17] = buildFlags;
+  packU32(b, 18, diagBuildStamp());
 
   return item;
 }

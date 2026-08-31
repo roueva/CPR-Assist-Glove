@@ -33,6 +33,7 @@ class _DiagSample {
   final double spO2User;
   final int    rescuerQuality;
   final double rescuerPpgFiltered;
+  final double rescuerPpgDc;
   final double patientTempC;
   final double rescuerTempC;
   final double rescuerHumidity;
@@ -60,6 +61,7 @@ class _DiagSample {
     required this.spO2User,
     required this.rescuerQuality,
     required this.rescuerPpgFiltered,
+    required this.rescuerPpgDc,
     required this.patientTempC,
     required this.rescuerTempC,
     required this.rescuerHumidity,
@@ -88,6 +90,7 @@ class _DiagSample {
     spO2User.toStringAsFixed(1),
     rescuerQuality.toString(),
     rescuerPpgFiltered.toStringAsFixed(4),
+    rescuerPpgDc.toStringAsFixed(0),
     patientTempC.toStringAsFixed(2),
     rescuerTempC.toStringAsFixed(2),
     rescuerHumidity.toStringAsFixed(1),
@@ -102,10 +105,60 @@ class _DiagSample {
       'timestamp_ms,force_N,depth_cm,raw_fsr_adc,palm_accel_mag_ms2,wrist_accel_mag_ms2,'
           'palm_wrist_angle_deg,wrist_flexion_deg,'
           'hr_patient_bpm,spo2_patient_pct,ppg_raw,ppg_quality,patient_pi,'
-          'hr_user_bpm,spo2_user_pct,rescuer_quality,rescuer_ppg_filtered,'
+          'hr_user_bpm,spo2_user_pct,rescuer_quality,rescuer_ppg_filtered,rescuer_ppg_dc,'
           'patient_temp_C,rescuer_temp_C,rescuer_humidity_pct,'
           'battery_pct,is_charging,'
           'palm_who_am_i,wrist_who_am_i,i2c_scan_mask';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build info — DIAG_FRAME byte 17 (buildFlags) / bytes 18-21 (buildStamp).
+// Top-level so both the per-component screen (_ComponentTestScreenState,
+// live "Firmware Build" card) and the sheet-level full-log export
+// (_GloveDiagnosticSheetState._downloadFullLog) can format the same values.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _debugFlagBitNames = [
+  'BLE_DEBUG_SERIAL',   // bit1
+  'DEPTH_PIPELINE_LOG', // bit2
+  'DEPTH_SELECTOR_LOG', // bit3
+  'FORCE_TEST_LOG',     // bit4
+  'IMU_TEST_LOG',       // bit5
+];
+
+/// 'STUDY' / 'DEV' from buildFlags bit0, or '—' if no DIAG_FRAME seen yet.
+String buildTypeLabel(int? flags) {
+  if (flags == null) return '—';
+  return (flags & 0x01) != 0 ? 'STUDY' : 'DEV';
+}
+
+/// Unpacks the bit-packed buildStamp (see byte 18-21 layout above) into
+/// 'YYYY-MM-DD HH:MM'. Not a Unix epoch — the glove has no RTC, so this is
+/// a compile-time fingerprint (bits 0-6 year-2000, 7-10 month, 11-15 day,
+/// 16-20 hour, 21-26 minute).
+String buildStampLabel(int? packed) {
+  if (packed == null || packed == 0) return '—';
+  final year   = 2000 + (packed & 0x7F);
+  final month  = (packed >> 7)  & 0x0F;
+  final day    = (packed >> 11) & 0x1F;
+  final hour   = (packed >> 16) & 0x1F;
+  final minute = (packed >> 21) & 0x3F;
+  final y  = year.toString().padLeft(4, '0');
+  final mo = month.toString().padLeft(2, '0');
+  final d  = day.toString().padLeft(2, '0');
+  final h  = hour.toString().padLeft(2, '0');
+  final mi = minute.toString().padLeft(2, '0');
+  return '$y-$mo-$d $h:$mi';
+}
+
+/// Comma-joined names of the non-STUDY_BUILD flags that are on. 'none' if
+/// STUDY_BUILD is clean; only meaningful when buildTypeLabel is 'DEV'.
+String activeDebugFlagsLabel(int flags) {
+  final active = <String>[
+    for (var i = 0; i < _debugFlagBitNames.length; i++)
+      if (flags & (1 << (i + 1)) != 0) _debugFlagBitNames[i],
+  ];
+  return active.isEmpty ? 'none' : active.join(', ');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +174,17 @@ class _GlobalDiagBuffer {
 
   static const int _maxRows = 3000;   // 2 minutes at 25 Hz
   final List<_DiagSample> _samples = [];
+
+  // Latest DIAG_FRAME build info, set alongside sample capture — see
+  // _ComponentTestScreenState._onData. Kept here (not just per-component
+  // state) so the full-log export can label it too.
+  int? buildFlags;
+  int? buildStamp;
+
+  void setBuild(int? flags, int? stamp) {
+    buildFlags = flags ?? buildFlags;
+    buildStamp = stamp ?? buildStamp;
+  }
 
   void add(_DiagSample s) {
     _samples.add(s);
@@ -260,6 +324,7 @@ class _GloveDiagnosticSheetState extends ConsumerState<GloveDiagnosticSheet> {
       palmAccelMag:       (d['diagPalmAccelMag']        as double?) ?? 0.0,
       wristAccelMag:      (d['diagWristAccelMag']       as double?) ?? 0.0,
       rescuerPpgFiltered: (d['diagRescuerPpgFiltered']  as double?) ?? 0.0,
+      rescuerPpgDc:       (d['diagRescuerPpgDc']         as double?) ?? 0.0,
       palmWristAngle:     (d['wristAlignmentAngle']     as double?) ?? 0.0,
       wristFlexion:       (d['wristFlexionAngle']       as double?) ?? 0.0,
       hrPatient:          (d['heartRatePatient']        as double?) ?? 0.0,
@@ -398,7 +463,11 @@ class _GloveDiagnosticSheetState extends ConsumerState<GloveDiagnosticSheet> {
     }
     final ts   = DateTime.now().millisecondsSinceEpoch;
     final name = 'cpr_glove_diag_full_$ts.csv';
-    final sb   = StringBuffer()..writeln(_DiagSample.csvHeader());
+    final buf  = _GlobalDiagBuffer.instance;
+    final sb   = StringBuffer()
+      ..writeln('# build_type=${buildTypeLabel(buf.buildFlags)}')
+      ..writeln('# build_stamp=${buildStampLabel(buf.buildStamp)}')
+      ..writeln(_DiagSample.csvHeader());
     for (final s in samples) {
       sb.writeln(s.toCsvRow().join(','));
     }
@@ -857,6 +926,8 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
   StreamSubscription? _dataSub;
   final List<_DiagSample> _buffer = [];
   _DiagSample? _latest;
+  int? _buildFlags;
+  int? _buildStamp;
   List<Widget>? _cachedBody;
   int _lastBodyRebuildMs = 0;
   bool _bodyDirty = true;
@@ -886,6 +957,8 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
   void _onData(Map<String, dynamic> d) {
     if (!mounted) return;
     final now = DateTime.now().millisecondsSinceEpoch;
+    _buildFlags = (d['diagBuildFlags'] as int?) ?? _buildFlags;
+    _buildStamp = (d['diagBuildStamp'] as int?) ?? _buildStamp;
     final sample = _DiagSample(
       timestampMs:     now,
       force:           (d['force']            as double?) ?? 0.0,
@@ -894,6 +967,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
       palmAccelMag:    (d['diagPalmAccelMag']  as double?) ?? 0.0,
       wristAccelMag:   (d['diagWristAccelMag'] as double?) ?? 0.0,
       rescuerPpgFiltered: (d['diagRescuerPpgFiltered'] as double?) ?? 0.0,
+      rescuerPpgDc:    (d['diagRescuerPpgDc']    as double?) ?? 0.0,
       palmWristAngle:  (d['wristAlignmentAngle'] as double?) ?? 0.0,
       wristFlexion:    (d['wristFlexionAngle']   as double?) ?? 0.0,
       hrPatient:       (d['heartRatePatient']    as double?) ?? 0.0,
@@ -928,6 +1002,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
     _buffer.add(sample);
     if (_buffer.length > AppConstants.diagCsvMaxRows) _buffer.removeAt(0);
     _GlobalDiagBuffer.instance.add(sample);
+    _GlobalDiagBuffer.instance.setBuild(_buildFlags, _buildStamp);
 
     // Dismiss action feedback after result changes
     if (_actionPending && actionResult != 0) {
@@ -1029,7 +1104,10 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
       return;
     }
     final name = 'diag_${widget.component.name}_${DateTime.now().millisecondsSinceEpoch}.csv';
-    final sb = StringBuffer()..writeln(_csvHeaderFor(widget.component));
+    final sb = StringBuffer()
+      ..writeln('# build_type=${buildTypeLabel(_buildFlags)}')
+      ..writeln('# build_stamp=${buildStampLabel(_buildStamp)}')
+      ..writeln(_csvHeaderFor(widget.component));
     for (final row in _buffer) {
       sb.writeln(_csvRowFor(widget.component, row).join(','));
     }
@@ -1392,11 +1470,14 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
         _DiagRow('Signal quality', s == null ? '—' : '${s.rescuerQuality}', unit: '/ 100'),
         _DiagRow('Heart rate', s == null ? '—' : s.hrUser.toStringAsFixed(0), unit: 'BPM'),
         _DiagRow('SpO₂', s == null ? '—' : s.spO2User.toStringAsFixed(1), unit: '%'),
+        _DiagRow('PPG DC (raw IR)', s == null ? '—' : s.rescuerPpgDc.toStringAsFixed(0), unit: 'counts'),
       ]),
       _DiagCard(title: 'Static Checks', children: [
         _CheckRow('I²C response (CH4, 0x57)',
             (s?.i2cScanMask ?? 0) & (1 << AppConstants.diagI2cBitMax30102R) != 0,
             hint: 'No ACK → solder fault on TCA CH4'),
+        _CheckRow('PPG DC not stuck at 0', s != null && s.rescuerPpgDc > 0,
+            hint: 'Stuck at 0 with contact → finger not covering sensor, or I²C read failing'),
       ]),
       _GuidedCheck(
         title:       'Live Stimulus Test',
@@ -1685,6 +1766,7 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
   List<Widget> _buildBattery() {
     final snapshot = List<_DiagSample>.unmodifiable(_buffer);
     final s = _latest;
+    final flags = _buildFlags;
     return [
       _DiagCard(title: 'Live Readings', children: [
         _DiagRow('Battery', s == null ? '—' : '${s.batteryPct}', unit: '%'),
@@ -1697,6 +1779,12 @@ class _ComponentTestScreenState extends ConsumerState<_ComponentTestScreen> {
             hint: '>100% → ADC calibration error'),
         _CheckRow('Charging detected when USB plugged', s != null && s.isCharging,
             hint: 'Plug USB now — should flip to Yes within a second'),
+      ]),
+      _DiagCard(title: 'Firmware Build', children: [
+        _DiagRow('Build type', buildTypeLabel(flags)),
+        _DiagRow('Compiled', buildStampLabel(_buildStamp)),
+        if (flags != null && buildTypeLabel(flags) == 'DEV')
+          _DiagRow('Active debug flags', activeDebugFlagsLabel(flags)),
       ]),
       _MultiTraceSparkline(
         title: 'Battery (%)',
