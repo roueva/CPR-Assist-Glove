@@ -135,9 +135,15 @@ Same pass:
 5. \_handleCompassAccuracy (:364) logs and does nothing. Delete or wire a prompt.
 
 location\_service.dart:
-6. Remove the `location` package entirely, keep `geolocator`. Both are imported in
-   location\_service.dart, aed\_location\_controller.dart, aed\_map\_widget.dart — two
-   permission systems, two streams. Do this first.
+6. ~~Remove the `location` package entirely, keep `geolocator`.~~ **Checked
+   2026-08-31 — don't.** All three `loc.Location()` call sites
+   (`location\_service.dart:61`, `aed\_location\_controller.dart:412`,
+   `aed\_map\_widget.dart:266`) do the identical single thing:
+   `requestService()`, the native inline "Turn on Location?" system dialog.
+   `geolocator` has no equivalent — its only option, `openLocationSettings()`,
+   sends the user to the Settings app instead. Permissions and the GPS stream
+   are already 100% `geolocator`; `location` isn't duplicating either one.
+   Keep both packages.
 7. AppConstants.locationFilterHigh is dead: passed :313, discarded because the
    navigating branch hardcodes distanceFilter: 0 at :281.
 8. :274 computes `accuracy` and logs "HIGH", but the navigating branch ignores it
