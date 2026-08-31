@@ -10,8 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 // offline conditions (no internet or user not logged in).
 //
 // Key scheme:
-//   session_local_keys  — JSON list of all active local session keys
-//   session_local_<ms>  — JSON-encoded SessionDetail for that session
+//   session_local_keys_<ownerId>       — JSON list of that owner's session keys
+//   session_local_<ownerId>_<ms>       — JSON-encoded SessionDetail for that session
 //
 // Max 50 sessions — synced sessions evicted first, then oldest unsynced.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +111,7 @@ class SessionLocalStorage {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key   = _recordKey(ownerId, _keyMs(detail));
+      if (!prefs.containsKey(key)) return;
       final synced = detail.markSynced();
       await prefs.setString(key, jsonEncode(synced.toJson()));
     } catch (e) {
@@ -220,10 +221,14 @@ class SessionLocalStorage {
         if (ms == null) continue;
         final newKey = _recordKey(to, ms);
         await prefs.setString(newKey, raw);
-        await prefs.remove(oldKey);
         toKeys..remove(newKey)..add(newKey);
       }
+      // Index written before old records are removed, so a crash mid-loop
+      // leaves migrated records reachable and retry is idempotent.
       await prefs.setString(_indexKey(to), jsonEncode(toKeys));
+      for (final oldKey in fromKeys) {
+        await prefs.remove(oldKey);
+      }
       await prefs.remove(_indexKey(from));
       debugPrint('SessionLocalStorage: migrated ${fromKeys.length} session(s) from $from to $to');
     } catch (e) {
@@ -259,9 +264,13 @@ class SessionLocalStorage {
             }
           } catch (_) {}
         }
+      }
+      // Index written before old records are removed, so a crash mid-loop
+      // leaves migrated records reachable and retry is idempotent.
+      await prefs.setString(_indexKey(_defaultOwner), jsonEncode(anonKeys));
+      for (final oldKey in legacyKeys) {
         await prefs.remove(oldKey);
       }
-      await prefs.setString(_indexKey(_defaultOwner), jsonEncode(anonKeys));
       await prefs.remove('session_local_keys');
       debugPrint('SessionLocalStorage: legacy migration done (${legacyKeys.length} old key(s))');
     } catch (e) {
