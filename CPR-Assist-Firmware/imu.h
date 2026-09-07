@@ -67,6 +67,18 @@ struct IntegState {
   // Min/max of orientation pitch+roll seen during the current stroke. The
   // span (max - min) at stroke end goes into the confidence metric.
   // Updated by depth.cpp at every COMPRESSING sample.
+  //
+  // REVERTED 2026-09-01: tried replacing this with a mounting-agnostic
+  // cumulative |gyro|*dt rotation sum (rotationAccumDeg). Field data showed
+  // it reads much higher than this bounded net-displacement span for
+  // ordinary good-technique strokes (it rectifies oscillation/vibration
+  // instead of letting +/- cancel), blowing past IMU_CONF_TILT_FAIL_DEG on
+  // nearly every compression and collapsing IMU confidence to ~0 — which
+  // both forced the depth selector to FORCE_ONLY and starved
+  // forceCalibAddSample() of trustworthy samples, so k stopped adapting.
+  // If revisiting: keep the all-3-axis vector integral (not a magnitude
+  // rectified per-sample), and retune IMU_CONF_TILT_GOOD/FAIL_DEG against
+  // real data before trusting it again.
   float tiltMinDeg    =  9999.0f;
   float tiltMaxDeg    = -9999.0f;
 };

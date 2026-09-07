@@ -4,6 +4,8 @@
 // All compile-time constants. Change values here only.
 // =============================================================================
 
+#include <Arduino.h>
+
 // ── Firmware version ──────────────────────────────────────────────────────────
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 0

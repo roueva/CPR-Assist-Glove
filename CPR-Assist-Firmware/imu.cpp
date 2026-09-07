@@ -151,10 +151,15 @@ static void updateCF(CompFilter& cf, const IMURaw& raw, float dt) {
   const float mag = sqrtf(ax_g*ax_g + ay_g*ay_g + az_g*az_g);
   const bool  accelValid = (mag > 0.85f && mag < 1.15f);
 
+  // Palm mounting: gravity rests on +Y at rest (IMU_PALM_VERT_AXIS in config.h),
+  // not +Z as the textbook pitch/roll formula assumes. Pitch (tilt sensitive to
+  // X, denominator spans Y/Z) is unaffected by that — Y is already inside the
+  // sqrt — but roll must read off Z, not Y, or it saturates near ±90° at rest
+  // (atan2 of the dominant axis over a near-zero residual) instead of ~0°.
   if (!cf.initialised) {
     if (!accelValid) return;
     cf.pitch  = atan2f(ax_g, sqrtf(ay_g*ay_g + az_g*az_g));
-    cf.roll   = atan2f(ay_g, sqrtf(ax_g*ax_g + az_g*az_g));
+    cf.roll   = atan2f(az_g, sqrtf(ax_g*ax_g + ay_g*ay_g));
     cf.grav_x = ax_g;
     cf.grav_y = ay_g;
     cf.grav_z = az_g;
@@ -169,7 +174,7 @@ static void updateCF(CompFilter& cf, const IMURaw& raw, float dt) {
   // Accel correction only when sensor is near-stationary (not during compression)
   if (accelValid) {
     const float accel_pitch = atan2f(ax_g, sqrtf(ay_g*ay_g + az_g*az_g));
-    const float accel_roll  = atan2f(ay_g, sqrtf(ax_g*ax_g + az_g*az_g));
+    const float accel_roll  = atan2f(az_g, sqrtf(ax_g*ax_g + ay_g*ay_g));
     const float alpha = (_cfFastConvergeTicksLeft > 0) ? CF_ALPHA_FAST : CF_ALPHA;
     if (_cfFastConvergeTicksLeft > 0) _cfFastConvergeTicksLeft--;
     cf.pitch = alpha * cf.pitch + (1.0f - alpha) * accel_pitch;
@@ -194,9 +199,13 @@ static void updateCFWrist(CompFilter& cf, const IMURaw& raw, float dt) {
   const float mag = sqrtf(ax_g*ax_g + ay_g*ay_g + az_g*az_g);
   const bool accelValid = (mag > 0.85f && mag < 1.15f);
 
+  // Wrist mounting: gravity rests on +X at rest (IMU_WRIST_VERT_AXIS in
+  // config.h), not +Z. Roll (sensitive to Y, denominator spans X/Z) is fine
+  // as-is, but pitch must read off Z, not X, or it saturates near ±90° at
+  // rest instead of ~0° — mirrors the palm fix in updateCF() above.
   if (!cf.initialised) {
     if (!accelValid) return;
-    cf.pitch  = atan2f(ax_g, sqrtf(ay_g*ay_g + az_g*az_g));
+    cf.pitch  = atan2f(az_g, sqrtf(ax_g*ax_g + ay_g*ay_g));
     cf.roll   = atan2f(ay_g, sqrtf(ax_g*ax_g + az_g*az_g));
     cf.grav_x = ax_g;
     cf.grav_y = ay_g;
@@ -209,7 +218,7 @@ static void updateCFWrist(CompFilter& cf, const IMURaw& raw, float dt) {
   cf.roll  += gy_rads * dt;
 
   if (accelValid) {
-    const float accel_pitch = atan2f(ax_g, sqrtf(ay_g*ay_g + az_g*az_g));
+    const float accel_pitch = atan2f(az_g, sqrtf(ax_g*ax_g + ay_g*ay_g));
     const float accel_roll  = atan2f(ay_g, sqrtf(ax_g*ax_g + az_g*az_g));
     const float alpha = (_cfFastConvergeTicksLeft > 0) ? CF_ALPHA_FAST : CF_ALPHA;
     cf.pitch = alpha * cf.pitch + (1.0f - alpha) * accel_pitch;
