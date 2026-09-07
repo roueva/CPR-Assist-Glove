@@ -8,6 +8,13 @@ import 'compression_event.dart';
 import 'ventilation_event.dart';
 import 'pulse_check_event.dart';
 
+// Below this gap, a compression-to-compression interval is normal rhythm
+// noise, not a stoppage. Shared by _calculatePauseMetrics (what counts as
+// a no-flow gap) and the rate-variability computation (which intervals
+// represent genuine compression rate vs. a pause) so the two can't drift
+// apart and disagree on what "a pause" is.
+const double _kNoFlowThresholdSec = 2.0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionDetail  —  Complete session record  (BLE Spec v3.0 Section 8.5)
 //
@@ -463,19 +470,28 @@ class SessionDetail {
           ? firmwareTTF / 1000.0
           : (events.isNotEmpty ? events.first.timestampSec : 0.0);
 
-      // Rate variability — std deviation of inter-compression intervals (ms)
+      // Rate variability — std deviation of inter-compression intervals (ms).
+      // Intervals spanning a detected pause are excluded: a single 2s+ gap
+      // dwarfs the ~500-1200ms intervals of steady compressions, so without
+      // this filter the metric tracked pause count/duration rather than
+      // genuine rate variability (e.g. 49ms/583ms/2835ms across sessions
+      // with 0/1/9 pauses).
       if (n > 1) {
         final intervals = <double>[];
         for (int i = 1; i < n; i++) {
-          intervals.add(
-              (events[i].timestampMs - events[i - 1].timestampMs).toDouble());
+          final gapMs =
+              (events[i].timestampMs - events[i - 1].timestampMs).toDouble();
+          if (gapMs > _kNoFlowThresholdSec * 1000) continue;
+          intervals.add(gapMs);
         }
-        final mean     = intervals.reduce((a, b) => a + b) / intervals.length;
-        final variance = intervals
-            .map((x) => (x - mean) * (x - mean))
-            .reduce((a, b) => a + b) /
-            intervals.length;
-        rateVariability = sqrt(variance);
+        if (intervals.length > 1) {
+          final mean     = intervals.reduce((a, b) => a + b) / intervals.length;
+          final variance = intervals
+              .map((x) => (x - mean) * (x - mean))
+              .reduce((a, b) => a + b) /
+              intervals.length;
+          rateVariability = sqrt(variance);
+        }
       }
 
       // Averages — exclude events whose depth could not be measured
@@ -981,7 +997,7 @@ PauseMetrics _calculatePauseMetrics({
     );
   }
 
-  const thresholdSec = 2.0;
+  const thresholdSec = _kNoFlowThresholdSec;
 
   double noFlowTime = 0.0;
   int noFlowIntervals = 0;
@@ -1041,7 +1057,11 @@ PauseMetrics _calculatePauseMetrics({
     }
   }
 
-  scanGap(0.0, compressions.first.timestampSec);
+  // The interval from session start to the first compression is already
+  // reported as Time to First Compression — it is not a mid-session
+  // stoppage, so it must not also be scanned as a pause here (that double
+  // counted it into noFlowTime/unplannedPause* and duplicated it as a
+  // timeline event at 0:00 in the PDF export).
 
   for (int i = 1; i < compressions.length; i++) {
     scanGap(

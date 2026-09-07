@@ -1572,7 +1572,7 @@ class ExportService {
         recoilTargetMet: hasRecoilData ? _yn(c.recoilAchieved) : '',
         leaningDetected: hasRecoilData ? _yn(c.leaningDetected) : '',
 
-        force: fmtNum(c.peakForce > 0 ? c.peakForce : c.force, digits: 1),
+        force: fmtNum(c.displayForce, digits: 1),
         overForceDetected: _yn(c.overForce),
 
         instantRate: fmtNum(instantRate, digits: 1),
@@ -2205,14 +2205,45 @@ class ExportService {
         s.rescuerWristTempStart != null ||
         s.rescuerWristTempEnd != null;
 
-    final hasForceData   = s.compressions.any((c) => c.force > 0);
+    final hasForceData   = s.compressions.any((c) => c.displayForce > 0);
     final hasPostureData = s.compressions.any(
             (c) => c.wristAlignmentAngle > 0 || c.wristFlexionAngle.abs() > 0);
     final hasVitals      = s.rescuerVitals.isNotEmpty;
 
     final avgForce = s.compressions.isEmpty ? 0.0
-        : s.compressions.map((c) => c.force).reduce((a, b) => a + b) /
+        : s.compressions.map((c) => c.displayForce).reduce((a, b) => a + b) /
         s.compressions.length;
+
+    // Force chart Y range: data-driven by default (max + headroom) so real
+    // variation is visible instead of being squashed against a fixed 660 N
+    // ceiling; only stretch toward that ceiling once values get close
+    // enough to the 600 N guide to need room above it. The guide itself is
+    // always drawn regardless of scale.
+    final maxForceVal = s.compressions.isEmpty ? 0.0
+        : s.compressions.map((c) => c.displayForce).reduce((a, b) => a > b ? a : b);
+    // Unrounded candidate range: data-driven (max + headroom) by default;
+    // only stretch toward 660 once values get close enough to the 600 N
+    // guide to need room above it.
+    final forceMaxYRaw = maxForceVal > 600
+        ? maxForceVal + 60
+        : maxForceVal >= 480
+            ? 660.0
+            : (maxForceVal * 1.25 + 10).clamp(20.0, 660.0);
+    // Round Y-step picked from the unrounded candidate — instead of
+    // forceMaxY/4 (which gave e.g. 0/49/99/148/198), step up through
+    // 10/25/50/100/200 the same way the x-axis ticks do.
+    final forceYStep = forceMaxYRaw <= 60 ? 10.0
+        : forceMaxYRaw <= 150 ? 25.0
+        : forceMaxYRaw <= 300 ? 50.0
+        : forceMaxYRaw <= 700 ? 100.0
+        : 200.0;
+    // Then round the range itself up to an exact multiple of that step, so
+    // the top tick always lands exactly on maxY instead of falling short.
+    final forceMaxY = (forceMaxYRaw / forceYStep).ceil() * forceYStep;
+    // The 600 N guide only means anything once it's actually on-scale —
+    // below that, it would sit off the top of the plot while the guide,
+    // legend entry, and caption still talked about it.
+    final forceNearThreshold = forceMaxY >= 600;
 
     // ── Derived pcts for hero rings ──────────────────────────────────────────
     final depthPct  = s.compressionCount > 0
@@ -2291,6 +2322,7 @@ class ExportService {
         if (s.compressions.isNotEmpty) ...[
           _buildTimeChart(
             font: roboto, fontBold: robotoBold,
+            xMax: s.sessionDuration.toDouble(),
             title: 'Compression Depth Over Time',
             subtitle: 'Per-compression peak depth, measured from baseline to maximum.',
             caption: 'Green band = AHA target depth '
@@ -2323,16 +2355,31 @@ class ExportService {
         ],
 
         // ── Phase depth chart ──────────────────────────────────────────────
+        // Title/text/card wrapped in Inseparable (same as _buildTimeChart)
+        // so the section can only move to a fresh page as a whole — never
+        // split with the title stranded on one page and the card on the
+        // next. A plain Container does NOT achieve this: Container,
+        // DecoratedBox, and Padding all delegate canSpan to their child,
+        // and this section's child chain ends in a pw.Column, which IS
+        // spanning — see the note on _buildTimeChart's return for the
+        // full explanation. Safe to force non-spanning here because this
+        // card's size is fixed (3 phase bars), not proportional to
+        // session length.
         if (s.compressions.length >= 30) ...[
-          _sectionTitle(robotoBold, 'Depth by Phase'),
-          pw.SizedBox(height: 4),
-          pw.Text(
-              'Average depth in the first / middle / last third of the session — '
-                  'a downward trend across thirds is the classic fatigue signature.',
-              style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
-          pw.SizedBox(height: 10),
-          _buildPhaseDepthCard(robotoBold, robotoMedium, roboto,
-              s.compressions, depthMin, depthMax),
+          pw.Inseparable(child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionTitle(robotoBold, 'Depth by Phase'),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                    'Average depth in the first / middle / last third of the session — '
+                        'a downward trend across thirds is the classic fatigue signature.',
+                    style: pw.TextStyle(font: roboto, fontSize: 8, color: _kTextSecond)),
+                pw.SizedBox(height: 10),
+                _buildPhaseDepthCard(robotoBold, robotoMedium, roboto,
+                    s.compressions, depthMin, depthMax),
+              ],
+          )),
           pw.SizedBox(height: 18),
         ],
 
@@ -2340,6 +2387,7 @@ class ExportService {
         if (s.compressions.isNotEmpty) ...[
           _buildTimeChart(
             font: roboto, fontBold: robotoBold,
+            xMax: s.sessionDuration.toDouble(),
             title: 'Compression Rate Over Time',
             subtitle: 'Instantaneous rate, computed from inter-compression intervals.',
             caption: 'Green band = AHA target rate (100–120 BPM). '
@@ -2373,29 +2421,36 @@ class ExportService {
         if (hasForceData) ...[
           _buildTimeChart(
             font: roboto, fontBold: robotoBold,
+            xMax: s.sessionDuration.toDouble(),
             title: 'Compression Force Over Time',
             subtitle: 'Peak force per compression, measured at the FlexiForce sensor.',
-            caption: 'Red dashed line at 600 N = injury threshold. '
-                'Forces above this risk rib fractures. '
-                'Lower forces are not necessarily bad — depth is the clinical target, '
-                'force just measures how hard you push to achieve it.',
+            caption: forceNearThreshold
+                ? 'Red dashed line at 600 N = injury threshold. '
+                    'Forces above this risk rib fractures. '
+                    'Lower forces are not necessarily bad — depth is the clinical target, '
+                    'force just measures how hard you push to achieve it.'
+                : 'Peak force this session was ${maxForceVal.toStringAsFixed(0)} N — '
+                    'well under the 600 N rib-fracture threshold, so it isn\'t shown on '
+                    'this scale. Lower forces are not necessarily bad — depth is the '
+                    'clinical target, force just measures how hard you push to achieve it.',
             lines: [
               _ChartLine(
                   _series(s.compressions,
-                          (c) => c.timestampSec, (c) => c.force),
+                          (c) => c.timestampSec, (c) => c.displayForce),
                   _kBrandMid, fill: true),
             ],
             minY: 0,
-            maxY: s.compressions.any((c) => c.force > 600) ? 700 : 660,
-            yTickInterval: 100,
+            maxY: forceMaxY,
+            yTickInterval: forceYStep,
             yLabel: (v) => v.toStringAsFixed(0),
             guides: [
-              _ChartGuide(600, _kError.shade(0.6)),
+              if (forceNearThreshold) _ChartGuide(600, _kError.shade(0.6)),
               _ChartGuide(avgForce, _kTextDisabled.shade(0.6)),
             ],
             legend: [
               _LegendItem('Force (N)', _kBrandMid),
-              _LegendItem('600 N danger threshold', _kError),
+              if (forceNearThreshold)
+                _LegendItem('600 N danger threshold', _kError),
               _LegendItem('Average ${avgForce.toStringAsFixed(0)} N', _kTextDisabled),
             ],
             plotHeight: 90,
@@ -2408,9 +2463,10 @@ class ExportService {
         if (hasPostureData) ...[
           _buildTimeChart(
             font: roboto, fontBold: robotoBold,
+            xMax: s.sessionDuration.toDouble(),
             title: 'Wrist Posture Over Time',
             subtitle: 'Alignment (palm tilt) and flexion (wrist bend) per compression.',
-            caption: 'Both should stay under 15° (alignment) and 10° (flexion). '
+            caption: 'Blue = alignment (target < 15°), teal = flexion (target < 10°). '
                 'Bent wrists reduce force transfer to the chest and increase rescuer '
                 'fatigue. Keep elbows locked and shoulders directly over wrists.',
             lines: [
@@ -2426,15 +2482,17 @@ class ExportService {
             minY: 0, maxY: 45, yTickInterval: 15,
             yLabel: (v) => '${v.toStringAsFixed(0)}°',
             guides: [
-              _ChartGuide(15, _kSuccess.shade(0.5)),
-              _ChartGuide(10, _kSuccess.shade(0.5)),
+              _ChartGuide(15, _kBrandBlue.shade(0.5)),
+              _ChartGuide(10, _kBrandMid.shade(0.5)),
             ],
             legend: [
               _LegendItem('Wrist alignment (°)', _kBrandBlue),
+              _LegendItem('15° alignment target', _kBrandBlue.shade(0.5)),
               _LegendItem('Wrist flexion (°)', _kBrandMid),
-              _LegendItem('15° / 10° targets', _kSuccess),
+              _LegendItem('10° flexion target', _kBrandMid.shade(0.5)),
             ],
-            plotHeight: 90,
+            plotHeight: 110,
+            dotColor: (li, v) => v > (li == 0 ? 15 : 10) ? _kError : null,
           ),
           pw.SizedBox(height: 20),
         ],
@@ -2443,6 +2501,7 @@ class ExportService {
         if (hasVitals) ...[
           _buildTimeChart(
             font: roboto, fontBold: robotoBold,
+            xMax: s.sessionDuration.toDouble(),
             title: 'Rescuer Vitals Over Time',
             subtitle: 'Heart rate (PPG) and composite fatigue score during pauses.',
             caption: 'Heart rate climbs and fatigue score rises with sustained CPR. '
@@ -2476,13 +2535,39 @@ class ExportService {
         ],
 
         // ── 12. Detailed metrics (appendix — full numerical breakdown) ────
-        _sectionTitle(robotoBold, 'Detailed Metrics'),
-        pw.SizedBox(height: 8),
-        _twoColumnMetrics(robotoMedium, roboto, s, depthMin, depthMax),
+        // Wrapped in Inseparable, not a plain Container — see the note on
+        // _buildTimeChart's return. _twoColumnMetrics's Row is already
+        // non-spanning on its own (Flex.canSpan => direction ==
+        // Axis.vertical, flex.dart:554), but the Container it used to sit
+        // in still delegated canSpan up from that Row's ANCESTOR chain
+        // once combined with the title's Column — Inseparable is the
+        // widget that actually overrides canSpan instead of delegating.
+        // The table's row set is a small fixed list of possible metrics,
+        // not proportional to session length, so forcing it non-spanning
+        // carries no crash risk.
+        pw.Inseparable(child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(robotoBold, 'Detailed Metrics'),
+              pw.SizedBox(height: 8),
+              _twoColumnMetrics(robotoMedium, roboto, s, depthMin, depthMax),
+            ],
+        )),
         pw.SizedBox(height: 20),
 
 // ── 12b. Session Timeline ──────────────────────────────────────────
-        pw.NewPage(),
+        // Session Timeline itself is NOT bundled the same way: its row
+        // count grows with session length (pauses/ventilations/pulse
+        // checks/swaps), and _buildSessionTimeline's own Column relies on
+        // being a spanning widget to paginate a long event list — wrapping
+        // it in a non-spanning Container would risk a hard "won't fit"
+        // crash on a long session instead of a graceful page split. The
+        // conditional break below is what protects its title instead: it
+        // only forces a fresh page when there isn't enough room left for
+        // the title, subtitle, and first row together, so Timeline can
+        // still flow into whatever space the (now-bundled) Detailed
+        // Metrics block leaves behind.
+        pw.NewPage(freeSpace: 110),
         _sectionTitle(robotoBold, 'Session Timeline'),
         pw.SizedBox(height: 4),
         pw.Text(
@@ -2513,29 +2598,48 @@ class ExportService {
         ],
 
         // ── Biometrics ─────────────────────────────────────────────────────
+        // hasBio is a != null check, but _biometricsPanel's own rows are
+        // gated on > 0 (a stored zero HR/SpO2 is a failed reading, not a
+        // real one — see the panel below) — so a session can satisfy hasBio
+        // purely on wrist temperatures while HR/SpO2 are filtered out,
+        // leaving a small panel. Bundled with its title in Inseparable, not
+        // a plain Container (see the note on _buildTimeChart's return),
+        // bounded content not proportional to session length so no crash
+        // risk — so that small panel can't get split from its heading and
+        // stranded alone on a fresh page.
         if (hasBio) ...[
-          _sectionTitle(robotoBold, 'Biometrics & Environment'),
-          pw.SizedBox(height: 8),
-          _biometricsPanel(robotoBold, robotoMedium, roboto, s, patSpO2),
+          pw.Inseparable(child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionTitle(robotoBold, 'Biometrics & Environment'),
+                pw.SizedBox(height: 8),
+                _biometricsPanel(robotoBold, robotoMedium, roboto, s, patSpO2),
+              ],
+          )),
           pw.SizedBox(height: 20),
         ],
 
         // ── Session note ───────────────────────────────────────────────────
         if (s.note != null && s.note!.isNotEmpty) ...[
-          _sectionTitle(robotoBold, 'Session Note'),
-          pw.SizedBox(height: 8),
-          pw.Container(
-            width:   double.infinity,
-            padding: const pw.EdgeInsets.all(14),
-            decoration: pw.BoxDecoration(
-              color:        _kBgGrey,
-              borderRadius: pw.BorderRadius.circular(8),
-              border:       pw.Border.all(color: _kDivider, width: 0.5),
-            ),
-            child: pw.Text(s.note!,
-                style: pw.TextStyle(font: roboto, fontSize: 10,
-                    color: _kTextPrimary)),
-          ),
+          pw.Inseparable(child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                _sectionTitle(robotoBold, 'Session Note'),
+                pw.SizedBox(height: 8),
+                pw.Container(
+                  width:   double.infinity,
+                  padding: const pw.EdgeInsets.all(14),
+                  decoration: pw.BoxDecoration(
+                    color:        _kBgGrey,
+                    borderRadius: pw.BorderRadius.circular(8),
+                    border:       pw.Border.all(color: _kDivider, width: 0.5),
+                  ),
+                  child: pw.Text(s.note!,
+                      style: pw.TextStyle(font: roboto, fontSize: 10,
+                          color: _kTextPrimary)),
+                ),
+              ],
+          )),
         ],
       ],
     ));
@@ -2741,7 +2845,7 @@ class ExportService {
 
 // Force — only if any session has force data
         if (details != null && details.any((d) =>
-        d != null && d.compressions.any((c) => c.force > 0))) ...[
+        d != null && d.compressions.any((c) => c.displayForce > 0))) ...[
           _sectionTitle(robotoBold, 'Force Comparison'),
           pw.SizedBox(height: 10),
           _buildOverlaidComparisonChart(
@@ -2750,7 +2854,7 @@ class ExportService {
             subtitle: null,
             caption: 'Red dashed line = 600 N injury threshold.',
             sessions: sessions, details: details, slotColors: slotColors,
-            yExtractor: (c) => c.force,
+            yExtractor: (c) => c.displayForce,
             minY: 0, maxY: 700, yTickInterval: 100,
             yLabel: (v) => v.toStringAsFixed(0),
             guides: [_ChartGuide(600, _kError.shade(0.6))],
@@ -3666,8 +3770,13 @@ class ExportService {
       if (s.averageDepth > 0)
         _Row('Average Depth', '${s.averageDepth.toStringAsFixed(1)} cm',
             note: 'Target: ${depthMin.toStringAsFixed(0)}-${depthMax.toStringAsFixed(0)} cm'),
-      if (s.averageEffectiveDepth > 0)
-        _Row('Effective Depth (angle-corrected)', '${s.averageEffectiveDepth.toStringAsFixed(1)} cm'),
+      // Effective Depth / Avg. Compression Axis Deviation intentionally
+      // omitted here — compressionAxisDev has produced physically
+      // impossible values across sessions from the same user on the same
+      // manikin (48° vs 82°), making the angle-corrected depth derived
+      // from it meaningless as a displayed metric. The underlying fields
+      // and CSV export are untouched; this is a display-layer omission
+      // pending a fix to compressionAxisDev itself.
       if (s.peakDepth > 0)
         _Row('Peak Depth', '${s.peakDepth.toStringAsFixed(1)} cm'),
       if (s.depthSD > 0)
@@ -4230,12 +4339,15 @@ class ExportService {
       SessionDetail s, double? patSpO2) {
 
     // Row 1: Rescuer
+    // A stored-but-zero HR/SpO2 means the PPG read failed (e.g. pause too
+    // short for a reliable sample), not a genuine zero reading — treat it
+    // as absent like every other "> 0" gated metric in this panel.
     final rescuerItems = <_Metric>[];
-    if (s.rescuerHRLastPause != null) {
+    if ((s.rescuerHRLastPause ?? 0) > 0) {
       rescuerItems.add(_Metric('Rescuer HR (last pause)',
           '${s.rescuerHRLastPause!.toStringAsFixed(0)} BPM', _kBrandBlue));
     }
-    if (s.rescuerSpO2LastPause != null) {
+    if ((s.rescuerSpO2LastPause ?? 0) > 0) {
       rescuerItems.add(_Metric('Rescuer SpO₂ (last pause)',
           '${s.rescuerSpO2LastPause!.toStringAsFixed(0)}%', _kBrandBlue));
     }
@@ -4271,7 +4383,7 @@ class ExportService {
     }
     if (s.rescuerWristTempEnd != null) {
       rescuerItems.add(_Metric('Wrist Temp (end)',
-          '${s.rescuerWristTempEnd!.toStringAsFixed(1)}  C', _kTextSecond));
+          '${s.rescuerWristTempEnd!.toStringAsFixed(1)} °C', _kTextSecond));
     }
 
     if (rescuerItems.isEmpty && patientItems.isEmpty) return pw.SizedBox.shrink();
@@ -4765,8 +4877,9 @@ class ExportService {
 // ─────────────────────────────────────────────────────────────────────────────
 
   static String _mmssFromSec(double secs) {
-    final m = (secs ~/ 60).toString();
-    final s = (secs % 60).toInt().toString().padLeft(2, '0');
+    final total = secs.round();
+    final m = (total ~/ 60).toString();
+    final s = (total % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
@@ -4833,7 +4946,10 @@ class ExportService {
       }
     }
     if (d.compressions.isNotEmpty) {
-      scan(0.0, d.compressions.first.timestampSec);
+      // The gap from session start to the first compression is already
+      // its own "Session started" event with a "First compression at Xs"
+      // subtitle above — scanning it here duplicated it as a second,
+      // overlapping "Unplanned pause" event at the same 0:00 timestamp.
       for (int i = 1; i < d.compressions.length; i++) {
         scan(d.compressions[i - 1].timestampSec,
             d.compressions[i].timestampSec);
@@ -4930,9 +5046,30 @@ class ExportService {
     //
     // Connector line is drawn by a small CustomPaint behind each row's dot.
 
-    pw.Widget row(_TLEventPdf e, bool isFirst, bool isLast) {
+    // A pdf-package Stack sizes itself from its non-Positioned children only
+    // (Positioned children never contribute to the Stack's own box size —
+    // see pdf/src/widgets/stack.dart). The old per-row layout put the dot in
+    // its own tiny Stack and tried to reach the next dot with a Positioned
+    // connector of a *guessed* fixed length (40pt) — on any row whose real
+    // content wasn't exactly that tall, the guess over- or under-shot,
+    // producing the garbled/overlapping timeline seen in exported PDFs.
+    //
+    // Fix: make `content` (the title/subtitle/tip column) the ONLY
+    // non-positioned child of the row's Stack, so the Stack's box height is
+    // always the row's true content height. The connector is then
+    // positioned with BOTH top and bottom set, which the pdf package
+    // stretches to fit that real height exactly — no guessing, and each
+    // row's line meets the next row's line exactly at the shared boundary.
+    pw.Widget row(_TLEventPdf e, bool isLast) {
       final dotSize     = e.isBookend ? 18.0 : 12.0;
+      const timeW       = 32.0;
+      const timeGap     = 6.0;
       const dotColumnW  = 22.0;
+      const contentGap  = 8.0;
+      const dotTop      = 6.0;
+      const leftInset   = timeW + timeGap;
+      final dotLeft     = leftInset + (dotColumnW - dotSize) / 2;
+      const lineLeft    = leftInset + dotColumnW / 2 - 0.75;
 
       // Build the optional tip pill
       pw.Widget? tip;
@@ -4950,99 +5087,92 @@ class ExportService {
         );
       }
 
-      return pw.Container(
-        // No fixed height — let content drive it.
-        child: pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Time column
-            pw.SizedBox(
-              width: 32,
-              child: pw.Padding(
-                padding: const pw.EdgeInsets.only(top: 2),
-                child: pw.Text(e.time,
-                    textAlign: pw.TextAlign.right,
-                    style: pw.TextStyle(font: medium, fontSize: 7,
-                        color: _kTextDisabled)),
-              ),
-            ),
-            pw.SizedBox(width: 6),
-            // Dot + connector column
-            pw.SizedBox(
-              width: dotColumnW,
-              child: pw.Stack(
-                alignment: pw.Alignment.topCenter,
-                children: [
-                  // Connector segments — drawn behind the dot.
-                  // Top half (above the dot) — skip on first row.
-                  if (!isFirst)
-                    pw.Positioned(
-                      top: 0,
-                      child: pw.Container(
-                          width: 1.5, height: 8, color: _kDivider),
-                    ),
-                  // Bottom half (below the dot) — skip on last row.
-                  // Fixed height instead of bottom:0 so the Stack has a
-                  // resolvable size — otherwise MultiPage can't lay out.
-                  if (!isLast)
-                    pw.Positioned(
-                      top: 8 + dotSize - 1,
-                      child: pw.Container(
-                          width: 1.5, height: 40, color: _kDivider),
-                    ),
-                  // The dot itself
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.only(top: 6),
-                    child: e.isIgnored
-                        ? pw.Container(
-                      width: dotSize, height: dotSize,
-                      decoration: pw.BoxDecoration(
-                        color: _kBgGrey,
-                        shape: pw.BoxShape.circle,
-                        border: pw.Border.all(
-                            color: _kTextDisabled, width: 0.8),
-                      ),
-                    )
-                        : pw.Container(
-                      width: dotSize, height: dotSize,
-                      decoration: pw.BoxDecoration(
-                        color: e.dotColor,
-                        shape: pw.BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            pw.SizedBox(width: 8),
-            // Content
-            pw.Expanded(
-              child: pw.Padding(
-                padding: pw.EdgeInsets.only(
-                    top: 3,
-                    bottom: isLast ? 0 : 10),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(e.title,
-                        style: pw.TextStyle(
-                            font: e.isBookend ? bold : medium,
-                            fontSize: 9,
-                            color: e.isIgnored
-                                ? _kTextDisabled : _kTextPrimary)),
-                    pw.SizedBox(height: 1),
-                    pw.Text(e.subtitle,
-                        style: pw.TextStyle(font: font, fontSize: 7,
-                            color: e.isIgnored
-                                ? _kTextDisabled
-                                : _kTextSecond)),
-                    if (tip != null) tip,
-                  ],
-                ),
-              ),
-            ),
-          ],
+      // Wrapped in a full-width SizedBox: this is the Stack's one
+      // non-positioned child, so its box size is what the Stack sizes
+      // itself from (see the sizing comment at the top of row()). Stack
+      // gives non-positioned children a LOOSENED constraint specifically
+      // so it can measure each one's own natural size — but a bare Padding
+      // wrapping a start-aligned Column has no reason to claim more than
+      // its own text's natural width under a loose constraint, so it (and
+      // therefore the whole Stack, and the card drawn from its box) was
+      // shrinking to roughly the title/subtitle text width, leaving most
+      // of the page width unused. Re-tightening the constraint here with
+      // an explicit width forces the Column's own box back to full width
+      // — its *children* (the Text widgets, the tip pill) stay unaffected
+      // and naturally left-aligned/sized, since only the Column's own
+      // outer box is being widened, not each child individually.
+      final content = pw.SizedBox(
+        width: double.infinity,
+        child: pw.Padding(
+          padding: pw.EdgeInsets.only(
+              left: leftInset + dotColumnW + contentGap,
+              top: 3,
+              bottom: isLast ? 0 : 10),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(e.title,
+                  style: pw.TextStyle(
+                      font: e.isBookend ? bold : medium,
+                      fontSize: 9,
+                      color: e.isIgnored
+                          ? _kTextDisabled : _kTextPrimary)),
+              pw.SizedBox(height: 1),
+              pw.Text(e.subtitle,
+                  style: pw.TextStyle(font: font, fontSize: 7,
+                      color: e.isIgnored
+                          ? _kTextDisabled
+                          : _kTextSecond)),
+              if (tip != null) tip,
+            ],
+          ),
         ),
+      );
+
+      return pw.Stack(
+        children: [
+          content,
+          // Time label
+          pw.Positioned(
+            left: 0, top: 3,
+            child: pw.SizedBox(
+              width: timeW,
+              child: pw.Text(e.time,
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(font: medium, fontSize: 7,
+                      color: _kTextDisabled)),
+            ),
+          ),
+          // Connector — stretches from this row's dot to the row's real
+          // bottom edge. Skipped on the last row; every other row's tail
+          // meets the next row's top exactly, since rows stack with no gap.
+          if (!isLast)
+            pw.Positioned(
+              left: lineLeft, top: dotTop + dotSize, bottom: 0,
+              child: pw.Container(width: 1.5, color: _kDivider),
+            ),
+          // The dot
+          pw.Positioned(
+            left: dotLeft, top: dotTop,
+            child: e.isIgnored
+                ? pw.Container(
+              width: dotSize, height: dotSize,
+              decoration: pw.BoxDecoration(
+                color: _kBgGrey,
+                shape: pw.BoxShape.circle,
+                border: pw.Border.all(
+                    color: _kTextDisabled, width: 0.8),
+              ),
+            )
+                : pw.Container(
+              width: dotSize, height: dotSize,
+              decoration: pw.BoxDecoration(
+                color: e.dotColor,
+                shape: pw.BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -5114,7 +5244,7 @@ class ExportService {
               top:    i == 0 ? 12 : 0,
               bottom: i == events.length - 1 ? 10 : 0,
             ),
-            child: row(events[i], i == 0, i == events.length - 1),
+            child: row(events[i], i == events.length - 1),
           ),
 
         // Divider before stats (still inside the white card)
@@ -5656,7 +5786,7 @@ class ExportService {
     final minG = trainingGrades.isEmpty
         ? 0.0 : trainingGrades.reduce((a, b) => a < b ? a : b);
 
-    pw.Widget sessionRow(SessionSummary s, int idx, bool isFirst, bool isLast,
+    pw.Widget sessionRow(SessionSummary s, int idx, bool isLast,
         double? prevGrade) {
 
       final isEmg     = s.isEmergency;
@@ -5694,64 +5824,28 @@ class ExportService {
           : 'Grade ${s.totalGrade.toStringAsFixed(0)}% · '
           'CCF ${(s.handsOnRatio * 100).round()}%';
 
-      return pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          // Date column
-          pw.SizedBox(
-            width: 56,
-            child: pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 4),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(s.dateFormatted,
-                      textAlign: pw.TextAlign.right,
-                      style: pw.TextStyle(font: medium, fontSize: 8,
-                          color: _kTextPrimary)),
-                  pw.Text(
-                      s.sessionStart != null
-                          ? '${s.sessionStart!.hour.toString().padLeft(2, '0')}:'
-                          '${s.sessionStart!.minute.toString().padLeft(2, '0')}'
-                          : '',
-                      textAlign: pw.TextAlign.right,
-                      style: pw.TextStyle(font: font, fontSize: 7, color: _kTextDisabled)),
-                ],
-              ),
-            ),
-          ),
-          pw.SizedBox(width: 8),
-          // Dot + connector
-          pw.SizedBox(
-            width: 22,
-            child: pw.Stack(
-              alignment: pw.Alignment.topCenter,
-              children: [
-                if (!isFirst)
-                  pw.Positioned(top: 0,
-                      child: pw.Container(width: 1.5, height: 10,
-                          color: _kDivider)),
-                if (!isLast)
-                  pw.Positioned(top: 24,
-                      child: pw.Container(width: 1.5, height: 50, color: _kDivider)),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.only(top: 8),
-                  child: pw.Container(
-                    width: 14, height: 14,
-                    decoration: pw.BoxDecoration(
-                      color: dotColor,
-                      shape: pw.BoxShape.circle,
-                      border: pw.Border.all(color: _kWhite, width: 1.5),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          pw.SizedBox(width: 10),
-          // Content
-          pw.Expanded(
-            child: pw.Container(
+      // Same fix as the single-session timeline's row() (see its comment):
+      // the content card is the Stack's only non-positioned child, so the
+      // Stack's box height is always the card's real height, and the
+      // connector (top+bottom, not a guessed fixed length) stretches to
+      // match exactly instead of over/under-shooting into neighbor rows.
+      const dateW      = 56.0;
+      const dotColumnW = 22.0;
+      const dotSize    = 14.0;
+      const dotTop     = 8.0;
+      const leftInset  = dateW + 8.0;
+      const dotLeft    = leftInset + (dotColumnW - dotSize) / 2;
+      const lineLeft   = leftInset + dotColumnW / 2 - 0.75;
+
+      // Wrapped in a full-width SizedBox for the same reason as the
+      // single-session timeline's `content` (see its comment): this Padding
+      // is the Stack's non-positioned sizing child, and without a
+      // re-tightened width constraint it — and the bordered card inside it
+      // — shrink to the card's own natural content width instead of
+      // claiming the row's full available width.
+      final card = pw.SizedBox(width: double.infinity, child: pw.Padding(
+        padding: const pw.EdgeInsets.only(left: leftInset + dotColumnW + 10),
+        child: pw.Container(
               margin: pw.EdgeInsets.only(top: 4, bottom: isLast ? 0 : 12),
               padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
               decoration: pw.BoxDecoration(
@@ -5828,6 +5922,53 @@ class ExportService {
                 ],
               ),
             ),
+      ));
+
+      return pw.Stack(
+        children: [
+          card,
+          // Date column
+          pw.Positioned(
+            left: 0, top: 4,
+            child: pw.SizedBox(
+              width: dateW,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(s.dateFormatted,
+                      textAlign: pw.TextAlign.right,
+                      style: pw.TextStyle(font: medium, fontSize: 8,
+                          color: _kTextPrimary)),
+                  pw.Text(
+                      s.sessionStart != null
+                          ? '${s.sessionStart!.hour.toString().padLeft(2, '0')}:'
+                          '${s.sessionStart!.minute.toString().padLeft(2, '0')}'
+                          : '',
+                      textAlign: pw.TextAlign.right,
+                      style: pw.TextStyle(font: font, fontSize: 7, color: _kTextDisabled)),
+                ],
+              ),
+            ),
+          ),
+          // Connector — stretches to the row's real bottom (see
+          // single-session row() comment for why top+bottom, not a fixed
+          // height, is what makes this line meet the next row correctly).
+          if (!isLast)
+            pw.Positioned(
+              left: lineLeft, top: dotTop + dotSize, bottom: 0,
+              child: pw.Container(width: 1.5, color: _kDivider),
+            ),
+          // The dot
+          pw.Positioned(
+            left: dotLeft, top: dotTop,
+            child: pw.Container(
+              width: dotSize, height: dotSize,
+              decoration: pw.BoxDecoration(
+                color: dotColor,
+                shape: pw.BoxShape.circle,
+                border: pw.Border.all(color: _kWhite, width: 1.5),
+              ),
+            ),
           ),
         ],
       );
@@ -5838,7 +5979,7 @@ class ExportService {
     double? prevTrainingGrade;
     for (int i = 0; i < sorted.length; i++) {
       final s = sorted[i];
-      widgets.add(sessionRow(s, i, i == 0, i == sorted.length - 1,
+      widgets.add(sessionRow(s, i, i == sorted.length - 1,
           prevTrainingGrade));
       if (s.isTraining && s.totalGrade > 0) {
         prevTrainingGrade = s.totalGrade;
@@ -6003,13 +6144,22 @@ class ExportService {
     required List<_LegendItem> legend,
     double plotHeight = 100,
     PdfColor? Function(int, double)? dotColor,
+    // When set, every chart in the report shares this as the x-axis range
+    // (0 to session duration) instead of each computing its own end from
+    // wherever its own data happens to stop — otherwise charts whose last
+    // data point lands at a different time (e.g. a chart with a gap near
+    // the end) end up with visibly different axis lengths on the same page.
+    double? xMax,
   }) {
     const double kLeftGutter   = 26;
 
-    // Overall session span for the x axis (max t across all lines).
-    double tMax = 0;
-    for (final l in lines) {
-      for (final p in l.points) { if (p[0] > tMax) tMax = p[0]; }
+    // Overall session span for the x axis (max t across all lines), unless
+    // the caller pins it to the session duration via xMax.
+    double tMax = xMax ?? 0;
+    if (xMax == null) {
+      for (final l in lines) {
+        for (final p in l.points) { if (p[0] > tMax) tMax = p[0]; }
+      }
     }
     if (tMax <= 0) tMax = 1;
 
@@ -6024,12 +6174,38 @@ class ExportService {
       maxY,
     ];
 
-    // X tick times (5 evenly spaced m:ss labels).
+    // X ticks at round intervals, stepped up through the candidate list
+    // until the resulting count is at most 6 — instead of dividing the
+    // span into 4 equal-but-arbitrary fractions, which produced ugly
+    // non-round values (e.g. "1:05") right at the edge. Ticks are then
+    // built as an integer count times the interval, not by repeatedly
+    // adding a double to itself, so the last tick can't drift off its
+    // true value (it can still legitimately fall short of tMax).
+    const xTickCandidates = <double>[5, 10, 15, 30, 60, 120, 300, 600];
+    var xTickInterval = xTickCandidates.first;
+    for (final c in xTickCandidates) {
+      xTickInterval = c;
+      if ((tMax / c).floor() + 1 <= 6) break;
+    }
+    final xTickCount = (tMax / xTickInterval).floor() + 1;
     final xTicks = <double>[
-      for (int i = 0; i <= 4; i++) tMax * i / 4,
+      for (int i = 0; i < xTickCount; i++) i * xTickInterval,
     ];
 
-    return pw.Container(
+    // Wrapped in Inseparable so this chart can never be split across a
+    // page boundary. A plain pw.Container looks non-spanning at a glance,
+    // but Container/DecoratedBox/Padding all mix in SpanningWidget and
+    // delegate canSpan to their child (widget.dart: StatelessWidget.canSpan
+    // and SingleChildWidget.canSpan both do `child is SpanningWidget &&
+    // child.canSpan`) — and this Container's child is a pw.Column, which
+    // IS spanning (Flex.canSpan => direction == Axis.vertical, flex.dart:
+    // 554). So the whole chart — title included — was actually spanning-
+    // capable the entire time, letting MultiPage place the title on one
+    // page and the plot on the next. Inseparable(canSpan: false, the
+    // default) is the one widget in this package that overrides canSpan
+    // outright instead of delegating, which is what genuine atomicity
+    // requires here.
+    return pw.Inseparable(child: pw.Container(
       width:   double.infinity,
       padding: const pw.EdgeInsets.fromLTRB(12, 12, 12, 8),
       decoration: pw.BoxDecoration(
@@ -6057,7 +6233,16 @@ class ExportService {
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
-                // Left value axis
+                // Left value axis. Labels are vertically centered on their
+                // tick by offsetting top by half a line-height (~4pt for
+                // this 6.5pt font) — but for the topmost/bottommost ticks,
+                // that center sits right at the Stack's own edge (fraction
+                // 0 or 1), so the un-clamped offset pushed the label's top
+                // half above y=0 or its bottom half below plotHeight, and
+                // the Stack's default overflow clip sliced it off. Clamping
+                // the center to stay at least half a line-height inside
+                // each edge reserves that padding and keeps every label
+                // fully on-canvas.
                 pw.SizedBox(
                   width: kLeftGutter,
                   child: pw.Stack(
@@ -6065,8 +6250,8 @@ class ExportService {
                       for (final ty in ticks)
                         pw.Positioned(
                           right: 3,
-                          top: (1 - (ty - minY) / (maxY - minY)) *
-                              plotHeight - 4,
+                          top: ((1 - (ty - minY) / (maxY - minY)) * plotHeight)
+                              .clamp(4.0, plotHeight - 4.0) - 4.0,
                           child: pw.Text(yLabel(ty),
                               style: pw.TextStyle(
                                   font: font,
@@ -6093,18 +6278,33 @@ class ExportService {
             ),
           ),
 
-          // Bottom time axis (aligned under the plot, offset by gutter)
+          // Bottom time axis (aligned under the plot, offset by gutter).
+          // Labels sit at their real proportional position — Expanded
+          // segments sized to the actual gap (in seconds) between
+          // consecutive ticks, plus a trailing segment for any remainder
+          // after the last tick — rather than being spread evenly by
+          // index, which would misplace them once ticks stop landing
+          // exactly on the axis end (see xTickInterval above).
           pw.Padding(
             padding: const pw.EdgeInsets.only(left: kLeftGutter, top: 2),
             child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                for (final tx in xTicks)
-                  pw.Text(_mmss(tx.round()),
+                for (int i = 0; i < xTicks.length; i++) ...[
+                  pw.Text(_mmss(xTicks[i].round()),
                       style: pw.TextStyle(
                           font: font,
                           fontSize: 6.5,
                           color: _kTextDisabled)),
+                  if (i < xTicks.length - 1 && xTicks[i + 1] > xTicks[i])
+                    pw.Expanded(
+                        flex: (xTicks[i + 1] - xTicks[i]).round(),
+                        child: pw.SizedBox()),
+                ],
+                if (xTicks.isNotEmpty && tMax > xTicks.last)
+                  pw.Expanded(
+                      flex: (tMax - xTicks.last).round(),
+                      child: pw.SizedBox()),
               ],
             ),
           ),
@@ -6142,7 +6342,7 @@ class ExportService {
           ],
         ],
       ),
-    );
+    ));
   }
 
   /// The single plot painter — gridlines, band, guides, every line, dots.
@@ -6177,7 +6377,44 @@ class ExportService {
     }
     canvas.restoreContext();
 
-    // Target band.
+    // Dashed guide lines.
+    for (final g in guides) {
+      final gy = yOf(g.y);
+      var dx = 0.0;
+      while (dx < size.x) {
+        canvas.saveContext();
+        canvas.setStrokeColor(g.color);
+        canvas.setLineWidth(0.6);
+        canvas.moveTo(dx, gy);
+        canvas.lineTo((dx + 4.0) < size.x ? dx + 4.0 : size.x, gy);
+        canvas.strokePath();
+        canvas.restoreContext();
+        dx += 7.0;
+      }
+    }
+
+    // Area fill (drawn BEFORE the target band, so the band sits visibly on
+    // top of it instead of being painted over — the fill used to be an
+    // opaque lightened color via .shade(), which fully hid the band. Real
+    // alpha via setGraphicState + the line's own full-saturation color
+    // matches how fl_chart's area fills look in session_results_charts.dart.
+    for (final l in lines) {
+      if (l.points.length < 2 || !l.fill) continue;
+      canvas.saveContext();
+      canvas.setGraphicState(const PdfGraphicState(fillOpacity: 0.12));
+      canvas.setFillColor(l.color);
+      canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
+      for (final p in l.points) {
+        canvas.lineTo(xOf(p[0]), yOf(p[1]));
+      }
+      canvas.lineTo(xOf(l.points.last[0]), 0);
+      canvas.lineTo(xOf(l.points.first[0]), 0);
+      canvas.closePath();
+      canvas.fillPath();
+      canvas.restoreContext();
+    }
+
+    // Target band — on top of the (now-transparent) fill, at full opacity.
     if (band != null) {
       final top = yOf(band.max);
       final h   = yOf(band.min) - top;
@@ -6207,40 +6444,10 @@ class ExportService {
       }
     }
 
-    // Dashed guide lines.
-    for (final g in guides) {
-      final gy = yOf(g.y);
-      var dx = 0.0;
-      while (dx < size.x) {
-        canvas.saveContext();
-        canvas.setStrokeColor(g.color);
-        canvas.setLineWidth(0.6);
-        canvas.moveTo(dx, gy);
-        canvas.lineTo((dx + 4.0) < size.x ? dx + 4.0 : size.x, gy);
-        canvas.strokePath();
-        canvas.restoreContext();
-        dx += 7.0;
-      }
-    }
-
-    // Lines (+ optional area fill on the first line only).
+    // Lines and dots — full opacity, on top of fill and band.
     for (int li = 0; li < lines.length; li++) {
       final l = lines[li];
       if (l.points.length < 2) continue;
-
-      if (l.fill) {
-        canvas.saveContext();
-        canvas.setFillColor(l.color.shade(0.08));
-        canvas.moveTo(xOf(l.points[0][0]), yOf(l.points[0][1]));
-        for (final p in l.points) {
-          canvas.lineTo(xOf(p[0]), yOf(p[1]));
-        }
-        canvas.lineTo(xOf(l.points.last[0]), 0);
-        canvas.lineTo(xOf(l.points.first[0]), 0);
-        canvas.closePath();
-        canvas.fillPath();
-        canvas.restoreContext();
-      }
 
       canvas.saveContext();
       canvas.setStrokeColor(l.color);

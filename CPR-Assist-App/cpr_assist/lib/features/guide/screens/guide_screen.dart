@@ -10,13 +10,15 @@ import 'package:cpr_assist/core/core.dart';
 // Hub-and-detail CPR reference. No login required.
 //
 // Structure:
-//   GuideScreen                  ← hub with chain-of-survival banner + 5 cards
-//   _GuideDetailScreen           ← reusable pushed-screen shell
-//   _CompressionsDetailScreen    ← hand placement · rate · depth · 30:2 · breaths
-//   _AedDetailScreen             ← what it is · pad placement · 6-step use
-//   _QuickStepsDetailScreen      ← 8-step sequential checklist
-//   _PediatricDetailScreen       ← photo pair + comparison table
-//   _StopRecoveryDetailScreen    ← stop criteria + recovery position
+//   GuideScreen                     ← hub with chain-of-survival banner + 5 cards
+//   _GuideDetailScreen              ← single-scroll pushed-screen shell
+//   _GuideTabbedDetailScreen        ← tabbed pushed-screen shell (dense hubs)
+//   _CompressionsDetailScreen       ← tabbed: hands · rate & depth · breathing
+//   _AedDetailScreen                ← tabbed: use it · pads · special cases
+//   _QuickStepsDetailScreen         ← 8-step sequential checklist
+//   _SpecialSituationsDetailScreen  ← pediatric table + drowning/pregnancy/
+//                                      overdose/hypothermia situation cards
+//   _StopRecoveryDetailScreen       ← stop criteria + recovery position
 //
 // Shared widgets (reused across detail screens):
 //   _PhotoCard          ← image with gradient caption overlay
@@ -26,12 +28,15 @@ import 'package:cpr_assist/core/core.dart';
 //   _SuccessBanner      ← green note row
 //   _BulletList         ← dot bullets
 //   _StepRailList       ← numbered step rail (used for CPR steps + AED steps)
+//   _ChainStepList       ← connected timeline rail (chain of survival links)
 //   _RateGaugeBar       ← 100–120 /min gauge
 //   _DepthGaugeBar      ← 5–6 cm depth gauge
 //   _RatioBox           ← 30 : 2 large-number display
+//   _StatTilePair       ← two big-number tiles side by side
+//   _SituationCard      ← icon + title + one-line scannable call-out
 //   _PadPlacementSVG    ← torso + pad schematic
 //   _PediatricTable     ← adult vs infant vs child comparison
-//   _WhenToStopCard     ← keep-going / stop-when split card
+//   _WhenToStopCard     ← keep-going / stop-when two-column comparison
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -122,7 +127,7 @@ class GuideScreen extends StatelessWidget {
                         title: 'Special situations',
                         heroHeight: AppSpacing.guideHubSmH,
                         onTap: () =>
-                            context.push(const _PediatricDetailScreen()),
+                            context.push(const _SpecialSituationsDetailScreen()),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -177,67 +182,62 @@ class _ChainOfSurvivalScreen extends StatelessWidget {
           text: 'Every minute without CPR reduces survival by ~10%...',
         ),
         SizedBox(height: AppSpacing.sm),
-        _ChainLinkCard(
-          number: 1,
-          color: AppColors.warning,
-          icon: Icons.phone_in_talk_rounded,
-          title: 'Prevention & early recognition',
-          goal: 'Prevent or detect cardiac arrest early',
-          timeTarget: 'Before and within the first 1–2 minutes',
-          points: [
-            'Learn CPR and keep your skills current',
-            'Recognise warning signs: chest pain, breathlessness, collapse',
-            'If unresponsive and not breathing normally — treat as cardiac arrest',
-            'Call 112 immediately, put on speakerphone, start CPR',
-            'Delegate: "You — call 112. You — get the AED"',
-          ],
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _ChainLinkCard(
-          number: 2,
-          color: AppColors.primary,
-          icon: Icons.favorite_rounded,
-          title: 'Early CPR & defibrillation',
-          goal: 'Preserve brain & restart the heart',
-          timeTarget: 'Start within 2–3 minutes of collapse',
-          points: [
-            '30 chest compressions at 100–120 /min, 5–6 cm deep',
-            'Full chest recoil between compressions',
-            '2 rescue breaths after every 30 compressions',
-            'Use AED as soon as it arrives — do not pause CPR to wait for it',
-            'Do not pause CPR until the AED is attached and ready to analyse',
-            'Each minute of delay to defibrillation reduces survival ~10%',
-          ],
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _ChainLinkCard(
-          number: 3,
-          color: AppColors.emergency,
-          icon: Icons.local_hospital_rounded,
-          title: 'Advanced & post resuscitation care',
-          goal: 'Optimise brain & heart function',
-          timeTarget: 'From EMS arrival onward',
-          points: [
-            'EMS takes over with advanced airway and IV medications',
-            'Targeted temperature management may be used after ROSC',
-            'Coronary angiography if cardiac cause suspected',
-          ],
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _ChainLinkCard(
-          number: 4,
-          color: AppColors.success,
-          icon: Icons.self_improvement_rounded,
-          title: 'Survival & recovery',
-          goal: 'Restore quality of life',
-          timeTarget: 'Hours to months after the event',
-          points: [
-            'Neurological and cardiac rehabilitation begins in ICU',
-            'Cognitive, physical, and emotional recovery may take months',
-            'Psychological support for both survivor and bystander rescuers',
-            'Many survivors return to normal daily activities with proper follow-up',
-          ],
-        ),
+        _ChainStepList(steps: [
+          _ChainStepData(
+            color: AppColors.warning,
+            icon: Icons.phone_in_talk_rounded,
+            title: 'Prevention & early recognition',
+            goal: 'Prevent or detect cardiac arrest early',
+            timeTarget: 'Before and within the first 1–2 minutes',
+            points: [
+              'Learn CPR and keep your skills current',
+              'Recognise warning signs: chest pain, breathlessness, collapse',
+              'If unresponsive and not breathing normally — treat as cardiac arrest',
+              'Call 112 immediately, put on speakerphone, start CPR',
+              'Delegate: "You — call 112. You — get the AED"',
+            ],
+          ),
+          _ChainStepData(
+            color: AppColors.primary,
+            icon: Icons.favorite_rounded,
+            title: 'Early CPR & defibrillation',
+            goal: 'Preserve brain & restart the heart',
+            timeTarget: 'Start within 2–3 minutes of collapse',
+            points: [
+              '30 chest compressions at 100–120 /min, 5–6 cm deep',
+              'Full chest recoil between compressions',
+              '2 rescue breaths after every 30 compressions',
+              'Use AED as soon as it arrives — do not pause CPR to wait for it',
+              'Do not pause CPR until the AED is attached and ready to analyse',
+              'Each minute of delay to defibrillation reduces survival ~10%',
+            ],
+          ),
+          _ChainStepData(
+            color: AppColors.emergency,
+            icon: Icons.local_hospital_rounded,
+            title: 'Advanced & post resuscitation care',
+            goal: 'Optimise brain & heart function',
+            timeTarget: 'From EMS arrival onward',
+            points: [
+              'EMS takes over with advanced airway and IV medications',
+              'Targeted temperature management may be used after ROSC',
+              'Coronary angiography if cardiac cause suspected',
+            ],
+          ),
+          _ChainStepData(
+            color: AppColors.success,
+            icon: Icons.self_improvement_rounded,
+            title: 'Survival & recovery',
+            goal: 'Restore quality of life',
+            timeTarget: 'Hours to months after the event',
+            points: [
+              'Neurological and cardiac rehabilitation begins in ICU',
+              'Cognitive, physical, and emotional recovery may take months',
+              'Psychological support for both survivor and bystander rescuers',
+              'Many survivors return to normal daily activities with proper follow-up',
+            ],
+          ),
+        ]),
         SizedBox(height: AppSpacing.sm),
         _InfoBanner(
           text: 'Source: European Resuscitation Council Guidelines 2025',
@@ -248,8 +248,7 @@ class _ChainOfSurvivalScreen extends StatelessWidget {
   }
 }
 
-class _ChainLinkCard extends StatelessWidget {
-  final int number;
+class _ChainStepData {
   final Color color;
   final IconData icon;
   final String title;
@@ -257,8 +256,7 @@ class _ChainLinkCard extends StatelessWidget {
   final String timeTarget;
   final List<String> points;
 
-  const _ChainLinkCard({
-    required this.number,
+  const _ChainStepData({
     required this.color,
     required this.icon,
     required this.title,
@@ -266,66 +264,106 @@ class _ChainLinkCard extends StatelessWidget {
     required this.timeTarget,
     required this.points,
   });
+}
+
+/// A connected vertical timeline — each link's icon circle joined to the
+/// next by a rail line, reusing the _StepRailRow visual so the four links
+/// read as one chain instead of four floating cards.
+class _ChainStepList extends StatelessWidget {
+  final List<_ChainStepData> steps;
+
+  const _ChainStepList({required this.steps});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: AppDecorations.card(),
-      child: Column(
+    return Column(
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          _ChainStepRow(data: steps[i], isLast: i == steps.length - 1),
+      ],
+    );
+  }
+}
+
+class _ChainStepRow extends StatelessWidget {
+  final _ChainStepData data;
+  final bool isLast;
+
+  const _ChainStepRow({required this.data, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: AppSpacing.iconBoxSize,
-                height: AppSpacing.iconBoxSize,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+          SizedBox(
+            width: AppSpacing.guideStepRail,
+            child: Column(
+              children: [
+                Container(
+                  width: AppSpacing.guideChainIcon,
+                  height: AppSpacing.guideChainIcon,
+                  decoration: AppDecorations.iconCircle(bg: data.color),
+                  child: Icon(data.icon,
+                      size: AppSpacing.iconSm, color: AppColors.textOnDark),
                 ),
-                child: Center(
-                  child: Text(
-                    '$number',
-                    style: AppTypography.heading(size: 15, color: color),
+                if (!isLast)
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: 1.5,
+                        color: data.color.withValues(alpha: 0.25),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.md),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                decoration: AppDecorations.card(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: AppTypography.bodyMedium(size: 14, color: AppColors.textPrimary)),
+                    Text(data.title,
+                        style: AppTypography.bodyMedium(
+                            size: 14, color: AppColors.textPrimary)),
                     const SizedBox(height: AppSpacing.xxs),
                     Row(
                       children: [
-                        Icon(Icons.flag_outlined, size: 11, color: color),
+                        Icon(Icons.flag_outlined, size: 11, color: data.color),
                         const SizedBox(width: AppSpacing.xxs),
                         Expanded(
-                          child: Text(goal,
-                              style: AppTypography.label(size: 11, color: color)),
+                          child: Text(data.goal,
+                              style: AppTypography.label(
+                                  size: 11, color: data.color)),
                         ),
                       ],
                     ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        const Icon(Icons.schedule_rounded,
+                            size: 11, color: AppColors.textSecondary),
+                        const SizedBox(width: AppSpacing.xxs),
+                        Text(data.timeTarget,
+                            style: AppTypography.body(
+                                size: 11, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _BulletList(color: data.color, items: data.points),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              const Icon(Icons.schedule_rounded, size: 11, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.xxs),
-              Text(timeTarget,
-                  style: AppTypography.body(size: 11, color: AppColors.textSecondary)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _BulletList(color: color, items: points),
         ],
       ),
     );
@@ -600,6 +638,228 @@ class _GuideDetailScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// _GuideTabbedDetailScreen — pushed-screen shell with a segmented TabBar,
+// for hubs dense enough to split into topics (Compressions, AED).
+// TabBar styling mirrors _TabBarWidget in session_results_layout.dart.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _GuideTabbedDetailScreen extends StatefulWidget {
+  final String title;
+  final Color accentColor;
+  final List<String> tabLabels;
+  final List<List<Widget>> tabChildren;
+
+  const _GuideTabbedDetailScreen({
+    required this.title,
+    required this.accentColor,
+    required this.tabLabels,
+    required this.tabChildren,
+  });
+
+  @override
+  State<_GuideTabbedDetailScreen> createState() =>
+      _GuideTabbedDetailScreenState();
+}
+
+class _GuideTabbedDetailScreenState extends State<_GuideTabbedDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: widget.tabChildren.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.paddingOf(context).bottom;
+
+    return Scaffold(
+      backgroundColor: AppColors.screenBgGrey,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: AppColors.shadowDefault,
+        toolbarHeight: AppSpacing.headerHeight,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: AppColors.primary, size: AppSpacing.iconMd),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(widget.title, style: AppTypography.heading(size: 18)),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+                boxShadow: AppDecorations.card().boxShadow,
+              ),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: widget.accentColor,
+                unselectedLabelColor: AppColors.textDisabled,
+                indicatorColor: widget.accentColor,
+                indicatorWeight: 2.5,
+                dividerColor: AppColors.divider,
+                labelStyle:
+                    AppTypography.badge(size: 11, color: widget.accentColor),
+                unselectedLabelStyle:
+                    AppTypography.badge(size: 11, color: AppColors.textDisabled),
+                tabs: [for (final l in widget.tabLabels) Tab(text: l)],
+              ),
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                for (final children in widget.tabChildren)
+                  ListView(
+                    padding: EdgeInsets.only(
+                      top: AppSpacing.sm,
+                      left: AppSpacing.md,
+                      right: AppSpacing.md,
+                      bottom: bottomPad + AppSpacing.xxl,
+                    ),
+                    children: children,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _StatTile / _StatTilePair — two big-number tiles side by side
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatTile {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+
+  const _StatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+}
+
+class _StatTilePair extends StatelessWidget {
+  final _StatTile left;
+  final _StatTile right;
+
+  const _StatTilePair({required this.left, required this.right});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _StatTileBox(data: left)),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: _StatTileBox(data: right)),
+      ],
+    );
+  }
+}
+
+class _StatTileBox extends StatelessWidget {
+  final _StatTile data;
+  const _StatTileBox({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: data.color,
+        borderRadius: BorderRadius.circular(AppSpacing.cardRadiusLg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(data.icon, size: AppSpacing.iconMd, color: AppColors.textOnDark),
+          const SizedBox(height: AppSpacing.xs),
+          Text(data.value,
+              style: AppTypography.numericDisplay(
+                  size: 24, color: AppColors.textOnDark)),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(data.label,
+              style: AppTypography.caption(
+                  color: AppColors.textOnDark.withValues(alpha: 0.85))),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _SituationCard — icon + title + one-line note, colored left accent.
+// Used for scannable "watch out for X" call-outs (AED edge cases, special
+// situations) where a dense bullet list would be slower to scan under stress.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SituationCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String note;
+
+  const _SituationCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.note,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm + AppSpacing.xs),
+      decoration: AppDecorations.accentCard(accentColor: color),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: AppSpacing.iconSm, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.bodyMedium(size: 13)),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(note,
+                    style: AppTypography.body(
+                        size: 12, color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DETAIL SCREEN 1 — Compressions & breathing
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -608,123 +868,141 @@ class _CompressionsDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _GuideDetailScreen(
+    return const _GuideTabbedDetailScreen(
       title: 'Compressions & breathing',
       accentColor: AppColors.primary,
-      children: [
-        // ── Hand placement photo + notes ──────────────────────────────────
-        _PhotoCard(
-          assetPath: 'assets/icons/guide/detail_hand_placement.png',
-          caption: 'Heel of hand · lower sternum · arms locked straight',
-          tint: AppColors.primary,
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _SectionCard(
-          titleIcon: Icons.pan_tool_rounded,
-          titleIconColor: AppColors.primary,
-          title: 'Hand placement',
-          child: Column(
-            children: [
-              _BulletRow(
-                color: AppColors.primary,
-                title: 'Dominant hand heel on lower half of sternum',
-                body: 'Not on ribs or the xiphoid process',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _BulletRow(
-                color: AppColors.primary,
-                title: 'Second hand on top, fingers interlaced and raised',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _BulletRow(
-                color: AppColors.primary,
-                title: 'Arms straight, shoulders over hands, use body weight',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _WarnBanner(
-                text:
-                'Hands on ribs or too low risk fracture — stay on the sternum',
-              ),
-            ],
+      tabLabels: ['HANDS', 'RATE & DEPTH', 'BREATHING'],
+      tabChildren: [
+        // ── Tab 1: Hand placement ────────────────────────────────────────
+        [
+          _PhotoCard(
+            assetPath: 'assets/icons/guide/detail_hand_placement.png',
+            caption: 'Heel of hand · lower sternum · arms locked straight',
+            tint: AppColors.primary,
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
+          SizedBox(height: AppSpacing.sm),
+          _SectionCard(
+            titleIcon: Icons.pan_tool_rounded,
+            titleIconColor: AppColors.primary,
+            title: 'Hand placement',
+            child: Column(
+              children: [
+                _BulletRow(
+                  color: AppColors.primary,
+                  title: 'Dominant hand heel on lower half of sternum',
+                  body: 'Not on ribs or the xiphoid process',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _BulletRow(
+                  color: AppColors.primary,
+                  title: 'Second hand on top, fingers interlaced and raised',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _BulletRow(
+                  color: AppColors.primary,
+                  title: 'Arms straight, shoulders over hands, use body weight',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _WarnBanner(
+                  text:
+                  'Hands on ribs or too low risk fracture — stay on the sternum',
+                ),
+              ],
+            ),
+          ),
+        ],
 
-        // ── Rate gauge ────────────────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.speed_rounded,
-          titleIconColor: AppColors.primary,
-          title: 'Compression rate',
-          child: Column(
-            children: [
-              _RateGaugeBar(),
-              SizedBox(height: AppSpacing.sm),
-              _InfoBanner(
-                text:
-                '"Stayin\' Alive" rhythm is 103 BPM — or count aloud: 1-and-2-and-3…',
-              ),
-            ],
+        // ── Tab 2: Rate & depth ──────────────────────────────────────────
+        [
+          _StatTilePair(
+            left: _StatTile(
+              icon: Icons.speed_rounded,
+              value: '100–120',
+              label: 'compressions / min',
+              color: AppColors.primary,
+            ),
+            right: _StatTile(
+              icon: Icons.straighten_rounded,
+              value: '5–6',
+              label: 'cm deep',
+              color: AppColors.primaryAlt,
+            ),
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
+          SizedBox(height: AppSpacing.sm),
+          _SectionCard(
+            titleIcon: Icons.speed_rounded,
+            titleIconColor: AppColors.primary,
+            title: 'Compression rate',
+            child: Column(
+              children: [
+                _RateGaugeBar(),
+                SizedBox(height: AppSpacing.sm),
+                _InfoBanner(
+                  text:
+                  '"Stayin\' Alive" rhythm is 103 BPM — or count aloud: 1-and-2-and-3…',
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          _SectionCard(
+            titleIcon: Icons.straighten_rounded,
+            titleIconColor: AppColors.primary,
+            title: 'Compression depth',
+            child: Column(
+              children: [
+                _DepthGaugeBar(),
+                SizedBox(height: AppSpacing.sm),
+                _BulletRow(
+                  color: AppColors.primary,
+                  title: 'Full chest recoil between compressions',
+                  body: 'Do not lean on the chest between compressions',
+                ),
+              ],
+            ),
+          ),
+        ],
 
-        // ── Depth gauge ───────────────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.straighten_rounded,
-          titleIconColor: AppColors.primary,
-          title: 'Compression depth',
-          child: Column(
-            children: [
-              _DepthGaugeBar(),
-              SizedBox(height: AppSpacing.sm),
-              _BulletRow(
-                color: AppColors.primary,
-                title: 'Full chest recoil between compressions',
-                body: 'Do not lean on the chest between compressions',
-              ),
-            ],
+        // ── Tab 3: Breathing ─────────────────────────────────────────────
+        [
+          _SectionCard(
+            titleIcon: Icons.refresh_rounded,
+            titleIconColor: AppColors.primary,
+            title: '30 : 2 cycle',
+            child: Column(
+              children: [
+                _RatioBox(),
+                SizedBox(height: AppSpacing.md),
+                _PhotoCard(
+                  assetPath: 'assets/guide/detail_rescue_breath.jpg',
+                  caption: 'Head tilt · chin lift · pinch nose · seal mouth',
+                  tint: AppColors.primaryAlt,
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _BulletRow(
+                  color: AppColors.primaryAlt,
+                  title: 'Head tilt, chin lift — open airway before each breath',
+                ),
+                SizedBox(height: AppSpacing.xs),
+                _BulletRow(
+                  color: AppColors.primaryAlt,
+                  title: 'Pinch nose · seal lips · ~1 second breath',
+                  body: 'Watch for visible chest rise — do not over-inflate',
+                ),
+                SizedBox(height: AppSpacing.xs),
+                _BulletRow(
+                  color: AppColors.primaryAlt,
+                  title: 'Both breaths in under 5 seconds total',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _InfoBanner(
+                  text:
+                  'Untrained or reluctant? Skip breaths — continuous compressions still save lives',
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
-
-        // ── 30:2 + rescue breath ──────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.refresh_rounded,
-          titleIconColor: AppColors.primary,
-          title: '30 : 2 cycle',
-          child: Column(
-            children: [
-              _RatioBox(),
-              SizedBox(height: AppSpacing.md),
-              _PhotoCard(
-                assetPath: 'assets/guide/detail_rescue_breath.jpg',
-                caption: 'Head tilt · chin lift · pinch nose · seal mouth',
-                tint: AppColors.primaryAlt,
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _BulletRow(
-                color: AppColors.primaryAlt,
-                title: 'Head tilt, chin lift — open airway before each breath',
-              ),
-              SizedBox(height: AppSpacing.xs),
-              _BulletRow(
-                color: AppColors.primaryAlt,
-                title: 'Pinch nose · seal lips · ~1 second breath',
-                body: 'Watch for visible chest rise — do not over-inflate',
-              ),
-              SizedBox(height: AppSpacing.xs),
-              _BulletRow(
-                color: AppColors.primaryAlt,
-                title: 'Both breaths in under 5 seconds total',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _InfoBanner(
-                text:
-                'Untrained or reluctant? Skip breaths — continuous compressions still save lives',
-              ),
-            ],
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -739,136 +1017,160 @@ class _AedDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _GuideDetailScreen(
+    return const _GuideTabbedDetailScreen(
       title: 'AED',
       accentColor: AppColors.warning,
-      children: [
-        // ── What it looks like ────────────────────────────────────────────
-        _PhotoCard(
-          assetPath: 'assets/guide/detail_aed_cabinet.jpg',
-          caption: 'Bright yellow or green cabinet — often on walls in public spaces',
-          tint: AppColors.warning,
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _SectionCard(
-          titleIcon: Icons.bolt_rounded,
-          titleIconColor: AppColors.warning,
-          title: 'What is an AED?',
-          child: Column(
-            children: [
-              _BulletRow(
-                color: AppColors.warning,
-                title: 'Analyses heart rhythm automatically',
-                body: 'Shocks only if a shockable rhythm is detected',
-              ),
-              SizedBox(height: AppSpacing.xs),
-              _BulletRow(
-                color: AppColors.warning,
-                title: 'Cannot harm a healthy heart — safe for anyone',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _WarnBanner(
-                text:
-                'Use this app\'s AED map to find the nearest device before you need it',
-                icon: Icons.map_outlined,
-              ),
-            ],
+      tabLabels: ['USE IT', 'PADS', 'SPECIAL CASES'],
+      tabChildren: [
+        // ── Tab 1: What it is + how to use it ───────────────────────────
+        [
+          _PhotoCard(
+            assetPath: 'assets/guide/detail_aed_cabinet.jpg',
+            caption: 'Bright yellow or green cabinet — often on walls in public spaces',
+            tint: AppColors.warning,
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
-
-        // ── Pad placement ─────────────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.dashboard_outlined,
-          titleIconColor: AppColors.warning,
-          title: 'Pad placement',
-          child: Column(
-            children: [
-              _PadPlacementSVG(),
-              SizedBox(height: AppSpacing.sm),
-              _BulletRow(
-                color: AppColors.warning,
-                title: 'Pad ①  below right collarbone, right of sternum',
-              ),
-              SizedBox(height: AppSpacing.xs),
-              _BulletRow(
-                color: AppColors.warning,
-                title: 'Pad ②  left side, below the armpit on the ribcage',
-              ),
-              SizedBox(height: AppSpacing.xs),
-              _BulletRow(
-                color: AppColors.warning,
-                title: 'Dry the chest first — moisture cuts effectiveness',
-              ),
-              SizedBox(height: AppSpacing.sm),
-              _WarnBanner(
-                text:
-                'Remove pacemaker patches, bra underwires, and medication patches before placing pads',
-              ),
-            ],
+          SizedBox(height: AppSpacing.sm),
+          _SectionCard(
+            titleIcon: Icons.bolt_rounded,
+            titleIconColor: AppColors.warning,
+            title: 'What is an AED?',
+            child: Column(
+              children: [
+                _BulletRow(
+                  color: AppColors.warning,
+                  title: 'Analyses heart rhythm automatically',
+                  body: 'Shocks only if a shockable rhythm is detected',
+                ),
+                SizedBox(height: AppSpacing.xs),
+                _BulletRow(
+                  color: AppColors.warning,
+                  title: 'Cannot harm a healthy heart — safe for anyone',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _WarnBanner(
+                  text:
+                  'Use this app\'s AED map to find the nearest device before you need it',
+                  icon: Icons.map_outlined,
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
+          SizedBox(height: AppSpacing.sm),
+          _SectionCard(
+            titleIcon: Icons.list_alt_rounded,
+            titleIconColor: AppColors.warning,
+            title: 'How to use it — follow voice prompts',
+            child: _StepRailList(steps: [
+              _StepData(
+                color: AppColors.success,
+                title: 'Power on',
+                body: 'Open the case — most power on automatically',
+              ),
+              _StepData(
+                color: AppColors.primary,
+                title: 'Expose & prepare chest',
+                body: 'Remove clothing, dry skin, remove patches',
+              ),
+              _StepData(
+                color: AppColors.warning,
+                title: 'Attach pads as shown',
+                body: 'Press firmly for full skin contact',
+              ),
+              _StepData(
+                color: AppColors.emergency,
+                title: 'Stand clear — analysis',
+                body: 'Shout "Stand clear" · nobody touches the patient',
+              ),
+              _StepData(
+                color: AppColors.emergency,
+                title: 'Deliver shock if advised',
+                body: 'Press the flashing button when prompted',
+              ),
+              _StepData(
+                color: AppColors.primary,
+                title: 'Immediately resume CPR',
+                body: 'Within 10 seconds of the shock',
+              ),
+            ]),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          _InfoBanner(
+            text:
+            'Keep pads on and AED switched on throughout — it will re-analyse every 2 minutes',
+          ),
+        ],
 
-        // ── AED usage steps ───────────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.list_alt_rounded,
-          titleIconColor: AppColors.warning,
-          title: 'How to use it — follow voice prompts',
-          child: _StepRailList(steps: [
-            _StepData(
-              color: AppColors.success,
-              title: 'Power on',
-              body: 'Open the case — most power on automatically',
+        // ── Tab 2: Pad placement ─────────────────────────────────────────
+        [
+          _SectionCard(
+            titleIcon: Icons.dashboard_outlined,
+            titleIconColor: AppColors.warning,
+            title: 'Pad placement',
+            child: Column(
+              children: [
+                _PadPlacementSVG(),
+                SizedBox(height: AppSpacing.sm),
+                _BulletRow(
+                  color: AppColors.warning,
+                  title: 'Pad ①  below right collarbone, right of sternum',
+                ),
+                SizedBox(height: AppSpacing.xs),
+                _BulletRow(
+                  color: AppColors.warning,
+                  title: 'Pad ②  left side, below the armpit on the ribcage',
+                ),
+                SizedBox(height: AppSpacing.xs),
+                _BulletRow(
+                  color: AppColors.warning,
+                  title: 'Dry the chest first — moisture cuts effectiveness',
+                ),
+                SizedBox(height: AppSpacing.sm),
+                _WarnBanner(
+                  text:
+                  'Remove pacemaker patches, bra underwires, and medication patches before placing pads',
+                ),
+              ],
             ),
-            _StepData(
-              color: AppColors.primary,
-              title: 'Expose & prepare chest',
-              body: 'Remove clothing, dry skin, remove patches',
-            ),
-            _StepData(
-              color: AppColors.warning,
-              title: 'Attach pads as shown',
-              body: 'Press firmly for full skin contact',
-            ),
-            _StepData(
-              color: AppColors.emergency,
-              title: 'Stand clear — analysis',
-              body: 'Shout "Stand clear" · nobody touches the patient',
-            ),
-            _StepData(
-              color: AppColors.emergency,
-              title: 'Deliver shock if advised',
-              body: 'Press the flashing button when prompted',
-            ),
-            _StepData(
-              color: AppColors.primary,
-              title: 'Immediately resume CPR',
-              body: 'Within 10 seconds of the shock',
-            ),
-          ]),
-        ),
-        SizedBox(height: AppSpacing.sm),
+          ),
+        ],
 
-        // ── Special situations ────────────────────────────────────────────
-        _SectionCard(
-          titleIcon: Icons.warning_amber_rounded,
-          titleIconColor: AppColors.warning,
-          title: 'Special situations',
-          child: _BulletList(items: [
-            'Pacemaker / ICD: place pads at least 8 cm from the device',
-            'Wet skin: dry first — move to a dry surface if possible',
-            'Pregnant: AED is safe — shock does not reach the fetus',
-            'Hairy chest: shave briefly if a razor is included',
-            'Children 1–8 yr: pediatric pads if available. Infants <1 yr: prioritise CPR.',
-          ]),
-        ),
-        SizedBox(height: AppSpacing.sm),
-
-        _InfoBanner(
-          text:
-          'Keep pads on and AED switched on throughout — it will re-analyse every 2 minutes',
-        ),
+        // ── Tab 3: Special cases ─────────────────────────────────────────
+        [
+          _SituationCard(
+            icon: Icons.favorite_border_rounded,
+            color: AppColors.warning,
+            title: 'Pacemaker / ICD',
+            note: 'Place pads at least 8 cm from the device',
+          ),
+          SizedBox(height: AppSpacing.xs),
+          _SituationCard(
+            icon: Icons.water_drop_outlined,
+            color: AppColors.warning,
+            title: 'Wet skin',
+            note: 'Dry first — move to a dry surface if possible',
+          ),
+          SizedBox(height: AppSpacing.xs),
+          _SituationCard(
+            icon: Icons.pregnant_woman_rounded,
+            color: AppColors.warning,
+            title: 'Pregnant',
+            note: 'AED is safe — the shock does not reach the fetus',
+          ),
+          SizedBox(height: AppSpacing.xs),
+          _SituationCard(
+            icon: Icons.content_cut_rounded,
+            color: AppColors.warning,
+            title: 'Hairy chest',
+            note: 'Shave briefly if a razor is included in the kit',
+          ),
+          SizedBox(height: AppSpacing.xs),
+          _SituationCard(
+            icon: Icons.child_care_rounded,
+            color: AppColors.warning,
+            title: 'Children 1–8 yr / infants <1 yr',
+            note: 'Pediatric pads if available. For infants, prioritise CPR.',
+          ),
+        ],
       ],
     );
   }
@@ -948,13 +1250,13 @@ class _QuickStepsDetailScreen extends StatelessWidget {
 // DETAIL SCREEN 4 — Pediatric
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _PediatricDetailScreen extends StatelessWidget {
-  const _PediatricDetailScreen();
+class _SpecialSituationsDetailScreen extends StatelessWidget {
+  const _SpecialSituationsDetailScreen();
 
   @override
   Widget build(BuildContext context) {
     return _GuideDetailScreen(
-      title: 'Pediatric',
+      title: 'Special situations',
       accentColor: AppColors.pediatric,
       children: [
         // Two photos side by side
@@ -1004,6 +1306,60 @@ class _PediatricDetailScreen extends StatelessWidget {
           'No pediatric pads available? Adult pads are acceptable — better than no shock',
           accentColor: AppColors.pediatric,
         ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // ── Other special situations ──────────────────────────────────────
+        const _SectionCard(
+          titleIcon: Icons.warning_amber_rounded,
+          titleIconColor: AppColors.pediatric,
+          title: 'Other special situations',
+          child: Column(
+            children: [
+              _SituationCard(
+                icon: Icons.waves_rounded,
+                color: AppColors.pediatric,
+                title: 'Drowning / water rescue',
+                note:
+                'Give 5 initial rescue breaths before starting compressions — '
+                'the cause is usually respiratory, not cardiac',
+              ),
+              SizedBox(height: AppSpacing.xs),
+              _SituationCard(
+                icon: Icons.pregnant_woman_rounded,
+                color: AppColors.pediatric,
+                title: 'Pregnancy',
+                note:
+                'Tilt the pelvis left, or have someone manually pull the uterus '
+                'left, to relieve pressure on the vena cava — then continue '
+                'standard CPR',
+              ),
+              SizedBox(height: AppSpacing.xs),
+              _SituationCard(
+                icon: Icons.medication_outlined,
+                color: AppColors.pediatric,
+                title: 'Opioid overdose',
+                note:
+                'Give naloxone if available, but never delay or pause '
+                'compressions to administer it',
+              ),
+              SizedBox(height: AppSpacing.xs),
+              _SituationCard(
+                icon: Icons.ac_unit_rounded,
+                color: AppColors.pediatric,
+                title: 'Hypothermia / cold water',
+                note:
+                'Check for a pulse for up to a full minute before starting '
+                'compressions — a cold heart beats very slowly',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        const _InfoBanner(
+          text: 'Source: European Resuscitation Council Guidelines 2025',
+          icon: Icons.menu_book_outlined,
+          accentColor: AppColors.pediatric,
+        ),
       ],
     );
   }
@@ -1024,6 +1380,10 @@ class _StopRecoveryDetailScreen extends StatelessWidget {
       children: [
         // When to stop card
         _WhenToStopCard(),
+        SizedBox(height: AppSpacing.sm),
+        _InfoBanner(
+          text: 'Swap rescuers every 2 minutes if possible to maintain compression quality',
+        ),
         SizedBox(height: AppSpacing.sm),
 
         // Recovery position photo + notes
@@ -1575,51 +1935,58 @@ class _StepRailRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          // Content
+          // Content — urgent steps get a full highlighted card, not just a badge
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(
                 bottom: isLast ? 0 : AppSpacing.md,
                 top: AppSpacing.xxs,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(data.title,
-                            style: AppTypography.bodyMedium(size: 13)),
-                      ),
-                      if (data.urgent) ...[
-                        const SizedBox(width: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xs,
-                            vertical: 1,
-                          ),
-                          decoration: AppDecorations.chip(
-                            color: AppColors.emergency,
-                            bg: AppColors.errorBg,
-                          ),
-                          child: Text(
-                            'PRIORITY',
-                            style: AppTypography.badge(
-                                size: 9,
-                                color: AppColors.emergency),
-                          ),
+              child: Container(
+                width: double.infinity,
+                padding: data.urgent
+                    ? const EdgeInsets.all(AppSpacing.sm + AppSpacing.xs)
+                    : EdgeInsets.zero,
+                decoration: data.urgent ? AppDecorations.emergencyCard() : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(data.title,
+                              style: AppTypography.bodyMedium(size: 13)),
                         ),
+                        if (data.urgent) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                              vertical: 1,
+                            ),
+                            decoration: AppDecorations.chip(
+                              color: AppColors.emergency,
+                              bg: AppColors.white,
+                            ),
+                            child: Text(
+                              'PRIORITY',
+                              style: AppTypography.badge(
+                                  size: 9,
+                                  color: AppColors.emergency),
+                            ),
+                          ),
+                        ],
                       ],
+                    ),
+                    if (data.body != null) ...[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(data.body!,
+                          style: AppTypography.body(
+                              size: 12,
+                              color: AppColors.textSecondary)),
                     ],
-                  ),
-                  if (data.body != null) ...[
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(data.body!,
-                        style: AppTypography.body(
-                            size: 12,
-                            color: AppColors.textSecondary)),
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -2035,63 +2402,86 @@ class _TableCell extends StatelessWidget {
 // _WhenToStopCard
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Two-column "keep going / stop" comparison — side-by-side tinted panels
+/// read faster at a glance than one card with an internal divider.
 class _WhenToStopCard extends StatelessWidget {
   const _WhenToStopCard();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.cardPadding),
-      decoration: AppDecorations.card(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.play_circle_outline_rounded,
-                  size: AppSpacing.iconSm, color: AppColors.success),
-              const SizedBox(width: AppSpacing.xs),
-              Text('Keep going while',
-                  style: AppTypography.label(
-                      size: 12, color: AppColors.success)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const _BulletList(
-            color: AppColors.success,
-            items: [
-              'No AED available yet or AED is analysing',
-              'No clear signs of life or normal breathing',
-              'You are still physically able',
-            ],
-          ),
-          const Divider(
-              height: AppSpacing.lg, color: AppColors.divider),
-          Row(
-            children: [
-              const Icon(Icons.check_circle_outline_rounded,
-                  size: AppSpacing.iconSm, color: AppColors.primary),
-              const SizedBox(width: AppSpacing.xs),
-              Text('Stop when',
-                  style: AppTypography.label(
-                      size: 12, color: AppColors.primary)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const _BulletList(
-            color: AppColors.primary,
-            items: [
-              'EMS takes over care',
-              'Person begins breathing normally',
-              'You cannot safely continue',
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const _InfoBanner(
-            text:
-            'Swap rescuers every 2 minutes if possible to maintain compression quality',
-          ),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                color: AppColors.successBg,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.play_circle_outline_rounded,
+                            size: AppSpacing.iconSm, color: AppColors.success),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text('Keep going while',
+                              style: AppTypography.label(
+                                  size: 12, color: AppColors.success)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    const _BulletList(
+                      color: AppColors.success,
+                      items: [
+                        'No AED available yet or AED is analysing',
+                        'No clear signs of life or normal breathing',
+                        'You are still physically able',
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(width: 1, color: AppColors.divider),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                color: AppColors.primaryLight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline_rounded,
+                            size: AppSpacing.iconSm, color: AppColors.primary),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text('Stop when',
+                              style: AppTypography.label(
+                                  size: 12, color: AppColors.primary)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    const _BulletList(
+                      color: AppColors.primary,
+                      items: [
+                        'EMS takes over care',
+                        'Person begins breathing normally',
+                        'You cannot safely continue',
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

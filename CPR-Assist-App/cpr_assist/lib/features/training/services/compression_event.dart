@@ -153,6 +153,12 @@ class CompressionEvent {
       wristAlignmentAngle <= CprTargets.alignmentMaxDeg &&
           wristFlexionAngle.abs() <= CprTargets.flexionMaxDeg;
 
+  /// The per-compression peak force to show anywhere in the UI/exports.
+  /// [force] is a raw single-packet reading (BLE-internal, not a peak —
+  /// see SIGNALS.md), so prefer the client-tracked [peakForce] and fall
+  /// back to [force] only when peakForce wasn't captured.
+  double get displayForce => peakForce > 0 ? peakForce : force;
+
   double get timestampSec => timestampMs / 1000.0;
 
   /// Duration from compression-start timestamp to peak timestamp.
