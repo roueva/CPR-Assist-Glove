@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -314,13 +315,14 @@ class _PanelContent extends ConsumerWidget {
                       labelColor: AppColors.primary,
                       onTap:      () => onPush(const LoginScreen()),
                     ),
-                  _PanelItem(
-                    icon:       Icons.developer_mode_rounded,
-                    iconColor:  AppColors.textDisabled,
-                    label:      'UI Preview',
-                    labelColor: AppColors.textDisabled,
-                    onTap:      () => onPush(const DevPreviewScreen()),
-                  ),
+                  if (kDebugMode)
+                    _PanelItem(
+                      icon:       Icons.developer_mode_rounded,
+                      iconColor:  AppColors.textDisabled,
+                      label:      'UI Preview',
+                      labelColor: AppColors.textDisabled,
+                      onTap:      () => onPush(const DevPreviewScreen()),
+                    ),
                 ],
               ),
             ),
