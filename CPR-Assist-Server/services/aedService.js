@@ -200,11 +200,13 @@ class AEDService {
             const countResult = await client.query('SELECT COUNT(*) as total FROM aed_locations');
             const totalInDB = parseInt(countResult.rows[0].total);
 
-            await client.query(
+            const syncLogResult = await client.query(
                 `INSERT INTO aed_sync_log (synced_at, aeds_checked, aeds_inserted, aeds_updated)
-     VALUES (NOW(), $1, $2, $3)`,
+     VALUES (NOW(), $1, $2, $3)
+     RETURNING id`,
                 [aeds.length, totalInserted, totalUpdated]
             );
+            const syncLogId = syncLogResult.rows[0].id;
 
             await client.query('COMMIT');
 
@@ -215,7 +217,7 @@ class AEDService {
 
             // ✅ Parse availability after successful sync
             // Fire-and-forget — don't block HTTP response on long-running parse
-            this.parseAvailabilityAfterSync(aeds).catch(e =>
+            this.parseAvailabilityAfterSync(aeds, syncLogId).catch(e =>
                 console.error('⚠️ Availability parsing failed:', e.message)
             );
 
@@ -238,7 +240,7 @@ class AEDService {
     /**
  * Parse availability strings after sync
  */
-    async parseAvailabilityAfterSync(aeds) {
+    async parseAvailabilityAfterSync(aeds, syncLogId) {
         try {
             console.log('\n📝 Starting availability parsing...');
             const parser = new AvailabilityParser(this.pool);
@@ -247,9 +249,26 @@ class AEDService {
 
             console.log(`✅ Availability cache updated: ${Object.keys(parsedCache).length} entries`);
 
+            // Clear any previous failure now that parsing succeeded — this
+            // step can fail without failing the sync (e.g. no Python
+            // interpreter on the host), so aed_sync_log is the only record
+            // of whether it actually ran.
+            if (syncLogId != null) {
+                await this.pool.query(
+                    'UPDATE aed_sync_log SET availability_parse_error = NULL WHERE id = $1',
+                    [syncLogId]
+                ).catch(e => console.error('⚠️ Could not clear availability_parse_error:', e.message));
+            }
+
             return parsedCache;
         } catch (error) {
             console.error('❌ Availability parsing failed:', error.message);
+            if (syncLogId != null) {
+                await this.pool.query(
+                    'UPDATE aed_sync_log SET availability_parse_error = $1 WHERE id = $2',
+                    [error.message, syncLogId]
+                ).catch(e => console.error('⚠️ Could not record availability_parse_error:', e.message));
+            }
             // Don't fail the whole sync if parsing fails
             return null;
         }

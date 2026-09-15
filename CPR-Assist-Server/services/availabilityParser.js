@@ -341,7 +341,11 @@ const newCache = await this.loadCache(); // this already reads from DB first
 
         } catch (error) {
             console.error('❌ Error in availability parsing:', error);
-            return await this.loadCache();
+            // Rethrow — the sole caller (AEDService.parseAvailabilityAfterSync)
+            // already wraps this in its own try/catch and persists the
+            // failure onto aed_sync_log; swallowing it here made that
+            // failure invisible anywhere but this console line.
+            throw error;
         } finally {
             this.isRunning = false;
         }

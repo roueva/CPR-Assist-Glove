@@ -66,6 +66,14 @@ async function ensureAedTable() {
             );
         `);
 
+        // Added after aed_sync_log existed in production — IF NOT EXISTS
+        // covers both fresh installs (redundant, harmless) and existing
+        // deployments (actually adds the column).
+        await client.query(`
+            ALTER TABLE aed_sync_log
+            ADD COLUMN IF NOT EXISTS availability_parse_error TEXT;
+        `);
+
         await client.query(`
             CREATE TABLE IF NOT EXISTS availability_cache (
                 id                SERIAL PRIMARY KEY,

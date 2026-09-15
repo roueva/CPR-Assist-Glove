@@ -94,15 +94,17 @@ router.get('/last-sync', async (req, res) => {
     try {
         // Get the most recent AED update time as proxy for last sync
         const result = await pool.query(
-            'SELECT synced_at as last_sync FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
+            'SELECT synced_at as last_sync, availability_parse_error FROM aed_sync_log ORDER BY synced_at DESC LIMIT 1'
         );
-        
+
         const lastSync = result.rows[0]?.last_sync;
-        
+        const availabilityParseError = result.rows[0]?.availability_parse_error ?? null;
+
         if (lastSync) {
             res.json({
                 success: true,
                 lastSync: new Date(lastSync).toISOString(),
+                availabilityParseError,
                 timestamp: new Date().toISOString()
             });
         } else {
