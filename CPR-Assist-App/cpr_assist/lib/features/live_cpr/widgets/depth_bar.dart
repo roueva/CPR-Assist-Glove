@@ -51,9 +51,12 @@ class _AnimatedDepthBarState extends State<AnimatedDepthBar>
   @override
   void initState() {
     super.initState();
+    // Spans the LIVE_STREAM notify interval (10 Hz) with a small margin so
+    // the bar keeps easing right up to the next packet instead of snapping
+    // to position in 40ms and holding still for the remaining ~60ms.
     _ctrl = AnimationController(
       vsync:    this,
-      duration: const Duration(milliseconds: 40),
+      duration: AppConstants.bleLiveStreamInterval * 0.9,
     );
     _pillPulse = AnimationController(
       vsync:    this,

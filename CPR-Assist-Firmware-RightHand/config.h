@@ -309,7 +309,7 @@
 
 // 1 = print FTEST adc/voltage/force every 250ms. No session needed.
 //     Use with kitchen scale and known weights to verify force sensor reads.
-#define FORCE_TEST_LOG      1
+#define FORCE_TEST_LOG      0
 
 // 1 = type 'g' in Serial Monitor to start a 1-second IMU integration window.
 //     Move glove a known distance; it reports palmMM / wristMM measured.
@@ -407,7 +407,7 @@
 // hardcode one into the other.
 // 0 = normal operation (k refits every session from scratch, starting from
 // K_POPULATION_DEFAULT).
-#define FORCE_CALIB_LOCK 1
+#define FORCE_CALIB_LOCK 0
 
 
 

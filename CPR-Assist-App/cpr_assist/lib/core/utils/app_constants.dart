@@ -150,6 +150,12 @@ class AppConstants {
   static const int bleLiveStreamPacketSize = 108;
   static const int bleEventChannelPacketSize = 96;
 
+  /// LIVE_STREAM notify interval — matches firmware LIVE_STREAM_INTERVAL_MS.
+  /// UI tweens driven by this stream (e.g. the depth bar) should span close
+  /// to this interval so they ease continuously into each new value instead
+  /// of snapping quickly then holding still until the next packet.
+  static const Duration bleLiveStreamInterval = Duration(milliseconds: 100);
+
   /// Legacy alias — kept so any remaining callers compile without change.
   /// Points to the larger of the two packet sizes.
   @Deprecated('Use bleLiveStreamPacketSize or bleEventChannelPacketSize')

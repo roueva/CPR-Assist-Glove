@@ -428,24 +428,43 @@ if (_state == CompState::COMPRESSING) {
     _liveDepthCm = 0.0f;  // RELEASED → bar returns to zero
   }
   if (_liveDepthCm < LIVE_DEPTH_NOISE_FLOOR_CM) _liveDepthCm = 0.0f;  // floor sensor noise
-  // Display-only smoothed depth — follows the true integrated displacement up
-  // AND down so the bar shows the whole motion. Separate from _liveDepthCm so
-  // valley/recoil grading (line ~445) stays on the unchanged signal.
- const float dispTarget = (_state == CompState::COMPRESSING)
-                             ? fmaxf(0.0f, integPalm.depthM * 100.0f)
-                             : (forceN > FORCE_LEANING_THRESHOLD)
-                                 // released but still pressing → show the lean
-                                 ? forceCalibK() * powf(forceN, DEPTH_EXPONENT) / 10.0f
-                                 : 0.0f;  // truly released → rest at 0
+  // Display-only smoothed depth. While COMPRESSING: same rationale as
+  // selectDepth()'s CALIBRATING branch — before forceCalibK() is fit, the
+  // force model runs on K_POPULATION_DEFAULT, which is untrustworthy for
+  // absolute accuracy, so IMU drives the display until forceCalibComplete();
+  // after that, the force→depth model tracks applied force more smoothly
+  // than the double-integrated IMU signal. Between strokes (leaning), the
+  // force model is used regardless of calibration status — it's a coarse
+  // "you're pressing" cue, not compared against target thresholds, so the
+  // population-default k is fine there even pre-calibration. Separate from
+  // _liveDepthCm so valley/recoil grading (line ~445) and the final peak
+  // depth selector stay on their unchanged signals.
+  const bool useForceLive = forceCalibComplete();
+  float dispTarget;
+  if (_state == CompState::COMPRESSING) {
+    dispTarget = useForceLive
+        ? forceCalibK() * powf(forceN, DEPTH_EXPONENT) / 10.0f
+        : fmaxf(0.0f, integPalm.depthM * 100.0f);
+  } else {
+    dispTarget = (forceN > FORCE_LEANING_THRESHOLD)
+        ? forceCalibK() * powf(forceN, DEPTH_EXPONENT) / 10.0f
+        : 0.0f;
+  }
   _displayDepthCm += LIVE_DEPTH_EMA_ALPHA * (dispTarget - _displayDepthCm);
   if (_displayDepthCm < DISPLAY_DEPTH_NOISE_FLOOR_CM) _displayDepthCm = 0.0f;
   s.depth = _displayDepthCm;
 
-// Clicker — fires the instant live depth crosses the lower target, once per
-  // stroke, only on a trustworthy IMU reading. Re-arms after recoil.
+  // Clicker — fires the instant the displayed depth crosses the lower
+  // target, once per stroke. Reads _displayDepthCm (the same signal driving
+  // the bar above) rather than the separate IMU-only _liveDepthCm, so the
+  // click can never fire at a different instant than the bar visually
+  // enters the DEPTH zone. Divergence gating still applies while the IMU
+  // path is live (pre-calibration); once force takes over there's no IMU
+  // reading to diverge. Re-arms after recoil.
   static bool _clickArmed = true;
-  const float liveMM = _liveDepthCm * 10.0f;
-  if (s.sessionActive && _clickArmed && liveMM >= s.targetDepthMinMM && !integPalm.diverged) {
+  const float liveMM = _displayDepthCm * 10.0f;
+  const bool clickTrustworthy = useForceLive || !integPalm.diverged;
+  if (s.sessionActive && _clickArmed && liveMM >= s.targetDepthMinMM && clickTrustworthy) {
     _clickJustFired = true;
     _clickArmed = false;
   } else if (liveMM < CLICK_RESET_MM) {
