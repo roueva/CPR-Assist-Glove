@@ -234,7 +234,7 @@ static float _firstFiveAvgMM = 0.0f;
 static bool _firstFiveLocked = false;
 static uint32_t _fatigueOnsetIndex = 0;
 
-static void checkFatigue(float peakMM, int compNum, SharedState& s, float userHrBpm) {
+static void checkFatigue(float peakMM, int compNum, SharedState& s, float userHrBpm, uint8_t userSigQuality) {
   if (compNum == FATIGUE_DEPTH_TREND_SAMPLES && !_firstFiveLocked) {
     // Lock first FATIGUE_DEPTH_TREND_SAMPLES compression average as baseline
     float sum = 0;
@@ -259,7 +259,13 @@ static void checkFatigue(float peakMM, int compNum, SharedState& s, float userHr
 
   // Flag transition (one-shot): once decline exceeds threshold the alert fires.
   if (!_fatigueFlag) {
-    const float hrAdjusted = (userHrBpm > FATIGUE_HR_THRESHOLD_BPM)
+    // userHrBpm is gState.heartRateUser, published unconditionally every
+    // 500ms (see CORRECTIONS.md) — only let it lower the threshold when
+    // the signal quality backing it clears the same bar the pulse-check
+    // path uses (PULSE_MIN_SIGNAL_QUALITY). A motion-corrupted reading
+    // otherwise falls back to the base threshold, never the lowered one.
+    const bool hrTrustworthy = userSigQuality >= PULSE_MIN_SIGNAL_QUALITY;
+    const float hrAdjusted = (hrTrustworthy && userHrBpm > FATIGUE_HR_THRESHOLD_BPM)
                                ? FATIGUE_DECLINE_THRESHOLD_MM * FATIGUE_HR_DECLINE_FACTOR
                                : FATIGUE_DECLINE_THRESHOLD_MM;
     if (decline >= hrAdjusted) {
@@ -766,7 +772,7 @@ if (_state == CompState::COMPRESSING) {
           s.tooDeepCount = _cntTooDeep;
           s.fatigueOnsetIndex = _fatigueOnsetIndex;
 
-          checkFatigue(finalMM, _compressionNum, s, s.heartRateUser);
+          checkFatigue(finalMM, _compressionNum, s, s.heartRateUser, s.rescuerSignalQuality);
         }
 
         // totalCompressions = all compressions including pre-calibration

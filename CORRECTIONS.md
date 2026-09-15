@@ -1,8 +1,15 @@
 # Post-defense corrections
 
 ## Firmware
-- [ ] Contact-plus-pause gating for circulation check (passive only, never prompts)
-- [ ] Remove audio/haptic prompt from pulse check trigger
+- [x] Contact-plus-pause gating for circulation check (passive only, never prompts).
+      Confirmed 2026-09-16 — landed in 294dec8, code and comments at
+      `cpr_glove_new.ino:1168-1240` match: window opens only on rescuer-paused
+      + sustained carotid contact, no time-based or prompted trigger.
+- [x] Remove audio/haptic prompt from pulse check trigger. Confirmed
+      2026-09-16 — no audio/haptic call exists at window-open in either
+      firmware variant or the app; the only pulse-check audio cues are the
+      10s-in "resume compressions" reminder (shortens an in-progress pause,
+      never starts one) and the result cue at window close.
 - [x] Low-SQI must report "Uncertain", not "Absent"
 - [x] BLOCKING BEFORE USER STUDY — K_POPULATION_DEFAULT does not match the
       thesis's stated k values, in either mode. The thesis states the
@@ -106,19 +113,32 @@
       (no usable reference at all — the discriminator silently no-opped)
       is distinguishable on hardware from source=live/paused with cls
       unchanged (reference was available but didn't agree).
-- [ ] OPEN — not fixed. gState.heartRateUser is published every 500ms with
-      no quality gate: max30102UpdateRescuer (max30102.cpp) writes
-      _pR.hrBpm unconditionally, and it's only zeroed after ~1.5s of
-      sustained no-contact (_rNoContactStreak >= 150). Between those, a
-      motion-corrupted value (e.g. mid-compression) can sit in
-      gState.heartRateUser looking like a valid reading. The self-detection
-      guard above works around this itself (checks rescuerSignalQuality
-      before trusting it), but other consumers of heartRateUser —
-      including, on the app side, the live rescuer vitals card — may be
-      trusting it blindly without checking rescuerSignalQuality alongside
-      it. Needs a sweep of every reader of heartRateUser (firmware and app)
-      to confirm each one either checks signal quality or has a reason not
-      to.
+- [x] gState.heartRateUser is published every 500ms with no quality gate:
+      max30102UpdateRescuer (max30102.cpp) writes _pR.hrBpm unconditionally,
+      and it's only zeroed after ~1.5s of sustained no-contact
+      (_rNoContactStreak >= 150). Between those, a motion-corrupted value
+      (e.g. mid-compression) can sit in gState.heartRateUser looking like a
+      valid reading. Swept every reader (firmware and app), 2026-09-16:
+        - ble_manager.cpp (LIVE_STREAM byte 72, diag frame) — raw telemetry,
+          transmitted alongside rescuerSignalQuality; the consumer's job to
+          gate, not the transmitter's. No change needed.
+        - cpr_glove.ino/cpr_glove_new.ino rescuerHRLastPause snapshot (window
+          open) — unguarded at snapshot time, but every consumer (the
+          self-detection liveRefOk/pausedRefOk check at window close) already
+          gates on rescuerSignalQuality/rescuerSQLastPause >=
+          PULSE_MIN_SIGNAL_QUALITY before trusting it. No change needed.
+        - depth.cpp checkFatigue() — FIXED. Used userHrBpm to halve the
+          fatigue decline threshold with no quality check at all. Now takes
+          userSigQuality and only applies the HR-lowered threshold when it
+          clears PULSE_MIN_SIGNAL_QUALITY; otherwise falls back to the base
+          threshold. Applied identically to both firmware variants.
+        - live_cpr_screen.dart / VitalsCard (rescuer vitals card) — displays
+          heartRateUser unconditionally but dims the whole card to 0.45
+          opacity via hasGoodSignal (rescuerSignalQuality < 40). Visual
+          gating, not a hard cutoff — judged sufficient for a live display
+          card; no change needed.
+        - glove_diagnostic_sheet.dart — raw diagnostic dump, shows hrUser and
+          rescuerQuality side by side by design. No change needed.
 - [x] `imu.cpp`'s file-header comment said ±8g/0x5C; now correctly reads
       ±4g/0x4A, matching `IMU_CTRL1_XL_VALUE`. Confirmed fixed 2026-08-30.
 - [x] The comment above `IMU_CTRL1_XL_VALUE` in `config.h` said ±2g; now
