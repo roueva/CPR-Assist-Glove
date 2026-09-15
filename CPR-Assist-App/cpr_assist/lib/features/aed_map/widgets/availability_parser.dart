@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,21 +59,8 @@ class AvailabilityParser {
 
       // 2. Fallback to cache
       final cachedMap = await _loadFromCache();
-      if (cachedMap != null && cachedMap.isNotEmpty) {
-        _availabilityMap = cachedMap;
-        return;
-      }
-
-      // 3. Last resort: bundled asset
-      final jsonString = await rootBundle
-          .loadString('assets/data/parsed_availability_map.json');
-      final assetMap = json.decode(jsonString) as Map<String, dynamic>?;
-
-      if (assetMap != null && assetMap.isNotEmpty) {
-        _availabilityMap = assetMap;
-      } else {
-        _availabilityMap = null;
-      }
+      _availabilityMap =
+          (cachedMap != null && cachedMap.isNotEmpty) ? cachedMap : null;
     } catch (_) {
       _availabilityMap = null;
     }
@@ -100,6 +86,8 @@ class AvailabilityParser {
           .timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
+        final lastUpdated = response.headers['x-last-updated'];
+        if (lastUpdated != null) await _storeLastUpdated(lastUpdated);
         return json.decode(response.body) as Map<String, dynamic>;
       }
     } catch (_) {
@@ -121,6 +109,33 @@ class AvailabilityParser {
       );
     } catch (_) {
       // Non-fatal — app continues without caching
+    }
+  }
+
+  // Server-reported time the availability rules were last updated
+  // (backend's X-Last-Updated header, aed_sync_log-derived) — distinct from
+  // availability_map_timestamp above, which is this device's local fetch
+  // time used only for the 7-day cache expiry check.
+  static const String _lastUpdatedKey = 'availability_rules_last_updated';
+
+  static Future<void> _storeLastUpdated(String iso) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastUpdatedKey, iso);
+    } catch (_) {
+      // Non-fatal
+    }
+  }
+
+  /// Server time the currently-loaded availability rules were last updated,
+  /// or null if the rules never came from a successful backend fetch.
+  static Future<DateTime?> getLastUpdated() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final iso = prefs.getString(_lastUpdatedKey);
+      return iso != null ? DateTime.tryParse(iso) : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -152,7 +167,7 @@ class AvailabilityParser {
       }) {
     // Memo cache — same input within the same minute returns the same status
     final now = DateTime.now();
-    final cacheKey = '${availability ?? ""}|${now.year}${now.month}${now.day}${now.hour}${now.minute}';
+    final cacheKey = '${availability ?? ""}|${now.year}-${now.month}-${now.day}-${now.hour}-${now.minute}';
     final cached = _parseCache[cacheKey];
     if (cached != null) return cached;
 
