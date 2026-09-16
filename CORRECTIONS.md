@@ -61,6 +61,13 @@
       K_STUDY_LOCKED and around FORCE_CALIB_LOCK
       were rewritten to describe the two constants' separate roles instead
       of the old hardcode-k-into-K_POPULATION_DEFAULT workflow.
+      REVISED 2026-09-16 — K_STUDY_LOCKED changed 3.45 → 3.15. Bench-tested
+      on the study glove the night before the study and confirmed correct
+      against manual reference measurements; supersedes the 10-run average
+      above. The live glove had already been hand-edited to 3.15 outside
+      git (caught via a repo/Arduino-sketch diff, not from a review) before
+      this was reconciled back into the repo. Thesis text still says 3.45
+      and needs updating to 3.15 before submission.
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Rescuer-pulse discriminator
       using simultaneous wrist HR. Problem: the patient sensor is a
       fingertip pressed against the carotid, with the rescuer's own perfused

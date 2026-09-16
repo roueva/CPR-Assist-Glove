@@ -198,11 +198,14 @@
 // controlled user-study sessions instead.
 #define K_POPULATION_DEFAULT 1.30f
 
-// Laerdal Little Anne study manikin k — averaged from 10 independent runs of
-// ~30 compressions each. Used in place of K_POPULATION_DEFAULT when
-// FORCE_CALIB_LOCK is 1, so every study participant is scored against the
-// same manikin-derived coefficient instead of one refit per session.
-#define K_STUDY_LOCKED 3.45f
+// Laerdal Little Anne study manikin k. Used in place of K_POPULATION_DEFAULT
+// when FORCE_CALIB_LOCK is 1, so every study participant is scored against
+// the same manikin-derived coefficient instead of one refit per session.
+// Revised 2026-09-16: bench-tested at 3.15 on the study glove the night
+// before the study and confirmed correct against manual reference
+// measurements — supersedes the earlier 3.45 (10-run average from a
+// previous calibration pass). Needs the thesis text updated to match.
+#define K_STUDY_LOCKED 3.15f
 
 
 // ── Force sensor ──────────────────────────────────────────────────────────────
