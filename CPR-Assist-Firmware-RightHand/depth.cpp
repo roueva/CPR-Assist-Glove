@@ -472,17 +472,19 @@ if (_state == CompState::COMPRESSING) {
   if (_displayDepthCm < DISPLAY_DEPTH_NOISE_FLOOR_CM) _displayDepthCm = 0.0f;
   s.depth = _displayDepthCm;
 
-  // Clicker — fires the instant the displayed depth crosses the lower
-  // target, once per stroke. Reads _displayDepthCm (the same signal driving
-  // the bar above) rather than the separate IMU-only _liveDepthCm, so the
-  // click can never fire at a different instant than the bar visually
-  // enters the DEPTH zone. Divergence gating still applies while the IMU
-  // path is live (pre-calibration); once force takes over there's no IMU
-  // reading to diverge. Re-arms after recoil.
+  // Clicker — fires the instant live depth crosses the lower target, once
+  // per stroke, only on a trustworthy IMU reading. Re-arms after recoil.
+  // Deliberately reads _liveDepthCm, NOT _displayDepthCm: _liveDepthCm
+  // unconditionally zeroes on release, while _displayDepthCm (above) stays
+  // non-zero through recoil whenever forceN > FORCE_LEANING_THRESHOLD
+  // (5N) once calibrated — true for nearly every real compression, since
+  // CPR technique keeps hands in continuous contact with the chest. Using
+  // _displayDepthCm here was tried and reverted: it left _clickArmed stuck
+  // false after the first stroke because the click never saw depth drop
+  // back below CLICK_RESET_MM.
   static bool _clickArmed = true;
-  const float liveMM = _displayDepthCm * 10.0f;
-  const bool clickTrustworthy = useForceLive || !integPalm.diverged;
-  if (s.sessionActive && _clickArmed && liveMM >= s.targetDepthMinMM && clickTrustworthy) {
+  const float liveMM = _liveDepthCm * 10.0f;
+  if (s.sessionActive && _clickArmed && liveMM >= s.targetDepthMinMM && !integPalm.diverged) {
     _clickJustFired = true;
     _clickArmed = false;
   } else if (liveMM < CLICK_RESET_MM) {
