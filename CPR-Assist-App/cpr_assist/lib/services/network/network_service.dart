@@ -255,7 +255,7 @@ class NetworkService {
           response = await http.get(url, headers: headers)
               .timeout(AppConstants.apiTimeout);
       }
-      return _handleResponse(response, endpoint, method,
+      return await _handleResponse(response, endpoint, method,
           body: body, requiresAuth: requiresAuth);
     } on TimeoutException {
       throw Exception('Request timed out — check your connection.');

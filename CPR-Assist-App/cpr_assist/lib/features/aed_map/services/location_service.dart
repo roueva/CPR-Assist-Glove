@@ -73,7 +73,7 @@ class LocationService {
 
       if (currentPermission == LocationPermission.deniedForever) {
         if (showSettingsDialog && context.mounted) {
-          return _showPermissionSettingsDialog(context);
+          return await _showPermissionSettingsDialog(context);
         }
         return false;
       }

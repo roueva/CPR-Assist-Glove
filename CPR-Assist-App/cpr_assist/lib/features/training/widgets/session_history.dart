@@ -7,7 +7,6 @@ import '../../../providers/session_provider.dart';
 import '../../account/screens/login_screen.dart';
 import '../../account/screens/registration_screen.dart';
 import '../screens/session_service.dart';
-import '../services/export_service.dart';
 import '../services/session_detail.dart';
 import '../services/session_local_storage.dart';
 import 'cpr_chart_helpers.dart';
@@ -781,114 +780,6 @@ class _SessionsList extends StatelessWidget {
       ],
     );
   }
-}
-
-Future<void> _showContextMenu(
-    BuildContext context, {
-      required SessionSummary session,
-      required int            sessionNumber,
-      required VoidCallback   onSelect,
-    }) async {
-  await showModalBottomSheet<void>(
-    context:          context,
-    useRootNavigator: true,
-    builder: (_) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              margin:     const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              width:      40,
-              height:     4,
-              decoration: AppDecorations.dragHandle(),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.check_circle_outline_rounded),
-            title:   const Text('Select'),
-            onTap: () {
-              context.pop();
-              onSelect();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.notes_rounded),
-            title:   Text(
-              session.note?.isNotEmpty == true ? 'Edit note' : 'Add note',
-            ),
-            onTap: () async {
-              final container = ProviderScope.containerOf(context);
-              context.pop();
-              final result = await AppDialogs.showNoteEditor(
-                context,
-                initialNote: session.note,
-              );
-              if (result == null) return;
-              final service = container.read(sessionServiceProvider);
-              final ok = await service.updateNote(
-                session.id!,
-                result.isEmpty ? null : result,
-              );
-              if (ok) {
-                container.invalidate(sessionSummariesProvider);
-                if (context.mounted) {
-                  UIHelper.showSuccess(context, 'Note saved');
-                }
-              }
-            },
-          ),
-          ListTile(
-            leading: const Icon(
-              Icons.download_outlined,
-              color: AppColors.primary,
-            ),
-            title: const Text('Export this session'),
-            onTap: () async {
-              context.pop();
-              await ExportService.exportSingleSessionCsv(session);
-            },
-          ),
-          ListTile(
-            leading: const Icon(
-              Icons.delete_outline_rounded,
-              color: AppColors.emergency,
-            ),
-            title: const Text(
-              'Delete',
-              style: TextStyle(color: AppColors.emergency),
-            ),
-            onTap: () async {
-              final container = ProviderScope.containerOf(context);
-              context.pop();
-              final confirmed = await AppDialogs.showDestructiveConfirm(
-                context,
-                icon:         Icons.delete_outline_rounded,
-                iconColor:    AppColors.emergency,
-                iconBg:       AppColors.errorBg,
-                title:        'Delete Session?',
-                message:      'This permanently removes Session $sessionNumber.',
-                confirmLabel: 'Delete',
-                confirmColor: AppColors.emergency,
-                cancelLabel:  'Cancel',
-              );
-              if (confirmed != true) return;
-              final service = container.read(sessionServiceProvider);
-              final ok = await service.deleteSession(session.id!);
-              if (ok) {
-                container.invalidate(sessionSummariesProvider);
-                if (context.mounted) {
-                  UIHelper.showSuccess(context, 'Session deleted');
-                }
-              }
-            },
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-      ),
-    ),
-  );
 }
 
 // ── Stats header ───────────────────────────────────────────────────────────
