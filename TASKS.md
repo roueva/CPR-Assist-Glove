@@ -290,17 +290,28 @@ grep -rn 'ScaffoldMessenger' lib/ --include=\*.dart | grep -v ui\_helper.dart
 
 Nothing optional. Run immediately before the first participant.
 
-**Firmware flashed and verified:**
+**Firmware flashed and verified** (left-hand study glove —
+`CPR-Assist-Firmware-LeftHand/config.h`; the right-hand variant is
+currently a bench-only build, `FORCE\_CALIB\_LOCK=0` by its own design —
+not part of this gate unless that changes):
 
-* \[ ] `FORCE\_CALIB\_LOCK = 1` — `config.h:315`
-* \[ ] `K\_POPULATION\_DEFAULT` at the study value — `config.h:190`
-* \[ ] `DEPTH\_PIPELINE\_LOG = 0` — `config.h:256`
-* \[ ] `DEPTH\_SELECTOR\_LOG = 0` — `config.h:260`
-* \[ ] `BLE\_DEBUG\_SERIAL = 0` — `config.h:251` (already 0)
-* \[ ] `FORCE\_TEST\_LOG = 0`, `IMU\_TEST\_LOG = 0`
+* \[ ] `STUDY\_BUILD = 1` — `config.h:278` (currently 0). Its own `#error`
+  guard requires the five log flags below to already be 0 — flip this
+  *last*, after the CALIB-line hardware check in `CORRECTIONS.md` (which
+  needs `DEPTH\_PIPELINE\_LOG` live to read), not before.
+* \[ ] `FORCE\_CALIB\_LOCK = 1` — `config.h:370` (already 1)
+* \[ ] `K\_STUDY\_LOCKED = 3.15f` — `config.h:208` (already 3.15 on this
+  glove; 3.45 is the right-hand glove's value, don't check against it)
+* \[ ] `DEPTH\_PIPELINE\_LOG = 0` — `config.h:264` (currently 1 — leave at 1
+  until the CALIB-line check passes, see `STUDY\_BUILD` above)
+* \[ ] `DEPTH\_SELECTOR\_LOG = 0` — `config.h:268` (currently 1, same
+  sequencing)
+* \[ ] `BLE\_DEBUG\_SERIAL = 0` — `config.h:259` (already 0)
+* \[ ] `FORCE\_TEST\_LOG = 0`, `IMU\_TEST\_LOG = 0` — `config.h:272`, `:276`
+  (already 0, 0)
 
 `MANIKIN\_CALIBRATION\_LOG` no longer exists — renamed `DEPTH\_PIPELINE\_LOG`
-(`config.h:255`). Fix any checklist still naming it.
+(`config.h:264`). Fix any checklist still naming it.
 
 **Hardware (needs the physical glove):**
 
@@ -312,9 +323,19 @@ Nothing optional. Run immediately before the first participant.
 **App:**
 
 * \[ ] Navigation tested walking outdoors
-* \[ ] Friends tab resolved
-* \[ ] `dev\_preview\_screen.dart` excluded from the release build
-* \[ ] No debug screens reachable
+* \[x] Friends tab resolved — honest "Coming Soon" placeholder with a
+  disabled search bar now (`leaderboard\_screen.dart`), not the earlier
+  dead non-functional one. Confirmed in code 2026-10-14.
+* \[ ] `dev\_preview\_screen.dart` reachable only in debug builds — the menu
+  entry is gated behind `kDebugMode` (`account\_menu.dart:318`), so it's
+  unreachable via navigation in a release build. That is *not* the same as
+  "excluded from the release build" — the file still compiles into the
+  release binary as dead code. Decide if gated-unreachable is sufficient or
+  if you want it stripped from release builds entirely.
+* \[ ] No debug screens reachable — confirmed `dev\_preview\_screen.dart` is
+  the only `kDebugMode`-gated screen in `lib/`. `glove\_diagnostic\_sheet.dart`
+  is production glove-diagnostic functionality, not a debug screen, and
+  isn't gated — leave it reachable.
 
 **Known bugs (fix before the study):**
 
@@ -323,12 +344,17 @@ corrections and their validation state live there, not here. This list is
 app-side bugs only; the two are not merged, since `CORRECTIONS.md` gets
 archived once the study starts and this file doesn't.
 
-* M1 — `SessionLocalStorage.migrateLegacyUnscopedData()`: index is persisted
-once after the loop while per-key writes/removes commit inside it, so a
-partial failure orphans migrated sessions permanently (data on disk,
-unreachable via `\_readIndex`, not self-healing on retry). Also:
-`jsonDecode(raw)` at `:246` is outside the inner try, so one malformed
-`session\_local\_keys` value aborts the whole migration. No completion marker.
+* [x] M1 — `SessionLocalStorage.migrateLegacyUnscopedData()`: index was
+persisted once after the loop while per-key writes/removes committed
+inside it, so a partial failure orphaned migrated sessions permanently.
+Fixed — confirmed in code 2026-10-14: the index is now written *before*
+the per-key removal loop (`session\_local\_storage.dart:270` vs `:271-273`),
+so a crash mid-loop leaves migrated records reachable and retry is
+idempotent (comment at `:268-269` states this explicitly). The per-record
+`jsonDecode` is now inside its own try/catch (`:257-265`); the outer
+`jsonDecode(raw)` for the legacy key list itself is still unguarded
+directly but the whole function is wrapped in an outer try/catch
+(`:247-278`) that logs and bails instead of crashing.
 * R2 — `flutter\_foreground\_task` creates a second `FlutterEngine`
 unconditionally on service start (`ForegroundTask.kt:41-49`), so two engines
 are live during any BLE CPR session. Geolocator counts engines process-wide
