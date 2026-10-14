@@ -462,10 +462,12 @@ BLEEventItem bleBuildDiagFrame() {
   int16_t rawAdc = (int16_t)analogRead(PIN_FSR_ADC);
   packU16(b, 1, (uint16_t)rawAdc);
 
+  portENTER_CRITICAL(&gStateMux);
   b[3] = diagPalmWhoAmI;
   b[4] = diagWristWhoAmI;
   b[5] = diagI2cScanResult;
   b[6] = diagActionResult;
+  portEXIT_CRITICAL(&gStateMux);
 
   int16_t palmMg  = (int16_t)constrain((int)(imuGetMotionAccelPalm()  * 100.0f), -32768, 32767);
   int16_t wristMg = (int16_t)constrain((int)(imuGetMotionAccelWrist() * 100.0f), -32768, 32767);

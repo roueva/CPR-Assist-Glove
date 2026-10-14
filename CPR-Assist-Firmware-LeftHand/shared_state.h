@@ -163,9 +163,23 @@ inline SharedState snapshotState() {
   return copy;
 }
 
-// ── Diagnostic mode globals (written by onAppCommand, read by bleSendLiveStream)
-// Not under gStateMux because both writers are on commsTask (BLE callbacks) and
-// the reader is also commsTask (bleSendLiveStream). Single-core access, no race.
+// ── Diagnostic mode globals (written by onAppCommand's CMD_DIAG_* cases and
+// by the button-event handler in commsTask; read as a group by
+// bleBuildDiagFrame on commsTask).
+// CORRECTED 2026-10-14 — this comment previously claimed both writers were
+// on commsTask. False: onAppCommand is invoked synchronously from
+// EventCB::onWrite (ble_manager.cpp), which runs on the BLE stack's own
+// internal callback task, not commsTask. So diagActionResult/
+// diagI2cScanResult/diagPalmWhoAmI/diagWristWhoAmI are genuinely written
+// from two different tasks (the BLE callback task and commsTask) and read
+// from a third relationship (commsTask again, but not guaranteed to be the
+// same instant as either writer). Every write site and the one group read
+// (ble_manager.cpp's bleBuildDiagFrame) now wrap just the plain-byte
+// assignments in portENTER_CRITICAL(&gStateMux)/EXIT — never around the
+// I2C/audio/motor/LED calls alongside them, since those can block and must
+// never run with a spinlock held. diagActive itself stays unlocked: it's a
+// simple independent gate, read standalone in several places already, and
+// isn't part of the torn-group concern the other four fields had.
 extern volatile bool diagActive;
 extern volatile uint8_t diagActionResult;
 extern volatile uint8_t diagI2cScanResult;

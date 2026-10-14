@@ -39,7 +39,7 @@ Two app tasks: `sensorTask` (Core 1, priority 5, 8192-byte stack,
   `CMD_SET_VENTILATION`, `CMD_FEEDBACK_SET`, `CMD_SET_FEEDBACK_CH`. Confirmed
   clean.
 - **DEFECT — the diag-globals comment at `shared_state.h:166-168` is
-  false.** It claims:
+  false. FIXED 2026-10-14.** It claimed:
 
   > Not under gStateMux because both writers are on commsTask (BLE
   > callbacks) and the reader is also commsTask. Single-core access, no race.
@@ -62,19 +62,38 @@ Two app tasks: `sensorTask` (Core 1, priority 5, 8192-byte stack,
   three-task shared state (sensorTask does not touch it, but the BLE stack's
   own task and commsTask both do) with zero synchronization.
 
-  Practical exposure is narrow — all five fields are single-byte
+  Practical exposure was narrow — all five fields are single-byte
   (`bool`/`uint8_t`), so no torn read of an individual field — but the
-  five-field write at `CMD_DIAG_START` (`diagActive = true` then
-  `diagActionResult = 0x00` then `diagI2cScanResult = 0x00` then, after an
-  I²C mutex acquisition, `diagPalmWhoAmI`/`diagWristWhoAmI`) is not atomic
-  as a group. `commsTask`'s DIAG_FRAME send at 4 Hz
-  (`DIAG_FRAME_INTERVAL_MS`) can read `diagActive == true` with
-  `diagPalmWhoAmI`/`diagWristWhoAmI` still at their previous session's
-  stale values, or `0x00`, mid-sequence. Low severity (diagnostic-only path,
-  gated behind a manual `CMD_DIAG_START`, never active during a graded
-  session), but the comment's safety reasoning should be fixed regardless —
-  it currently tells a future reader something false about where the write
-  comes from.
+  four-byte group (`diagActionResult`, `diagI2cScanResult`,
+  `diagPalmWhoAmI`, `diagWristWhoAmI`) that `bleBuildDiagFrame` reads
+  together (`ble_manager.cpp:465-468`) had no cross-task memory barrier at
+  all. Low severity either way: diagnostic-only path, gated behind a
+  manual `CMD_DIAG_START`, never active during a graded session.
+
+  **Fix applied, approved, committed.** Every write site of the four
+  group fields — `CMD_DIAG_START`, `CMD_DIAG_STOP`, all six
+  `CMD_DIAG_ACTION` sub-cases, and the button-event handler in `commsTask`
+  (`cpr_glove.ino:964-966`) — now wraps just the plain-byte assignment in
+  `portENTER_CRITICAL(&gStateMux)`/`EXIT`, never the I2C/audio/motor/LED
+  calls alongside them (a spinlock must never be held across a blocking
+  call). The one group read in `bleBuildDiagFrame` does the same. The
+  `shared_state.h` comment was rewritten to describe the actual task
+  relationship instead of the false one. `diagActive` itself was left
+  unlocked — it's a standalone gate, read independently in several places
+  already, and was never part of the torn-group concern.
+
+  This does **not** fix, and cannot be fixed by locking, the separate
+  ~100 ms latency where `diagActive` flips true before the I²C-sourced
+  `diagPalmWhoAmI`/`diagWristWhoAmI` are ready (`CMD_DIAG_START` waits on
+  `gI2CMutex` before populating them) — that's an inherent property of the
+  I²C read taking time within one function call, not a cross-task race.
+  Noted for completeness, not treated as a defect.
+
+  Not touched: the right-hand glove (`CPR-Assist-Firmware-RightHand/`)
+  almost certainly has the identical pattern, since its `shared_state.h`/
+  `ble_manager.cpp` are forked from the same source. Out of scope for this
+  pass — it wasn't part of the audited files — flagging for a deliberate
+  decision on whether to mirror the fix there.
 
 ## 2. Does `snapshotState()` copy atomically?
 
@@ -194,7 +213,7 @@ been exercised; not reportable as a confirmed defect from code alone.
 
 | # | Finding | Status |
 |---|---|---|
-| 1 | `shared_state.h:166-168`'s safety comment for the diag globals is wrong — the writer (`onAppCommand`'s `CMD_DIAG_START`/`CMD_DIAG_STOP` cases) runs on the BLE stack's own callback task, not `commsTask`. Five-field write sequence not atomic as a group. | **DEFECT** — low severity, diagnostic-only path |
+| 1 | `shared_state.h:166-168`'s safety comment for the diag globals was wrong — the writer (`onAppCommand`'s `CMD_DIAG_*` cases) runs on the BLE stack's own callback task, not `commsTask`. Four-byte group read with no cross-task barrier. | **FIXED 2026-10-14** — all 13 write sites + the 1 read site now wrapped in `gStateMux`; comment corrected |
 | 2 | `snapshotState()` is atomic | Verified safe |
 | 3 | Task priorities/stacks as configured; no runtime headroom measurement exists | Gap — needs hardware instrumentation |
 | 4 | `depthFinalizeLastValley()` ordering holds on all 3 `stopSession()` call sites | Verified safe |
