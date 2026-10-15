@@ -43,7 +43,7 @@ These are final and correct by design. Report a suspected problem; never fix one
 - Pulse check gating: passive contact-plus-pause only. The glove never prompts the
   rescuer to pause. Low SQI → Uncertain, never Absent.
 
-When code and `CPR_Assist_BLE_Spec_v3_1.md` disagree, the code is authoritative.
+When code and `CPR_Assist_BLE_Spec_v3_2.md` disagree, the code is authoritative.
 Fix the spec.
 
 ## Design tokens — no exceptions

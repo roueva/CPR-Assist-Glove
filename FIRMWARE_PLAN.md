@@ -266,6 +266,9 @@ APP-SIDE LEFTOVERS:
 
 ## F. Commit the BLE spec, then reconcile
 
+**In progress.** Spec committed (`aca3b32`, now `CPR_Assist_BLE_Spec_v3_2.md`).
+Reconciliation report: `docs/BLE_SPEC_RECONCILIATION.md`. Apply pass pending.
+
 `CPR_Assist_BLE_Spec_v3_1.md` **is not in the repo.** It is referenced
 throughout the code and it is a thesis appendix. Its absence is why the signal
 dictionary had to infer the spec from the app parser.
@@ -295,6 +298,9 @@ firmware. Add a v3.2 changelog entry listing every change.
 
 ## G. Thread safety
 
+**Done** — `b936418` (audit, `firmware/THREADING.md`) + `e8c414f`/`a920bcf`
+(diag-globals fix). Items 3, 5, 6 of the audit need hardware to close.
+
 Never audited. Two cores share `gState`. This is the most likely source of a
 bug that appears only under load — i.e. during a participant session.
 
@@ -323,6 +329,8 @@ Files: cpr_glove.ino, shared_state.h, ble_manager.cpp, depth.cpp, imu.cpp
 ---
 
 ## H. Metrics mapping
+
+**Dropped** — thesis finished (2026-10-15). Kept below as record.
 
 `SIGNALS.md` says what the firmware **produces**. Nothing says whether that is
 what the study **needs**. `residualDepthX10` was the warning — declared,
@@ -413,15 +421,17 @@ Do this **before** the study, not after.
 Last thing before the first participant. Verify on the flashed firmware, not
 in the source.
 
-- [ ] `FORCE_CALIB_LOCK = 1` — `config.h:315`
-- [ ] `K_POPULATION_DEFAULT` at the study value — `config.h:190`
-- [ ] `DEPTH_PIPELINE_LOG = 0` — `config.h:256`
-- [ ] `DEPTH_SELECTOR_LOG = 0` — `config.h:260`
-- [ ] `BLE_DEBUG_SERIAL = 0` — `config.h:251`
+- [ ] `FORCE_CALIB_LOCK = 1` — `config.h:370`
+- [ ] `K_STUDY_LOCKED = 3.15f` — `config.h:208` (left-hand study glove;
+      `K_POPULATION_DEFAULT` 1.30f is the Emergency fallback, not the study value)
+- [ ] `DEPTH_PIPELINE_LOG = 0` — `config.h:264`
+- [ ] `DEPTH_SELECTOR_LOG = 0` — `config.h:268`
+- [ ] `BLE_DEBUG_SERIAL = 0` — `config.h:259`
+- [ ] `STUDY_BUILD = 1` — `config.h:278`, flipped last (see TASKS.md §6)
 - [ ] `FORCE_TEST_LOG = 0`, `IMU_TEST_LOG = 0`
 
 `MANIKIN_CALIBRATION_LOG` no longer exists — renamed `DEPTH_PIPELINE_LOG`
-(`config.h:255`). Fix any checklist still naming it.
+(`config.h:264`). Fix any checklist still naming it.
 
 ---
 

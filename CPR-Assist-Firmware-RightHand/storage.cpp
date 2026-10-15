@@ -35,7 +35,7 @@
 //     103   uint8   pulseCheckArrayLen
 //   COMPRESSION ARRAY (compressionArrayLen × 20 bytes)
 //   VENTILATION ARRAY (ventilationArrayLen × 12 bytes)
-//   PULSE CHECK ARRAY (pulseCheckArrayLen × 12 bytes)
+//   PULSE CHECK ARRAY (pulseCheckArrayLen × 13 bytes)
 // Meta:  /sessions/meta.bin — 41 bytes, see layout below (state 0=empty,1=pending)
 // =============================================================================
 #include "storage.h"

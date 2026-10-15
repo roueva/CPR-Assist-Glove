@@ -112,6 +112,10 @@
       layout — pairs an SQI with the existing rescuerHRLastPause/
       rescuerSpO2LastPause snapshot so the paused reference can be
       quality-gated the same way the live one is.
+      SUPERSEDED by FIRMWARE_PLAN Block C: PULSE_CHECK_RESULT byte 9 now
+      carries the reference source (0 none, 1 live, 2 paused), so the
+      paragraph below is history. The downgrade reason itself is still not
+      transmitted; source=live/paused with cls=Uncertain is the closest proxy.
       SPEC LIMITATION: PKT_PULSE_CHECK_RESULT (Spec v3.1, locked) has no
       spare field, so the downgrade reason cannot be transmitted over BLE.
       The app currently cannot distinguish a self-detection downgrade from
@@ -155,7 +159,9 @@
       ±4g/0x4A, matching `IMU_CTRL1_XL_VALUE`. Confirmed fixed 2026-08-30.
 - [x] The comment above `IMU_CTRL1_XL_VALUE` in `config.h` said ±2g; now
       correctly reads ±4g. Confirmed fixed 2026-08-30.
-- [ ] Before user study: MANIKIN_CALIBRATION_LOG=0, BLE_DEBUG_SERIAL=0
+- [ ] Before user study: DEPTH_PIPELINE_LOG=0, DEPTH_SELECTOR_LOG=0,
+      BLE_DEBUG_SERIAL=0, then STUDY_BUILD=1. Full list and order in
+      TASKS.md §6. (MANIKIN_CALIBRATION_LOG was renamed DEPTH_PIPELINE_LOG.)
 - [ ] ADDRESSED — PENDING HARDWARE VALIDATION. Patient PPG FIFO overflowed:
       max30102UpdatePatient was folded into the 500 ms rescuer vitals block,
       but the 32-sample FIFO holds only 320 ms at 100 Hz, so a 500 ms drain
@@ -224,8 +230,8 @@
       drop to 0) and that the waveform resumes cleanly — no discontinuity
       or stuck value — when contact returns.
 - [ ] HARDWARE — on the first study session, confirm from the serial log
-      (DEPTH_PIPELINE_LOG's CALIB line, calibK field) that k reads 3.45 at
-      boot and stays 3.45 for the full two-minute session under real
+      (DEPTH_PIPELINE_LOG's CALIB line, calibK field) that k reads 3.15 at
+      boot and stays 3.15 for the full two-minute session under real
       compressions — never drifts, never reverts toward the population
       mean. This is the empirical check that FORCE_CALIB_LOCK actually
       holds in practice, not just by code-path analysis.
@@ -273,8 +279,9 @@
 - [ ] I1 icons / I2 tooltips
 - [ ] L2 alert 112 via url_launcher
 - [ ] K2 standalone glove verification
-- [ ] Export PDF: saveContext/restoreContext in gradeSparkline, genericSparkline,
-      radar polygon, both trainingHero ring painters
+- [x] Export PDF: saveContext/restoreContext in gradeSparkline, genericSparkline,
+      radar polygon, both trainingHero ring painters. Closed — confirmed
+      2026-08-30, 26 save / 26 restore, balanced (TASKS.md §5).
 
 ## HTTP error handling — still substring-matches in three screens
 `network_service.dart` now throws `HttpStatusException` (carries a real
@@ -300,7 +307,15 @@ of `e.toString().contains('404')`.
       visible on screen at once — the card and its own route line no longer
       match. Decide whether card accents should follow the polyline swap or
       are intentionally a separate palette.
-- [ ] Per-event pause rows can't distinguish a 45 s overrun from a clean
+- [x] FIXED 2026-10-15 — compliant now requires a 3–15 s pause
+      (`SessionDetail._isCompliantPause`, `AppConstants.maxCompliantPauseSec`),
+      so a long overrun is non-compliant and lowers ventilationCompliance.
+      10–15 s stays compliant but is marked "over the 10 s target". Rows show
+      "over target" / "overran" / "too short" / "prompt ignored" via
+      `VentilationEvent.overTarget`/`overran`/`tooShort`; the PDF
+      ventilation table shows ">15 s" for an overrun; the
+      `_twoColumnMetrics` note wording is fixed. Original item:
+      Per-event pause rows can't distinguish a 45 s overrun from a clean
       10 s pause. VentilationEvent/PulseCheckEvent display `durationSec`
       capped at `maxAcceptablePauseSec` (10 s) with a compliant marker, so
       a pause that ran 4.5x over shows identically to an honest 10 s pause
