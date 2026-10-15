@@ -166,8 +166,10 @@ class _AEDCardInternal extends StatelessWidget {
         ? Icons.directions_walk
         : Icons.directions_car;
 
+    // Same colours as the route polyline (RouteService.buildRoutePolyline),
+    // so the ETA matches the line it describes.
     final Color timeColor = isRealData
-        ? (selectedMode == 'walking' ? AppColors.aedNavGreen : AppColors.primary)
+        ? (selectedMode == 'walking' ? AppColors.success : AppColors.primaryAlt)
         : AppColors.textDisabled;
     final Color timeIconColor = isRealData ? timeColor : AppColors.textSecondary;
 

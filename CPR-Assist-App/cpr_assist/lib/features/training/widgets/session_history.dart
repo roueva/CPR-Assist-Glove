@@ -129,6 +129,17 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
     });
   }
 
+  static int _byGradeEmergencyLast(
+      SessionSummary a, SessionSummary b, {required bool highFirst}) {
+    if (a.isEmergency != b.isEmergency) return a.isEmergency ? 1 : -1;
+    if (a.isEmergency) {
+      return (b.sessionStart ?? DateTime(0)).compareTo(a.sessionStart ?? DateTime(0));
+    }
+    return highFirst
+        ? b.totalGrade.compareTo(a.totalGrade)
+        : a.totalGrade.compareTo(b.totalGrade);
+  }
+
   List<SessionSummary> _apply(List<SessionSummary> all) {
     // 1. Mode tab pre-filter
     List<SessionSummary> base;
@@ -168,11 +179,14 @@ class _SessionHistoryScreenState extends ConsumerState<SessionHistoryScreen>
       case 'oldest':
         base.sort((a, b) => (a.sessionStart ?? DateTime(0)).compareTo(b.sessionStart ?? DateTime(0)));
         break;
+      // Emergency sessions have no grade (totalGrade is a 0.0 sentinel), so
+      // they never take part in a grade sort: they go to the bottom, newest
+      // first, in both directions.
       case 'grade_high':
-        base.sort((a, b) => b.totalGrade.compareTo(a.totalGrade));
+        base.sort((a, b) => _byGradeEmergencyLast(a, b, highFirst: true));
         break;
       case 'grade_low':
-        base.sort((a, b) => a.totalGrade.compareTo(b.totalGrade));
+        base.sort((a, b) => _byGradeEmergencyLast(a, b, highFirst: false));
         break;
       case 'duration_desc':
         base.sort((a, b) => b.sessionDuration.compareTo(a.sessionDuration));
