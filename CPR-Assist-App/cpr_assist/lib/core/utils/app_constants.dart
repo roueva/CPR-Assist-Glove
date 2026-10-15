@@ -45,6 +45,9 @@ class AppConstants {
   static const double cacheInvalidationDistance = 100.0;
 
   static const Duration locationSettleTime     = Duration(seconds: 30);
+  /// GPS fix interval while navigating. geolocator's Android default is 5 s
+  /// when no AndroidSettings are passed — far too slow for a follow camera.
+  static const Duration navigationLocationInterval = Duration(seconds: 1);
   static const Duration improvementTimeout     = Duration(seconds: 30);
   static const int      maxImprovementAttempts = 3;
   static const double   significantImprovement = 50.0; // meters
@@ -70,10 +73,22 @@ class AppConstants {
   /// a large initial gap (e.g. panning in from the AED overview) still takes
   /// proportionally longer to close than routine GPS jitter does. Snap
   /// thresholds cut the long asymptotic tail short once it's imperceptible.
-  static const double cameraPositionSmoothingMs = 120.0;
-  static const double cameraBearingSmoothingMs  = 100.0;
-  static const double cameraSnapDistanceMeters  = 1.5;
+  static const double cameraPositionSmoothingMs = 250.0;
+  static const double cameraBearingSmoothingMs  = 250.0;
+  static const double cameraSnapDistanceMeters  = 0.3;
   static const double cameraSnapBearingDegrees  = 1.0;
+
+  /// Dead reckoning between GPS fixes: the camera target keeps moving along
+  /// the last fix's GPS speed and course, for at most this long, so it never
+  /// sits still waiting for the next fix. Below the speed floor, or on a fix
+  /// coarser than the accuracy ceiling, the target holds at the fix instead.
+  static const int    navigationMaxExtrapolationMs   = 1500;
+  static const double navigationMinSpeedMps          = 0.5;
+  static const double navigationMaxFixAccuracyMeters = 25.0;
+
+  /// Compass changes smaller than this are ignored, so the map doesn't
+  /// shimmer while standing still.
+  static const double compassDeadbandDegrees = 2.0;
 
   static const double rerouteThresholdMeters      = 50.0;
   static const double offRouteDistanceThreshold   = 25.0;

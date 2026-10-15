@@ -7,6 +7,7 @@ import 'package:flutter_compass/flutter_compass.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/core.dart';
+import 'location_service.dart';
 
 enum NavigationState { inactive, compassTracking, userControlling }
 
@@ -20,8 +21,6 @@ class NavigationController {
   DateTime? _lastProgrammaticMoveTime;
   DateTime? _lastUserTouchTime;
   bool      _showRecenterButton      = false;
-  LatLng?   _previousUserLocation;
-  DateTime? _lastLocationUpdateTime;
   bool      _isRecenterInProgress    = false;
 
   // ── Single camera driver ─────────────────────────────────────────────────
@@ -29,7 +28,13 @@ class NavigationController {
   // only thing that ever calls moveCamera — nothing else touches the camera
   // once navigation is active, so there is no animation to cancel and no
   // driver to fight.
+  //
+  // _targetPosition is the last fix. The ticker follows a prediction from
+  // it (see _predictedTargetPosition), not the fix itself.
   LatLng?   _targetPosition;
+  DateTime? _targetFixTime;
+  double    _velocityNorthMps = 0.0;
+  double    _velocityEastMps  = 0.0;
   double?   _targetBearing;
   Ticker?   _cameraTicker;
   Duration  _lastCameraTick = Duration.zero;
@@ -75,7 +80,7 @@ class NavigationController {
 
   /// Update the current user location.
   void updateUserLocation(LatLng location) {
-    _targetPosition = location;
+    _setTargetFix(location);
 
     if (_navigationState == NavigationState.compassTracking) {
       if (_wasRecentUserTouch()) {
@@ -86,7 +91,6 @@ class NavigationController {
         return;
       }
 
-      _updateLocationHistory(location);
       _ensureCameraTicker();
     }
   }
@@ -103,7 +107,7 @@ class NavigationController {
     }
 
     debugPrint('Starting navigation mode with location tracking...');
-    _targetPosition = userLocation;
+    _setTargetFix(userLocation);
 
     await _enterNavigationMode(userLocation, destination);
 
@@ -128,7 +132,7 @@ class NavigationController {
     _onRecenterButtonVisibilityChanged?.call(false);
 
     _cameraZoom     = AppConstants.compassOnlyZoom;
-    _targetPosition = destination;
+    _setTargetFix(destination);
 
     _startCompassTracking();
     _ensureCameraTicker();
@@ -165,7 +169,7 @@ class NavigationController {
     debugPrint('🎯 Recentering and resuming compass tracking');
 
     _isRecenterInProgress = true;
-    _targetPosition        = userLocation;
+    _setTargetFix(userLocation);
     _navigationState       = NavigationState.compassTracking;
     _showRecenterButton    = false;
     _onRecenterButtonVisibilityChanged?.call(false);
@@ -205,10 +209,11 @@ class NavigationController {
     _onRecenterButtonVisibilityChanged?.call(false);
     _notifyStateChanged();
 
-    _previousUserLocation  = null;
-    _lastLocationUpdateTime = null;
-    _targetPosition = null;
-    _cameraPosition = null;
+    _targetPosition   = null;
+    _targetFixTime    = null;
+    _velocityNorthMps = 0.0;
+    _velocityEastMps  = 0.0;
+    _cameraPosition   = null;
   }
 
   /// Dispose of all resources.
@@ -226,8 +231,8 @@ class NavigationController {
 
     _mapController        = null;
     _targetPosition        = null;
+    _targetFixTime         = null;
     _cameraPosition        = null;
-    _previousUserLocation = null;
 
     _navigationState    = NavigationState.inactive;
     _showRecenterButton = false;
@@ -235,20 +240,63 @@ class NavigationController {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  void _updateLocationHistory(LatLng location) {
-    final now = DateTime.now();
+  /// Records a new fix and the velocity to extrapolate it with. Velocity
+  /// comes from the raw GPS fix (Doppler speed and course), only when
+  /// [location] is that fix — a cached location or a destination gets zero.
+  void _setTargetFix(LatLng location) {
+    _targetPosition   = location;
+    _targetFixTime    = DateTime.now();
+    _velocityNorthMps = 0.0;
+    _velocityEastMps  = 0.0;
 
-    if (_previousUserLocation != null && _lastLocationUpdateTime != null) {
-      final timeDelta =
-          now.difference(_lastLocationUpdateTime!).inMilliseconds / 1000.0;
-
-      if (timeDelta > 0 && timeDelta < 5) {
-        _calculateDistance(_previousUserLocation!, location);
-      }
+    final fix = LocationService().lastNavigationFix;
+    if (fix == null ||
+        fix.latitude != location.latitude ||
+        fix.longitude != location.longitude) {
+      return;
+    }
+    // iOS reports -1 for an invalid speed or course.
+    if (fix.speed < AppConstants.navigationMinSpeedMps ||
+        fix.heading < 0 ||
+        fix.accuracy > AppConstants.navigationMaxFixAccuracyMeters) {
+      return;
     }
 
-    _previousUserLocation   = location;
-    _lastLocationUpdateTime = now;
+    final course = fix.heading * pi / 180.0;
+    _velocityNorthMps = fix.speed * cos(course);
+    _velocityEastMps  = fix.speed * sin(course);
+  }
+
+  bool get _isExtrapolating {
+    if (_targetFixTime == null) return false;
+    if (_velocityNorthMps == 0.0 && _velocityEastMps == 0.0) return false;
+    return DateTime.now().difference(_targetFixTime!).inMilliseconds <
+        AppConstants.navigationMaxExtrapolationMs;
+  }
+
+  /// The last fix moved forward along its velocity by the time since it
+  /// arrived, capped at navigationMaxExtrapolationMs.
+  LatLng _predictedTargetPosition() {
+    final fix = _targetPosition!;
+    if (_targetFixTime == null ||
+        (_velocityNorthMps == 0.0 && _velocityEastMps == 0.0)) {
+      return fix;
+    }
+
+    final elapsedMs = DateTime.now()
+        .difference(_targetFixTime!)
+        .inMilliseconds
+        .clamp(0, AppConstants.navigationMaxExtrapolationMs);
+    final dtSec = elapsedMs / 1000.0;
+
+    const metersPerDegreeLat = 111320.0;
+    final metersPerDegreeLon =
+        metersPerDegreeLat * cos(fix.latitude * pi / 180.0);
+
+    return LatLng(
+      fix.latitude  + _velocityNorthMps * dtSec / metersPerDegreeLat,
+      fix.longitude + _velocityEastMps  * dtSec / metersPerDegreeLon,
+    );
   }
 
   Future<void> _enterNavigationMode(LatLng userLocation, LatLng destination) async {
@@ -305,14 +353,13 @@ class NavigationController {
       }
       _lastCompassUpdate = now;
 
-      if (_targetBearing != null) {
-        final bearingDiff = _shortestBearingDelta(_targetBearing!, event.heading!).abs();
-        if (bearingDiff < 1.0) return;
-
-        _targetBearing = _interpolateBearing(_targetBearing!, event.heading!, 0.15);
-      } else {
-        _targetBearing = event.heading;
+      // Raw heading straight to the target — the ticker is the only smoother.
+      if (_targetBearing != null &&
+          _shortestBearingDelta(_targetBearing!, event.heading!).abs() <
+              AppConstants.compassDeadbandDegrees) {
+        return;
       }
+      _targetBearing = _normalizeBearing(event.heading!);
 
       _ensureCameraTicker();
     });
@@ -387,17 +434,18 @@ class NavigationController {
     if (dtMs <= 0) return;
 
     // Stop rather than idle-tick at 60fps: no map/target, the user is
-    // dragging, or the camera has already caught up to its targets. GPS and
-    // compass updates call _ensureCameraTicker() again whenever there is
-    // fresh work to do.
+    // dragging, or the camera has already caught up to its targets and the
+    // position target is no longer being extrapolated. GPS and compass
+    // updates call _ensureCameraTicker() again whenever there is fresh work.
     if (_mapController == null || _targetPosition == null || _wasRecentUserTouch()) {
       _cameraTicker?.stop();
       return;
     }
 
-    final target = _targetPosition!;
+    final target = _predictedTargetPosition();
     final targetBearing = _targetBearing ?? _cameraBearing;
-    final atTargetPosition = _cameraPosition != null &&
+    final atTargetPosition = !_isExtrapolating &&
+        _cameraPosition != null &&
         _calculateDistance(_cameraPosition!, target) < AppConstants.cameraSnapDistanceMeters;
     final atTargetBearing =
         _shortestBearingDelta(_cameraBearing, targetBearing).abs() < AppConstants.cameraSnapBearingDegrees;

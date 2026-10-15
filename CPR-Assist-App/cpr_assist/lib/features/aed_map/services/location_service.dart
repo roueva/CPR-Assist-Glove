@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -14,9 +15,15 @@ class LocationService {
   StreamSubscription<Position>? _positionSubscription;
   Timer? _improvementTimer;
   int _accuracyUpgradeToken = 0;
+  Position? _lastNavigationFix;
   static StreamController<bool>? _locationServiceController;
   static Timer? _locationServiceTimer;
   static StreamSubscription<ServiceStatus>? _serviceStatusSubscription;
+
+  /// Raw fix behind the most recent navigation-stream update. The update
+  /// callbacks carry only LatLng; the follow camera also needs GPS speed and
+  /// course to extrapolate between fixes.
+  Position? get lastNavigationFix => _lastNavigationFix;
 
   Future<bool> get hasPermission async {
     final status = await Geolocator.checkPermission();
@@ -229,6 +236,17 @@ class LocationService {
       return;
     }
 
+    // Navigation already has a fix — a low-accuracy phase would only feed the
+    // follow camera coarse, infrequent fixes for the first 30 s.
+    if (isNavigating) {
+      _upgradeToTargetAccuracy(
+        onLocationUpdate: onLocationUpdate,
+        isNavigating:     true,
+        distanceFilter:   distanceFilter,
+      );
+      return;
+    }
+
     debugPrint('🔍 GPS Phase 1: Low accuracy (quick start)');
 
     bool hasUpgraded = false;
@@ -285,12 +303,12 @@ class LocationService {
 
     if (isNavigating) {
       _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy:       LocationAccuracy.bestForNavigation,
-          distanceFilter: 0,
-        ),
+        locationSettings: _navigationLocationSettings(),
       ).listen(
-            (position) => onLocationUpdate(LatLng(position.latitude, position.longitude)),
+            (position) {
+          _lastNavigationFix = position;
+          onLocationUpdate(LatLng(position.latitude, position.longitude));
+        },
         onError: (Object error) {
           debugPrint('❌ Location stream error: $error');
           if (error.toString().contains('location')) stopLocationMonitoring();
@@ -309,6 +327,31 @@ class LocationService {
           if (error.toString().contains('location')) stopLocationMonitoring();
         },
       );
+    }
+  }
+
+  /// 1 Hz, every fix, highest accuracy. Plain LocationSettings can't set an
+  /// interval, and geolocator then defaults Android to one fix per 5 s.
+  LocationSettings _navigationLocationSettings() {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return AndroidSettings(
+          accuracy:       LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+          intervalDuration: AppConstants.navigationLocationInterval,
+        );
+      case TargetPlatform.iOS:
+        return AppleSettings(
+          accuracy:       LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+          activityType:   ActivityType.otherNavigation,
+          pauseLocationUpdatesAutomatically: false,
+        );
+      default:
+        return const LocationSettings(
+          accuracy:       LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+        );
     }
   }
 
@@ -398,6 +441,7 @@ class LocationService {
     _improvementTimer?.cancel();
     _positionSubscription = null;
     _improvementTimer     = null;
+    _lastNavigationFix    = null;
   }
 
   void dispose() {

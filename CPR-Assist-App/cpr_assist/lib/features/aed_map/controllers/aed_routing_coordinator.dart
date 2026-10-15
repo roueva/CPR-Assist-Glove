@@ -463,6 +463,13 @@ class AEDRoutingCoordinator {
 
     final destination = currentState.navigation.destination!;
 
+    // ── Forward to navigation controller ─────────────────────────────────────
+    // First, before anything below can await: the route re-fetch is a network
+    // call, and the follow camera must not stall on it.
+    if (navigationController != null && navigationController!.isActive) {
+      navigationController!.updateUserLocation(currentLocation);
+    }
+
     // ── Arrival check ────────────────────────────────────────────────────────
     final distToDestination =
     LocationService.distanceBetween(currentLocation, destination);
@@ -516,11 +523,6 @@ class AEDRoutingCoordinator {
             state.navigation.route, estimatedTime, remainingDistance);
         await updateNavigationRoute(currentLocation, destination);
       });
-    }
-
-    // ── Forward to navigation controller ─────────────────────────────────────
-    if (navigationController != null && navigationController!.isActive) {
-      navigationController!.updateUserLocation(currentLocation);
     }
   }
 
