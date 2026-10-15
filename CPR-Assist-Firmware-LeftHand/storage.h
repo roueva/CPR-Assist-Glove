@@ -26,7 +26,7 @@ uint8_t storageTotalChunks(uint8_t sessionIndex);
 struct StoredVentilation {
   uint32_t timestampMs;
   uint16_t cycleNumber;
-  uint8_t ventilationsGiven;
+  uint8_t compressionsDuringWindow;
   uint32_t durationMs;
   uint8_t compliant;
 } __attribute__((packed));

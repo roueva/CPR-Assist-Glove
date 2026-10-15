@@ -261,7 +261,7 @@ int storageSaveSession(const SharedState& s, uint32_t durationSec, uint64_t unix
     const StoredVentilation& v = vents[i];
     packU32(buf, off + 0, v.timestampMs);
     packU16(buf, off + 4, v.cycleNumber);
-    buf[off + 6] = v.ventilationsGiven;
+    buf[off + 6] = v.compressionsDuringWindow;
     packU32(buf, off + 7, v.durationMs);
     buf[off + 11] = v.compliant;
     off += STORAGE_VENTILATION_SIZE;

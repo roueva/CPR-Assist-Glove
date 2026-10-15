@@ -423,7 +423,7 @@ if (_state == CompState::COMPRESSING) {
 
   // ── Live instantaneous depth (for depth bar animation) ────────────────────
   // Live feedback: rises with the stroke, never dips mid-press (the raw
-  // double-integrator jitters ±cm at 25 Hz), snaps to 0 on release.
+  // double-integrator jitters by about a cm sample to sample), snaps to 0 on release.
   if (_state == CompState::COMPRESSING) {
     float rawCm = integPalm.depthM * 100.0f;
     if (rawCm < 0.0f) rawCm = 0.0f;
@@ -663,7 +663,7 @@ if (_state == CompState::COMPRESSING) {
               (_recoilValleyDepthMM < RECOIL_RESIDUAL_MAX_MM && _recoilValleyForceN < FORCE_LEANING_THRESHOLD) ? "RECOIL_OK" : "NO_RECOIL");
 #endif
 
-     bool validDepth = (imuMM > VALID_DEPTH_MIN_MM && imuMM < VALID_DEPTH_MAX_MM);  // legacy flag still used for storage gating below; kept independent of the new IMU-confidence calibration gate
+     bool validDepth = (imuMM > VALID_DEPTH_MIN_MM && imuMM < VALID_DEPTH_MAX_MM);  // gates the depth-trend buffer and the depth SD accumulators below (not per-compression storage); kept independent of the new IMU-confidence calibration gate
      bool validForce = (_peakForce > FORCE_BASELINE_MIN);  // 30 N, single source of truth
 
       // Update gravity EMA (kept as fallback signal — see Chunk 1 Section 3.3)
@@ -849,7 +849,7 @@ if (_state == CompState::COMPRESSING) {
   // ── Always update posture angles ──────────────────────────────────────────
   s.wristAlignmentAngle = fabsf(imuGetPalmPitchDeg());
   s.wristFlexionAngle = imuWristDropped() ? 0.0f
-                                          : imuGetWristFlexionDeg();  // signed ±45; 0 = wrist IMU unavailable
+                                          : imuGetWristFlexionDeg();  // signed, not clamped (palm pitch - wrist pitch); 0 = wrist IMU unavailable
   s.compressionAxisDeviation = fabsf(imuGetPalmRollDeg());
   s.force = forceN;
 }
