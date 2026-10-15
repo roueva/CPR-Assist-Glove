@@ -93,3 +93,33 @@ Firmware and app agree on every byte below. Only the spec is behind.
 ---
 
 Nothing above has been edited. Awaiting approval.
+
+---
+
+## 6. Addendum 2026-10-15 — §9 grading and §11 backend
+
+Read-only. Sources: `calculateGradeFromDetail` (`session_service.dart`),
+`SessionDetail.applyPauseModel`, `CPR-Assist-Server/db.js`.
+
+### §9 Grading — weights and time bands match the code. Three gaps:
+
+| # | Spec says | Code does | Proposed spec change |
+|---|---|---|---|
+| G1 | — | Fewer than 10 compressions → grade 0 (`session_service.dart:285`) | Add the rule. |
+| G2 | Ventilation = correctVentilations / totalVentilations | `ventilationCompliance` from the app's measured pauses (3–15 s), which also overwrites correctVentilations. The glove's own count is not used. | Say where the number comes from; point to §7.2. |
+| G3 | Labels A–D: "Excellent!", "Good job!", "Keep it up!", "Keep practicing!" at 90/75/55 | Same 90/75/55 bands, but no letters. The PDF uses "Outstanding!", "Great work!", "Keep it up!", "Keep practising!" (`export_service.dart:3341`); the leaderboard uses the bands for colour only. | Replace §9.3 with the bands and the PDF wording. |
+
+### §11 Backend — spec is far behind `db.js`. Session timestamps are TIMESTAMPTZ (spec says TIMESTAMP).
+
+| Table | In `db.js`, missing from spec |
+|---|---|
+| cpr_sessions | no_flow_intervals_firmware, unplanned_pause_time, unplanned_pause_count, wrist_dropped_during_session, patient_spo2_last_check, fatigue_alert_timestamp_ms, fatigue_alert_score, two_min_alert_timestamps_ms, two_min_alert_numbers, mode_change_timestamps_ms/values/triggers, scenario_change_timestamps_ms/values/triggers |
+| session_compressions | valley_depth (= residualLoadDepthCm), peak_ts, valley_ts |
+| session_pulse_checks | interval_from_start, ref_source, patient_spo2, ppg_samples (JSONB) |
+| session_rescuer_vitals | humidity |
+
+Also: spec `no_flow_time` note says "unplanned gaps > 2 s", but §6 defines
+no-flow as all gaps > 2 s including planned pauses; unplanned is its own
+column. Endpoints (§11.3) not checked.
+
+Proposed: rewrite §11.1–11.2 from `db.js` as-is. Spec only, no DB change.

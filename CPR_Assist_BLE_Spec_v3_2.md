@@ -18,7 +18,7 @@ Version 3.1 supersedes v3.0. This release reconciles the specification with the 
 
 Version 3.2 supersedes v3.1. This release documents the DIAG_FRAME packet (0x0D), which has been implemented in firmware and parsed by the app since the diagnostics tool was added but was never described in this specification. Changes from v3.1: new section 4.14 defining DIAG_FRAME (0x0D), a glove-to-app engineering telemetry frame sent at 4 Hz only while the diagnostics sheet is open; DIAG_FRAME added to the packet type reference in 4.1 and to the appendix quick reference. DIAG_FRAME carries two build-provenance fields, buildFlags (byte 17) and buildStamp (bytes 18-21), which report the compile-time configuration of the flashed firmware so that a study build can be verified on the device rather than inferred from source. App-to-glove commands 0xF3 START and 0xF4 STOP are marked reserved and not implemented app-side: the constants exist in the app but are commented out, and session start and stop are driven by the physical button only. No change to LIVE_STREAM or to any existing EVENT_CHANNEL packet layout.
 
-Version 3.3 supersedes v3.2. This release reconciles the specification with the as-built firmware and app, which already agree with each other on every item below. No firmware behaviour changed. Changes from v3.2, row by row in docs/BLE_SPEC_RECONCILIATION.md: LIVE_STREAM bytes 52–55 (residualLoadDepthCm), 86 (inVentilationWindow) and 102–107 (lastPeakDepthCm, lastPeakConfidence, lastPeakDepthSource) documented, as they were never reserved. Byte 91 documented as a 3-bit feedback mask. Patient vitals documented as also sent while diagnostics are active, and patient temperature as zero outside a pulse-check window. compressionAxisDeviation source corrected to palm-IMU roll. fatigueFlag and wristDropped definitions corrected. PULSE_CHECK_START trigger rewritten as the passive contact-plus-pause gate, and its intervalNumber redefined as a pulse-check count. PULSE_CHECK_RESULT close condition corrected, byte 9 refSource documented, and the self-detection downgrade described. SESSION_END byte 95 (wristDroppedDuringSession) documented, and correctVentilations, pulseChecksPrompted and pulseChecksComplied redefined. SESSION_END inactivity timeout corrected. SELFTEST_RESULT bytes 5–15 and its extra triggers documented. 0xF7 CALIBRATE behaviour corrected. Commands 0xFE, 0xFF, 0xEB, 0xED, 0xEC and 0xEE added. DIAG_FRAME byte 6 redefined as the last diagnostic action or button event. Session lifecycle steps 7–9 and the pulse-check card rewritten. VentilationEvent model corrected to the app's measured-duration fields. Local storage file name, meta file, header field order, compression padding and pulse-check entry size (13 bytes) corrected. Posture: wristAlignmentAngle documented as absolute palm pitch with a 30° target, postureOk as alignment only, and wristFlexionAngle as a display guide that is not scored. The firmware already used this rule. The app's labels, charts and exports, which stated 15° alignment and ±10° flexion, were corrected to match. The graded correctPosture count is unchanged.
+Version 3.3 supersedes v3.2. This release reconciles the specification with the as-built firmware and app, which already agree with each other on every item below. No firmware behaviour changed. Changes from v3.2, row by row in docs/BLE_SPEC_RECONCILIATION.md: LIVE_STREAM bytes 52–55 (residualLoadDepthCm), 86 (inVentilationWindow) and 102–107 (lastPeakDepthCm, lastPeakConfidence, lastPeakDepthSource) documented, as they were never reserved. Byte 91 documented as a 3-bit feedback mask. Patient vitals documented as also sent while diagnostics are active, and patient temperature as zero outside a pulse-check window. compressionAxisDeviation source corrected to palm-IMU roll. fatigueFlag and wristDropped definitions corrected. PULSE_CHECK_START trigger rewritten as the passive contact-plus-pause gate, and its intervalNumber redefined as a pulse-check count. PULSE_CHECK_RESULT close condition corrected, byte 9 refSource documented, and the self-detection downgrade described. SESSION_END byte 95 (wristDroppedDuringSession) documented, and correctVentilations, pulseChecksPrompted and pulseChecksComplied redefined. SESSION_END inactivity timeout corrected. SELFTEST_RESULT bytes 5–15 and its extra triggers documented. 0xF7 CALIBRATE behaviour corrected. Commands 0xFE, 0xFF, 0xEB, 0xED, 0xEC and 0xEE added. DIAG_FRAME byte 6 redefined as the last diagnostic action or button event. Session lifecycle steps 7–9 and the pulse-check card rewritten. VentilationEvent model corrected to the app's measured-duration fields. Local storage file name, meta file, header field order, compression padding and pulse-check entry size (13 bytes) corrected. Posture: wristAlignmentAngle documented as absolute palm pitch with a 30° target, postureOk as alignment only, and wristFlexionAngle as a display guide that is not scored. The firmware already used this rule. The app's labels, charts and exports, which stated 15° alignment and ±10° flexion, were corrected to match. The graded correctPosture count is unchanged. Session start (§5.1 step 2) and imuCalibrated corrected: there is no 500 ms gravity baseline. §9 now states the < 10 compression rule, the app-side ventilation compliance source, and grade bands instead of letter labels. §11 rewritten from CPR-Assist-Server/db.js. Stored ventilation byte renamed compressionsDuringWindow (was ventilationsGiven), same position.
 
 ## **1.1 Hardware Summary**
 
@@ -90,7 +90,7 @@ Sent continuously at 10 Hz whenever the glove is on and BLE is connected. All mu
 | ── FATIGUE FLAGS (bytes 48–55) |  |  |  |  |
 | 48 | uint8 | fatigueFlag | 0 or 1 | One-shot latch. 1 = the 5-comp rolling average depth has declined by at least FATIGUE_DECLINE_THRESHOLD_MM (10 mm) from the average of the session's first 5 compressions. Elevated rescuer HR (with signal quality ≥ 40) lowers the threshold. Triggers FATIGUE_ALERT event once per session. |
 | 49 | uint8 | rescuerFatigueScore | 0–100 | Depth-decline fatigue proxy: (firstFiveCompressionAvgDepthMM − currentDepthTrendMM) / FATIGUE_DECLINE_THRESHOLD_MM × 100, clamped 0–100. Elevated rescuer HR lowers the trigger threshold but is NOT a term in the score. RMSSD is streamed separately (byte 81) and is NOT an input to this score. 0 = no decline detected, 100 = severe decline. Stored in RescuerVitalSnapshot. |
-| 50 | uint8 | imuCalibrated | 0 or 1 | 1 = gravity baseline calibration complete (requires 3+ compressions). App shows a calibrating indicator when 0 at session start. |
+| 50 | uint8 | imuCalibrated | 0 or 1 | 1 = palm complementary filter initialised AND at least GRAV_MIN_CYCLES_PALM (3) gravity cycles counted. The cycle count is not reset per session, so after the first 3 compressions since power-on this stays 1, dropping to 0 only briefly while the filter re-initialises at session start. App shows a calibrating indicator when 0. |
 | 51 | uint8 | wristDropped | 0 or 1 | 1 = wrist-side IMU (LSM6DSOX #2) latched as dropped after WRIST_DROPOUT_LIMIT (3) consecutive strokes with zero wrist depth once its gravity baseline is established. Cleared on session reset. App shows a sensor warning when 1. |
 | 52–55 | float32 | residualLoadDepthCm | cm | Residual load between compressions, expressed as a depth: the inter-compression force run back through the force→depth model. NOT an IMU-measured depth and NOT the recoil residual used for recoilAchieved. Non-zero while leaning, so the app can show leaning on the depth graph. |
 | ── PATIENT VITALS (bytes 56–71) — sent only while pulseCheckActive = 1 or diagnostics are active; all six fields are 0 otherwise |  |  |  |  |
@@ -149,7 +149,7 @@ Byte 0 of every frame is the packetType discriminator. The app writes commands t
 | 0x08 | FATIGUE_ALERT | Glove → App | When fatigueFlag first becomes 1 (5-comp rolling avg declines ≥ 10 mm from the first-5-compression average, see LIVE_STREAM byte 48). Fires once per session maximum. |
 | 0x09 | PENDING_LOCAL_DATA | Glove → App | Sent on BLE connection if glove has locally stored sessions. byte[1] = number of pending sessions (0–255). |
 | 0x0A | LOCAL_SESSION_CHUNK | Glove → App | Data chunk for a locally stored session being transmitted after app sends 0xF5 REQUEST_SESSION. |
-| 0x0B | SELFTEST_RESULT | Glove → App | Sent after glove completes self-test: automatically on power-on, on 0xFC RUN_SELFTEST, and after 0xF7 CALIBRATE. If 0xFC or 0xF7 arrives during a session, pulse check, or ventilation window, the glove skips the test and replies at once with every reason code set to NOT_TESTED (0xFF). Carries pass/warn/critical bitmasks, battery %, I2C scan, WHO_AM_I values, and per-sensor reason codes. |
+| 0x0B | SELFTEST_RESULT | Glove → App | Sent after glove completes self-test: on 0xFC RUN_SELFTEST and after 0xF7 CALIBRATE. The automatic run 1.5 s after BLE connect is currently disabled in firmware (runSelftest() commented out, "TEMP: disabled while debugging TCA"). If 0xFC or 0xF7 arrives during a session, pulse check, or ventilation window, the glove skips the test and replies at once with every reason code set to NOT_TESTED (0xFF). Carries pass/warn/critical bitmasks, battery %, I2C scan, WHO_AM_I values, and per-sensor reason codes. |
 | 0x0C | SCENARIO_CHANGE | Glove → App | Glove button double-press cycles scenario (adult/pediatric). Also sent in response to app 0xFD SET_SCENARIO command. |
 | 0x0D | DIAG_FRAME | Glove → App | Engineering telemetry. Queued at 4 Hz while the app's glove diagnostics sheet is open (diagActive) and at no other time. Carries raw sensor values, I2C scan results, and firmware build provenance. Not part of any session record and never written to the backend. |
 | 0xF1 | APP → MODE_SET | App → Glove | App sets mode: byte[1] = 0x00 Emergency / 0x01 Training / 0x02 Training-No-Feedback. |
@@ -374,7 +374,7 @@ Engineering telemetry for the glove diagnostics sheet. The glove queues this fra
 | **Step** | **Trigger** | **Glove Action** | **App Action** |
 | --- | --- | --- | --- |
 | 1 | Button press or app 0xF3 | Sends SESSION_START (0x01). Clears all counters. | Starts client-side session timer. Clears compressionEvents[]. Records sessionStartTime. |
-| 2 | Rescuer places hands — force > 5 N | Begins silent 500 ms gravity baseline calibration. Sets imuCalibrated = 0 during calibration. | Shows calibrating indicator while imuCalibrated = 0. |
+| 2 | Session start | Arms a complementary-filter reset that fires after ~300 ms of stillness (palm accel within 3% of 1 g), then fast-converges. No force trigger. imuCalibrated may read 0 briefly. | Shows calibrating indicator while imuCalibrated = 0. |
 | 3 | First compression > threshold | LIVE_STREAM begins. compressionCount increments. | Depth bar animates. Rate gauge updates. Accumulates CompressionEvents. |
 | 4 | 30th compression in cycle | Sends VENTILATION_WINDOW (0x03). Audio + haptic cue. Resets compressionInCycle to 0. | Shows BREATHE overlay with cycle number. Starts ventilation timer. The glove counts the window compliant if the rescuer pauses ≥ 3 s after a 2.5 s grace period. |
 | 5 | Compressions resume after ventilation | Resumes normal LIVE_STREAM. | Hides BREATHE overlay. Logs VentilationEvent. Increments cycle counter. |
@@ -452,7 +452,7 @@ Mode 2 is a blind assessment mode. The glove suppresses all feedback channels (D
 | Consecutive good streak | App-computed | — | Live counter of unbroken correct compressions |
 | Fatigue flag | Firmware computed | LIVE | 5-comp rolling avg declines ≥ 10 mm from the first-5-compression average |
 | Rescuer fatigue score (0–100) | Firmware computed | LIVE | Depth-decline proxy only: decline of 5-comp depth trend vs first-5 average. HR shifts the trigger threshold; RMSSD is NOT an input. |
-| IMU calibrated flag | Firmware computed | LIVE | 0 during warmup (first 3 compressions), 1 after |
+| IMU calibrated flag | Firmware computed | LIVE | 0 until 3 gravity cycles since power-on, and briefly during the filter re-init at session start |
 | Wrist dropped flag | Firmware computed | LIVE | Latched after 3 consecutive zero-depth wrist strokes. Cleared on session reset. |
 | Patient HR (BPM) | Fingertip MAX30102 | LIVE | Valid during pulse check only |
 | Patient SpO2 (%) | Fingertip MAX30102 | LIVE | Valid during pulse check only |
@@ -507,7 +507,7 @@ One instance per 30:2 cycle. Stored in SessionDetail.ventilations[].
 | durationSec | double | The measured no-flow gap containing this prompt, computed by the app after the session from the compression timeline, capped at maxCompliantPauseSec (15 s). Not a firmware value. |
 | compliant | bool | App-side: true when the uncapped measured gap is between minCompliantPauseSec (3 s) and maxCompliantPauseSec (15 s). The 10 s guideline target stays maxAcceptablePauseSec: a compliant 10–15 s pause is marked "over target", and time past 10 s is still reported as unplanned pause time. A pause past 15 s keeps durationSec = 15 and compliant = false, which is how the app marks it as overran. Drives ventilationCompliance. Independent of the glove's correctVentilations count (SESSION_END bytes 42–45). |
 
-The app model has no ventilationsGiven field. The glove's stored ventilation array (§8.2) carries one, and the offline parser does not read it.
+The app model has no breath-count field. The glove's stored ventilation array (§8.2) carries compressionsDuringWindow, and the offline parser does not read it.
 
 ## **7.3 PulseCheckEvent (Emergency mode only)**
 
@@ -661,7 +661,7 @@ All data stored in little-endian binary. No JSON. The header is 104 bytes, then 
 | VENTILATION ARRAY (12 bytes × ventilationArrayLen) |  |  |
 | timestampMs | uint32 | Session ms when ventilation window opened |
 | cycleNumber | uint16 | Which 30:2 cycle (starts at 1) |
-| ventilationsGiven | uint8 | Despite the name, the number of compressions made while the window was open (firmware `compsDuringWindow`), saturating at 255. Not a breath count. The app does not read it. |
+| compressionsDuringWindow | uint8 | Number of compressions made while the window was open, saturating at 255. Not a breath count. Renamed from ventilationsGiven in v3.3; same byte, no format change. The app does not read it. |
 | durationMs | uint32 | Total ms spent in ventilation window. The app does not read it; it recomputes duration from the compression timeline. |
 | compliant | uint8 | 1 = the glove counted this window in correctVentilations (pause ≥ 3 s after the 2.5 s grace period). The app does not read it. |
 | PULSE CHECK ARRAY (13 bytes × pulseCheckArrayLen) |  |  |
@@ -691,7 +691,7 @@ All data stored in little-endian binary. No JSON. The header is 104 bytes, then 
 
 # **9. Grading Formula (Training Mode Only)**
 
-Grade is always computed client-side by the app. The glove never calculates or sends a grade. Score range: 0–100. Pulse check compliance is excluded from Training mode. Emergency sessions always receive grade 0.0.
+Grade is always computed client-side by the app. The glove never calculates or sends a grade. Score range: 0–100. Pulse check compliance is excluded from Training mode. Emergency sessions always receive grade 0.0. Sessions with fewer than 10 compressions also receive grade 0.0.
 
 ## **9.1 Standard Adult Weights**
 
@@ -702,7 +702,7 @@ Grade is always computed client-side by the app. The glove never calculates or s
 | Correct recoil | 20% | 0% | correctRecoil / totalCompressions × 100 |
 | Depth + rate combo | 8% | 0% | depthRateCombo / totalCompressions × 100 |
 | Hands-on ratio (CCF) | 5% | 0% | handsOnRatio × 100 |
-| Ventilation compliance | 12% | 0% | (correctVentilations / totalVentilations) × 100. 100% if no ventilation windows occurred. |
+| Ventilation compliance | 12% | 0% | SessionDetail.ventilationCompliance: share of ventilation prompts whose measured pause was 3–15 s (§7.2). Computed by the app from the compression timeline; the glove's own correctVentilations count is not used. 100% if no ventilation windows occurred (e.g. compression-only). |
 | Posture consistency | 8% | 0% | correctPosture / totalCompressions × 100 |
 | Time to first compression | 2% | 0% | 100 if < 5 s │ 80 if 5–10 s │ 50 if > 10 s |
 
@@ -725,14 +725,16 @@ Applies when scenario = "pediatric". Depth weighted higher for the smaller chest
 
 As with the adult weights, there is no force-safety term and no fatigue penalty. Weights sum to 100%.
 
-## **9.3 Grade Labels**
+## **9.3 Grade Bands**
 
-| **Score Range** | **Grade** | **Label** |
+There are no letter grades. The app uses three thresholds on the 0–100 grade, for colour and for the PDF verdict text.
+
+| **Score Range** | **PDF verdict** | **Colour** |
 | --- | --- | --- |
-| 90–100 | A | Excellent! |
-| 75–89 | B | Good job! |
-| 55–74 | C | Keep it up! |
-| 0–54 | D | Keep practicing! |
+| 90–100 | Outstanding! | success |
+| 75–89 | Great work! | primaryAlt |
+| 55–74 | Keep it up! | warning |
+| 0–54 | Keep practising! | error |
 
 # **10. App Screen Behaviour**
 
@@ -791,67 +793,81 @@ Shown after Training mode session ends. All graphs share the same X-axis (second
 
 # **11. Backend Schema**
 
+Source of truth: CPR-Assist-Server/db.js. Tables are created with CREATE TABLE IF NOT EXISTS and extended with ADD COLUMN IF NOT EXISTS on every start.
+
 ## **11.1 cpr_sessions Table (all columns)**
 
 | **Column** | **Type / Default** | **Notes** |
 | --- | --- | --- |
 | id | BIGSERIAL PK |  |
-| user_id | BIGINT NOT NULL | FK to users table |
+| user_id | BIGINT NOT NULL | FK users(id) ON DELETE CASCADE |
 | mode | VARCHAR(25) / 'emergency' | "emergency" │ "training" │ "training_no_feedback" |
 | scenario | VARCHAR(40) / 'standard_adult' | "standard_adult" │ "pediatric" |
-| session_start | TIMESTAMP NOT NULL | Unique per user (uq_user_session_start index) |
-| session_end | TIMESTAMP |  |
+| session_start | TIMESTAMPTZ NOT NULL | Unique per user (upsert key with user_id) |
+| session_end | TIMESTAMPTZ |  |
 | compression_count | INT / 0 |  |
 | correct_depth | INT / 0 |  |
 | correct_frequency | INT / 0 |  |
 | correct_recoil | INT / 0 |  |
 | depth_rate_combo | INT / 0 |  |
-| correct_posture | INT / 0 |  |
+| correct_posture | INT / 0 | Firmware postureOk count (alignment < 30°) |
 | leaning_count | INT / 0 |  |
 | over_force_count | INT / 0 |  |
 | too_deep_count | INT / 0 |  |
-| correct_ventilations | INT / 0 |  |
+| correct_ventilations | INT / 0 | App-computed (3–15 s pauses) |
 | average_depth | FLOAT / 0 | cm |
 | average_frequency | FLOAT / 0 | BPM |
-| average_effective_depth | FLOAT / 0 | cm — angle-corrected mean depth |
-| peak_depth | FLOAT / 0 | cm — maximum single compression |
-| depth_sd | FLOAT / 0 | cm — std deviation of per-compression depths |
-| depth_consistency | FLOAT / 0 | % compressions within target depth range |
-| freq_consistency | FLOAT / 0 | % compressions within 100–120 BPM |
-| hands_on_ratio | FLOAT / 1 | 0–1. CCF. |
-| no_flow_time | FLOAT / 0 | seconds of unplanned gaps > 2 s |
-| no_flow_intervals | INT / 0 | count of unplanned gaps |
-| rate_variability | FLOAT / 0 | std deviation of inter-compression intervals (ms) |
-| time_to_first_comp | FLOAT / 0 | seconds |
+| average_effective_depth | FLOAT / 0 | cm, angle-corrected |
+| peak_depth | FLOAT / 0 | cm |
+| depth_sd | FLOAT / 0 | cm |
+| depth_consistency | FLOAT / 0 | % |
+| freq_consistency | FLOAT / 0 | % |
+| hands_on_ratio | FLOAT / 1 | 0–1, CCF |
+| no_flow_time | FLOAT / 0 | s, all gaps > 2 s including planned pauses (§6) |
+| no_flow_intervals | INT / 0 | App-computed count of those gaps (authoritative) |
+| no_flow_intervals_firmware | INT / 0 | Glove SESSION_END byte 91, advisory |
+| unplanned_pause_time | FLOAT / 0 | s, gaps outside or beyond planned windows |
+| unplanned_pause_count | INT / 0 |  |
+| rate_variability | FLOAT / 0 | ms |
+| time_to_first_comp | FLOAT / 0 | s |
 | consecutive_good_peak | INT / 0 | longest unbroken correct streak |
 | fatigue_onset_index | INT / 0 | 0 = no fatigue |
-| rescuer_swap_count | INT / 0 | TWO_MIN_ALERT events fired |
+| rescuer_swap_count | INT / 0 | TWO_MIN_ALERT count |
 | ventilation_count | INT / 0 |  |
 | ventilation_compliance | FLOAT / 0 | 0–100 % |
-| pulse_checks_prompted | INT / 0 | Emergency only |
-| pulse_checks_complied | INT / 0 | Emergency only |
-| pulse_detected_final | BOOLEAN / false | Emergency only |
-| patient_temperature | FLOAT / NULL | °C — last carotid skin temp captured during a pulse check |
+| pulse_checks_prompted | INT / 0 | Windows opened by the passive gate |
+| pulse_checks_complied | INT / 0 | Windows closed with SQI ≥ 40 |
+| pulse_detected_final | BOOLEAN / false |  |
+| wrist_dropped_during_session | BOOLEAN / false | SESSION_END byte 95 |
+| patient_temperature | FLOAT / NULL | °C, last carotid skin temp during a pulse check |
+| patient_spo2_last_check | FLOAT / NULL | % |
 | rescuer_hr_last_pause | FLOAT / NULL | BPM |
 | rescuer_spo2_last_pause | FLOAT / NULL | % |
-| rescuer_wrist_temp_start | FLOAT / NULL | °C — wrist skin temp at session start (legacy ambient_temp_start was migrated into this column and dropped) |
-| rescuer_wrist_temp_end | FLOAT / NULL | °C — wrist skin temp at session end (legacy ambient_temp_end was migrated into this column and dropped) |
-| user_heart_rate | FLOAT / NULL | Legacy field — rescuer HR (kept for compat) |
-| user_temperature | FLOAT / NULL | Legacy field — rescuer temp (kept for compat) |
-| session_duration | INT / 0 | seconds |
-| total_grade | FLOAT / 0 | 0–100. Always 0 for Emergency. |
-| synced_from_local | BOOLEAN / false | True if uploaded from glove LittleFS |
-| note | VARCHAR(500) | Optional user note |
+| rescuer_wrist_temp_start | FLOAT / NULL | °C wrist skin |
+| rescuer_wrist_temp_end | FLOAT / NULL | °C wrist skin |
+| user_heart_rate | FLOAT / NULL | Legacy |
+| user_temperature | FLOAT / NULL | Legacy |
+| session_duration | INT / 0 | s |
+| total_grade | FLOAT / 0 | 0–100, 0 for Emergency |
+| note | VARCHAR(500) |  |
+| fatigue_alert_timestamp_ms | INTEGER |  |
+| fatigue_alert_score | INTEGER |  |
+| two_min_alert_timestamps_ms | INTEGER[] |  |
+| two_min_alert_numbers | INTEGER[] |  |
+| mode_change_timestamps_ms / _values / _triggers | INTEGER[] ×3 | One entry per MODE_CHANGE |
+| scenario_change_timestamps_ms / _values / _triggers | INTEGER[] ×3 | One entry per SCENARIO_CHANGE |
 
 ## **11.2 Sub-Tables**
 
-session_compressions: id, session_id (FK + CASCADE), timestamp_ms, depth, frequency, instantaneous_rate, force, recoil_achieved, over_force, posture_ok, leaning_detected, wrist_alignment_angle, wrist_flexion_angle, compression_axis_dev, effective_depth, peak_force, downstroke_time_ms
+All have id BIGSERIAL PK, session_id BIGINT NOT NULL (FK cpr_sessions ON DELETE CASCADE), timestamp_ms INT NOT NULL, and an index on (session_id, timestamp_ms).
 
-session_ventilations: id, session_id (FK + CASCADE), timestamp_ms, cycle_number, ventilations_given, duration_sec, compliant
+session_compressions: depth, frequency, instantaneous_rate, force, recoil_achieved, over_force, posture_ok, leaning_detected, wrist_alignment_angle, wrist_flexion_angle, compression_axis_dev, effective_depth, peak_force, downstroke_time_ms, peak_ts, valley_ts, valley_depth (= residualLoadDepthCm)
 
-session_pulse_checks: id, session_id (FK + CASCADE), timestamp_ms, interval_number, classification, detected, detected_bpm, confidence, perfusion_index, detector_a_count, detector_b_count, user_decision
+session_ventilations: cycle_number, duration_sec, compliant
 
-session_rescuer_vitals: id, session_id (FK + CASCADE), timestamp_ms, heart_rate, spo2, rmssd, rescuer_pi, temperature, fatigue_score, signal_quality, pause_type
+session_pulse_checks: interval_number, interval_from_start, classification, detected, detected_bpm, confidence, perfusion_index, detector_a_count, detector_b_count, ref_source, user_decision, patient_spo2, ppg_samples (JSONB)
+
+session_rescuer_vitals: heart_rate, spo2, rmssd, rescuer_pi, temperature, fatigue_score, signal_quality, pause_type, humidity
 
 ## **11.3 Endpoints**
 
@@ -887,7 +903,7 @@ session_rescuer_vitals: id, session_id (FK + CASCADE), timestamp_ms, heart_rate,
 | 14 | Set overForceFlag = 1 when compression force exceeds 600 N; increment overForceCount in SESSION_END | High | overForceFlag |
 | 15 | Set fatigueFlag = 1 when depthTrend declines ≥ FATIGUE_DECLINE_THRESHOLD_MM (10 mm) from the first-5-compression average; send FATIGUE_ALERT (0x08) once per session | High | fatigueFlag |
 | 16 | Compute rescuerFatigueScore (0–100): depth-decline proxy = (firstFiveCompressionAvgDepthMM − currentDepthTrendMM) / FATIGUE_DECLINE_THRESHOLD_MM × 100, clamped 0–100. Elevated rescuer HR lowers the trigger threshold only; RMSSD is NOT an input. Stream in LIVE_STREAM byte 49. | High | rescuerFatigueScore |
-| 17 | Set imuCalibrated = 0 during first 3 compressions (warmup); set to 1 after gravity baseline stable | High | imuCalibrated |
+| 17 | Set imuCalibrated = 1 once the palm filter is initialised and 3 gravity cycles have been counted (count kept across sessions) | High | imuCalibrated |
 | 18 | Latch wristDropped = 1 after WRIST_DROPOUT_LIMIT (3) consecutive zero-depth wrist strokes once the wrist gravity baseline is established; clear on session reset | High | wristDropped |
 | 19 | Track tooDeepCount: increment when peak depth > 6 cm (adult) or > 5 cm (pediatric) | Medium | tooDeepCount in SESSION_END |
 | 20 | Implement VENTILATION_WINDOW (0x03): send at 30th compression of each cycle; reset compressionInCycle; count the window in correctVentilations on a ≥ 3 s pause after a 2.5 s grace period | High | ventilation flow |
