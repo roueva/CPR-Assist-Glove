@@ -2006,11 +2006,11 @@ class _MetricsTab extends StatelessWidget {
               format:  (v) => v != null ? '${v.toStringAsFixed(1)}°' : '—',
               colorFn: (v) {
                 if (v == null) return AppColors.textDisabled;
-                if (v <= 10)   return AppColors.success;
-                if (v <= 15)   return AppColors.warning;
+                if (v <= CprTargets.alignmentGoodDeg) return AppColors.success;
+                if (v <= CprTargets.alignmentMaxDeg)  return AppColors.warning;
                 return AppColors.error;
               },
-              target: '< 15°',
+              target: '< ${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°',
               lowerIsBetter: true,
               bestHighlight: true,
               infoText: 'Mean wrist deviation angle measured by the glove during compressions. Straight locked arms positioned directly over the sternum give the lowest angle and the most efficient force transfer.',
@@ -2024,7 +2024,7 @@ class _MetricsTab extends StatelessWidget {
               colorFn: _pctColor,
               target:  '≥ 80%',
               bestHighlight: true,
-              infoText: 'Percentage of compressions where wrist alignment angle was below 15° and wrist flexion was within ±10° at the same time. Both conditions must be met for a compression to count as correct posture.',
+              infoText: 'Percentage of compressions where the glove measured a hand tilt below ${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°. Wrist flexion is shown separately and does not count toward posture.',
             ),
           ],
         ),

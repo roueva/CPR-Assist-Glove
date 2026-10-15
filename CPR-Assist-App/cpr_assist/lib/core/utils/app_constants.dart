@@ -294,6 +294,11 @@ class AppConstants {
   static const int      maxLocalSessions        = 20;
   static const double maxAcceptablePauseSec = 10.0;
   static const double minCompliantPauseSec = 3.0;
+  /// Ceiling for a planned pause to still count as compliant. Lenient on
+  /// purpose: a pause a few seconds past the 10 s target is far better than
+  /// none or 40 s. Time past maxAcceptablePauseSec is still reported as
+  /// unplanned pause time.
+  static const double maxCompliantPauseSec = 15.0;
   static const double plannedWindowAssocToleranceSec = 3.0;
   /// Above this many unplanned pauses, session pause quality is flagged.
   static const int maxAcceptableUnplannedPauseCount = 2;

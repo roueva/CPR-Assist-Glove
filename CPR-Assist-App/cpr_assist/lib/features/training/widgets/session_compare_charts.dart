@@ -446,7 +446,7 @@ class _ComparePostureChartState extends State<_ComparePostureChart> {
     }
     if (series.isEmpty) return const SizedBox.shrink();
 
-    final double chartMaxY = (maxAngle + 5).clamp(20.0, 45.0);
+    final double chartMaxY = (maxAngle + 5).clamp(CprTargets.alignmentMaxDeg + 5, 45.0);
 
     return CprChartCard(
       title:    'Wrist Alignment',

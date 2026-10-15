@@ -868,16 +868,16 @@ class _CompressionQualityCard extends StatelessWidget {
                     ? [
                   _TileRow('Wrist angle',
                       '${avgWristAngle.toStringAsFixed(1)}°',
-                      color: avgWristAngle <= 15 ? AppColors.success
-                          : avgWristAngle <= 25  ? AppColors.warning
+                      color: avgWristAngle <= CprTargets.alignmentGoodDeg ? AppColors.success
+                          : avgWristAngle <= CprTargets.alignmentMaxDeg  ? AppColors.warning
                           : AppColors.error),
                   _TileRow(
-                      avgWristAngle <= 15 ? 'Good alignment'
-                          : avgWristAngle <= 25 ? 'Slight tilt'
+                      avgWristAngle <= CprTargets.alignmentGoodDeg ? 'Good alignment'
+                          : avgWristAngle <= CprTargets.alignmentMaxDeg ? 'Near the limit'
                           : 'Significant tilt',
                       '',
-                      color: avgWristAngle <= 15 ? AppColors.success
-                          : avgWristAngle <= 25  ? AppColors.warning
+                      color: avgWristAngle <= CprTargets.alignmentGoodDeg ? AppColors.success
+                          : avgWristAngle <= CprTargets.alignmentMaxDeg  ? AppColors.warning
                           : AppColors.error),
                 ]
                     : [
@@ -897,29 +897,29 @@ class _CompressionQualityCard extends StatelessWidget {
                       if (avgWristAngle > 0)
                         _DetailRow2('Avg wrist angle',
                             '${avgWristAngle.toStringAsFixed(1)}°',
-                            sub: avgWristAngle <= 15
-                                ? 'Within optimal range (< 15°)'
-                                : avgWristAngle <= 25
-                                ? 'Slight tilt. Try to straighten.'
-                                : 'Significant tilt. Needs correction.',
-                            color: avgWristAngle <= 15 ? AppColors.success
-                                : avgWristAngle <= 25  ? AppColors.warning
+                            sub: avgWristAngle <= CprTargets.alignmentGoodDeg
+                                ? 'Well aligned (< ${CprTargets.alignmentGoodDeg.toStringAsFixed(0)}°)'
+                                : avgWristAngle <= CprTargets.alignmentMaxDeg
+                                ? 'Within target (< ${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°), but near the limit.'
+                                : 'Above the ${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° target. Needs correction.',
+                            color: avgWristAngle <= CprTargets.alignmentGoodDeg ? AppColors.success
+                                : avgWristAngle <= CprTargets.alignmentMaxDeg  ? AppColors.warning
                                 : AppColors.error),
                     ]),
                     const _DetailSection('What this means',
                         body: 'Wrist alignment affects the direction of compression force. '
-                            'A tilted wrist (> 15°) redirects force laterally rather than '
+                            'A tilted hand redirects force laterally rather than '
                             'straight down, reducing effective depth and increasing wrist '
                             'injury risk. Correct posture ensures maximum force reaches the sternum.'),
                     _DetailSection('How to improve', bullets: [
-                      if (avgWristAngle > 0 && avgWristAngle <= 15) ...[
+                      if (avgWristAngle > 0 && avgWristAngle <= CprTargets.alignmentGoodDeg) ...[
                         'Great wrist alignment at ${avgWristAngle.toStringAsFixed(1)} degrees. Keep it up!',
                         'Posture tends to drift under fatigue, so stay mindful as the session progresses.',
-                      ] else if (avgWristAngle > 15 && avgWristAngle <= 25) ...[
-                        'Your wrist angle averaged ${avgWristAngle.toStringAsFixed(1)} degrees, a slight tilt. Check your wrist position before starting compressions.',
+                      ] else if (avgWristAngle > CprTargets.alignmentGoodDeg && avgWristAngle <= CprTargets.alignmentMaxDeg) ...[
+                        'Your wrist angle averaged ${avgWristAngle.toStringAsFixed(1)} degrees, within target but close to the limit. Check your wrist position before starting compressions.',
                         'Keep wrists neutral, inline with your forearm, not bent forward or back.',
                         'Interlace fingers and lift them off the chest.',
-                      ] else if (avgWristAngle > 25) ...[
+                      ] else if (avgWristAngle > CprTargets.alignmentMaxDeg) ...[
                         'Your wrist angle averaged ${avgWristAngle.toStringAsFixed(1)} degrees, a significant tilt. This redirects force away from the sternum and reduces effective depth.',
                         'Focus on straightening your wrists before each compression.',
                         'Position yourself directly above the sternum, shoulders over hands, elbows locked.',
@@ -1699,12 +1699,18 @@ class _SessionTimelineSection extends StatelessWidget {
         sortKey:    t,
         time:       _fmt(t),
         title:      'Ventilation · cycle ${v.cycleNumber}',
-        subtitle:   given
+        subtitle:   v.overTarget
+            ? '${v.durationSec.toStringAsFixed(1)} s pause · over the ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s target'
+            : given
             ? '${v.durationSec.toStringAsFixed(1)} s pause'
+            : v.overran
+            ? 'Pause over ${AppConstants.maxCompliantPauseSec.toStringAsFixed(0)} s · far past the ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s target'
+            : v.tooShort
+            ? '${v.durationSec.toStringAsFixed(1)} s pause · too short for breaths'
             : 'Prompt ignored · CPR continued',
         dotColor:   AppColors.primaryAlt,
         icon:       Icons.air_rounded,
-        isGrayedOut: !given,
+        isGrayedOut: !given && !v.overran && !v.tooShort,
         isIgnored:  !given,
       ));
     }

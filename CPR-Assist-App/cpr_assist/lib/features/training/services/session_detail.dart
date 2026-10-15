@@ -326,6 +326,22 @@ class SessionDetail {
   /// Firmware-stored ventilation windowMs is intentionally NOT used: it
   /// measures a different quantity (prompt→close window incl. grace + resume
   /// latency) and does not implement the AHA excess rule.
+  /// A planned pause (ventilation or pulse check) is compliant when its
+  /// uncapped measured length is within [minCompliantPauseSec,
+  /// maxCompliantPauseSec] — long enough to act, short enough not to
+  /// badly overrun the allowance.
+  static bool _isCompliantPause(double durSec) =>
+      durSec >= AppConstants.minCompliantPauseSec &&
+      durSec <= AppConstants.maxCompliantPauseSec;
+
+  /// Displayed pause length. Capped at maxCompliantPauseSec so a 12 s pause
+  /// shows as 12 s, while a 40 s one stays at the cap — its excess is
+  /// already reported as unplanned pause time.
+  static double _cappedPauseSec(double durSec) =>
+      durSec <= AppConstants.maxCompliantPauseSec
+          ? durSec
+          : AppConstants.maxCompliantPauseSec;
+
   static SessionDetail applyPauseModel(SessionDetail d) {
     final pm = _calculatePauseMetrics(
       compressions:        d.compressions,
@@ -341,19 +357,18 @@ class SessionDetail {
         // for this ventilation. Zero duration, non-compliant.
         return v.copyWith(durationSec: 0.0, compliant: false);
       }
-      // The ventilation event represents only the compliant portion. Any
-      // overrun beyond the allowance is surfaced separately as an unplanned
-      // pause (Behavior Y), so the displayed vent duration is capped here to
-      // avoid double-representing the same hands-off time.
-      final cappedDur = dur <= AppConstants.maxAcceptablePauseSec
-          ? dur
-          : AppConstants.maxAcceptablePauseSec;
+      // Time past the 10 s allowance is surfaced separately as an unplanned
+      // pause (Behavior Y). The displayed duration is capped at the
+      // compliance ceiling (see _cappedPauseSec).
       // Compliant only when the rescuer ACTUALLY paused (>= 3 s, matching
-      // firmware WINDOW_PAUSE_COMPLIANT_MS) AND did not overrun the 10 s
-      // allowance. A sub-3 s blip is too short to have delivered breaths.
+      // firmware WINDOW_PAUSE_COMPLIANT_MS) AND did not badly overrun
+      // (<= maxCompliantPauseSec). A sub-3 s blip is too short to have
+      // delivered breaths. An overrun row keeps durationSec at the cap, so
+      // (!compliant && durationSec >= maxCompliantPauseSec) identifies it
+      // after a re-fetch.
       return v.copyWith(
-        durationSec: cappedDur,
-        compliant:   dur >= AppConstants.minCompliantPauseSec,
+        durationSec: _cappedPauseSec(dur),
+        compliant:   _isCompliantPause(dur),
       );
     }).toList();
 
@@ -365,12 +380,9 @@ class SessionDetail {
       if (dur == null) {
         return p.copyWith(durationSec: 0.0, compliant: false);
       }
-      final cappedDur = dur <= AppConstants.maxAcceptablePauseSec
-          ? dur
-          : AppConstants.maxAcceptablePauseSec;
       return p.copyWith(
-        durationSec: cappedDur,
-        compliant:   dur >= AppConstants.minCompliantPauseSec,
+        durationSec: _cappedPauseSec(dur),
+        compliant:   _isCompliantPause(dur),
       );
     }).toList();
 

@@ -512,7 +512,7 @@ class ExportService {
     );
     row4(
       'Posture Target Met',
-      'Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°',
+      'Align <${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°',
       s.correctPosture.toString(),
       pctFromCount(s.correctPosture),
     );
@@ -756,8 +756,7 @@ class ExportService {
     }
 
     String postureTarget() {
-      return 'Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / '
-          'Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°';
+      return 'Align <${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°';
     }
 
     void blankLine() => sb.writeln(',');
@@ -1386,7 +1385,7 @@ class ExportService {
       'Wrist Alignment (deg)',
       'Wrist Flexion (deg)',
       'Axis Deviation (deg)',
-      'Posture Target Met (Align ≤${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° / Flex ≤${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°)',
+      'Posture Target Met (Align <${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°)',
 
       // Overall
       'All Targets Met',
@@ -2466,7 +2465,9 @@ class ExportService {
             xMax: s.sessionDuration.toDouble(),
             title: 'Wrist Posture Over Time',
             subtitle: 'Alignment (palm tilt) and flexion (wrist bend) per compression.',
-            caption: 'Blue = alignment (target < 15°), teal = flexion (target < 10°). '
+            caption: 'Blue = alignment (target < ${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}°, '
+                'counts toward posture), teal = flexion (guide < '
+                '${CprTargets.flexionMaxDeg.toStringAsFixed(0)}°, not scored). '
                 'Bent wrists reduce force transfer to the chest and increase rescuer '
                 'fatigue. Keep elbows locked and shoulders directly over wrists.',
             lines: [
@@ -2482,17 +2483,17 @@ class ExportService {
             minY: 0, maxY: 45, yTickInterval: 15,
             yLabel: (v) => '${v.toStringAsFixed(0)}°',
             guides: [
-              _ChartGuide(15, _kBrandBlue.shade(0.5)),
-              _ChartGuide(10, _kBrandMid.shade(0.5)),
+              _ChartGuide(CprTargets.alignmentMaxDeg, _kBrandBlue.shade(0.5)),
+              _ChartGuide(CprTargets.flexionMaxDeg, _kBrandMid.shade(0.5)),
             ],
             legend: [
               _LegendItem('Wrist alignment (°)', _kBrandBlue),
-              _LegendItem('15° alignment target', _kBrandBlue.shade(0.5)),
+              _LegendItem('${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° alignment target', _kBrandBlue.shade(0.5)),
               _LegendItem('Wrist flexion (°)', _kBrandMid),
-              _LegendItem('10° flexion target', _kBrandMid.shade(0.5)),
+              _LegendItem('${CprTargets.flexionMaxDeg.toStringAsFixed(0)}° flexion guide', _kBrandMid.shade(0.5)),
             ],
             plotHeight: 110,
-            dotColor: (li, v) => v > (li == 0 ? 15 : 10) ? _kError : null,
+            dotColor: (li, v) => v > (li == 0 ? CprTargets.alignmentMaxDeg : CprTargets.flexionMaxDeg) ? _kError : null,
           ),
           pw.SizedBox(height: 20),
         ],
@@ -3649,7 +3650,7 @@ class ExportService {
       n > 0 ? s.correctRecoil / n * 100 : 0,
       _pctColor(n > 0 ? s.correctRecoil / n : 0)),
       ('Correct posture',
-      '≤15° align / ≤10° flex',
+      '<${CprTargets.alignmentMaxDeg.toStringAsFixed(0)}° align',
       n > 0 ? s.correctPosture / n * 100 : 0,
       _pctColor(n > 0 ? s.correctPosture / n : 0)),
       ('Depth + rate',
@@ -3807,7 +3808,7 @@ class ExportService {
         _Row(
           'Unplanned Pauses',
           '${s.unplannedPauseCount}',
-          note: '${s.unplannedPauseTime.toStringAsFixed(1)} s not explained by ventilation/pulse checks',
+          note: '${s.unplannedPauseTime.toStringAsFixed(1)} s outside, or beyond the allowance of, ventilation/pulse checks',
           isAlert: s.unplannedPauseCount > 0,
         ),
       if (s.timeToFirstCompression > 0)
@@ -4234,7 +4235,11 @@ class ExportService {
             children: [
               _tableCell(font, '${v.cycleNumber}', color: _kTextSecond),
               _tableCell(font, '$m:$s'),
-              _tableCell(font, '${v.durationSec.toStringAsFixed(1)} s', align: pw.TextAlign.right),
+              _tableCell(font,
+                  v.overran
+                      ? '>${AppConstants.maxCompliantPauseSec.toStringAsFixed(0)} s'
+                      : '${v.durationSec.toStringAsFixed(1)} s',
+                  align: pw.TextAlign.right),
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 child: pw.Center(
@@ -4963,8 +4968,14 @@ class ExportService {
         sortKey:  v.timestampSec,
         time:     _mmssFromSec(v.timestampSec),
         title:    'Ventilation · cycle ${v.cycleNumber}',
-        subtitle: v.compliant
+        subtitle: v.overTarget
+            ? '${v.durationSec.toStringAsFixed(1)} s pause · over the ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s target'
+            : v.compliant
             ? '${v.durationSec.toStringAsFixed(1)} s pause'
+            : v.overran
+            ? 'Pause over ${AppConstants.maxCompliantPauseSec.toStringAsFixed(0)} s · far past the ${AppConstants.maxAcceptablePauseSec.toStringAsFixed(0)} s target'
+            : v.tooShort
+            ? '${v.durationSec.toStringAsFixed(1)} s pause · too short for breaths'
             : 'Prompt ignored · CPR continued',
         dotColor:  v.compliant ? _kBrandMid : _kTextDisabled,
         isIgnored: !v.compliant,

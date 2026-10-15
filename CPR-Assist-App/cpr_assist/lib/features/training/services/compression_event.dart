@@ -15,7 +15,13 @@ class CprTargets {
   static const double depthMax         = 6.0;   // cm
   static const double rateMin          = 100.0; // BPM
   static const double rateMax          = 120.0; // BPM
-  static const double alignmentMaxDeg  = 15.0;  // degrees from vertical
+  // Palm-tilt posture threshold. Must match firmware WRIST_ALIGN_WARN_DEG
+  // (config.h), which sets the postureOk flag behind correctPosture.
+  static const double alignmentMaxDeg  = 30.0;  // degrees, |palm pitch|
+  // Display-only: below this an average alignment is shown as good rather
+  // than near the limit. Not part of the postureOk rule.
+  static const double alignmentGoodDeg = 20.0;  // degrees, |palm pitch|
+  // Display-only flexion guide. Flexion is not part of the postureOk rule.
   static const double flexionMaxDeg    = 10.0;  // degrees ±
   // N — rib fracture risk. Currently unused: over-force is computed
   // firmware-side (scenario-aware — 600 N adult, 400 N pediatric) and the
@@ -70,14 +76,15 @@ class CompressionEvent {
   /// True if force exceeded 600 N (rib fracture risk threshold).
   final bool overForce;
 
-  /// True if wristAlignmentAngle < 15° AND wristFlexionAngle within ±10°.
+  /// Firmware postureOk flag: wristAlignmentAngle < WRIST_ALIGN_WARN_DEG (30°).
+  /// Alignment only — flexion is not a term.
   final bool postureOk;
 
   /// True if inter-compression force stayed > 5 N for > 200 ms.
   final bool leaningDetected;
 
   // ── Posture ───────────────────────────────────────────────────────────────
-  /// 3D compression vector deviation from vertical (degrees). Target: < 15°.
+  /// Absolute palm-IMU pitch (degrees). Target: < [CprTargets.alignmentMaxDeg].
   final double wristAlignmentAngle;
 
   /// Wrist flexion/extension angle from ulnar IMU (degrees, ±45°).
@@ -149,9 +156,7 @@ class CompressionEvent {
     return rate >= CprTargets.rateMin && rate <= CprTargets.rateMax;
   }
 
-  bool get isPostureOk =>
-      wristAlignmentAngle <= CprTargets.alignmentMaxDeg &&
-          wristFlexionAngle.abs() <= CprTargets.flexionMaxDeg;
+  bool get isPostureOk => wristAlignmentAngle < CprTargets.alignmentMaxDeg;
 
   /// The per-compression peak force to show anywhere in the UI/exports.
   /// [force] is a raw single-packet reading (BLE-internal, not a peak —

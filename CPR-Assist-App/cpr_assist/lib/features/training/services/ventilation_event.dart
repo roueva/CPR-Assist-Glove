@@ -5,11 +5,15 @@
 // Stored in SessionDetail.ventilations[].
 //
 // NOTE: durationSec is the *measured* no-flow gap that contains this prompt
-// (computed post-session from the compression timeline), not a firmware value.
-// "compliant" is true when that measured duration <= maxAcceptablePauseSec.
+// (computed post-session from the compression timeline), not a firmware value,
+// capped at maxCompliantPauseSec. "compliant" is true when the uncapped
+// measured gap is within [minCompliantPauseSec, maxCompliantPauseSec]
+// (SessionDetail.applyPauseModel).
 //
 // File location: features/training/services/ventilation_event.dart
 // ─────────────────────────────────────────────────────────────────────────────
+
+import 'package:cpr_assist/core/core.dart';
 
 class VentilationEvent {
   /// Session ms when ventilation window opened.
@@ -21,8 +25,9 @@ class VentilationEvent {
   /// Seconds spent in this ventilation window.
   final double durationSec;
 
-  /// True if at least one pause > 1 s was detected in this window
-  /// (firmware-derived: compsDuringWindow <= 2 AND windowMs >= COMPLIED_MIN_MS).
+  /// True if the measured pause was 3–15 s (minCompliantPauseSec to
+  /// maxCompliantPauseSec).
+  /// App-derived (see file header), not read from the glove.
   final bool compliant;
 
   const VentilationEvent({
@@ -33,6 +38,18 @@ class VentilationEvent {
   });
 
   double get timestampSec => timestampMs / 1000.0;
+
+  /// Paused, but far past the allowance. durationSec is capped at
+  /// maxCompliantPauseSec, so a non-compliant row at the cap overran.
+  bool get overran =>
+      !compliant && durationSec >= AppConstants.maxCompliantPauseSec;
+
+  /// Compliant, but past the 10 s target (within the lenient ceiling).
+  bool get overTarget =>
+      compliant && durationSec > AppConstants.maxAcceptablePauseSec;
+
+  /// Paused, but too briefly to have delivered breaths.
+  bool get tooShort => !compliant && durationSec > 0 && !overran;
 
   factory VentilationEvent.fromJson(Map<String, dynamic> json) {
     return VentilationEvent(

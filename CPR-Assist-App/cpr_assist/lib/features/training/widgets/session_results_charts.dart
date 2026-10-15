@@ -447,7 +447,7 @@ class _WristAlignmentChartCardState extends State<_WristAlignmentChartCard> {
         final maxAngle = buildPostureSpots(widget.events)
             .map((s) => s.y)
             .fold(0.0, (a, b) => a > b ? a : b);
-        final chartMaxY = (maxAngle + 5).clamp(20.0, 45.0);
+        final chartMaxY = (maxAngle + 5).clamp(CprTargets.alignmentMaxDeg + 5, 45.0);
         return CprScrollableChart(
           series: [
             CprSeries(

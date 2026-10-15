@@ -66,14 +66,14 @@ class PulseCheckEvent {
 
   /// Measured no-flow gap (s) that contained this pulse-check prompt,
   /// reconstructed post-session from the compression timeline by
-  /// SessionDetail.applyPauseModel. Capped at the 10 s allowance for display
-  /// (overrun excess surfaces as a separate unplanned pause). 0.0 if the
-  /// rescuer never paused for this prompt.
+  /// SessionDetail.applyPauseModel. Capped at maxCompliantPauseSec (15 s) for
+  /// display (time past the 10 s allowance also surfaces as unplanned pause).
+  /// 0.0 if the rescuer never paused for this prompt.
   final double durationSec;
 
   /// True when the measured pause was >= 3 s (rescuer actually stopped,
-  /// matching firmware WINDOW_PAUSE_COMPLIANT_MS) AND <= 10 s allowance.
-  /// Same rule as VentilationEvent.compliant.
+  /// matching firmware WINDOW_PAUSE_COMPLIANT_MS) AND <= maxCompliantPauseSec
+  /// (15 s). Same rule as VentilationEvent.compliant.
   final bool compliant;
 
   /// Self-detection guard's reference source at window close (FIRMWARE_PLAN

@@ -810,7 +810,7 @@ class _GradeInfoDialog extends StatelessWidget {
     const _GradeWeightRow('Full recoil',            'Complete decompression', 18, true),
     _GradeWeightRow('Ventilation compliance', ventilationRatioLabel,    12, false),
     const _GradeWeightRow('Depth + rate combined',  'Both correct together',   8, false),
-    const _GradeWeightRow('Posture',                'Wrist alignment < 15°',   8, false),
+    const _GradeWeightRow('Posture',                'Wrist alignment < 30°',   8, false),
     const _GradeWeightRow('Time to first comp',     'Under 10 seconds',        4, false),
     const _GradeWeightRow('Hands-on ratio',         'Minimal pauses',          4, false),
   ]
@@ -820,7 +820,7 @@ class _GradeInfoDialog extends StatelessWidget {
     const _GradeWeightRow('Full recoil',            'Complete decompression',  20, true),
     _GradeWeightRow('Ventilation compliance', ventilationRatioLabel,     12, false),
     const _GradeWeightRow('Depth + rate combined',  'Both correct together',    8, false),
-    const _GradeWeightRow('Posture',                'Wrist alignment < 15°',    8, false),
+    const _GradeWeightRow('Posture',                'Wrist alignment < 30°',    8, false),
     const _GradeWeightRow('Hands-on ratio',         'Minimal pauses',           5, false),
     const _GradeWeightRow('Time to first comp',     'Under 10 seconds',         2, false),
   ];
