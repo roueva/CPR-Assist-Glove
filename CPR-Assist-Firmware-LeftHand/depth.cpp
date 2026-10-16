@@ -55,7 +55,6 @@ static bool _wasLeaning = false;
 static unsigned long _leaningStartMs = 0;  // 0 = not currently above threshold
 static float _liveDepthCm = 0.0f;
 static float _displayDepthCm = 0.0f;  // EMA-smoothed, display only
-static float _ledDepthCm = 0.0f;      // force-model, peak-held per stroke, glove LEDs only
 
 // ── Rate-jump plausibility reference — EMA-smoothed, internal only ──────────
 static float _rateJumpReference = 0.0f;
@@ -287,7 +286,6 @@ void depthSessionReset() {
   _compressionNum = 0;
   _liveDepthCm = 0.0f;
   _displayDepthCm = 0.0f;
-  _ledDepthCm = 0.0f;
   _lastPeakMM = 0.0f;
   _compressionInCycle = 0;
   _totalCompressions = 0;
@@ -458,18 +456,6 @@ if (_state == CompState::COMPRESSING) {
   _displayDepthCm += LIVE_DEPTH_EMA_ALPHA * (dispTarget - _displayDepthCm);
   if (_displayDepthCm < DISPLAY_DEPTH_NOISE_FLOOR_CM) _displayDepthCm = 0.0f;
   s.depth = _displayDepthCm;
-
-  // Glove LED bar — force-model depth, NOT smoothed (the EMA above is what
-  // clipped the narrow force peak) and held at its peak through the stroke,
-  // so the 20 Hz LED refresh cannot miss it. Released: shows a lean if
-  // still pressing, else 0. Never transmitted; the app bar still uses s.depth.
-  const float forceDepthCm = forceToDepth(forceN) / 10.0f;
-  if (_state == CompState::COMPRESSING) {
-    if (forceDepthCm > _ledDepthCm) _ledDepthCm = forceDepthCm;
-  } else {
-    _ledDepthCm = (forceN > FORCE_LEANING_THRESHOLD) ? forceDepthCm : 0.0f;
-  }
-  s.ledDepthCm = _ledDepthCm;
 
   // Clicker — fires the instant live depth crosses the lower target, once
   // per stroke, only on a trustworthy IMU reading. Re-arms after recoil.

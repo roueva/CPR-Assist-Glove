@@ -107,49 +107,55 @@ void neoDiagLedTest() {
 }
 
 // ── Depth bar (LEDs 0–5) ──────────────────────────────────────────────────────
-// Fills like the app's depth bar: one column from 0 up to the top of the
-// scale (upper target + NEO_DEPTH_BAR_HEADROOM_CM), every lit LED coloured
-// by the zone the depth is in — orange below target, green in target, red
-// over. Driven by force-model depth (s.ledDepthCm), not the IMU.
 static void updateDepthBar(const SharedState& s) {
-  const int nLeds = NEO_LED_DEPTH_END - NEO_LED_DEPTH_START + 1;
+  float depthCm = s.depth;
+  float force = s.force;
+  bool session = s.sessionActive;
+  Scenario sc = s.currentScenario;
+
+  float minTarget = s.targetDepthMinMM / 10.0f;  // mm → cm
+  float maxTarget = s.targetDepthMaxMM / 10.0f;
 
   // No session or no feedback: all off
-  if (!s.sessionActive || !s.visualFeedbackEnabled) {
-    for (int i = 0; i < nLeds; i++) _strip.setPixelColor(NEO_LED_DEPTH_START + i, COL_OFF());
+  if (!session || !s.visualFeedbackEnabled) {
+    for (int i = 0; i <= 5; i++) _strip.setPixelColor(i, COL_OFF());
     return;
   }
 
-  // Leaning between compressions: first LED red
-  if (s.leaningDetected) {
-    _strip.setPixelColor(NEO_LED_DEPTH_START, COL_RED());
-    for (int i = 1; i < nLeds; i++) _strip.setPixelColor(NEO_LED_DEPTH_START + i, COL_OFF());
+  // Residual pressure while released (leaning)
+  if (!s.sessionActive || (depthCm < 0.1f && force > FORCE_LEANING_THRESHOLD)) {
+    _strip.setPixelColor(0, COL_RED());
+    for (int i = 1; i <= 5; i++) _strip.setPixelColor(i, COL_OFF());
     return;
   }
 
-  const float depthCm   = s.ledDepthCm;
-  const float minTarget = s.targetDepthMinMM / 10.0f;  // mm → cm
-  const float maxTarget = s.targetDepthMaxMM / 10.0f;
-  const float scaleCm   = maxTarget + NEO_DEPTH_BAR_HEADROOM_CM;
-
-  // Released — all off
-  if (depthCm < NEO_DEPTH_BAR_MIN_CM) {
-    for (int i = 0; i < nLeds; i++) _strip.setPixelColor(NEO_LED_DEPTH_START + i, COL_OFF());
+  // Full recoil — all off
+  if (depthCm < 0.1f && !s.leaningDetected) {
+    for (int i = 0; i <= 5; i++) _strip.setPixelColor(i, COL_OFF());
     return;
   }
 
+  // Colour by zone (unchanged): light blue below target, green in target,
+  // red over. Fill level matches the phone depth bar exactly — same signal
+  // (s.depth = LIVE_STREAM byte 0) over the same 0..NEO_DEPTH_BAR_SCALE_CM
+  // scale, in every zone.
   const uint32_t color = (depthCm > maxTarget)  ? COL_RED()
                        : (depthCm >= minTarget) ? COL_GREEN()
-                       :                          COL_ORANGE();
+                       :                          COL_LIGHTBLUE();
 
-  float ledsLit = (depthCm / scaleCm) * nLeds;
-  if (ledsLit > nLeds) ledsLit = nLeds;
-  const int fullLeds = (int)ledsLit;
+  float ledsLit = (depthCm / NEO_DEPTH_BAR_SCALE_CM) * 6.0f;
+  if (ledsLit > 6.0f) ledsLit = 6.0f;
+  int fullLeds = (int)ledsLit;
 
-  for (int i = 0; i < nLeds; i++) {
-    if (i < fullLeds) _strip.setPixelColor(NEO_LED_DEPTH_START + i, color);
-    else if (i == fullLeds) _strip.setPixelColor(NEO_LED_DEPTH_START + i, dimColor(color, ledsLit - fullLeds));
-    else _strip.setPixelColor(NEO_LED_DEPTH_START + i, COL_OFF());
+  for (int i = 0; i <= 5; i++) {
+    if (i < fullLeds) _strip.setPixelColor(i, color);
+    else if (i == fullLeds) {
+      // Partial LED: scale brightness
+      float part = ledsLit - fullLeds;
+      _strip.setPixelColor(i, dimColor(color, part));
+    } else {
+      _strip.setPixelColor(i, COL_OFF());
+    }
   }
 }
 

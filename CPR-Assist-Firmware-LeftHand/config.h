@@ -559,10 +559,9 @@
 // LED index assignments
 #define NEO_LED_DEPTH_START 0  // LEDs 0–5: depth bar
 #define NEO_LED_DEPTH_END 5
-// Depth bar scale = upper depth target + this, matching the app bar
-// (AnimatedDepthBar maxDepthCm 6.5 for the 5–6 cm adult band).
-#define NEO_DEPTH_BAR_HEADROOM_CM 0.5f
-#define NEO_DEPTH_BAR_MIN_CM 0.1f  // below this the bar is off (released)
+// Depth bar full scale — the phone bar's AnimatedDepthBar.maxDepthCm, so
+// the LEDs fill to the same level the phone bar does for the same depth.
+#define NEO_DEPTH_BAR_SCALE_CM 6.5f
 #define NEO_LED_RATE 6    // LED 6: rate indicator
 #define NEO_LED_STATUS 7  // LED 7: mode/status
 
