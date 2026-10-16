@@ -101,6 +101,7 @@ defects found in these packets themselves.
 |---|---|---|---|
 | `s.rescuerSQLastPause` | 0-100 | SQI paired with `rescuerHRLastPause`, captured at the same moment (`shared_state.h:132`, `cpr_glove.ino:1205,1298`). | `max30102ClassifyPulse()` self-detection guard (`cpr_glove.ino:1297-1318`) only. Explicitly documented in `shared_state.h:126-131` as "not part of the transmitted SESSION_END summary." Not a defect — correctly internal. |
 | `_recoilValleyDepthMM` | mm | IMU-measured residual depth at valley (`depth.cpp:514`). | Feeds `recoilAchieved` grading (`depth.cpp:715-716`) and would feed `StoredCompression.residualDepthX10` — see §A, that write never happens. Never itself reaches BLE (contrast with the force-derived `valleyDepth` that does — see LIVE_STREAM table above). |
+| `s.ledDepthCm` | cm | `forceToDepth(forceN)/10`, unsmoothed, peak-held through COMPRESSING; on release the lean depth if force > `FORCE_LEANING_THRESHOLD`, else 0 (`depth.cpp`, after `s.depth`). | `neopixel.cpp` `updateDepthBar()` only. Never transmitted — the app depth bar still uses `gState.depth` (IMU while compressing), so the glove LEDs and the app bar can differ. |
 | `battery.cpp: _voltage` (`batteryVoltage()`) | V | Raw battery voltage before percentage mapping (`battery.cpp:26,40-42`). | Nothing — see §A, dead accessor. Only the derived percentage is ever transmitted. |
 
 ---

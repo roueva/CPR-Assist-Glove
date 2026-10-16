@@ -34,6 +34,7 @@ enum class Scenario : uint8_t {
 struct SharedState {
   // ── Core compression
   float depth;              // cm, instantaneous
+  float ledDepthCm;         // cm, force-model depth for the glove LED bar only (not on BLE)
   float lastPeakDepthCm;    // most recent completed compression's locked peak (cm)
   // Chunk 4 — selector telemetry. lastPeakDepthCm above is the final selected
   // depth; these two describe HOW it was produced for app-side display and
