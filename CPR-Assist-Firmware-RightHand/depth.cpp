@@ -27,14 +27,6 @@ static CompState _state = CompState::RELEASED;
 static int _releaseConfirm = 0;
 static float _peakForce = 0.0f;
 
-// TEMP DIAG (right-hand board, tracing imu=0.0mm/0% issue) — peak absolute
-// motion-accel seen per stroke, PLUS signed min/max to check sign convention.
-// Remove once resolved.
-static float _diagPeakAPalm = 0.0f;
-static float _diagPeakAWrist = 0.0f;
-static float _diagMinAPalm = 0.0f;   // most negative signed value seen
-static float _diagMaxAPalm = 0.0f;   // most positive signed value seen
-
 // ── Compression counters ──────────────────────────────────────────────────────
 static int _compressionNum = 0;
 static uint32_t _compressionInCycle = 0;
@@ -401,10 +393,6 @@ void depthUpdate(float forceN, float dt, SharedState& s, GloveMode mode, Scenari
   float aPalm = imuGetMotionAccelPalm();
   float aWrist = imuGetMotionAccelWrist();  // wrist IMU mounted with Z inverted relative to palm
 if (_state == CompState::COMPRESSING) {
-    if (fabsf(aPalm) > _diagPeakAPalm) _diagPeakAPalm = fabsf(aPalm);
-    if (fabsf(aWrist) > _diagPeakAWrist) _diagPeakAWrist = fabsf(aWrist);
-    if (aPalm < _diagMinAPalm) _diagMinAPalm = aPalm;
-    if (aPalm > _diagMaxAPalm) _diagMaxAPalm = aPalm;
     integrateCompression(integPalm, aPalm, dt);
     if (integPalm.peakJustLocked) {
       _peakTimestampMs = (s.sessionStartMs > 0)
@@ -538,10 +526,6 @@ if (_state == CompState::COMPRESSING) {
       _totalCompressions++;
       _thisCompStartMs = millis();
       _peakForce = 0;
-      _diagPeakAPalm = 0.0f;
-      _diagPeakAWrist = 0.0f;
-      _diagMinAPalm = 0.0f;
-      _diagMaxAPalm = 0.0f;
 
       integPalm.peakDepthM = 0;
       integWrist.peakDepthM = 0;
@@ -587,19 +571,6 @@ if (_state == CompState::COMPRESSING) {
       // is consumed below.
       const uint32_t strokeDurationMs = millis() - _thisCompStartMs;
       imuApplyBoundaryCorrection(integPalm, strokeDurationMs);
-      #if DEPTH_SELECTOR_LOG
-      Serial.printf("[DIAG] comp=%d peakAbsAPalm=%.3f m/s^2  peakAbsAWrist=%.3f m/s^2  cfPalmInit=%d cfWristInit=%d  aPalmMIN=%.3f aPalmMAX=%.3f  wristDropped=%d\n",
-                    _compressionNum, _diagPeakAPalm, _diagPeakAWrist,
-                    cfPalm.initialised, cfWrist.initialised,
-                    _diagMinAPalm, _diagMaxAPalm, imuWristDropped());
-      // TEMP DIAG: per-compression palm integration result. The existing
-      // [CF] integWrist print below only fires once per session (_cfPrinted
-      // latch) — this one fires every stroke so we can see palm peakDepth/
-      // velocity/diverged evolve compression-to-compression. Remove once
-      // the imu=0.0mm/0% issue is resolved.
-      Serial.printf("[CF] integPalm: peakDepth=%.1fmm diverged=%d velocity=%.3f\n",
-                    integPalm.peakDepthM * 1000.0f, integPalm.diverged, integPalm.velocityMS);
-      #endif
       if (imuWristOk() && !imuWristDropped()) {
         imuApplyBoundaryCorrection(integWrist, strokeDurationMs);
       #if DEPTH_SELECTOR_LOG
