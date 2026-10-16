@@ -10,6 +10,9 @@
 bool storageInit();
 uint8_t storagePendingCount();
 
+// Bit i set = slot i holds a pending session.
+uint32_t storagePendingMask();
+
 // Save a completed session. Returns slot index (0–19) or -1 on failure.
 int storageSaveSession(const SharedState& s, uint32_t durationSec, uint64_t unixTsMs);
 // Read a session chunk for BLE transfer (bytes 4–79, 76 bytes payload)

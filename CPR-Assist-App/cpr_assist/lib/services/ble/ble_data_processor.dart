@@ -315,10 +315,14 @@ class BLEDataProcessor {
 
       // ── 0x01 SESSION_START ───────────────────────────────────────────────
       // byte[1] = mode  0=Emergency 1=Training 2=No-Feedback
+      // byte[2] = scenario
+      // byte[3–10] = uint64 gloveStartUnixMs LE (0 = glove not time-synced)
         case kPacketSessionStart:
           return ParsedBLEData._event(
             isStartPing: true,
             currentMode: b.getUint8(1),
+            gloveStartUnixMs: b.getUint32(3, Endian.little) +
+                b.getUint32(7, Endian.little) * 0x100000000,
           );
 
       // ── 0x02 SESSION_END ─────────────────────────────────────────────────
@@ -341,7 +345,8 @@ class BLEDataProcessor {
       //  58–61   float32 peakDepth
       //  62–65   float32 compressionDepthSD
       //  66–69   float32 patientTemperatureLastPulseCheck
-      //  70–73   reserved (rescuer temp at start/end at 82–89)
+      //  70      uint8   storageSlotPlus1  (flash slot + 1; 0 = not saved)
+      //  71–73   reserved (rescuer temp at start/end at 82–89)
       //  74–77   float32 rescuerHRLastPause
       //  78–81   float32 rescuerSpO2LastPause
 //  82–85   float32 rescuerTemperatureStart
@@ -386,6 +391,7 @@ class BLEDataProcessor {
             rescuerSwapCountEnd: b.getUint8(92),
             timeToFirstCompressionMs: b.getUint16(93, Endian.little),
             wristDroppedDuringSession: b.getUint8(95),
+            storageSlotPlus1:    b.getUint8(70),
           );
 
       // ── 0x03 VENTILATION_WINDOW ──────────────────────────────────────────
@@ -452,11 +458,15 @@ class BLEDataProcessor {
           );
 
       // ── 0x09 PENDING_LOCAL_DATA ──────────────────────────────────────────
-      // byte[1] uint8 pendingCount  0–20
+      // byte[1]   uint8 pendingCount  0–20
+      // byte[2–4] slot mask, bits 0–19 (0 from older firmware)
         case kPacketPendingLocalData:
           return ParsedBLEData._event(
             isPendingLocalData:  true,
             pendingSessionCount: b.getUint8(1),
+            pendingSlotMask:     b.getUint8(2) |
+                (b.getUint8(3) << 8) |
+                ((b.getUint8(4) & 0x0F) << 16),
           );
 
       // ── 0x0A LOCAL_SESSION_CHUNK ─────────────────────────────────────────
@@ -717,6 +727,15 @@ class ParsedBLEData {
 
   // ── PENDING_LOCAL_DATA fields ─────────────────────────────────────────────
   final int? pendingSessionCount;
+  /// PENDING_LOCAL_DATA bytes 2–4: bit i set = glove flash slot i pending.
+  /// 0 from firmware that predates the field.
+  final int? pendingSlotMask;
+  /// SESSION_START bytes 3–10: glove wall-clock start (ms since epoch).
+  /// 0 = glove not time-synced (or older firmware).
+  final int? gloveStartUnixMs;
+  /// SESSION_END byte 70: flash slot the session was saved to, plus 1.
+  /// 0 = not saved (or older firmware).
+  final int? storageSlotPlus1;
 
   // ── LOCAL_SESSION_CHUNK fields ────────────────────────────────────────────
   final int?        localSessionIndex;
@@ -854,6 +873,9 @@ class ParsedBLEData {
     this.twoMinAlertNumber,
     this.fatigueAlertScore,
     this.pendingSessionCount,
+    this.pendingSlotMask,
+    this.gloveStartUnixMs,
+    this.storageSlotPlus1,
     this.localSessionIndex,
     this.localChunkIndex,
     this.localTotalChunks,
@@ -938,6 +960,9 @@ class ParsedBLEData {
     int?   twoMinAlertNumber,
     int?   fatigueAlertScore,
     int?   pendingSessionCount,
+    int?   pendingSlotMask,
+    int?   gloveStartUnixMs,
+    int?   storageSlotPlus1,
     int?   localSessionIndex,
     int?   localChunkIndex,
     int?   localTotalChunks,
@@ -1017,6 +1042,9 @@ class ParsedBLEData {
     twoMinAlertNumber:     twoMinAlertNumber,
     fatigueAlertScore:     fatigueAlertScore,
     pendingSessionCount:   pendingSessionCount,
+    pendingSlotMask:       pendingSlotMask,
+    gloveStartUnixMs:      gloveStartUnixMs,
+    storageSlotPlus1:      storageSlotPlus1,
     localSessionIndex:     localSessionIndex,
     localChunkIndex:       localChunkIndex,
     localTotalChunks:      localTotalChunks,

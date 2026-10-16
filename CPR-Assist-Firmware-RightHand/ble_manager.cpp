@@ -244,15 +244,18 @@ static BLEEventItem makeItem(BLEEventType t) {
   return item;
 }
 
-BLEEventItem bleBuildSessionStart(GloveMode mode, Scenario sc) {
+BLEEventItem bleBuildSessionStart(GloveMode mode, Scenario sc, uint64_t startUnixMs) {
   auto item = makeItem(BLEEventType::SessionStart);
   item.data[0] = PKT_SESSION_START;
   item.data[1] = (uint8_t)mode;
   item.data[2] = (uint8_t)sc;
+  // bytes 3–10: session start, uint64 ms since epoch LE. The app adopts it
+  // as sessionStart so the live copy and the stored copy share one key.
+  for (int i = 0; i < 8; i++) item.data[3 + i] = (uint8_t)((startUnixMs >> (8 * i)) & 0xFF);
   return item;
 }
 
-BLEEventItem bleBuildSessionEnd(const SharedState& s) {
+BLEEventItem bleBuildSessionEnd(const SharedState& s, uint8_t storageSlotPlus1) {
   auto item = makeItem(BLEEventType::SessionEnd);
   uint8_t* b = item.data;
   b[0] = PKT_SESSION_END;
@@ -274,7 +277,10 @@ BLEEventItem bleBuildSessionEnd(const SharedState& s) {
   packF32(b, 58, s.peakDepth);
   packF32(b, 62, s.compressionDepthSD);
   packF32(b, 66, s.patientTemperatureLastPulseCheck);
-  // bytes 70–73 reserved (rescuer wrist temp at start/end captured separately at 82–89)
+  // byte 70: flash slot this session was saved to, plus 1 (0 = not saved;
+  // older firmware sends 0 here). The app confirms it after a clean live
+  // session so the glove does not re-send it. Bytes 71–73 reserved.
+  b[70] = storageSlotPlus1;
   packF32(b, 74, s.rescuerHRLastPause);
   packF32(b, 78, s.rescuerSpO2LastPause);
   packF32(b, 82, s.rescuerTemperatureStart);
@@ -349,10 +355,15 @@ BLEEventItem bleBuildFatigueAlert(uint8_t score) {
   return item;
 }
 
-BLEEventItem bleBuildPendingLocalData(uint8_t count) {
+BLEEventItem bleBuildPendingLocalData(uint8_t count, uint32_t slotMask) {
   auto item = makeItem(BLEEventType::PendingLocalData);
   item.data[0] = PKT_PENDING_LOCAL_DATA;
   item.data[1] = count;
+  // bytes 2–4: which slots are pending (bits 0–19), so the app requests
+  // exactly those instead of guessing 0..count-1.
+  item.data[2] = (uint8_t)(slotMask & 0xFF);
+  item.data[3] = (uint8_t)((slotMask >> 8) & 0xFF);
+  item.data[4] = (uint8_t)((slotMask >> 16) & 0x0F);
   return item;
 }
 

@@ -151,6 +151,14 @@ bool storageInit() {
   return true;
 }
 
+uint32_t storagePendingMask() {
+  if (!_ready) return 0;
+  uint32_t mask = 0;
+  for (int i = 0; i < META_STATE_SIZE; i++)
+    if (_meta[i] == 1) mask |= (1UL << i);
+  return mask;
+}
+
 uint8_t storagePendingCount() {
   if (!_ready) return 0;
   uint8_t cnt = 0;

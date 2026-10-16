@@ -39,8 +39,12 @@ void bleSendNextEvent();                        // send one item per call
 void bleFlushEventQueue();                     // discard all queued events (called on reconnect)
 
 // ── Packet builders ───────────────────────────────────────────────────────────
-BLEEventItem bleBuildSessionStart(GloveMode mode, Scenario sc);
-BLEEventItem bleBuildSessionEnd(const SharedState& s);
+// startUnixMs: wall-clock session start, the same value written to the
+// stored session header. 0 = glove not time-synced.
+BLEEventItem bleBuildSessionStart(GloveMode mode, Scenario sc, uint64_t startUnixMs);
+// storageSlotPlus1: flash slot this session was saved to, plus 1. 0 = not
+// saved (and what older firmware sends, so it can never name a real slot).
+BLEEventItem bleBuildSessionEnd(const SharedState& s, uint8_t storageSlotPlus1);
 BLEEventItem bleBuildVentilationWindow(uint16_t cycleNum, uint8_t breathsExpected);
 BLEEventItem bleBuildPulseCheckStart(uint16_t intervalNum, uint32_t elapsedMs);
 BLEEventItem bleBuildPulseCheckResult(uint8_t classification, float bpm,
@@ -49,7 +53,8 @@ BLEEventItem bleBuildPulseCheckResult(uint8_t classification, float bpm,
 BLEEventItem bleBuildModeChange(GloveMode mode, uint8_t trigger);
 BLEEventItem bleBuildTwoMinAlert(uint8_t alertNum);
 BLEEventItem bleBuildFatigueAlert(uint8_t score);
-BLEEventItem bleBuildPendingLocalData(uint8_t count);
+// slotMask: bit i set = slot i holds a pending session (bits 0–19).
+BLEEventItem bleBuildPendingLocalData(uint8_t count, uint32_t slotMask);
 BLEEventItem bleBuildLocalSessionChunk(uint8_t sessIdx, uint8_t chunkIdx,
                                        uint8_t totalChunks, const uint8_t* payload92);
 BLEEventItem bleBuildSelftestResult(const SelfTestResult& r);

@@ -366,7 +366,7 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
 
     // ── SESSION_START ──────────────────────────────────────────────────────
     if (data['isStartPing'] == true) {
-      _sessionStartTime = DateTime.now();
+      _sessionStartTime = _sessionStartFromGlove(data['gloveStartUnixMs'] as int?);
       final gloveModeInt = data['currentMode'] as int? ?? 0;
       ref.read(appModeProvider.notifier).setModeFromGlove(gloveModeInt);
       ref.read(cprSessionActiveProvider.notifier).state = true;
@@ -521,13 +521,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     // ── PENDING_LOCAL_DATA — glove has offline sessions ────────────────────
     if (data['isPendingLocalData'] == true) {
       final count = data['pendingSessionCount'] as int? ?? 0;
-      if (count > 0 && mounted) {
+      // Firmware without the slot mask can't serve requests at all, so no
+      // mask = nothing to pull and no "syncing" promise.
+      final mask  = data['pendingSlotMask'] as int? ?? 0;
+      if (count > 0 && mask != 0 && mounted) {
         UIHelper.showSnackbar(
           context,
           message: '$count session(s) stored on glove — syncing now…',
           icon: Icons.sync_rounded,
         );
-        _requestGloveSessions(count); // fire-and-forget, no await
+        _requestGloveSessions(mask); // fire-and-forget, no await
       }
       return;
     }
@@ -564,18 +567,13 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     }
   }
 
-  Future<void> _requestGloveSessions(int count) async {
+  Future<void> _requestGloveSessions(int slotMask) async {
     // Never pull offline sessions while a live session is active —
     // EVENT_CHANNEL write contention would corrupt the live stream.
     // The glove will re-send PENDING_LOCAL_DATA on the next connection.
+    // requestStoredSessions re-checks between slots and stops on a session.
     if (_isSessionActive) return;
-    final ble = ref.read(bleConnectionProvider);
-    for (int i = 0; i < count; i++) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
-      if (_isSessionActive) return; // re-check after each delay
-      await ble.sendRequestSession(i);
-    }
+    await ref.read(bleConnectionProvider).requestStoredSessions(slotMask);
   }
 
   void _updateLiveValues(Map<String, dynamic> data) {
@@ -695,6 +693,18 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     });
   }
 
+  /// The glove's own start time when it has one, so this live copy and the
+  /// glove's flash copy share one sessionStart (the local-storage and backend
+  /// upsert key): if the flash copy syncs later it replaces this one instead
+  /// of duplicating it. Phone clock when the glove isn't time-synced or its
+  /// value is implausibly far off.
+  DateTime _sessionStartFromGlove(int? gloveStartUnixMs) {
+    final now = DateTime.now();
+    if (gloveStartUnixMs == null || gloveStartUnixMs <= 0) return now;
+    final glove = DateTime.fromMillisecondsSinceEpoch(gloveStartUnixMs);
+    return glove.difference(now).abs() <= AppConstants.gloveStartMaxSkew ? glove : now;
+  }
+
   // ── Session end ────────────────────────────────────────────────────────────
   Future<void> _handleSessionEnd(Map<String, dynamic> data) async {
     final currentMode = ref.read(appModeProvider);
@@ -776,6 +786,16 @@ class _LiveCPRScreenState extends ConsumerState<LiveCPRScreen>
     container.invalidate(sessionSummariesProvider);
     if (!localOk && mounted) {
       UIHelper.showWarning(context, 'Session could not be saved on this device.');
+    }
+
+    // A clean live session makes the glove's flash copy redundant — confirm
+    // it so the glove deletes it rather than re-sending it on the next
+    // connect. After any disconnect the live copy may have gaps, so the flash
+    // copy stays pending and replaces this one (same sessionStart) on sync.
+    final slotPlus1 = (data['storageSlotPlus1'] as int?) ?? 0;
+    final hadGap    = wasInterrupted || data['hadDisconnect'] == true;
+    if (localOk && slotPlus1 > 0 && !hadGap) {
+      unawaited(bleConn.sendConfirmReceived(slotPlus1 - 1));
     }
 
     // Emergency + not logged in: offer login once, non-blocking

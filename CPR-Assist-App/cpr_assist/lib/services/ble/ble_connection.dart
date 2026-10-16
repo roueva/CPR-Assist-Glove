@@ -66,6 +66,12 @@ class BLEConnection {
   int    _sessionStartMs     = 0;
   int    _sessionMode        = 0;   // 0=emergency 1=training 2=no_feedback
   bool   _sessionActive      = false;
+  /// Set if the link dropped at any point during the current session. The
+  /// live copy may then have gaps, so its flash copy is not confirmed.
+  bool   _sessionHadDisconnect = false;
+  /// Slot → completer for the one-at-a-time stored-session pull.
+  final Map<int, Completer<void>> _storedSlotDone = {};
+  bool   _storedSessionPullActive = false;
   bool   _pulseCheckOpen     = false;
   // Cached from the most recent PULSE_CHECK_START; consumed (and cleared) by
   // the matching PULSE_CHECK_RESULT. Null means no START was seen for this
@@ -783,6 +789,7 @@ class BLEConnection {
       _sessionStartMs         = now;
       _sessionMode            = parsed.currentMode;
       _sessionActive          = true;
+      _sessionHadDisconnect   = false;
       _startForegroundTask();
       _pulseCheckOpen         = false;
       _lastCompressionCount   = 0;
@@ -799,6 +806,7 @@ class BLEConnection {
         'isStartPing':  true,
         'isEndPing':    false,
         'currentMode':  parsed.currentMode,
+        'gloveStartUnixMs': parsed.gloveStartUnixMs,
       });
       return;
     }
@@ -835,6 +843,8 @@ class BLEConnection {
         'timeToFirstCompressionMs': parsed.timeToFirstCompressionMs,
         'wristDroppedDuringSession': parsed.wristDroppedDuringSession,
         'pulseDetected':       parsed.pulseDetected,
+        'storageSlotPlus1':    parsed.storageSlotPlus1,
+        'hadDisconnect':       _sessionHadDisconnect,
         // Biometrics
         'patientTemperatureLastPulseCheck': parsed.patientTemperatureLastPulseCheck,
         'rescuerHRLastPause':     parsed.rescuerHRLastPause,
@@ -1003,6 +1013,7 @@ class BLEConnection {
       _dataController.add({
         'isPendingLocalData':  true,
         'pendingSessionCount': parsed.pendingSessionCount,
+        'pendingSlotMask':     parsed.pendingSlotMask,
       });
       return;
     }
@@ -1034,6 +1045,7 @@ class BLEConnection {
           final c = buffers[i];
           if (c == null) {
             debugPrint('BLE: chunk $i missing for session $sessionIdx — aborting reassembly');
+            _storedSlotDone.remove(sessionIdx)?.complete();
             return;
           }
           fullBytes.addAll(c);
@@ -1049,6 +1061,7 @@ class BLEConnection {
         } catch (e) {
           debugPrint('BLE: offline session parse failed — $e');
         }
+        _storedSlotDone.remove(sessionIdx)?.complete();
       }
       return;
     }
@@ -1164,6 +1177,32 @@ class BLEConnection {
   Future<bool> sendRequestSession(int index) =>
       _writeCommand([kCmdRequestSession, index]);
 
+  /// Pulls every slot set in [slotMask] (PENDING_LOCAL_DATA bytes 2–4), one
+  /// at a time: the glove queues at most 4 requests, so each slot is
+  /// requested only after the previous one finished or timed out. Stops if
+  /// a live session starts or the link drops — the glove re-announces its
+  /// pending slots on the next connect.
+  Future<void> requestStoredSessions(int slotMask) async {
+    if (_storedSessionPullActive) return;
+    _storedSessionPullActive = true;
+    try {
+      for (int slot = 0; slot < AppConstants.gloveStorageSlots; slot++) {
+        if ((slotMask & (1 << slot)) == 0) continue;
+        if (_sessionActive || !isConnected) return;
+        final done = Completer<void>();
+        _storedSlotDone[slot] = done;
+        await sendRequestSession(slot);
+        await done.future.timeout(
+          AppConstants.storedSessionPullTimeout,
+          onTimeout: () => debugPrint('BLE: stored slot $slot timed out'),
+        );
+        _storedSlotDone.remove(slot);
+      }
+    } finally {
+      _storedSessionPullActive = false;
+    }
+  }
+
   /// 0xF6 — Confirm a session was received. Glove deletes it from flash.
   Future<bool> sendConfirmReceived(int index) =>
       _writeCommand([kCmdConfirmReceived, index]);
@@ -1249,6 +1288,7 @@ class BLEConnection {
       _updateStatus('Disconnected');
     } else {
       if (_sessionActive) {
+        _sessionHadDisconnect = true;
         _startDisconnectSessionWatchdog();
       }
       _updateStatus('Disconnected — Reconnecting…');

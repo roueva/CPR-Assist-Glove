@@ -193,6 +193,16 @@ class AppConstants {
   /// session as trivial — no save, no grade screen, just exit. Must match
   /// STORAGE_MIN_COMPRESSIONS_TO_SAVE in firmware config.h (currently 3).
   static const int minCompressionsToSave = 3;
+
+  /// Glove flash slots (firmware STORAGE_MAX_SESSIONS).
+  static const int gloveStorageSlots = 20;
+  /// Longest a stored session takes to stream (600 compressions ≈ 136 chunks
+  /// at ~50 ms) plus margin. Past this the pull moves on to the next slot.
+  static const Duration storedSessionPullTimeout = Duration(seconds: 15);
+  /// The glove's session start is projected from the app's own SYNC_TIME, so
+  /// it should be within a second of the phone clock. Anything further off
+  /// is treated as bad and the phone clock is used instead.
+  static const Duration gloveStartMaxSkew = Duration(seconds: 30);
   /// Physiologically plausible patient pulse-rate bounds. A detected-BPM value
   /// outside this range is treated as noise and never displayed.
   static const double pulseBpmMin = 20.0;

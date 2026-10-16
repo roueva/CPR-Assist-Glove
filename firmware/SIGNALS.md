@@ -83,6 +83,9 @@ inspection).
 | `s.rescuerTemperatureStart` / `s.rescuerTemperatureEnd` | °C | Wrist temp captured at `startSession()`/`stopSession()` (`cpr_glove.ino:445,488`). | SESSION_END 82-85 / 86-89 f32 | `rescuerWristTempStart` / `rescuerWristTempEnd`. Naming disagreement (firmware omits "Wrist", app adds it) — harmless but inconsistent. |
 | `s.timeToFirstCompressionMs` | ms | Set once, on the first compression of the session, from `_peakTimestampMs` (`depth.cpp:750-752`). | SESSION_END 93-94 u16 | `timeToFirstCompressionMs` |
 | `r.reasonCodes[8]` | code enum | Per-sensor selftest failure reason, parallel to the pass/warn/critical bitmasks (`selftest.h:19-27`, out of primary scope). | SELFTEST_RESULT 8-15 | `selftestReasonCodes` |
+| `_sessionStartUnixMs` | ms since epoch | Wall-clock start projected from the last SYNC_TIME at `startSession()`; reused verbatim for the stored header. 0 = not synced. | SESSION_START 3-10 u64 | `gloveStartUnixMs` → adopted as `sessionStart` |
+| `storageSaveSession()` return + 1 | slot+1 | Flash slot the session was saved to, plus 1; 0 = not saved. Saved before SESSION_END is queued. | SESSION_END 70 u8 | `storageSlotPlus1` → CONFIRM_RECEIVED after a clean live session |
+| `storagePendingMask()` | bitmask | Bit i = slot i pending (`storage.cpp`). | PENDING_LOCAL_DATA 2-4 (20 bits) | `pendingSlotMask` → `requestStoredSessions()` |
 
 `SESSION_START`, `VENTILATION_WINDOW`, `PULSE_CHECK_START`, `PULSE_CHECK_RESULT`,
 `MODE_CHANGE`, `TWO_MIN_ALERT`, `FATIGUE_ALERT`, `PENDING_LOCAL_DATA`,

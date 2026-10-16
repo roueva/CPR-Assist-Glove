@@ -18,7 +18,7 @@ Version 3.1 supersedes v3.0. This release reconciles the specification with the 
 
 Version 3.2 supersedes v3.1. This release documents the DIAG_FRAME packet (0x0D), which has been implemented in firmware and parsed by the app since the diagnostics tool was added but was never described in this specification. Changes from v3.1: new section 4.14 defining DIAG_FRAME (0x0D), a glove-to-app engineering telemetry frame sent at 4 Hz only while the diagnostics sheet is open; DIAG_FRAME added to the packet type reference in 4.1 and to the appendix quick reference. DIAG_FRAME carries two build-provenance fields, buildFlags (byte 17) and buildStamp (bytes 18-21), which report the compile-time configuration of the flashed firmware so that a study build can be verified on the device rather than inferred from source. App-to-glove commands 0xF3 START and 0xF4 STOP are marked reserved and not implemented app-side: the constants exist in the app but are commented out, and session start and stop are driven by the physical button only. No change to LIVE_STREAM or to any existing EVENT_CHANNEL packet layout.
 
-Version 3.3 supersedes v3.2. This release reconciles the specification with the as-built firmware and app, which already agree with each other on every item below. No firmware behaviour changed. Changes from v3.2, row by row in docs/BLE_SPEC_RECONCILIATION.md: LIVE_STREAM bytes 52–55 (residualLoadDepthCm), 86 (inVentilationWindow) and 102–107 (lastPeakDepthCm, lastPeakConfidence, lastPeakDepthSource) documented, as they were never reserved. Byte 91 documented as a 3-bit feedback mask. Patient vitals documented as also sent while diagnostics are active, and patient temperature as zero outside a pulse-check window. compressionAxisDeviation source corrected to palm-IMU roll. fatigueFlag and wristDropped definitions corrected. PULSE_CHECK_START trigger rewritten as the passive contact-plus-pause gate, and its intervalNumber redefined as a pulse-check count. PULSE_CHECK_RESULT close condition corrected, byte 9 refSource documented, and the self-detection downgrade described. SESSION_END byte 95 (wristDroppedDuringSession) documented, and correctVentilations, pulseChecksPrompted and pulseChecksComplied redefined. SESSION_END inactivity timeout corrected. SELFTEST_RESULT bytes 5–15 and its extra triggers documented. 0xF7 CALIBRATE behaviour corrected. Commands 0xFE, 0xFF, 0xEB, 0xED, 0xEC and 0xEE added. DIAG_FRAME byte 6 redefined as the last diagnostic action or button event. Session lifecycle steps 7–9 and the pulse-check card rewritten. VentilationEvent model corrected to the app's measured-duration fields. Local storage file name, meta file, header field order, compression padding and pulse-check entry size (13 bytes) corrected. Posture: wristAlignmentAngle documented as absolute palm pitch with a 30° target, postureOk as alignment only, and wristFlexionAngle as a display guide that is not scored. The firmware already used this rule. The app's labels, charts and exports, which stated 15° alignment and ±10° flexion, were corrected to match. The graded correctPosture count is unchanged. Session start (§5.1 step 2) and imuCalibrated corrected: there is no 500 ms gravity baseline. §9 now states the < 10 compression rule, the app-side ventilation compliance source, and grade bands instead of letter labels. §11 rewritten from CPR-Assist-Server/db.js. Stored ventilation byte renamed compressionsDuringWindow (was ventilationsGiven), same position.
+Version 3.3 supersedes v3.2. This release reconciles the specification with the as-built firmware and app, which already agree with each other on every item below. No firmware behaviour changed. Changes from v3.2, row by row in docs/BLE_SPEC_RECONCILIATION.md: LIVE_STREAM bytes 52–55 (residualLoadDepthCm), 86 (inVentilationWindow) and 102–107 (lastPeakDepthCm, lastPeakConfidence, lastPeakDepthSource) documented, as they were never reserved. Byte 91 documented as a 3-bit feedback mask. Patient vitals documented as also sent while diagnostics are active, and patient temperature as zero outside a pulse-check window. compressionAxisDeviation source corrected to palm-IMU roll. fatigueFlag and wristDropped definitions corrected. PULSE_CHECK_START trigger rewritten as the passive contact-plus-pause gate, and its intervalNumber redefined as a pulse-check count. PULSE_CHECK_RESULT close condition corrected, byte 9 refSource documented, and the self-detection downgrade described. SESSION_END byte 95 (wristDroppedDuringSession) documented, and correctVentilations, pulseChecksPrompted and pulseChecksComplied redefined. SESSION_END inactivity timeout corrected. SELFTEST_RESULT bytes 5–15 and its extra triggers documented. 0xF7 CALIBRATE behaviour corrected. Commands 0xFE, 0xFF, 0xEB, 0xED, 0xEC and 0xEE added. DIAG_FRAME byte 6 redefined as the last diagnostic action or button event. Session lifecycle steps 7–9 and the pulse-check card rewritten. VentilationEvent model corrected to the app's measured-duration fields. Local storage file name, meta file, header field order, compression padding and pulse-check entry size (13 bytes) corrected. Posture: wristAlignmentAngle documented as absolute palm pitch with a 30° target, postureOk as alignment only, and wristFlexionAngle as a display guide that is not scored. The firmware already used this rule. The app's labels, charts and exports, which stated 15° alignment and ±10° flexion, were corrected to match. The graded correctPosture count is unchanged. Session start (§5.1 step 2) and imuCalibrated corrected: there is no 500 ms gravity baseline. §9 now states the < 10 compression rule, the app-side ventilation compliance source, and grade bands instead of letter labels. §11 rewritten from CPR-Assist-Server/db.js. Stored ventilation byte renamed compressionsDuringWindow (was ventilationsGiven), same position. Glove-session sync (firmware change): SESSION_START bytes 3–10 now carry the glove start time, SESSION_END byte 70 the flash slot plus 1, PENDING_LOCAL_DATA bytes 2–4 a slot mask, and the glove now serves 0xF5 REQUEST_SESSION, which it previously ignored. §8.3 rewritten to match.
 
 ## **1.1 Hardware Summary**
 
@@ -147,7 +147,7 @@ Byte 0 of every frame is the packetType discriminator. The app writes commands t
 | 0x06 | MODE_CHANGE | Glove → App | Physical button held 2 s cycles mode. Also sent in response to app 0xF1 MODE_SET command. |
 | 0x07 | TWO_MIN_ALERT | Glove → App | Every 2 minutes of active session time. Triggers rescuer-switch banner in app + haptic + audio on glove. Fires in both Emergency and Training modes. |
 | 0x08 | FATIGUE_ALERT | Glove → App | When fatigueFlag first becomes 1 (5-comp rolling avg declines ≥ 10 mm from the first-5-compression average, see LIVE_STREAM byte 48). Fires once per session maximum. |
-| 0x09 | PENDING_LOCAL_DATA | Glove → App | Sent on BLE connection if glove has locally stored sessions. byte[1] = number of pending sessions (0–255). |
+| 0x09 | PENDING_LOCAL_DATA | Glove → App | Sent on BLE connection (1.5 s after) if glove has locally stored sessions. byte[1] = number of pending sessions (0–20), bytes[2–4] = which slots. |
 | 0x0A | LOCAL_SESSION_CHUNK | Glove → App | Data chunk for a locally stored session being transmitted after app sends 0xF5 REQUEST_SESSION. |
 | 0x0B | SELFTEST_RESULT | Glove → App | Sent after glove completes self-test: on 0xFC RUN_SELFTEST and after 0xF7 CALIBRATE. The automatic run 1.5 s after BLE connect is currently disabled in firmware (runSelftest() commented out, "TEMP: disabled while debugging TCA"). If 0xFC or 0xF7 arrives during a session, pulse check, or ventilation window, the glove skips the test and replies at once with every reason code set to NOT_TESTED (0xFF). Carries pass/warn/critical bitmasks, battery %, I2C scan, WHO_AM_I values, and per-sensor reason codes. |
 | 0x0C | SCENARIO_CHANGE | Glove → App | Glove button double-press cycles scenario (adult/pediatric). Also sent in response to app 0xFD SET_SCENARIO command. |
@@ -179,7 +179,8 @@ Byte 0 of every frame is the packetType discriminator. The app writes commands t
 | 0 | packetType | 0x01 |
 | 1 | mode | 0 = Emergency │ 1 = Training │ 2 = Training-No-Feedback |
 | 2 | scenario | 0 = standard adult │ 1 = pediatric |
-| 3–95 | reserved | 0x00 |
+| 3–10 | startUnixMs (uint64 LE) | Wall-clock session start, ms since epoch, projected from the last SYNC_TIME. The same value is written to the stored session header, so the app adopts it as sessionStart and the live copy and the flash copy share one identity. 0 = glove not time-synced; the app then uses its own clock. |
+| 11–95 | reserved | 0x00 |
 
 ## **4.3 SESSION_END (0x02) — Full Session Summary**
 
@@ -206,7 +207,8 @@ The authoritative glove-side summary. averageDepth, averageFrequency, handsOnRat
 | 58–61 | peakDepth (float32) | Maximum single compression depth this session in cm |
 | 62–65 | compressionDepthSD (float32) | Standard deviation of per-compression peak depths (cm). App-side depthSD uses this if non-zero. |
 | 66–69 | patientTemperatureLastPulseCheck (float32) | Last MAX30205 carotid skin temperature captured with the fingertip on the patient during a pulse check window (°C). NOT a continuous patient temperature — only updated inside pulse-check windows. 0.0 = no valid pulse-check reading. |
-| 70–73 | reserved | 0x00. (Rescuer wrist temperature start/end are carried at bytes 82–89, not here.) |
+| 70 | storageSlotPlus1 (uint8) | Flash slot this session was saved to, plus 1. 0 = not saved (fewer than 3 compressions, or the write failed). Older firmware sends 0 here, so a 0 can never name a real slot. After a clean live session the app sends 0xF6 CONFIRM_RECEIVED for this slot. The glove saves the session before sending SESSION_END. |
+| 71–73 | reserved | 0x00. (Rescuer wrist temperature start/end are carried at bytes 82–89, not here.) |
 | 74–77 | rescuerHRLastPause (float32) | Rescuer HR at last ventilation or pulse check pause (wrist MAX30102). |
 | 78–81 | rescuerSpO2LastPause (float32) | Rescuer SpO2 at last pause (%). |
 | 82–85 | rescuerWristTempStart (float32) | Rescuer wrist SKIN temperature at SESSION_START from GXHT30 (°C). NOT ambient air — the GXHT30 has skin contact on the wrist. 0.0 if unavailable. |
@@ -217,7 +219,7 @@ The authoritative glove-side summary. averageDepth, averageFrequency, handsOnRat
 | 93–94 | timeToFirstCompressionMs (uint16) | Milliseconds from SESSION_START to the first compression peak, little-endian. Saturates at 65535. If 0 or 65535, the app falls back to the first CompressionEvent timestamp. |
 | 95 | wristDroppedDuringSession (uint8) | 1 = the wrist IMU dropout latch (LIVE_STREAM byte 51) fired at any point in this session. |
 
-**NOTE: ***SESSION_END is 96 bytes. The temperature fields at bytes 66–69 and 82–89 are full float32 (4 bytes each) — not fixed-point. Bytes 70–73 are reserved. Only LIVE_STREAM temperature fields use the uint16 fixed-point encoding.*
+**NOTE: ***SESSION_END is 96 bytes. The temperature fields at bytes 66–69 and 82–89 are full float32 (4 bytes each) — not fixed-point. Byte 70 is the storage slot, bytes 71–73 are reserved. Only LIVE_STREAM temperature fields use the uint16 fixed-point encoding.*
 
 ## **4.4 VENTILATION_WINDOW (0x03)**
 
@@ -281,7 +283,8 @@ The authoritative glove-side summary. averageDepth, averageFrequency, handsOnRat
 | --- | --- | --- |
 | 0 | packetType | 0x09 |
 | 1 | pendingCount (uint8) | Number of unsent sessions stored on glove flash (0–20). |
-| 2–95 | reserved | 0x00 |
+| 2–4 | slotMask (20 bits LE) | Bit i set = slot i is pending. Pending slots need not be contiguous. 0 from older firmware, which could not serve requests. |
+| 5–95 | reserved | 0x00 |
 
 ## **4.11 LOCAL_SESSION_CHUNK (0x0A)**
 
@@ -675,11 +678,13 @@ All data stored in little-endian binary. No JSON. The header is 104 bytes, then 
 
 ## **8.3 Offline Sync Flow**
 
-- On BLE connect: glove reads metadata, counts slots in the pending state, sends PENDING_LOCAL_DATA (0x09) with count.
+- Every session with at least 3 compressions is saved to flash at SESSION_END, whether or not the app is connected. A clean live session is confirmed straight away (§4.3 byte 70), so normally only sessions recorded without the app, or with a disconnect, stay pending.
 
-- App shows "X sessions stored on glove — syncing" banner.
+- On BLE connect: glove counts pending slots and sends PENDING_LOCAL_DATA (0x09) with the count and the slot mask.
 
-- App sends 0xF5 REQUEST_SESSION with byte[1] = session index (0-based).
+- App shows "X sessions stored on glove — syncing" banner, only when the mask is non-zero. Never during a live session.
+
+- App sends 0xF5 REQUEST_SESSION with byte[1] = slot index (0–19), one slot at a time: it requests the next slot only after the previous one is reassembled or 15 s pass. The glove queues at most 4 requests and drops extras.
 
 - Glove responds with LOCAL_SESSION_CHUNK (0x0A) packets: byte[1] = session index, byte[2] = chunk index, byte[3] = total chunks, bytes[4–95] = 92 bytes of session data per chunk.
 
@@ -688,6 +693,8 @@ All data stored in little-endian binary. No JSON. The header is 104 bytes, then 
 - App sends 0xF6 CONFIRM_RECEIVED with session index. Glove deletes the session file and returns the slot to empty.
 
 - Repeat for all pending sessions sequentially.
+
+- Duplicates: the stored copy has the same sessionStart as the live copy (§4.2), and both local storage and the backend upsert key on it, so a stored copy that arrives after a live one replaces it. After a disconnect this is the intended outcome: the glove copy has every compression, the live copy may not. Live-only extras (rescuer-vitals snapshots, PPG traces, alert timestamps) are not in the stored format and are lost on replacement.
 
 # **9. Grading Formula (Training Mode Only)**
 
